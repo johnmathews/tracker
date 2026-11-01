@@ -38,8 +38,8 @@ merge commit never reaches main.
 
 - **A date-dependent test on main.** `App.spec.ts` "saves the note for every week…" named next
   week as 26 October without pinning the clock. On Monday 2 November it failed, on main as much
-  as here. Its group now pins the clock to the file's `NOW`, as every other dated group does
-  (`docs/development.md`: every test that depends on the date pins the clock).
+  as here. This branch first pinned its group's clock; then main fixed it in #57 by reading next
+  week's key from the store, and the second merge (of #57) took main's fix and dropped the pin.
 - `docs/development.md` now lists the Ask specs (a W7 finding left for the wrap-up).
 
 ## Checks run after the merge (confirmed)
