@@ -546,7 +546,7 @@ details for 2 items.", the marks depending on the day of the week), or "Nothing 
 | Variable         | Default               | Meaning                                                                   |
 | ---------------- | --------------------- | ------------------------------------------------------------------------- |
 | `DATA_DIR`       | `/data`               | holds `fitness.db` and `backup/`                                          |
-| `PUBLIC_ORIGIN`  | (required)            | e.g. `https://fitness.itsa-pizza.com`; checked on writes, used in links   |
+| `PUBLIC_ORIGIN`  | (required)            | e.g. `https://tracker.itsa-pizza.com`; checked on writes, used in links   |
 | `COOKIE_SECURE`  | `true`                | `false` for plain-http local runs; the cookie is then `session`           |
 | `BACKUP_KEEP`    | `7`                   | daily copies kept in `$DATA_DIR/backup/`                                  |
 | `MAX_USERS`      | `50`                  | sign-up closes once this many accounts exist; `0` turns sign-up off       |

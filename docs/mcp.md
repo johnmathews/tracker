@@ -76,10 +76,19 @@ docker compose exec fitness-api tracker-admin token revoke <email> --all
 `token list` shows each token's prefix, scope, name, creation time and last use. A password reset,
 `disable` or `revoke-sessions` also revokes the account's tokens.
 
+On John's home server, the API runs on the `infra` VM, in the compose project in `/srv/infra`
+(home-server `documentation/infra_vm.md`, "Tracker"). Run the commands there over ssh:
+
+```sh
+ssh infra 'cd /srv/infra && docker compose exec fitness-api tracker-admin token create <email> --name laptop --write'
+ssh infra 'cd /srv/infra && docker compose exec fitness-api tracker-admin token list <email>'
+```
+
 ## 3. Which URL
 
 Use the public HTTPS URL: `https://<public host>/api/mcp`. Replace `<public host>` with the host
-in `PUBLIC_ORIGIN`.
+in `PUBLIC_ORIGIN`. On John's home server that is `https://tracker.itsa-pizza.com/api/mcp`.
+Without a token it answers 401, which shows the endpoint is up.
 
 - **Skip the LAN port.** It serves plain HTTP, so anyone on the network can read the token. The
   server also answers 421 for the LAN address.
