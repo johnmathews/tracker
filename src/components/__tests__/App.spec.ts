@@ -1291,7 +1291,8 @@ describe('exercise weight', () => {
     await mountConfig()
     const planner = usePlannerStore()
     planner.nextWeek()
-    planner.toggle('sq', 0) // 26 October now has a plan of its own
+    planner.toggle('sq', 0) // next week now has a plan of its own
+    const next = planner.weekKey
     planner.prevWeek()
     await nextTick()
     const edit = await openEdit('Squats')
@@ -1300,7 +1301,7 @@ describe('exercise weight', () => {
     await flushPromises()
     planner.nextWeek()
     await nextTick()
-    expect(planner.plans['2026-10-26']).toBeDefined()
+    expect(planner.plans[next]).toBeDefined()
     const note = ex()
       .findAll('tr[role="row"]')
       .find((r) => r.text().includes('Squats'))!
