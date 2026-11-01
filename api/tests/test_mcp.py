@@ -468,6 +468,27 @@ def test_item_history_defaults_to_eight_weeks(
     assert tool(agent, token, "item_history", item_id="nope")["name"] is None
 
 
+def test_item_history_gives_the_whole_note_the_other_reads_cut(
+    agent: TestClient, conn: sqlite3.Connection, uid: int, token: str
+) -> None:
+    """A note runs to 20,000 characters; the reads of many items cut it at 500, ending in "…".
+    `item_history` gives it whole, so an agent can read it there before writing one back."""
+    whole = ("Knees out. " * 100).strip()
+    details = {"details": {"sq": {"notes": whole}}}
+    load_tracked(conn, uid, exercise=plans(("sq", "Squats", 3)) | details)
+    assert tool(agent, token, "item_history", item_id="sq")["notes"] == whole
+    cut = whole[:499] + "…"
+    assert tool(agent, token, "week_summary")["items"][0]["notes"] == cut
+    assert tool(agent, token, "goals")["exercise"][0]["notes"] == cut
+    tools = {t["name"]: t for t in result(call(agent, "tools/list", token=token))["tools"]}
+    for name in ("week_summary", "weeks", "goals"):
+        assert "cut at 500" in tools[name]["description"], name
+    assert "whole note" in tools["item_history"]["description"]
+    for name in ("add_item", "update_item"):
+        assert "item_history" in tools[name]["description"], name
+        assert "item_history" in tools[name]["inputSchema"]["properties"]["note"]["description"]
+
+
 def test_goals_reports_the_defaults_for_an_account_with_no_plans(
     agent: TestClient, uid: int, token: str
 ) -> None:

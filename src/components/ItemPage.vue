@@ -18,6 +18,7 @@ import { MEASURE_OPTIONS, useExerciseForm } from '@/composables/exerciseForm'
 import { dayMonth } from '@/lib/dates'
 import { itemHistory, latestPlanWith, weekMonday } from '@/lib/history'
 import { renderNote } from '@/lib/markdown'
+import { detailsIdProblem } from '@/lib/problems'
 import { backToWeek, webHost } from '@/lib/routes'
 import {
   MAX_DETAILS_NOTES,
@@ -224,9 +225,10 @@ function onNotes(text: string): void {
   }
   const n = codePoints(text.trim())
   notesError.value =
-    n > MAX_DETAILS_NOTES
+    detailsIdProblem(props.itemId, 'notes') ??
+    (n > MAX_DETAILS_NOTES
       ? `These notes are ${n.toLocaleString('en-US')} characters. Shorten them to ${MAX_DETAILS_NOTES.toLocaleString('en-US')} or fewer to save them.`
-      : NOTES_TOO_BIG
+      : NOTES_TOO_BIG)
 }
 
 async function editNotes(): Promise<void> {
@@ -277,9 +279,10 @@ function onField(key: string, value: string | number | undefined): void {
   }
   const n = codePoints(text.trim())
   fieldErrors[key] =
-    n > MAX_FIELD
+    detailsIdProblem(props.itemId, 'details') ??
+    (n > MAX_FIELD
       ? `This is ${n.toLocaleString('en-US')} characters. Shorten it to ${MAX_FIELD} or fewer to save it.`
-      : DETAILS_TOO_BIG
+      : DETAILS_TOO_BIG)
 }
 
 /* ---- Arranging: which sections every page of the type shows, and their order (K66). ---- */

@@ -213,15 +213,22 @@ WeightArg = Annotated[
     float | None, Field(description="Exercises only: weight in kg, 0 to 500 (0 is bodyweight).")
 ]
 TimesArg = Annotated[int | None, Field(description="The goal: times a week, 0 to 7.")]
+#: What the reads of many items say about their notes.
+NOTES_CUT = (
+    'Notes are cut at 500 characters, ending in "…"; `item_history` gives an item\'s whole note.'
+)
 NOTE_HELP = (
     "An item's `note` is the item's own, the same in every week, as on its page in the app: "
-    "changing it changes no week's plan."
+    "changing it changes no week's plan. `week_summary`, `weeks` and `goals` cut a note at 500 "
+    'characters, ending in "…"; `item_history` gives the whole note: read it there before '
+    "writing a note back."
 )
 NoteArg = Annotated[
     str | None,
     Field(
         description="The item's note in markdown, up to 20,000 characters, the same in every "
-        "week; empty clears it."
+        "week; empty clears it. It replaces the whole note: read that with `item_history` "
+        "first, since the other reads cut it at 500."
     ),
 ]
 MARK_HELP = (
@@ -281,7 +288,8 @@ def _add_tools(server: MCPServer, config: Config) -> None:
         "goals were met, and which days met the daily target, as the app shows that week. Call "
         "it first to answer 'how is my training going this week'. A week with no plan of its "
         "own shows the plan it carries forward (`plan_week`), or the defaults (`plan_week` is "
-        "null). The result also has `this_week` and `today`, the account's current week and date.",
+        "null). The result also has `this_week` and `today`, the account's current week and date. "
+        f"{NOTES_CUT}",
         annotations=READ_ONLY,
     )
     def week_summary(
@@ -299,7 +307,7 @@ def _add_tools(server: MCPServer, config: Config) -> None:
         title="Weeks",
         description="Several weeks side by side, oldest first, each shaped like `week_summary`: "
         "call it to compare weeks or see a trend over a month or two. At most 26 weeks. Defaults "
-        "to the last 4 weeks ending this week.",
+        f"to the last 4 weeks ending this week. {NOTES_CUT}",
         annotations=READ_ONLY,
     )
     def weeks(
@@ -341,7 +349,8 @@ def _add_tools(server: MCPServer, config: Config) -> None:
         description="One exercise or food over the last weeks: its goal and marks in each week "
         "that shows it, and whether the goal was met. Call it for 'how are my squats going'. "
         "Get `item_id` from `week_summary` or `goals`. Weeks that do not show the item have "
-        "`in_plan` false.",
+        "`in_plan` false. `notes` is the item's whole note, uncut (up to 20,000 characters), "
+        "where the other reads cut it at 500: read it here before writing a note back.",
         annotations=READ_ONLY,
     )
     def item_history(
@@ -360,7 +369,7 @@ def _add_tools(server: MCPServer, config: Config) -> None:
         description="What this week asks for: every exercise and food with its times-a-week "
         "goal, the daily targets (exercises a day, foods a day) and the 'My goals' note. Call it "
         "for 'what are my goals' or before comparing progress with them. Always this week's "
-        "plan, for both exercise and diet.",
+        f"plan, for both exercise and diet. {NOTES_CUT}",
         annotations=READ_ONLY,
     )
     def goals() -> GoalsResult:

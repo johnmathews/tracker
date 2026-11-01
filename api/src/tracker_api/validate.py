@@ -384,6 +384,16 @@ def check_item_id(item_id: str) -> str:
     return item_id
 
 
+def check_details_id(item_id: str) -> str:
+    """An id the details path can name: `check_item_id`'s, with no `/` and not `.` or `..`.
+    Starlette decodes `%2F` before routing, and browsers fold dot segments out of a path, so a
+    write for such an id would never reach its item. The app's `isDetailsId` is the same rule.
+    Plans and ticks keep any id (an import may carry one); only details refuse these."""
+    if "/" in item_id or item_id in (".", ".."):
+        raise Invalid("item id must not hold a / or be . or ..")
+    return check_item_id(item_id)
+
+
 def check_day(day: int) -> int:
     if not 0 <= day <= 6:
         raise Invalid("day must be 0 (Monday) to 6 (Sunday)")

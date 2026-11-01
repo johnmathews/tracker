@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useDietStore } from '@/stores/diet'
 import { useDetailsStore } from '@/stores/details'
+import { detailsIdProblem } from '@/lib/problems'
 import {
   MAX_DETAILS_NOTES,
   MAX_TARGET,
@@ -27,7 +28,9 @@ const details = useDetailsStore()
 const name = ref(props.food?.name ?? '')
 const target = ref(props.food?.target ?? NEW_FOOD_TARGET)
 // The Note field is the food's notes, the same on every week (D2); the rest is this week's.
-const notes = ref(props.food ? details.notesOf('diet', props.food.id) : '')
+/** The notes as the dialog opened with them: Save writes them only if they changed since. */
+const loadedNotes = props.food ? details.notesOf('diet', props.food.id) : ''
+const notes = ref(loadedNotes)
 /** Add or edit: the title, the fields' ids and the primary action follow. */
 const adding = !props.food
 const id = adding ? 'add-food' : 'edit-food'
@@ -43,9 +46,12 @@ const noteError = ref<string | undefined>()
 watch(notes, () => (noteError.value = undefined))
 
 function save(): void {
+  // Untouched notes stay as the store has them now: a newer copy may have arrived meanwhile.
+  const notesChanged = notes.value !== loadedNotes
+  const itemId = props.food?.id ?? null
   // Nothing changes unless the notes can be saved too.
-  if (!details.canSetNotes('diet', props.food?.id ?? null, notes.value)) {
-    noteError.value = NOTE_TOO_BIG
+  if (notesChanged && !details.canSetNotes('diet', itemId, notes.value)) {
+    noteError.value = (itemId && detailsIdProblem(itemId, 'notes')) || NOTE_TOO_BIG
     return
   }
   const input = { name: name.value, target: target.value }
@@ -53,7 +59,7 @@ function save(): void {
     ? diet.updateFood(props.food.id, input) && props.food.id
     : diet.addFood(input)
   if (!saved) return
-  details.setNotes('diet', saved, notes.value)
+  if (notesChanged) details.setNotes('diet', saved, notes.value)
   emit('close')
 }
 </script>

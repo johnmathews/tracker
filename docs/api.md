@@ -53,7 +53,7 @@ The readers each return a dict:
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `week_summary(conn, user_id, section, week, today)`           | `week`, `plan_week` (None for the defaults), `carried`, `daily_target`; seven `days` (`date`, `count`, `met`, `future`); the `items` (`id`, `name`, `target`, `notes`, seven mark kinds, `done`, `great`, `partial`, `missed`, `goal_met`); `goals_met`, `days_met` |
 | `weeks(conn, user_id, section, start, end, today)`            | `week_summary` for each week from `start` to `end`, oldest first, at most 26                                                                                                                                                                                        |
-| `item_history(conn, user_id, section, item_id, weeks, today)` | one item over the last `weeks` weeks: per week `in_plan`, `target`, the marks and their counts. A week that doesn't show the item reads as empty, as on screen                                                                                                      |
+| `item_history(conn, user_id, section, item_id, weeks, today)` | one item over the last `weeks` weeks: its `name`, its whole `notes` (uncut), and per week `in_plan`, `target`, the marks and their counts. A week that doesn't show the item reads as empty, as on screen                                                           |
 | `goals(conn, user_id, today)`                                 | today's week's items with their goals, `exercises_a_day`, `foods_a_day`, and `note`, the "My goals" text (`""` until Settings has it)                                                                                                                               |
 | `consistency(conn, user_id, section, weeks, today)`           | over the last `weeks` weeks: the days up to today, how many met the daily target and the rate; the goals of the finished weeks, how many were met and the rate; the current runs of met days and of weeks with every goal met                                       |
 
@@ -64,8 +64,11 @@ Every reader keeps these rules:
 - Weeks are Monday `YYYY-MM-DD` keys. Another key, an unknown section, or a week count outside
   1–26 raises `InsightsError`, a `ValueError` whose `field` names the argument.
 - Keys are snake_case, and no user or session field appears. The return types are `TypedDict`s.
-- Names are cut to 100 characters and notes to 500, because they reach a model as text. An
-  item's `notes` are its details' (§3), the same in every week, never a week's plan's.
+- Names are cut to 100 characters, because they reach a model as text. The readers of many items
+  (`week_summary`, `weeks`, `goals`) cut a note at 500 characters, a longer one ending in "…".
+  `item_history`, one item's reader, gives its whole note (up to 20,000), so an agent reads it
+  there before writing a note back. An item's `notes` are its details' (§3), the same in every
+  week, never a week's plan's.
 - A reader reads only `user_id`'s rows and writes nothing.
 - A `missed` day counts in `done` and shows in `missed`. Read `goal_met` beside the kind counts.
 
@@ -216,8 +219,13 @@ has never seen with details. The rules follow plans:
   equal to the stored one after validation succeeds with the current `rev`, as P7 does for plans.
 - An empty document is stored rather than deleted, so the revision keeps counting and a device
   holding an older copy still conflicts (P27 in [decisions.md](decisions.md)).
-- `details` that is not an object, a `rev` that is not a whole number from 0, an unknown section
-  or an item id over 128 characters get 400 `invalid`.
+- `details` that is not an object, a `rev` that is not a whole number from 0, an unknown section,
+  an item id over 128 characters, or an id the path can't name get 400 `invalid`
+  (`check_details_id`). That is an id holding `/` or one that is `.` or `..`: Starlette decodes
+  `%2F` before routing, so `PUT /details/exercise/a%2Fb` never reaches the route (a 404
+  `not-found`), and browsers fold dot segments out of a path. The app never sends one
+  (`isDetailsId`, [architecture.md](architecture.md) §7). Plans and ticks still take any id of 1
+  to 128 characters, since an import can carry one; such an item just can't have details.
 - A document over 32 KB as stored gets 413 `too-large`, and one that would take the account over
   its quota 413 `quota`. Neither changes anything.
 
@@ -311,13 +319,18 @@ account's timezone, so the agent knows "now". Every read tool has `readOnlyHint`
 passes `today` to the reader, since `insights.py` never reads the clock. `section` is `exercise`
 (the default) or `diet` (food). A week is a Monday written `YYYY-MM-DD`.
 
-| Tool           | Arguments (defaults)                                                      | Returns                                                         |
-| -------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `week_summary` | `section` (`exercise`), `week` (this week)                                | One week: each item's marks against its goal, and the met days  |
-| `weeks`        | `section` (`exercise`), `start` (3 weeks before `end`), `end` (this week) | `week_summary` for each week from `start` to `end`, 26 at most  |
-| `item_history` | `item_id`, `section` (`exercise`), `weeks` (8)                            | One item's goal and marks over the last `weeks` weeks           |
-| `goals`        | none                                                                      | This week's goals for both sections, daily targets and the note |
-| `consistency`  | `section` (`exercise`), `weeks` (8)                                       | Met-day and goal-met rates over the last `weeks` weeks, streaks |
+| Tool           | Arguments (defaults)                                                      | Returns                                                                   |
+| -------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `week_summary` | `section` (`exercise`), `week` (this week)                                | One week: each item's marks against its goal, and the met days            |
+| `weeks`        | `section` (`exercise`), `start` (3 weeks before `end`), `end` (this week) | `week_summary` for each week from `start` to `end`, 26 at most            |
+| `item_history` | `item_id`, `section` (`exercise`), `weeks` (8)                            | One item's goal and marks over the last `weeks` weeks, and its whole note |
+| `goals`        | none                                                                      | This week's goals for both sections, daily targets and the note           |
+| `consistency`  | `section` (`exercise`), `weeks` (8)                                       | Met-day and goal-met rates over the last `weeks` weeks, streaks           |
+
+`week_summary`, `weeks` and `goals` cut each item's `notes` at 500 characters, a longer note
+ending in "…", and their descriptions say so. `item_history` returns the item's whole note as
+`notes`. `NOTE_HELP` and the `note` argument of `add_item` and `update_item` tell the agent to read
+it there before writing a note back, since a `note` replaces the whole note.
 
 A refused argument (a `week` that is not a Monday, an unknown `section`, a `weeks` outside 1
 to 26) returns a tool result with `isError: true` whose text names the field, as `week: must be a

@@ -275,6 +275,17 @@ export function isItemId(id: string): boolean {
 }
 
 /**
+ * An id the details path can name in one segment: an item id with no `/`, and not `.` or `..`.
+ * The API decodes `%2F` before routing, and the browser folds dot segments out of a path, so a
+ * write for such an id would never reach its item and would be retried for good (D6). The app
+ * makes no such id (`newId` is `x` and base36), but an import or an old plan can carry one: its
+ * plan and marks work, its notes and details can't be saved. The API's `check_details_id` agrees.
+ */
+export function isDetailsId(id: string): boolean {
+  return isItemId(id) && !id.includes('/') && id !== '.' && id !== '..'
+}
+
+/**
  * A section's details from a file, the cache or the API: a usable document per usable item id.
  * Documents that are empty or over the size cap drop out. As the API's `normalise_details_map`.
  */

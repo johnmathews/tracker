@@ -232,6 +232,52 @@ W6 ran the API suite (333 passed, coverage 99%), ruff, ruff format and mypy, Vit
 - **The API deploys before the web again** (W8): an API from before migration 8 answers 200 to a
   settings write and drops `itemSections`, so an arrangement made against it lasts only until the
   next read. `docs/deployment.md` §3.1 says so.
-- **RecentWeeks' `@dsCard` marker has no space before `subtitle`** (`height=820subtitle=…`, line 1
-  of its `preview.html`). W7 fixed the same slip in the ItemPage card's marker; the gate's marker
-  check doesn't catch it.
+- **The gate's `@dsCard` marker check misses a missing space** (`height=820subtitle=…`). Both
+  slips, in the ItemPage and RecentWeeks cards, are fixed; the check itself is unchanged.
+- **An MCP note write checks only the id's length** (`edits.py`), so an agent could set a note on
+  an imported item whose id has a slash, which the app shows but can't edit. Rare.
+
+## 7. Code review fixes (2026-11-01)
+
+A code review of the branch found five problems. Each got a failing test first, then the fix.
+
+1. **An offline note edit under the old app was lost on upgrade** (medium). `moveOldKeys` queued
+   the lifted notes at rev 0, but migration 7 had already put the server's old note at rev 1. The
+   write got a 409, and the app adopted the old note with a false "changed on another device"
+   notice. Lifted writes are now marked `lifted`; a 409 at rev 1 sends them again at rev 1, so the
+   device's copy wins. An item in a queued week with no note in the cache sends a cleared
+   document, so an offline clear goes too. A newer edit before the send stays `lifted`. Red: the
+   server kept `{notes: 'Old note'}` at rev 1.
+2. **An item id the details route can't name stalled sync for good** (medium). A details 404 is
+   retried (D6), and `a%2Fb` always 404s. `isDetailsId` (no `/`, not `.` or `..`) now guards the
+   details store's setters, the `-v3` lift and `sendDetails`, which drops an old queued one as
+   refused. The item page and both dialogs say "This item’s notes can’t be saved: its id has a
+   slash in it." The API's details route refuses the same ids (`check_details_id`). The app never
+   makes such an id; an import can. Red: `PUT /api/details/exercise/%2E%2E` answered 200.
+3. **MCP agents couldn't read a long note in full** (medium). Every read cut notes at 500.
+   `item_history` now returns the item's whole `notes`; the tool descriptions, `NOTE_HELP`, the
+   `note` argument and the docs say to read it there before writing a note back. Red: `KeyError:
+'notes'`.
+4. **The edit dialogs wrote back an untouched stale note** (medium). Save now calls `setNotes` only
+   when the text differs from what the dialog opened with. This also lets an item with a slashed
+   id save its plan. Red: the dialog's `'Knees out'` replaced the adopted `'From the phone'`.
+5. **A refresh within a second of typing skipped reading the server** (low). A read skipped while
+   held details keep the outbox busy is now marked `readPending`, and runs after the held details
+   are sent. Red: the last request was the details `PUT`, with no `GET /state` after it.
+
+Checks after the fixes: Vitest 951 passed with coverage (99.93% of statements, 100% of lines),
+`vue-tsc --build`, `npm run lint`, `npm run format:check`, Playwright 63 passed, the design gate
+with `--complete`, the API suite 727 passed (coverage 99%), ruff, ruff format and mypy.
+
+## 8. What is deliberately not done
+
+- **No UI to add a tracker or pick a type.** Types exist in a registry (W1); a third tracker or a
+  type of John's own is the next step, not this one.
+- **No change to `plans` and `ticks` CHECK constraints** (F3). A new section still needs those
+  tables rebuilt; `item_details` has no such CHECK.
+- **Plans keep their old `notes` until next written.** The API ignores them on read; removing
+  them would have meant rewriting every plan row in a migration for no visible gain.
+- **No dragging to reorder sections.** Move up and Move down work by mouse, keyboard and screen
+  reader; dragging could come later.
+- **The missed mark's spoken words stay "couldn't do it"**, though John reads a red mark as "this
+  was very difficult". Asked after this run, not changed in it.

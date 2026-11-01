@@ -114,9 +114,31 @@ describe('sync of item details', () => {
 
   it('sends a food’s details under the diet section, and an id as a path segment', async () => {
     const { details } = await start(emptyState())
-    details.setField('diet', 'a/b', 'serving', 'A handful')
+    details.setField('diet', 'a b?#', 'serving', 'A handful')
     await settle()
-    expect(detailsPuts().map((c) => c.path)).toEqual(['/details/diet/a%2Fb'])
+    expect(detailsPuts().map((c) => c.path)).toEqual(['/details/diet/a%20b%3F%23'])
+  })
+
+  it('drops a queued details write for an id the path can’t name, and sends the rest', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    localStorage.setItem(
+      OUTBOX_PREFIX + USER,
+      JSON.stringify([
+        { kind: 'details', section: 'exercise', item: 'a/b', id: 'a' },
+        { kind: 'details', section: 'exercise', item: '..', id: 'b' },
+        { kind: 'details', section: 'exercise', item: 'sq', id: 'c' },
+      ]),
+    )
+    const cache = emptyState()
+    cache.exercise.details = {
+      'a/b': { notes: 'Slash' },
+      '..': { notes: 'Dots' },
+      sq: { notes: 'Fine' },
+    }
+    const { sync } = await start(cache)
+    expect(detailsPuts().map((c) => c.path)).toEqual(['/details/exercise/sq'])
+    expect(sync.pending).toBe(0)
+    expect(sync.notice).toBe(REFUSED_NOTICE)
   })
 
   it('clears details by sending an empty document', async () => {
@@ -142,6 +164,28 @@ describe('sync of item details', () => {
     await settle()
     expect(detailsPuts()).toHaveLength(1)
     expect(detailsPuts()[0]!.body).toEqual({ details: { notes: 'Knees' }, rev: 0 })
+  })
+
+  it('runs a read skipped while details were held once they are sent', async () => {
+    const { sync, details } = await start(emptyState())
+    details.setNotes('exercise', 'sq', 'Knees out')
+    await nextTick()
+    // Another device changes a note meanwhile; this tab refreshes (focus) within the second.
+    api.accounts.get(USER)!.details.exercise.pu = { doc: { notes: 'From the phone' }, rev: 1 }
+    const reads = api.paths('GET /state').length
+    await sync.refresh()
+    expect(api.paths('GET /state')).toHaveLength(reads) // the held note keeps the outbox busy
+    await vi.advanceTimersByTimeAsync(DETAILS_DELAY)
+    await flushPromises()
+    expect(api.paths().slice(-2)).toEqual(['PUT /details/exercise/sq', 'GET /state'])
+    expect(details.notesOf('exercise', 'pu')).toBe('From the phone')
+  })
+
+  it('reads nothing extra after held details when no read was skipped', async () => {
+    const { details } = await start(emptyState())
+    details.setNotes('exercise', 'sq', 'Knees out')
+    await settle()
+    expect(api.paths().at(-1)).toBe('PUT /details/exercise/sq')
   })
 
   it('sends a tick at once, whatever details wait behind it', async () => {
@@ -421,6 +465,120 @@ describe('moving a -v3 cache and outbox', () => {
     ).toEqual(['/details/exercise/pu', '/details/exercise/sq'])
     expect(api.accounts.get(USER)!.details.exercise.sq!.doc).toEqual({ notes: 'Latest note' })
     expect(localStorage.getItem(V3_OUTBOX + USER)).toBeNull()
+  })
+
+  /**
+   * The server as migration 7 left it: each item's old note, lifted from its plans, at rev 1. The
+   * old app's plan for WEEK, at rev 1, still had them.
+   */
+  function migrated(notes: Record<string, string>): void {
+    const a = api.accounts.get(USER)!
+    a.plans.exercise[WEEK] = { items: [SQUATS, { id: 'pu', name: 'Push-ups', reps: 10 }], rev: 1 }
+    for (const [id, text] of Object.entries(notes)) {
+      a.details.exercise[id] = { doc: { notes: text }, rev: 1 }
+    }
+  }
+
+  /** A -v3 cache whose WEEK was edited offline under the old app, its plan write still queued. */
+  function editedOffline(): void {
+    const plans = {
+      [WEEK]: [
+        { ...SQUATS, notes: 'Edited offline' },
+        // Its note was cleared offline: no week of the cache has one.
+        { id: 'kh', name: 'Kettlebell halos', reps: 8, target: 3 },
+      ],
+    }
+    localStorage.setItem(
+      V3_CACHE + USER,
+      JSON.stringify({ ...v3, exercise: { plans, log: {}, revs: { [WEEK]: 1 } } }),
+    )
+    localStorage.setItem(
+      V3_OUTBOX + USER,
+      JSON.stringify([{ kind: 'plan', section: 'exercise', week: WEEK, id: 'old' }]),
+    )
+  }
+
+  it('keeps a note edited offline under the old app over the migrated one, and says nothing', async () => {
+    migrated({ sq: 'Old note', kh: 'Cleared offline' })
+    editedOffline()
+    const { sync, details } = await start()
+    expect(api.accounts.get(USER)!.details.exercise.sq).toEqual({
+      doc: { notes: 'Edited offline' },
+      rev: 2,
+    })
+    expect(details.notesOf('exercise', 'sq')).toBe('Edited offline')
+    expect(sync.notice).toBeNull()
+    expect(sync.pending).toBe(0)
+  })
+
+  it('sends a note cleared offline under the old app as a cleared document', async () => {
+    migrated({ sq: 'Old note', kh: 'Cleared offline' })
+    editedOffline()
+    const { details } = await start()
+    expect(api.accounts.get(USER)!.details.exercise.kh).toEqual({ doc: {}, rev: 2 })
+    expect(details.notesOf('exercise', 'kh')).toBe('')
+  })
+
+  it('keeps the lifted note when it is edited again before it is sent', async () => {
+    migrated({ sq: 'Old note' })
+    editedOffline()
+    api.offline = true
+    const { sync, details } = await start()
+    details.setNotes('exercise', 'sq', 'Edited again')
+    await settle()
+    expect(outbox()).toMatchObject([
+      { kind: 'plan' },
+      { kind: 'details', item: 'kh' },
+      { kind: 'details', item: 'sq', lifted: true },
+    ])
+    api.offline = false
+    await sync.refresh()
+    expect(api.accounts.get(USER)!.details.exercise.sq!.doc).toEqual({ notes: 'Edited again' })
+    expect(sync.notice).toBeNull()
+  })
+
+  it('lifts no write for an id the details path can’t name', async () => {
+    const plans = {
+      [WEEK]: [
+        { id: 'a/b', name: 'Slash', target: 3, notes: 'Kept here only' },
+        { id: '.', name: 'Dot', target: 3 },
+        { ...SQUATS, notes: 'Sent' },
+      ],
+    }
+    localStorage.setItem(
+      V3_CACHE + USER,
+      JSON.stringify({ ...v3, exercise: { plans, log: {}, revs: {} } }),
+    )
+    localStorage.setItem(
+      V3_OUTBOX + USER,
+      JSON.stringify([
+        { kind: 'plan', section: 'exercise', week: WEEK, id: 'old' },
+        // A week the cache no longer holds lifts nothing.
+        { kind: 'plan', section: 'exercise', week: '2026-10-05', id: 'gone' },
+      ]),
+    )
+    const { sync } = await start()
+    expect(detailsPuts().map((c) => c.path)).toEqual(['/details/exercise/sq'])
+    expect(sync.notice).toBeNull()
+  })
+
+  it('still takes the server’s copy when a lifted note was changed after the migration', async () => {
+    migrated({ sq: 'Old note' })
+    api.accounts.get(USER)!.details.exercise.sq = { doc: { notes: 'Changed since' }, rev: 2 }
+    editedOffline()
+    const { sync, details } = await start()
+    expect(details.notesOf('exercise', 'sq')).toBe('Changed since')
+    expect(sync.notice).toBe(DETAILS_CONFLICT_NOTICE)
+  })
+
+  it('takes the server’s rev-1 copy over a write that was not lifted', async () => {
+    migrated({ sq: 'Old note' })
+    api.stall('GET', '/state')
+    const { sync, details } = await start(emptyState())
+    details.setNotes('exercise', 'sq', 'Mine')
+    await settle()
+    expect(details.notesOf('exercise', 'sq')).toBe('Old note')
+    expect(sync.notice).toBe(DETAILS_CONFLICT_NOTICE)
   })
 
   it('ignores a tab still open on the code from before details', async () => {

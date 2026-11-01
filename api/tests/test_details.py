@@ -17,6 +17,8 @@ from tracker_api.validate import (
     MAX_FIELD,
     MAX_FIELDS,
     Details,
+    Invalid,
+    check_details_id,
     details_fit,
     encode_details,
     normalise_details,
@@ -256,6 +258,35 @@ def test_a_document_over_32_kb_is_refused(client: TestClient, config: Config) ->
     fields = {f"f{i}": "€" * MAX_FIELD for i in range(MAX_FIELDS)}
     r = client.put(PU, json={"details": {"fields": fields}, "rev": 0})
     assert (r.status_code, r.json()) == (413, {"error": "too-large"})
+
+
+@pytest.mark.parametrize("item_id", ["a/b", "/", ".", ".."])
+def test_details_ids_the_path_cant_name_are_invalid(item_id: str) -> None:
+    """A browser folds `.` and `..` out of a path, and Starlette decodes `%2F` before routing, so
+    a details write for such an id never reaches its item. The app never queues one
+    (`isDetailsId`); the route refuses them by the same rule."""
+    with pytest.raises(Invalid):
+        check_details_id(item_id)
+
+
+@pytest.mark.parametrize("encoded", ["%2E", "%2E%2E"])
+def test_the_details_route_refuses_dot_ids(
+    client: TestClient, config: Config, encoded: str
+) -> None:
+    sign_up(client, config)
+    r = client.put(f"/api/details/exercise/{encoded}", json={"details": {"notes": "x"}, "rev": 0})
+    assert (r.status_code, r.json()) == (400, {"error": "invalid"})
+    assert state(client)["exercise"]["detailRevs"] == {}
+
+
+def test_details_ids_with_dots_or_other_characters_are_fine(
+    client: TestClient, config: Config
+) -> None:
+    sign_up(client, config)
+    for item_id in ("a.b", "...", "a%20b%3F"):
+        r = client.put(f"/api/details/diet/{item_id}", json={"details": {"notes": "x"}, "rev": 0})
+        assert r.json() == {"rev": 1}
+    assert set(state(client)["diet"]["detailRevs"]) == {"a.b", "...", "a b?"}
 
 
 def test_an_item_id_of_128_characters_is_fine(client: TestClient, config: Config) -> None:

@@ -227,6 +227,21 @@ describe('notes', () => {
     expect(useDetailsStore().notesOf('exercise', 'ks')).toContain('Hinge')
   })
 
+  it('says an item whose id has a slash can’t keep notes, and saves nothing', async () => {
+    usePlannerStore().plans['2026-10-19']!.push({ ...PU, id: 'a/b', name: 'Slashed' })
+    mountPage('exercise', 'a/b')
+    await button().trigger('click')
+    await type(area(), 'Elbows in')
+    expect(section('notes').text()).toContain(
+      'This item’s notes can’t be saved: its id has a slash in it.',
+    )
+    expect(useDetailsStore().get('exercise', 'a/b')).toEqual({})
+    await type(field('works'), 'Chest')
+    expect(section('details').text()).toContain(
+      'This item’s details can’t be saved: its id has a slash in it.',
+    )
+  })
+
   it('takes the stored copy when it changes from elsewhere while being edited (a 409)', async () => {
     mountPage()
     await button().trigger('click')

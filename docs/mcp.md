@@ -18,7 +18,7 @@ change it. Each token belongs to one account and acts only as that account.
 | `whoami`       | Which account and scope the token has. Use it to test the link. |
 | `week_summary` | How one week went, item by item, against its goals.             |
 | `weeks`        | Several weeks side by side, for a trend.                        |
-| `item_history` | One exercise or food over the last weeks.                       |
+| `item_history` | One exercise or food over the last weeks, and its whole note.   |
 | `goals`        | This week's goals, the daily targets and the "My goals" note.   |
 | `consistency`  | The share of days and goals met, and the current streaks.       |
 
@@ -34,9 +34,10 @@ call them.
 | `set_daily_targets` | Sets how many exercises and foods make a day count. |
 
 An item's note belongs to the item, not to a week. It is the note the item's row and its page show
-in the app, the same in every week. Changing it changes no week's plan. The read tools give the first
-500 characters of a note. A longer note ends in "…" there, so read the whole note from an edit's
-result before writing it back.
+in the app, the same in every week. Changing it changes no week's plan. A note runs to 20,000
+characters. `week_summary`, `weeks` and `goals` give the first 500, and a longer note ends in "…"
+there. `item_history` gives the whole note. A `note` sent to `add_item` or `update_item` replaces
+the whole note, so read it with `item_history` before writing it back.
 
 [api.md](api.md) §3.1 lists the arguments and results of every tool.
 

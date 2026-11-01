@@ -277,10 +277,15 @@ The names went to `-v4` on 2026-11-01, when notes moved from plan items into ite
 its plan items carry no `notes`. Moving a `-v3` cache lifts its notes into details by the export's
 rule below (`liftNotes`, `normaliseState(v, true)`). The server lifted the same notes from its own
 plans (migration 7, [api.md](api.md) §2), so lifted notes are not sent. The exception is a section
-whose plan writes were still queued in the old outbox: a note there may never have reached the
-server, so each of its lifted items queues a `details` write. A note the server already holds is
-accepted as it is, as an identical plan is (P7), and a different one is a conflict that brings the
-server's copy in.
+whose plan writes were still queued in the old outbox: a note there may have been edited or cleared
+offline, after the copy the server lifted. Each of its lifted items queues a `details` write marked
+`lifted`, and so does each item in a queued week's plan with no note in the cache, which sends a
+cleared document. The server's rev 1 is migration 7's copy of the old note, so a 409 at rev 1 to a
+lifted write sends it again at rev 1, and the device's copy wins, as the queued plan write would
+have. A note the server already holds is accepted as it is (P7). A conflict at rev 2 or later means
+the note changed after the migration, so it brings the server's copy in, as for any write. A newer
+edit to the item before the lifted write is sent replaces it and stays `lifted`. An id the details
+path can't name (§7) queues nothing.
 
 **Migration.** Before weekly plans, one list served every week: `{ exercises, log }` under
 `tracker-v1` (the design prototype's shape, under its key renamed) and `{ foods, log }` under
@@ -771,7 +776,9 @@ in the outbox:
   so devices marking different days never collide. An outbox saved before marks had kinds holds
   `done` instead; it is read as `"great"` or `null` on load;
 - `details`: one item's details, sent as `PUT /api/details/<section>/<item>` with
-  `{ details, rev }`, the revision last seen (`detailRevs`). Clearing them sends `{}`;
+  `{ details, rev }`, the revision last seen (`detailRevs`). Clearing them sends `{}`. An item
+  whose id holds `/`, or is `.` or `..`, can't be named in that path, so it has no details
+  (`isDetailsId`, below);
 - `settings`: the accent, both daily picks and the item pages' arrangement, `PUT /api/settings`.
   `itemSections` always goes, `{}` for the default: the API keeps the saved arrangement when the
   key is missing (a tab on older code), so leaving it out could never reset one.
@@ -791,7 +798,9 @@ on the device.
 and cached at once, then held for `DETAILS_DELAY` (1 s) after its item's last change, and sent once
 with the latest text. A reload in that second keeps the edit, since it is already in the outbox.
 Other operations go past held details, because nothing depends on an item's details being sent
-first. An import sends held details at once, so the server merges against them.
+first. An import sends held details at once, so the server merges against them. A read in that
+second (focus, the minute timer) finds the outbox busy and skips `GET /api/state`; it is marked
+pending (`readPending`), and runs once the held details are sent and the outbox is empty.
 
 | Reply                                               | What happens                                                                                                                  |
 | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
@@ -809,7 +818,8 @@ Details follow the same rule.
 
 **A details conflict** brings the server's copy in: the sync store writes it into `base` first, so
 adopting it is no change to send back, then `adoptItem` puts it in the details store. A cleared copy
-(`{}`) reads as no details. `SyncStatus` shows `DETAILS_CONFLICT_NOTICE`: "An item's notes or
+(`{}`) reads as no details. A write lifted from a `-v3` cache (§4) is the exception: a 409 at rev 1
+is migration 7's copy of the old note, so it is sent again at rev 1 instead. `SyncStatus` shows `DETAILS_CONFLICT_NOTICE`: "An item's notes or
 details were changed on another device, so this device now shows that version." An item page open
 on that item takes the server's copy into its field instead of overwriting it on the next keystroke.
 
@@ -818,6 +828,19 @@ image can land before the API's (P28), so the write is treated as a server failu
 with the backoff, and holding the outbox behind it. Dropping it, as for any other refusal, would
 lose the notes typed while the API was behind. The API must therefore deploy first
 ([deployment.md](deployment.md) §3.1). A 404 to any other write is still dropped.
+
+A write that would 404 for good must therefore never be queued: it would hold the outbox forever.
+That is a details write for an id the path can't name. Starlette decodes `%2F` before routing, so
+`PUT /api/details/exercise/a%2Fb` gets 404 `not-found`, and the browser folds `.` and `..` out of
+a path. `isDetailsId` (`src/lib/storage.ts`) is `isItemId` without a `/` and not `.` or `..`. The
+details store's setters refuse any other id (false, so nothing is queued), and the item page and
+the edit dialogs say "This item’s notes can’t be saved: its id has a slash in it." (or "…details…",
+or "its id isn’t one the server takes" for the rest). A `-v3` lift queues nothing for one, and
+`sendDetails` drops one already queued by older code as refused. The API's details route refuses
+the same ids with 400 `invalid` (`check_details_id`, [api.md](api.md) §3). The app makes no such
+id: `newId()` is `x` and base36, and MCP's are made the same way. Only an import or a plan from
+elsewhere can carry one; plans and ticks keep any id of 1 to 128 characters, so its plan and marks
+still work.
 
 **Reads.** `GET /api/state` runs at start, on focus, on returning to a visible tab, and every minute
 while visible. It replaces local state only when the outbox is empty, and only if nothing changed

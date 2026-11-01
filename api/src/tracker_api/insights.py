@@ -8,7 +8,8 @@ answer about a week never contradicts what the week shows.
 The readers above them take a connection, a user id and `today` (the asker's date: the server
 cannot know the browser's), and return plain JSON with snake_case keys and Monday `YYYY-MM-DD`
 week keys. They read only that user's rows, write nothing, and carry no user or session fields.
-Names and notes are cut in their output, since they reach a model as text (docs/api.md §1).
+Names and notes are cut in their output, since they reach a model as text (docs/api.md §1),
+except `item_history`'s note: one item's, given whole so it can be read before it is rewritten.
 """
 
 import copy
@@ -201,6 +202,10 @@ class ItemHistory(TypedDict):
     item_id: str
     #: Its name in the latest week that shows it; None when no week in the range does.
     name: str | None
+    #: The item's whole note, uncut (up to 20,000 code points), the same in every week; "" when
+    #: it has none. The readers of many items cut theirs at MAX_NOTES; read it here before
+    #: writing one back.
+    notes: str
     start: str
     end: str
     weeks: list[HistoryWeek]
@@ -290,8 +295,9 @@ def _cut(text: str, limit: int) -> str:
 
 
 def _cut_note(text: str) -> str:
-    """An item's notes, at most MAX_NOTES code points. A longer note (they run to 20,000) ends in
-    "…", so an agent can tell it isn't the whole note before writing one back."""
+    """An item's notes in a reader of many items, at most MAX_NOTES code points. A longer note
+    (they run to 20,000) ends in "…", so an agent can tell it isn't the whole note: `item_history`
+    gives it whole."""
     return text if len(text) <= MAX_NOTES else text[: MAX_NOTES - 1] + "…"
 
 
@@ -385,7 +391,7 @@ def item_history(
     today: date,
 ) -> ItemHistory:
     """One item over the last `weeks` weeks, today's included, oldest first: its goal and marks
-    in each week that shows it."""
+    in each week that shows it, and its whole note (the one reader that doesn't cut it)."""
     section = _section(section)
     count = _week_count(weeks)
     tracked = load_tracked(conn, user_id, section)
@@ -431,6 +437,7 @@ def item_history(
         "section": section,
         "item_id": item_id,
         "name": name,
+        "notes": notes_of(tracked["details"], item_id),
         "start": mondays[0].isoformat(),
         "end": mondays[-1].isoformat(),
         "weeks": rows,

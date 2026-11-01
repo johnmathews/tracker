@@ -294,7 +294,22 @@ def test_names_and_notes_are_cut_in_output(conn: sqlite3.Connection) -> None:
     goal = insights.goals(conn, uid, TODAY)["diet"][0]
     assert goal["name"] == "🥦" * insights.MAX_NAME
     assert goal["notes"] == "🥕" * (MAX_NOTES - 1) + "…"
-    assert insights.item_history(conn, uid, "diet", "f", 1, TODAY)["name"] == "🥦" * 100
+    history = insights.item_history(conn, uid, "diet", "f", 1, TODAY)
+    assert history["name"] == "🥦" * 100
+    # One item's reader gives its whole note, to read before writing one back.
+    assert history["notes"] == notes
+
+
+def test_item_history_gives_the_whole_note_in_any_week(conn: sqlite3.Connection) -> None:
+    uid = add_user(conn)
+    note = ("Slow on the way down. " * 900).strip()  # 19,799 code points
+    plan = {"2026-10-05": [{"id": "pu", "name": "Push-ups", "reps": 10, "target": 2}]}
+    load(conn, uid, exercise={"plans": plan, "details": {"pu": {"notes": note}}})
+    assert insights.item_history(conn, uid, "exercise", "pu", 2, TODAY)["notes"] == note
+    # An item no week shows still has its note; one without a note reads "".
+    load(conn, uid, diet={"details": {"gone": {"notes": "Still here."}}})
+    assert insights.item_history(conn, uid, "diet", "gone", 1, TODAY)["notes"] == "Still here."
+    assert insights.item_history(conn, uid, "diet", "veg", 1, TODAY)["notes"] == ""
 
 
 def test_an_item_without_notes_reads_an_empty_note(conn: sqlite3.Connection) -> None:
@@ -409,6 +424,7 @@ def test_item_history(conn: sqlite3.Connection) -> None:
     assert out["section"] == "exercise"
     assert out["item_id"] == "pu"
     assert out["name"] == "Push-ups"
+    assert out["notes"] == ""
     assert (out["start"], out["end"]) == ("2026-10-05", "2026-10-26")
     assert out["weeks"] == [
         {

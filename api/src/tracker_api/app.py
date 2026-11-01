@@ -25,6 +25,7 @@ from .validate import (
     Section,
     check_day,
     check_details_body,
+    check_details_id,
     check_item_id,
     check_plan_body,
     parse_export,
@@ -388,7 +389,7 @@ def create_app(config: Config, run_backups: bool = True, mailer: Mailer | None =
         section: Section, item_id: str, body: Body, user: User, conn: Conn
     ) -> dict[str, int]:
         details, rev = check_details_body(body)
-        item_id = check_item_id(item_id)
+        item_id = check_details_id(item_id)
         result = data.put_details(
             conn, user.id, section, item_id, details, rev, quota=config.user_quota_bytes
         )

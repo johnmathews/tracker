@@ -92,6 +92,9 @@ describe('details store', () => {
     // Three bytes each in UTF-8: 12,000 characters are 36,000 bytes.
     const long = '語'.repeat(12_000)
     expect(details.canSetNotes('exercise', 'sq', long)).toBe(false)
+    // An item about to be added (no id yet) is measured the same way.
+    expect(details.canSetNotes('exercise', null, long)).toBe(false)
+    expect(details.canSetNotes('exercise', null, 'Knees out')).toBe(true)
     expect(details.setNotes('exercise', 'sq', long)).toBe(false)
     // 10,800 are 32,400 bytes, and the document 32,412: it fits, with no room for 1,500 more.
     expect(details.setNotes('exercise', 'sq', '語'.repeat(10_800))).toBe(true)
@@ -126,7 +129,8 @@ describe('details store', () => {
 
   it('refuses an id the API cannot name, __proto__ among them, and changes nothing', () => {
     const details = useDetailsStore()
-    for (const id of ['__proto__', '', 'x'.repeat(129)]) {
+    // A slash, `.` or `..` can't be one path segment: the browser or the router splits or folds it.
+    for (const id of ['__proto__', '', 'x'.repeat(129), 'a/b', '/', '.', '..']) {
       expect(details.setNotes('exercise', id, 'Note')).toBe(false)
       expect(details.canSetNotes('exercise', id, 'Note')).toBe(false)
       expect(details.setField('exercise', id, 'works', 'Legs')).toBe(false)
@@ -135,6 +139,9 @@ describe('details store', () => {
     expect(Object.getPrototypeOf(details.docs.exercise)).toBe(Object.prototype)
     expect(details.get('exercise', '__proto__')).toEqual({})
     expect(details.setNotes('exercise', 'x'.repeat(128), 'Note')).toBe(true)
+    for (const id of ['a.b', '...', 'a\\b', 'a b?#%']) {
+      expect(details.setNotes('exercise', id, 'Note')).toBe(true)
+    }
   })
 
   it('never lets a caller change the shared empty document', () => {

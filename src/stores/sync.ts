@@ -2,6 +2,7 @@ import { ref, watch, type WatchStopHandle } from 'vue'
 import { defineStore } from 'pinia'
 import { request, type ApiError } from '@/lib/api'
 import {
+  isDetailsId,
   isItemId,
   isMark,
   isRecord,
@@ -66,7 +67,11 @@ export const OLD_OUTBOX_PREFIXES = [
 export type Op =
   | { kind: 'plan'; section: Section; week: string }
   | { kind: 'tick'; section: Section; week: string; item: string; day: number; mark: Mark | null }
-  | { kind: 'details'; section: Section; item: string }
+  /**
+   * `lifted`: queued by `moveOldKeys` from a `-v3` cache whose plan writes were still queued. The
+   * server's rev 1 is then migration 7's copy of the old note, which this one replaces.
+   */
+  | { kind: 'details'; section: Section; item: string; lifted?: true }
   | { kind: 'settings' }
 
 /**
@@ -167,7 +172,10 @@ function isQueued(v: unknown): v is Queued {
   if (!isRecord(v) || typeof v.id !== 'string') return false
   if (v.kind === 'settings') return true
   const sectionOk = isSection(v.section)
-  if (v.kind === 'details') return sectionOk && typeof v.item === 'string' && isItemId(v.item)
+  if (v.kind === 'details') {
+    const liftedOk = v.lifted === undefined || v.lifted === true
+    return sectionOk && liftedOk && typeof v.item === 'string' && isItemId(v.item)
+  }
   const weekOk = typeof v.week === 'string' && WEEK_KEY.test(v.week)
   if (v.kind === 'plan') return sectionOk && weekOk
   return (
@@ -298,6 +306,8 @@ export const useSyncStore = defineStore('sync', () => {
   let detailsTimer: ReturnType<typeof setTimeout> | undefined
   let flushing: Promise<void> | null = null
   let refreshing: Promise<void> | null = null
+  /** A read skipped because the outbox still held something (held details): run it once empty. */
+  let readPending = false
   /** Bumped on every start and stop, so replies to an older session are ignored. */
   let generation = 0
   /** Bumped on every local change, so a read that raced one is discarded. */
@@ -359,11 +369,22 @@ export const useSyncStore = defineStore('sync', () => {
     pending.value = ops.length
   }
 
-  /** Add operations, each replacing any queued one for the same plan, cell, details or settings. */
+  /**
+   * Add operations, each replacing any queued one for the same plan, cell, details or settings. A
+   * details write that replaces a lifted one is lifted too: it still has the old note to replace.
+   */
   function enqueue(ops: Op[]): void {
     const keys = new Set(ops.map(opKey))
-    const queued = ops.map((op) => ({ ...op, id: newId() }))
-    writeOutbox([...readOutbox().filter((op) => !keys.has(opKey(op))), ...queued])
+    const outbox = readOutbox()
+    const lifted = new Set(
+      outbox.filter((op) => op.kind === 'details' && op.lifted).map((op) => opKey(op)),
+    )
+    const queued = ops.map((op) =>
+      op.kind === 'details' && lifted.has(opKey(op))
+        ? { ...op, lifted: true as const, id: newId() }
+        : { ...op, id: newId() },
+    )
+    writeOutbox([...outbox.filter((op) => !keys.has(opKey(op))), ...queued])
   }
 
   /** Drop a sent operation, unless a newer one for the same key has replaced it meanwhile. */
@@ -420,12 +441,18 @@ export const useSyncStore = defineStore('sync', () => {
     void flush()
   }
 
-  /** Hold details operations until the edits pause for DETAILS_DELAY, then send them. */
+  /**
+   * Hold details operations until the edits pause for DETAILS_DELAY, then send them. A read that
+   * was skipped meanwhile, since they kept the outbox busy, runs once they are sent.
+   */
   function holdDetails(): void {
     clearTimeout(detailsTimer)
     detailsTimer = setTimeout(() => {
       detailsTimer = undefined
-      void flush()
+      const gen = generation
+      void flush().then(() => {
+        if (gen === generation && readPending && !readOutbox().length) void refresh()
+      })
     }, DETAILS_DELAY)
   }
 
@@ -486,16 +513,20 @@ export const useSyncStore = defineStore('sync', () => {
    * An item's details as they are now, with the revision last seen; a 409 brings the server's copy
    * in, as a plan's does. A 404 comes from an API older than details (the web image can land
    * first, F8): the write stays queued and is retried like a server failure, never dropped (D6).
+   * So an id the path can't name (`isDetailsId`), which would 404 for good, is never sent: one
+   * queued by older code is refused here, as the server would refuse it.
    */
   async function sendDetails(
     op: Extract<Queued, { kind: 'details' }>,
     gen: number,
   ): Promise<Outcome | ApiError> {
     const { section, item } = op
+    if (!isDetailsId(item)) return { kind: 'refused', status: 400, code: 'invalid' }
+    const rev = detailRevs[section][item] ?? 0
     const res = await call<{ rev: number }>(
       'PUT',
       `/details/${section}/${encodeURIComponent(item)}`,
-      { details: details.get(section, item), rev: detailRevs[section][item] ?? 0 },
+      { details: details.get(section, item), rev },
     )
     if (gen !== generation) return 'stop'
     if (res.ok) {
@@ -508,6 +539,9 @@ export const useSyncStore = defineStore('sync', () => {
     detailRevs[section][item] = error.body.rev
     // The item has never had details on the server: send ours again as a create.
     if (error.body.details === null || error.body.details === undefined) return 'again'
+    // Rev 1 under a lifted write is migration 7's copy of the old note: ours is newer, as the
+    // queued plan write it came with would have been. Sent again at rev 1, it replaces it.
+    if (op.lifted && error.body.rev === 1 && rev !== 1) return 'again'
     adoptTheirDetails(section, item, error.body.details)
     notice.value = DETAILS_CONFLICT_NOTICE
     return 'done'
@@ -604,7 +638,12 @@ export const useSyncStore = defineStore('sync', () => {
     refreshing = (async () => {
       if (!user.value) return
       await flush()
-      if (gen !== generation || status.value === 'offline' || readOutbox().length) return
+      if (gen !== generation || status.value === 'offline') return
+      if (readOutbox().length) {
+        readPending = true
+        return
+      }
+      readPending = false
       const before = changes
       const res = await call<unknown>('GET', '/state')
       if (gen !== generation) return
@@ -679,40 +718,54 @@ export const useSyncStore = defineStore('sync', () => {
    *
    * Every old cache is from before item details, so its plan notes lift into details (D3). The
    * server lifted the same notes from its own plans (migration 7), so they are not sent, except in
-   * a section whose plan writes were still queued: a note there may not have reached the server. A
-   * note the server already holds is accepted as it is (P7); a different one is a conflict, which
-   * brings the server's copy in.
+   * a section whose plan writes were still queued: a note there may not have reached the server.
+   * Those go as lifted writes, which replace the migration's copy (rev 1) of the old note; an item
+   * in a queued week's plan with no note in the cache sends a cleared document, since its note may
+   * have been cleared offline. A note changed on the server since (rev 2 on) is a conflict, which
+   * brings the server's copy in. An id the details path can't name (`isDetailsId`) queues nothing.
    */
   function moveOldKeys(name: string): void {
-    let lifted: Record<Section, DetailsMap> | null = null
+    let old: SyncState | null = null
     for (const prefix of OLD_CACHE_PREFIXES) {
       const oldCache = readKey(prefix + name)
       if (oldCache === null) continue
       const state = normaliseState(parseJson(oldCache), true)
       if (state && readKey(cacheKey()) === null) {
         writeKey(cacheKey(), state)
-        lifted = { exercise: state.exercise.details, diet: state.diet.details }
+        old = state
       }
       removeKey(prefix + name)
     }
-    const unsent = new Set<Section>()
+    const unsent = new Map<Section, Set<string>>()
     for (const prefix of OLD_OUTBOX_PREFIXES) {
       const oldOps = parseJson(readKey(prefix + name))
       if (Array.isArray(oldOps)) {
         const queued = readOutbox()
         const keys = new Set(queued.map(opKey))
         const moved = oldOps.map(upgradeQueued).filter(isQueued)
-        for (const op of moved) if (op.kind === 'plan') unsent.add(op.section)
+        for (const op of moved) {
+          if (op.kind !== 'plan') continue
+          unsent.set(op.section, (unsent.get(op.section) ?? new Set()).add(op.week))
+        }
         writeOutbox([...moved.filter((op) => !keys.has(opKey(op))), ...queued])
       }
       removeKey(prefix + name)
     }
-    if (!lifted) return
-    const ops: Op[] = []
-    for (const section of unsent) {
-      for (const item of Object.keys(lifted[section])) ops.push({ kind: 'details', section, item })
+    if (!old) return
+    const items = new Map<string, Op>()
+    for (const [section, weeks] of unsent) {
+      const { details: lifted, plans } = old[section]
+      const ids = [
+        ...Object.keys(lifted),
+        ...[...weeks].flatMap((week) => (plans[week] ?? []).map((it) => it.id)),
+      ]
+      for (const item of ids) {
+        if (isDetailsId(item)) {
+          items.set(`${section}/${item}`, { kind: 'details', section, item, lifted: true })
+        }
+      }
     }
-    if (ops.length) enqueue(ops)
+    if (items.size) enqueue([...items.values()])
   }
 
   /** Begin syncing for `name`: show the cache at once, then send and read in the background. */
@@ -754,6 +807,7 @@ export const useSyncStore = defineStore('sync', () => {
     clearTimeout(retryTimer)
     clearTimeout(detailsTimer)
     detailsTimer = undefined
+    readPending = false
     retryDelay = FIRST_RETRY
     base = null
     revs = { exercise: {}, diet: {} }

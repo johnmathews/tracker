@@ -1320,6 +1320,42 @@ describe('exercise weight', () => {
     expect(edit.get('#edit-exercise-notes-count').text()).toBe('19,000 of 20,000 characters')
   })
 
+  it('leaves a newer note alone when its own note is untouched', async () => {
+    await mountConfig()
+    useDetailsStore().setNotes('exercise', 'sq', 'Knees out')
+    const edit = await openEdit('Squats')
+    // The server's copy arrives while the dialog is open, as a sync conflict adopts it.
+    useDetailsStore().adoptItem('exercise', 'sq', { notes: 'From the phone' })
+    await edit.get('#edit-exercise-reps').setValue('20')
+    await edit.get('form').trigger('submit')
+    await flushPromises()
+    expect(dialog()).toBeNull()
+    expect(usePlannerStore().exercises.find((e) => e.id === 'sq')!.reps).toBe(20)
+    expect(useDetailsStore().notesOf('exercise', 'sq')).toBe('From the phone')
+  })
+
+  it('saves an exercise whose id has a slash, and says its note can’t be saved', async () => {
+    await mountConfig()
+    const planner = usePlannerStore()
+    const slashed = { id: 'a/b', name: 'Slashed', reps: 5, target: 3, perSide: false }
+    planner.plans[planner.weekKey] = [...planner.exercises, slashed]
+    await nextTick()
+    let edit = await openEdit('Slashed')
+    await edit.get('#edit-exercise-reps').setValue('8')
+    await edit.get('form').trigger('submit')
+    await flushPromises()
+    expect(dialog()).toBeNull()
+    expect(planner.exercises.find((e) => e.id === 'a/b')!.reps).toBe(8)
+    edit = await openEdit('Slashed')
+    await edit.get('#edit-exercise-notes').setValue('Elbows in')
+    await edit.get('form').trigger('submit')
+    await flushPromises()
+    expect(edit.get('#edit-exercise-notes-error').text()).toBe(
+      'This item’s notes can’t be saved: its id has a slash in it.',
+    )
+    expect(useDetailsStore().get('exercise', 'a/b')).toEqual({})
+  })
+
   it('keeps everything as it was when the notes are too big to save', async () => {
     await mountConfig()
     const edit = await openEdit('Squats')
@@ -1430,6 +1466,41 @@ describe('the Edit food dialog', () => {
     expect(rowCells('Salmon')[0]!.attributes('aria-pressed')).toBe('true')
     expect(useDietStore().foods[2]).toEqual({ id: 'fish', name: 'Salmon', target: 3 })
     expect(useDetailsStore().notesOf('diet', 'fish')).toBe('Oily fish')
+  })
+
+  it('leaves a newer food note alone when its own note is untouched', async () => {
+    await mountConfig()
+    useDetailsStore().setNotes('diet', 'fish', 'Oily fish')
+    const edit = await openEdit('Fish')
+    useDetailsStore().adoptItem('diet', 'fish', { notes: 'From the phone' })
+    await edit.get('#edit-food-name').setValue('Salmon')
+    await edit.get('form').trigger('submit')
+    await flushPromises()
+    expect(dialog()).toBeNull()
+    expect(useDietStore().foods[2]!.name).toBe('Salmon')
+    expect(useDetailsStore().notesOf('diet', 'fish')).toBe('From the phone')
+  })
+
+  it('saves a food whose id has a slash, and says its note can’t be saved', async () => {
+    await mountConfig()
+    const diet = useDietStore()
+    diet.plans[usePlannerStore().weekKey] = [
+      ...diet.foods,
+      { id: 'a/b', name: 'Slashed', target: 2 },
+    ]
+    await nextTick()
+    let edit = await openEdit('Slashed')
+    await edit.get('#edit-food-name').setValue('Still slashed')
+    await edit.get('form').trigger('submit')
+    await flushPromises()
+    expect(dialog()).toBeNull()
+    edit = await openEdit('Still slashed')
+    await edit.get('#edit-food-notes').setValue('Oily')
+    await edit.get('form').trigger('submit')
+    await flushPromises()
+    expect(edit.get('#edit-food-notes-error').text()).toBe(
+      'This item’s notes can’t be saved: its id has a slash in it.',
+    )
   })
 
   it('opens with the food’s notes, and keeps everything when they are too big to save', async () => {

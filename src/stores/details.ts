@@ -5,8 +5,8 @@ import {
   MAX_FIELD,
   codePoints,
   detailsFit,
+  isDetailsId,
   isEmptyDetails,
-  isItemId,
   normaliseDetails,
   normaliseText,
   type DetailsMap,
@@ -74,13 +74,14 @@ export const useDetailsStore = defineStore('details', () => {
 
   /**
    * The document an item would have with `text` as its notes (`id` null: an item not added yet,
-   * with no details); null when that can't be saved. An id the API's paths can't name is refused,
-   * `__proto__` among them, which as a key would set the map's prototype.
+   * with no details); null when that can't be saved. An id the details path can't name is refused
+   * (`isDetailsId`: one with a slash, `.` or `..`), and `__proto__`, which as a key would set the
+   * map's prototype.
    */
   function withNotes(section: Section, id: string | null, text: string): ItemDetails | null {
     if (trimmedLength(text) > MAX_DETAILS_NOTES) return null
     if (id === null) return make({ notes: text })
-    return isItemId(id) ? make({ ...get(section, id), notes: text }) : null
+    return isDetailsId(id) ? make({ ...get(section, id), notes: text }) : null
   }
 
   /**
@@ -106,10 +107,10 @@ export const useDetailsStore = defineStore('details', () => {
   /**
    * Set one of an item's fields for every week; blank clears it. False, and nothing changes, for a
    * key the API wouldn't keep, text over MAX_FIELD characters once trimmed, a document over the
-   * size cap, a new field past the API's 32, or an id the API can't name.
+   * size cap, a new field past the API's 32, or an id the details path can't name (`isDetailsId`).
    */
   function setField(section: Section, id: string, key: string, text: string): boolean {
-    if (!isItemId(id) || !FIELD_KEY.test(key) || trimmedLength(text) > MAX_FIELD) return false
+    if (!isDetailsId(id) || !FIELD_KEY.test(key) || trimmedLength(text) > MAX_FIELD) return false
     const current = get(section, id)
     const doc = make({ ...current, fields: { ...current.fields, [key]: text } })
     if (!doc) return false
