@@ -71,6 +71,21 @@ def test_goals_migration_gives_saved_settings_none(
     c.close()
 
 
+def test_ask_log_holds_times_only_and_goes_with_its_user(tmp_path: Path) -> None:
+    """The Ask cap's log: who asked and when, and nothing of what was asked."""
+    c = connect(tmp_path / "f.db")
+    migrate(c)
+    columns = [r["name"] for r in c.execute("PRAGMA table_info(ask_log)")]
+    assert columns == ["id", "user_id", "asked_at"]
+    indexes = {r["name"] for r in c.execute("PRAGMA index_list(ask_log)")}
+    assert {"ask_log_by_user", "ask_log_by_time"} <= indexes
+    c.execute("INSERT INTO users (id, username, password_hash, created_at) VALUES (1, 'a', 'h', 0)")
+    c.execute("INSERT INTO ask_log (user_id, asked_at) VALUES (1, 100)")
+    c.execute("DELETE FROM users WHERE id = 1")
+    assert c.execute("SELECT COUNT(*) FROM ask_log").fetchone()[0] == 0
+    c.close()
+
+
 def test_connections_use_wal_and_foreign_keys(tmp_path: Path) -> None:
     c = connect(tmp_path / "f.db")
     migrate(c)

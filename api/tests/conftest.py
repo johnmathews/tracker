@@ -1,6 +1,7 @@
 """Shared fixtures: a config on a temp dir, a controllable clock, a cheap password hasher, and a
 mailer that records instead of sending."""
 
+import logging
 from collections.abc import Iterator
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -34,6 +35,16 @@ class Clock:
 def fast_hasher(monkeypatch: pytest.MonkeyPatch) -> None:
     """argon2 at its 64 MiB defaults takes tenths of a second per hash; tests need many."""
     monkeypatch.setattr(auth, "HASHER", PasswordHasher(time_cost=1, memory_cost=8, parallelism=1))
+
+
+@pytest.fixture(autouse=True)
+def api_logger() -> Iterator[logging.Logger]:
+    """The package logger, put back as it was: `create_app_from_env` gives it a handler."""
+    log = logging.getLogger("tracker_api")
+    handlers, level = list(log.handlers), log.level
+    yield log
+    log.handlers[:] = handlers
+    log.setLevel(level)
 
 
 @pytest.fixture

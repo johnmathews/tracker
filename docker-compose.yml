@@ -13,6 +13,8 @@ services:
     environment:
       PUBLIC_ORIGIN: http://localhost:8083
       COOKIE_SECURE: "false"
+      # Ask is on only when the shell running compose has a key; unset, it stays off.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     volumes:
       - api-data:/data
 

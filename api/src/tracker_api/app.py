@@ -1,16 +1,18 @@
 """The HTTP layer: routes, the write checks, and error mapping (docs/api.md §3)."""
 
+import logging
 import sqlite3
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from contextlib import asynccontextmanager, suppress
 from typing import Annotated, Any
 
+from anthropic import AsyncAnthropic
 from fastapi import BackgroundTasks, Depends, FastAPI, Path, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import auth, data, outbox
+from . import ask, auth, data, outbox
 from .backup import BackupThread
 from .config import Config
 from .db import connect, migrate
@@ -26,6 +28,8 @@ from .validate import (
     parse_json,
 )
 
+#: The package's logger; `create_app_from_env` gives it a handler.
+log = logging.getLogger("tracker_api")
 MAX_BODY = 1 << 20
 WRITES = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 # The HTTP status for each refusal code an auth step can raise.
@@ -69,12 +73,24 @@ def error_response(
     )
 
 
-def create_app(config: Config, run_backups: bool = True, mailer: Mailer | None = None) -> FastAPI:
-    """The API. Mail goes through `mailer`, by default Resend's when the config turns mail on."""
+def create_app(
+    config: Config,
+    run_backups: bool = True,
+    mailer: Mailer | None = None,
+    ask_client: AsyncAnthropic | None = None,
+) -> FastAPI:
+    """The API. Mail goes through `mailer`, by default Resend's when the config turns mail on;
+    Ask goes through `ask_client`, by default one made with the config's Anthropic key."""
     if not config.mail_enabled:
         mailer = None
     elif mailer is None:
         mailer = ResendMailer(config.resend_api_key or "", config.mail_from)
+    owns_ask_client = config.ask_enabled and ask_client is None
+    if not config.ask_enabled:
+        ask_client = None
+    elif ask_client is None:
+        # The key is passed explicitly, so the SDK reads no credentials from the environment.
+        ask_client = AsyncAnthropic(api_key=config.anthropic_api_key)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -87,9 +103,12 @@ def create_app(config: Config, run_backups: bool = True, mailer: Mailer | None =
         yield
         if backups:
             backups.stop()
+        if owns_ask_client and ask_client is not None:
+            await ask_client.close()
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.mailer = mailer
+    app.state.ask_client = ask_client
 
     @app.middleware("http")
     async def guard(
@@ -288,7 +307,7 @@ def create_app(config: Config, run_backups: bool = True, mailer: Mailer | None =
 
     @app.get("/api/auth/options")
     def options() -> dict[str, bool]:
-        return {"mail": mailer is not None}
+        return {"mail": mailer is not None, "ask": ask_client is not None}
 
     @app.post("/api/auth/forgot", status_code=202)
     def forgot(body: Body, background: BackgroundTasks, conn: Conn) -> dict[str, str]:
@@ -398,9 +417,50 @@ def create_app(config: Config, run_backups: bool = True, mailer: Mailer | None =
             raise ApiError(400, e.code) from None
         return dict(data.import_data(conn, user.id, parsed, quota=config.user_quota_bytes))
 
+    def need_ask() -> AsyncAnthropic:
+        if ask_client is None:
+            raise ApiError(503, "ask-off")
+        return ask_client
+
+    @app.get("/api/ask")
+    def ask_left(user: User, conn: Conn) -> dict[str, int]:
+        need_ask()
+        return {"remaining": ask.remaining(conn, config, user.id), "limit": config.ask_per_day}
+
+    @app.post("/api/ask")
+    def ask_question(body: Body, user: User, conn: Conn) -> ask.EventStream:
+        """Refusals come before the stream as JSON; after it starts, as an `error` event."""
+        client = need_ask()
+        try:
+            question = ask.parse(body, ask.server_today(config))
+        except ask.AskInvalid:
+            raise ApiError(400, "invalid") from None
+        try:
+            left = ask.claim(conn, config, user.id)
+        except ask.AskLimit as e:
+            wait = e.retry_after
+            raise ApiError(429, "too-many", {"Retry-After": str(wait)}, retryAfter=wait) from None
+        settings = data.load_settings(conn, user.id)
+        conversation = ask.messages(question, "" if settings is None else settings["goals"])
+        tools = ask.tools_for(config.db_path, user.id, question.today)
+
+        async def events() -> AsyncIterator[ask.Event]:
+            yield ("start", {"remaining": left})
+            async for event in ask.answer(client, config.ask_model, conversation, tools):
+                yield event
+
+        return ask.EventStream(ask.frames(events()))
+
     return app
 
 
 def create_app_from_env() -> FastAPI:
     """The uvicorn entry point: `uvicorn --factory tracker_api.app:create_app_from_env`."""
+    # uvicorn configures only its own loggers, so without a handler the API's info lines (Ask's
+    # usage, the daily backup) would be dropped.
+    if not log.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(levelname)s:  %(name)s %(message)s"))
+        log.addHandler(handler)
+        log.setLevel(logging.INFO)
     return create_app(Config.from_env())

@@ -3,8 +3,8 @@
 > Purpose
 >
 > The API service in `api/`: accounts, sessions, invites, email, the synced data, the read-only
-> insights over it, the admin CLI and backups. It is the reference for the endpoints the client
-> calls and for running the service.
+> insights over it, Ask, the admin CLI and backups. It is the reference for the endpoints the
+> client calls and for running the service.
 
 ## 1. Overview
 
@@ -24,6 +24,7 @@ scoped by `user_id`, and no endpoint reads another user's data.
 | `mail.py`     | the Resend client, and sending after the response                                                |
 | `data.py`     | reading and writing plans, ticks and settings; import, export; the quota (`usage`)               |
 | `insights.py` | read-only views of a user's weeks, counted as the screen counts them (§1.1)                      |
+| `ask.py`      | Ask (§3.1): the question's checks, the daily caps, the prompt, the tools and the Claude loop     |
 | `app.py`      | the HTTP layer: routes, the write checks, error mapping                                          |
 | `backup.py`   | the daily `VACUUM INTO` copy                                                                     |
 | `cli.py`      | `tracker-admin`                                                                                  |
@@ -73,6 +74,7 @@ Every reader keeps these rules:
 | `invites`       | `token_hash`                        | `kind` (`invite` or `reset`), `username`, `user_id` (resets), `expires_at`, `used_at`, `mailed` (a reset sent by email)                                                 |
 | `confirmations` | `token_hash`                        | `user_id`, `created_at`, `expires_at`, `used_at`: confirm-your-email links                                                                                              |
 | `mail_log`      | `id`                                | `user_id`, `kind` (`confirm` or `reset`), `sent_at`: one row per email attempted (a failed send still counts), for the limits                                           |
+| `ask_log`       | `id`                                | `user_id`, `asked_at`: one row per question claimed (a failed answer still counts), for Ask's caps. It holds nothing of the question or the answer                      |
 | `settings`      | `user_id`                           | `accent`, `daily_pick`, `food_pick` (K57), `goals` (My goals, `''` for none)                                                                                            |
 | `plans`         | `(user_id, section, week)`          | `items_json`, `rev`                                                                                                                                                     |
 | `ticks`         | `(user_id, section, week, item_id)` | `days`, `partial`, `missed`, `solid`, `hatch`: 7-bit masks (bit 0 is Monday); see below                                                                                 |
@@ -93,7 +95,8 @@ startup inside a transaction. Version 1 is the first six tables; version 2 adds 
 email: `email_confirmed_at`, `mailed`, `confirmations` and `mail_log`. Every account from before
 it starts unconfirmed. Version 4 adds `solid` and `hatch` (default 0), so every older mark reads as
 the zigzag. Version 5 adds `food_pick` to `settings` (default 2), foods a day (K57). Version 6
-adds `goals` to `settings` (default `''`), so every saved row reads as having no goals.
+adds `goals` to `settings` (default `''`), so every saved row reads as having no goals. Version 7
+adds `ask_log`, indexed by user and time and by time alone, for Ask's caps (§3.1).
 
 Migrations are a list in `db.py`, and the version is its length. A step is appended, never
 inserted, and no code or test names its index: `test_db.py` finds the goals step by its text.
@@ -122,7 +125,7 @@ cut off at the limit rather than read whole. A body with nothing to send, such a
 | `POST /auth/signup`                        | no      | `{email, password}` creates an account → the account and the cookie                              |
 | `POST /auth/logout`                        | session | ends this session and clears the cookie; 204                                                     |
 | `GET /auth/me`                             | session | the account: `{username}`, plus `confirmed` (below)                                              |
-| `GET /auth/options`                        | no      | `{mail}`: whether this API sends email (§4.1)                                                    |
+| `GET /auth/options`                        | no      | `{mail, ask}`: whether this API sends email (§4.1) and answers questions (§3.1)                  |
 | `POST /auth/forgot`                        | no      | `{email}` → 202 `{}` for any well-formed email; a reset link goes to a matching account (§4.1)   |
 | `POST /auth/confirm`                       | no      | `{token}` confirms the email → the account; 410 `gone` otherwise                                 |
 | `POST /auth/confirm/resend`                | session | a new confirm link → 202 `{}`; refusals in §4.1                                                  |
@@ -134,6 +137,8 @@ cut off at the limit rather than read whole. A body with nothing to send, such a
 | `PUT /settings`                            | session | `{accent, dailyPick, foodPick, goals}` → the stored settings; a key left out keeps the saved one |
 | `GET /export`                              | session | the export file (`architecture.md` §4)                                                           |
 | `POST /import`                             | session | an export file, merged in; → `{weeks, ticks, settings}` added                                    |
+| `GET /ask`                                 | session | `{remaining, limit}`: questions left today, and the per-account cap (§3.1)                       |
+| `POST /ask`                                | session | `{question, history, today}` → Claude's answer as a stream of events (§3.1)                      |
 
 **The account** is `{username}`: the account's email (the field keeps its old name, so older
 tabs and clients work unchanged). While mail is on it also carries `confirmed`, true once the
@@ -197,6 +202,91 @@ account's goals when those are empty, and never replace goals already saved. It 
 it added (`ticks` counts the empty days that gained a mark; `settings` is true when the file
 changed the account's settings, its goals alone included), in one transaction. A file that
 fails to parse gets 400 with `json`, `format` or `version`, the same codes the client shows.
+
+### 3.1 Ask
+
+Ask answers a person's questions about their own tracking with Claude. It is on when
+`ANTHROPIC_API_KEY` is set (§6). With no key, `GET /auth/options` says `"ask": false`, and both
+`/ask` routes get 503 `ask-off`. Unsetting the key turns Ask off with no deploy. The server
+stores no conversation: the browser holds the chat and sends it back with each question.
+
+**The question.** `POST /ask` is a write, so it passes the same Origin and Content-Type checks as
+every other write, and it needs a session. The body is `{question, history, today}`:
+
+- `question` is 1 to 2,000 characters after trimming spaces and line breaks at its ends.
+- `history` is the chat so far, up to 20 turns. Each turn is exactly `{role, text}`, with `role`
+  `user` or `assistant`. The turns alternate and start with `user`, so the last one is the
+  assistant's. Each `text` is a non-blank string of at most 8,000 characters, and all of them
+  together are at most 40,000. A turn with any other key, or a `text` that isn't a string, is
+  refused. No tool call, tool result or thinking block can reach the model from the browser.
+  A missing `history` is an empty one.
+- `today` is the browser's date, `YYYY-MM-DD`. It must be within a day of the server's UTC date,
+  since every time zone's date is. The server can't know the browser's date, and "this week"
+  depends on it.
+
+Anything else gets 400 `invalid` and costs no question. Other keys in the body are ignored.
+
+**The caps.** Each account may ask `ASK_PER_DAY` questions (30) in any rolling 24 hours. All
+accounts together may ask `ASK_PER_DAY_TOTAL` (300). A question is claimed in `ask_log` under the
+write lock before Claude is called, as `mail_log` is, so parallel questions can't pass a cap.
+Over a cap, the answer is 429 `too-many` with `Retry-After` and `retryAfter`: the seconds until the
+oldest question in the way leaves the rolling day. A claimed question counts even when the answer
+then fails, as a failed email does: a failed call to Anthropic can still cost tokens. `GET /ask`
+returns `{remaining, limit}`. `remaining` is the smaller of the account's questions left and
+everyone's; `limit` is `ASK_PER_DAY`. Outside the app, a spend limit in the Anthropic Console
+bounds the cost too (deployment.md §4).
+
+**The stream.** After the checks, the answer is `text/event-stream` with `Cache-Control:
+no-store` and `X-Accel-Buffering: no`, so nginx passes each event on at once. Each event is an
+`event:` line and one `data:` line of JSON:
+
+| Event   | Data                                         | When                                                                     |
+| ------- | -------------------------------------------- | ------------------------------------------------------------------------ |
+| `start` | `{"remaining": 29}`                          | first, with the questions left after this one                            |
+| `tool`  | `{"name": "week_summary"}`                   | as each tool runs, before its result goes back to Claude                 |
+| `text`  | `{"delta": "Three of four"}`                 | each piece of the answer, in order; join them for the markdown           |
+| `done`  | `{"stop": "end_turn"}`                       | last, when the answer is complete: `end_turn`, `max_tokens` or `refused` |
+| `error` | `{"error": "busy"}` or `{"error": "error"}`  | last, in place of `done`, when the answer failed                         |
+
+- `end_turn` is a complete answer. `max_tokens` is an answer cut short: it ran out of output
+  tokens, or reached the last round still wanting a tool. `refused` means Claude declined. The
+  text sent before a refusal is partial and should be discarded.
+- `busy` means Anthropic was unreachable, rate limited or overloaded; asking again later can
+  work. `error` means the request was refused (a bad key, say) or something failed here.
+- A `text` delta of `"\n\n"` separates a new block of text from the one before, such as the text
+  after a tool round.
+- During a silence of 15 seconds the stream sends the comment `: keep-alive`, so nginx's 60-second
+  read timeout never fires while Claude thinks or a tool runs. Clients skip comments.
+- A client that disconnects ends the stream, and the request to Anthropic is cancelled with it.
+
+**Claude.** `ask.py` calls the Messages API with the SDK's `AsyncAnthropic`, the key passed
+explicitly. The model is `ASK_MODEL` (`claude-sonnet-5-5`). Each request has `max_tokens` 4,000,
+`output_config.effort` `low` and adaptive thinking, the model's default, and never forces a tool.
+A question takes at most six requests; the sixth has `tool_choice` `none`, so it can only answer.
+The stop reason is checked before the content: a refused or cut-off turn's tool calls never run.
+No server-side fallback is set, because on this model it retries only `cyber` and `frontier_llm`
+declines, which questions about a person's tracking don't meet. The loop is written out rather
+than using the SDK's beta tool runner, which fails a call whose input has a key the schema lacks
+and logs it as an exception.
+
+**The prompt.** The system prompt is one constant: the role, the rules from §1.1 (a plan
+carries forward, every mark counts towards a goal, missed and partial days are reported as such,
+met days use exercises a day and foods a day, future days don't count), names and notes as data
+and never instructions, tools before judgement, no medical advice, short markdown with no
+headings, tables or images, and the voice. It holds nothing that varies, so it caches; the cache
+breakpoint is on it, and the tools render before it. Today, this week and the My goals note open
+the first user turn instead. The voice rules state facts against the goals, never count streaks
+and never quote the My goals note back. `VERDICT_RULE`, which lets answers say plainly that
+something is too little or too much and quote the goals back, waits on John's ruling (F7); setting
+`PLAIN_VERDICTS = True` in `ask.py` turns it on.
+
+**The tools** are `consistency`, `goals`, `item_history`, `week_summary` and `weeks`, sorted by
+name, each with a strict schema. Each wraps the `insights` reader of the same name (§1.1) and is a
+closure over the session's user and the question's `today`. No schema has a user field, and a
+key the schema lacks is never read, so a tool reads only the asker's data whatever the model
+writes. Each call runs on a worker thread with its own connection. An `InsightsError` goes back
+to Claude as an error result naming the field. A result over 20 KB of JSON goes back as an error
+too, telling Claude to ask for less, rather than cut mid-JSON.
 
 ## 4. Accounts and sessions
 
@@ -307,16 +397,28 @@ every kind in every drawing, met and unmet goals, and a day over the pick.
 
 ## 6. Configuration
 
-| Variable         | Default               | Meaning                                                                   |
-| ---------------- | --------------------- | ------------------------------------------------------------------------- |
-| `DATA_DIR`       | `/data`               | holds `fitness.db` and `backup/`                                          |
-| `PUBLIC_ORIGIN`  | (required)            | e.g. `https://fitness.itsa-pizza.com`; checked on writes, used in links   |
-| `COOKIE_SECURE`  | `true`                | `false` for plain-http local runs; the cookie is then `session`           |
-| `BACKUP_KEEP`    | `7`                   | daily copies kept in `$DATA_DIR/backup/`                                  |
-| `MAX_USERS`      | `50`                  | sign-up closes once this many accounts exist; `0` turns sign-up off       |
-| `RESEND_API_KEY` | (unset)               | turns mail on (§4.1); a key with sending access is enough. Never logged   |
-| `MAIL_FROM`      | (required with a key) | the From line, `Name <address>` on a domain verified in Resend            |
-| `MAIL_PER_HOUR`  | `30`                  | emails of every kind, across all accounts, in any rolling hour; 1 or more |
+| Variable            | Default               | Meaning                                                                   |
+| ------------------- | --------------------- | ------------------------------------------------------------------------- |
+| `DATA_DIR`          | `/data`               | holds `fitness.db` and `backup/`                                          |
+| `PUBLIC_ORIGIN`     | (required)            | e.g. `https://fitness.itsa-pizza.com`; checked on writes, used in links   |
+| `COOKIE_SECURE`     | `true`                | `false` for plain-http local runs; the cookie is then `session`           |
+| `BACKUP_KEEP`       | `7`                   | daily copies kept in `$DATA_DIR/backup/`                                  |
+| `MAX_USERS`         | `50`                  | sign-up closes once this many accounts exist; `0` turns sign-up off       |
+| `RESEND_API_KEY`    | (unset)               | turns mail on (§4.1); a key with sending access is enough. Never logged   |
+| `MAIL_FROM`         | (required with a key) | the From line, `Name <address>` on a domain verified in Resend            |
+| `MAIL_PER_HOUR`     | `30`                  | emails of every kind, across all accounts, in any rolling hour; 1 or more |
+| `ANTHROPIC_API_KEY` | (unset)               | turns Ask on (§3.1). Never logged                                         |
+| `ASK_MODEL`         | `claude-sonnet-5-5`   | the Claude model Ask uses                                                 |
+| `ASK_PER_DAY`       | `30`                  | questions per account in any rolling 24 hours; 1 or more                  |
+| `ASK_PER_DAY_TOTAL` | `300`                 | questions across all accounts in any rolling 24 hours; 1 or more          |
+
+**Logging.** The API's own lines go to stderr at info and above (`docker logs fitness-api`). The
+logs never hold what a person wrote or was told: no question, history, answer, note, goals or
+item name, and no email address. For Ask they hold, per request to Anthropic, the request id, the
+stop reason and the token counts (input, output, cache read, cache write), and per question the
+outcome, the rounds and the totals. An error is logged by its class, status and request id, since
+an error's message can quote the request. `ANTHROPIC_LOG` stays unset in production: at `debug`
+the SDK logs every request body.
 
 ## 7. Backups
 
@@ -362,6 +464,15 @@ Reviewed and kept on purpose, for a small service with open sign-up (D9 in
   be trusted. `tracker-admin reset` clears it.
 - **Sessions have no absolute lifetime.** A session used at least every 90 days lasts
   indefinitely. Logout, `revoke-sessions`, a reset and `disable` all end it.
+- **Ask sends a person's data to Anthropic.** A question goes to Anthropic's API with the chat so
+  far, the person's My goals note, and whatever the tools read for it: the plans, marks, item
+  names, notes and goals of the weeks Claude asks about. The app stores none of it, and the logs
+  hold none of it (§6). Anthropic's own retention applies to what it receives. A person's names
+  and notes can't steer the answer to anyone else, because every tool reads only the asker's data.
+  At worst they steer the asker's own answer.
+- **Ask can spend money until a cap stops it.** With the defaults, 300 questions a day across
+  everyone, each up to six requests of at most 4,000 output tokens. The spend limit in the
+  Anthropic Console is the bound that holds whatever the app does.
 
 ## 9. Validation parity
 
@@ -433,8 +544,17 @@ Tests sit in `api/tests/`:
   (links, expiry, resend and its limits, invited accounts, mail off, a failed send), forgot
   password (same answer for anyone, the hour's lifetime, confirming by a mailed reset only, silent
   limits) and `MAIL_PER_HOUR` across kinds.
+- `test_ask.py`: Ask with no network. An `httpx2.MockTransport` behind the SDK replays Messages
+  API event streams, built in the documented wire format: a plain answer, a tool round, every
+  tool, a refusal, `max_tokens`, the last round, 529, 429, 500, a dropped connection, a timeout,
+  an error mid-stream, and 400, 401, 403 and 404. It covers the request's settings, the context
+  turn, the event order, user isolation against forged tool input, error results, the 20 KB cap,
+  every validation refusal (forged tool and thinking blocks included), both caps and their
+  `Retry-After`, parallel claims, keep-alives, a disconnect cancelling the answer, the prompt's
+  rules and the verdict switch, and that no question, history, answer or goals reach the logs.
 - `test_db.py`, `test_config.py`, `test_backup.py`, `test_cli.py`: migrations (including racing
   ones, the WAL switch, and old ticks reading as `great` after step 2), configuration from the environment, daily copies, `tracker-admin`.
 - `conftest.py` gives each test a temporary database, a controllable clock, a cheap hasher and a
-  mailer that records instead of sending (`mail_client`);
+  mailer that records instead of sending (`mail_client`), and puts the package logger back after
+  each test;
   `fixtures.py` reads `fixtures/transfer/`.

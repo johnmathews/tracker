@@ -133,6 +133,27 @@ A failed send never shows to the person; it is logged by the API as `confirm ema
 `reset email not sent` with Resend's answer, so `docker logs fitness-api` is the place to look.
 Resend's own dashboard lists every email it accepted.
 
+**Ask** (`api.md` §3.1) is off until the API gets `ANTHROPIC_API_KEY`. To turn it on:
+
+1. In the Anthropic Console, create an API key for Tracker in a workspace of its own, so its
+   usage and limits stand apart.
+2. In the same workspace, set a monthly spend limit. The app caps questions (`ASK_PER_DAY` per
+   account and `ASK_PER_DAY_TOTAL` for everyone), but the Console's limit is the one that holds
+   whatever the app does.
+3. Keep the key in the home-server vault, and have the compose template pass it to `fitness-api`
+   as `ANTHROPIC_API_KEY`. `ASK_MODEL`, `ASK_PER_DAY` and `ASK_PER_DAY_TOTAL` keep their defaults
+   unless set. Leave `ANTHROPIC_LOG` unset: at `debug` the SDK logs every request body.
+4. Redeploy the API. `GET /api/auth/options` then answers `"ask": true`, and the app shows Ask.
+
+Each question logs its rounds with Anthropic's request ids and token counts, and a line
+`ask ended stop=… rounds=…` with the totals; none holds what was asked or answered. A line
+`ask upstream refused` at error level usually means a bad or revoked key. Unsetting the key and
+redeploying turns Ask off again; nothing else changes.
+
+For a local stack, `docker-compose.yml` passes `ANTHROPIC_API_KEY` from the shell that runs it,
+and leaves Ask off when the shell has none. A local API started with `uv run uvicorn` reads it the
+same way.
+
 The web container must reach the API as `fitness-api` on a shared Docker network: `nginx.conf`
 names that host. `docker-compose.yml` does this locally, and the home-server compose file does it
 in production.

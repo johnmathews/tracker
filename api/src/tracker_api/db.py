@@ -115,6 +115,17 @@ MIGRATIONS = [
     """
     ALTER TABLE settings ADD COLUMN goals TEXT NOT NULL DEFAULT '';
     """,
+    # Ask's daily caps: one row per question claimed (a failed answer still counts), holding who
+    # asked and when. Nothing of the question or the answer is stored.
+    """
+    CREATE TABLE ask_log (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+        asked_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX ask_log_by_user ON ask_log (user_id, asked_at);
+    CREATE INDEX ask_log_by_time ON ask_log (asked_at);
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

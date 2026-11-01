@@ -66,7 +66,7 @@ jobs:
         if: matrix.name == 'api'
         run: |
           docker run --rm --platform linux/arm64 api-smoke:arm64 \
-            python -c "import argon2, pydantic_core, tracker_api.app; print('ok')"
+            python -c "import anthropic, argon2, jiter, pydantic_core, tracker_api.app; print('ok')"
 
   # Both images together behind nginx, as production runs them: sign-up, writes and reads through
   # the /api proxy, the write guard, and nginx still serving the app with the API stopped.
