@@ -1,0 +1,36 @@
+<!-- @dsCard group="Ask" height=220 subtitle="A pen of three strokes while an answer is on its way; still under reduced motion" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AnswerProgress — preview</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: var(--space-6); background: var(--canvas); color: var(--ink); font-family: var(--font-sans); }
+  .stack { display: flex; flex-direction: column; gap: var(--space-6); }
+  .cell { display: flex; flex-direction: column; gap: var(--space-2); }
+  .state { margin: 0; color: var(--ink-secondary); }
+
+  /* At u = 1: the words at 17px, 10px after the pen. */
+  .progress { display: inline-flex; align-items: center; gap: 10px; color: var(--ink-secondary); font-size: 17px; line-height: 22px; }
+  .pen { display: inline-flex; gap: 4px; }
+  .pen span { display: block; width: 10px; height: 3px; border-radius: 2px; background: var(--ink); opacity: 0.35; }
+  @media (prefers-reduced-motion: no-preference) {
+    .moving .pen span { opacity: 1; animation: pen 1.2s ease-in-out infinite; }
+    .moving .pen span:nth-child(2) { animation-delay: 0.2s; }
+    .moving .pen span:nth-child(3) { animation-delay: 0.4s; }
+  }
+  @keyframes pen { 50% { opacity: 0.5; } }
+  @media (max-width: 639px) { body { padding: var(--space-4); } .progress { font-size: 16px; } }
+</style>
+</head>
+<body>
+<div class="stack">
+  <div class="cell"><p class="caption state">Moving</p>
+    <span class="progress moving" role="status"><span class="pen" aria-hidden="true"><span></span><span></span><span></span></span>Reading your weeks…</span></div>
+  <div class="cell"><p class="caption state">Reduced motion: still</p>
+    <span class="progress" role="status"><span class="pen" aria-hidden="true"><span></span><span></span><span></span></span>Reading your weeks…</span></div>
+</div>
+<script></script>
+</body>
+</html>
