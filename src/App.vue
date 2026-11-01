@@ -4,6 +4,7 @@ import { usePlannerStore } from '@/stores/planner'
 import AppNavbar from '@/components/AppNavbar.vue'
 import WeekHeader from '@/components/WeekHeader.vue'
 import SettingsPage from '@/components/SettingsPage.vue'
+import AskPage from '@/components/AskPage.vue'
 import ExerciseGrid from '@/components/ExerciseGrid.vue'
 import DietSection from '@/components/DietSection.vue'
 import LoginForm from '@/components/LoginForm.vue'
@@ -19,12 +20,15 @@ import { dismissConfirm } from '@/composables/useConfirm'
 import { useMediaQuery } from '@/composables/useMediaQuery'
 import { useScreenSprint } from '@/composables/screenSprint'
 import { isDark } from '@/lib/theme'
+import { useAskStore } from '@/stores/ask'
 import { useSessionStore } from '@/stores/session'
 import { useSyncStore } from '@/stores/sync'
 
 const store = usePlannerStore()
 const session = useSessionStore()
 const sync = useSyncStore()
+// Made here, not on the Ask page, so it forgets its conversation on any sign-out or user change.
+useAskStore()
 // Started before the first render: a remembered user is signed in synchronously, so the app
 // shows their cached data straight away instead of flashing the sign-in screen.
 void session.init()
@@ -50,12 +54,20 @@ function confirmToken(): string | null {
 }
 const confirmLink = ref(confirmToken())
 
-/** The page the hash asks for: Settings at `#/settings`, otherwise the planner. */
-type Page = 'planner' | 'settings'
+/** The page the hash asks for: Settings at `#/settings`, Ask at `#/ask`, otherwise the planner. */
+type Page = 'planner' | 'settings' | 'ask'
 function pageFor(): Page {
-  return location.hash === '#/settings' ? 'settings' : 'planner'
+  if (location.hash === '#/settings') return 'settings'
+  return location.hash === '#/ask' ? 'ask' : 'planner'
 }
 const page = ref<Page>(pageFor())
+/**
+ * The page on screen: Ask only while the API answers questions (F10). Until the flag has loaded
+ * the week shows and `#/ask` stays, so a remembered Ask page opens once the flag says yes.
+ */
+const shown = computed<Page>(() =>
+  page.value === 'ask' && session.ask !== true ? 'planner' : page.value,
+)
 function onHash(): void {
   link.value = linkToken()
   confirmLink.value = confirmToken()
@@ -63,19 +75,34 @@ function onHash(): void {
   forgot.value = isForgot()
   page.value = pageFor()
 }
-// Back from Settings, focus returns to the Settings button that opened it.
-watch(page, async (now) => {
-  if (now !== 'planner') return
+/** Drop the page from the address bar, so a reload opens the week. */
+function forgetPage(): void {
+  history.replaceState(null, '', location.pathname + location.search)
+  page.value = 'planner'
+}
+// Back from Settings or Ask, focus returns to the bar button that opened it.
+const OPENERS: Record<Exclude<Page, 'planner'>, string> = {
+  settings: 'settings-button',
+  ask: 'ask-button',
+}
+watch(shown, async (now, before) => {
+  if (now !== 'planner' || before === 'planner') return
   await nextTick()
-  document.querySelector<HTMLElement>('[data-testid="settings-button"]')?.focus()
+  document.querySelector<HTMLElement>(`[data-testid="${OPENERS[before]}"]`)?.focus()
 })
-// Signing out on the Settings page lands on the sign-in screen, and the next sign-in on the week.
+// Ask is off on this planner (no key, or turned off since): `#/ask` means the week.
+watch(
+  () => page.value === 'ask' && session.ask === false,
+  (off) => {
+    if (off) forgetPage()
+  },
+  { immediate: true },
+)
+// Signing out on Settings or Ask lands on the sign-in screen, and the next sign-in on the week.
 watch(
   () => session.status,
   (status) => {
-    if (status !== 'signed-out' || page.value !== 'settings') return
-    history.replaceState(null, '', location.pathname + location.search)
-    page.value = 'planner'
+    if (status === 'signed-out' && page.value !== 'planner') forgetPage()
   },
 )
 /** Drop the token from the address bar and history, where a used or dead one has no place. */
@@ -109,15 +136,15 @@ watch(
   { immediate: true },
 )
 
-// The planner's screens (PlannerScreen card, K24–K27): outside Edit plan and Settings each section
-// fills the screen, the page sprints between them and the bar keeps out of sight. The class on
-// <html> turns on main.css's `full:` variant.
+// The planner's screens (PlannerScreen card, K24–K27): outside Edit plan, Settings and Ask each
+// section fills the screen, the page sprints between them and the bar keeps out of sight. The
+// class on <html> turns on main.css's `full:` variant.
 const screens = computed(
   () =>
     session.status === 'signed-in' &&
     !link.value &&
     !confirmLink.value &&
-    page.value === 'planner' &&
+    shown.value === 'planner' &&
     !store.configMode,
 )
 watchEffect(() => document.documentElement.classList.toggle('planner-screens', screens.value))
@@ -150,6 +177,8 @@ function onFocus(): void {
 }
 function onOnline(): void {
   void sync.flush()
+  // The flag may not have loaded yet (offline at start), and the key may have changed meanwhile.
+  void session.loadOptions()
 }
 function onStorage(ev: StorageEvent): void {
   if (ev.storageArea !== localStorage) return
@@ -201,18 +230,22 @@ onBeforeUnmount(() => {
     @leave="closeLink"
   />
   <template v-else-if="session.status === 'signed-in'">
-    <!-- The Settings page has no bar: it links back to the week itself (K52). -->
-    <AppNavbar v-if="page !== 'settings'" :overlay="screens" />
-    <!-- Settings and Edit plan are full width on the page's margins, like the week (K51, K54). -->
+    <!-- The Settings and Ask pages have no bar: they link back to the week themselves (K52). -->
+    <AppNavbar v-if="shown === 'planner'" :overlay="screens" />
+    <!-- Settings and Edit plan are full width on the page's margins, like the week (K51, K54).
+         Ask fills the screen beside its side panel and sets its own margins. -->
     <main
       class="print:max-w-none print:p-0 full:max-w-none full:p-0"
       :class="
-        page === 'settings' || store.configMode
-          ? 'px-(--screen-pad-x) pb-[calc(var(--u)*64)]'
-          : 'mx-auto max-w-6xl px-4 pb-16 sm:px-6 lg:px-8'
+        shown === 'ask'
+          ? undefined
+          : shown === 'settings' || store.configMode
+            ? 'px-(--screen-pad-x) pb-[calc(var(--u)*64)]'
+            : 'mx-auto max-w-6xl px-4 pb-16 sm:px-6 lg:px-8'
       "
     >
-      <template v-if="page === 'settings'">
+      <AskPage v-if="shown === 'ask'" />
+      <template v-else-if="shown === 'settings'">
         <SyncStatus />
         <EmailStatus />
         <SettingsPage />

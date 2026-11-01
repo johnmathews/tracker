@@ -106,6 +106,44 @@ describe('session', () => {
     expect(useSyncStore().loaded).toBe(true)
   })
 
+  it('loads the Ask flag for a remembered user, who never sees the sign-in form (F9)', async () => {
+    api = signedIn()
+    api.ask = true
+    const session = useSessionStore()
+    // Unknown until the server says, so the bar's Ask button never flashes on or off.
+    expect(session.ask).toBeNull()
+    await session.init()
+    await flushPromises()
+    expect(session.ask).toBe(true)
+    expect(api.paths('GET /auth/options')).toHaveLength(1)
+  })
+
+  it('loads the Ask flag after signing in, off when the API has no key', async () => {
+    api = fresh()
+    const session = useSessionStore()
+    await session.login(USER, PASSWORD)
+    await flushPromises()
+    expect(session.ask).toBe(false)
+  })
+
+  it('keeps the Ask flag as it was when the options can’t be read', async () => {
+    api = signedIn()
+    api.ask = true
+    api.offline = true
+    const session = useSessionStore()
+    await session.init()
+    await flushPromises()
+    expect(session.ask).toBeNull()
+    api.offline = false
+    await session.loadOptions()
+    expect(session.ask).toBe(true)
+    api.failNext('GET', '/auth/options', 502)
+    await session.loadOptions()
+    expect(session.ask).toBe(true)
+    session.askOff()
+    expect(session.ask).toBe(false)
+  })
+
   it.each([
     ['wrong password', { status: 401, body: { error: 'invalid' } }, { code: 'invalid' }],
     [

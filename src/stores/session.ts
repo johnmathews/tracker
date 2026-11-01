@@ -76,6 +76,11 @@ export const useSessionStore = defineStore('session', () => {
   const confirmed = ref<boolean | null>(null)
   /** Whether this planner sends email, so the sign-in screen can offer a reset by email. */
   const mail = ref(false)
+  /**
+   * Whether this planner answers questions (Ask, docs/api.md §3.1): null until the server has
+   * said, so the bar's Ask button neither flashes on nor off while it loads.
+   */
+  const ask = ref<boolean | null>(null)
 
   function begin(name: string, account?: Account): void {
     // A different user's data must never show, even for a moment.
@@ -89,6 +94,8 @@ export const useSessionStore = defineStore('session', () => {
     if (account) confirmed.value = account.confirmed ?? null
     writeKey(SESSION_KEY, { user: name })
     sync.start(name, lost)
+    // A remembered user never sees the sign-in form, which used to be the only reader (F9).
+    void loadOptions()
   }
 
   /** The server stopped accepting the session: ask to sign in again, keeping unsent changes. */
@@ -142,10 +149,20 @@ export const useSessionStore = defineStore('session', () => {
     return signedIn(await request<Account>('POST', '/invites/redeem', { token, password }))
   }
 
-  /** Ask the server whether it sends email (docs/api.md §4.1); unknown counts as no. */
+  /**
+   * Ask the server whether it sends email (docs/api.md §4.1), where unknown counts as no, and
+   * whether it answers questions (§3.1), which stays as it was when the server can't be read.
+   * Called after every sign-in and when the browser comes back online.
+   */
   async function loadOptions(): Promise<void> {
-    const res = await request<{ mail: boolean }>('GET', '/auth/options')
+    const res = await request<{ mail: boolean; ask?: boolean }>('GET', '/auth/options')
     mail.value = res.ok && res.data.mail === true
+    if (res.ok) ask.value = res.data.ask === true
+  }
+
+  /** The API said Ask is off (503 `ask-off`): the key was unset since the options were read. */
+  function askOff(): void {
+    ask.value = false
   }
 
   /** Ask for a reset link by email. The answer is the same whether or not the account exists. */
@@ -217,12 +234,14 @@ export const useSessionStore = defineStore('session', () => {
     expired,
     confirmed,
     mail,
+    ask,
     init,
     login,
     signup,
     lookup,
     redeem,
     loadOptions,
+    askOff,
     forgot,
     confirmEmail,
     resendConfirmation,

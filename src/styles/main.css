@@ -176,50 +176,101 @@
 }
 
 /*
- * The Settings page and the dialogs at the week's size (SettingsPage card, K51; Dialog card,
- * K55). Their controls keep their cards' shapes and colours and take the page's `--set-*` sizes
- * here, outside the layers, so the sizes win over the primitives' fixed utilities there only.
+ * The Settings page, the Ask page and the dialogs at the week's size (SettingsPage card, K51;
+ * the Ask mockup, layout A; Dialog card, K55). Their controls keep their cards' shapes and colours
+ * and take the page's `--set-*` sizes here, outside the layers, so the sizes win over the
+ * primitives' fixed utilities there only.
  */
-:is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+:is(
+    [data-slot='settings-page'],
+    [data-slot='ask-page'],
+    [data-slot='dialog'],
+    [data-slot='confirm-dialog']
+  )
   [data-slot='text-field']
   > label,
-:is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+:is(
+    [data-slot='settings-page'],
+    [data-slot='ask-page'],
+    [data-slot='dialog'],
+    [data-slot='confirm-dialog']
+  )
   [data-slot='text-area']
   > label {
   font-size: var(--set-label);
   line-height: 1.3;
 }
-:is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+:is(
+    [data-slot='settings-page'],
+    [data-slot='ask-page'],
+    [data-slot='dialog'],
+    [data-slot='confirm-dialog']
+  )
   [data-slot='text-field-input'] {
   height: var(--set-control);
   padding-inline: calc(var(--set-control) * 0.25);
   font-size: var(--set-text);
 }
-:is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+:is(
+    [data-slot='settings-page'],
+    [data-slot='ask-page'],
+    [data-slot='dialog'],
+    [data-slot='confirm-dialog']
+  )
   [data-slot='text-field']
   > p,
-:is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+:is(
+    [data-slot='settings-page'],
+    [data-slot='ask-page'],
+    [data-slot='dialog'],
+    [data-slot='confirm-dialog']
+  )
   [data-slot='text-area']
   > p {
   font-size: max(16px, calc(var(--u) * 16));
   line-height: 1.35;
 }
-:is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+:is(
+    [data-slot='settings-page'],
+    [data-slot='ask-page'],
+    [data-slot='dialog'],
+    [data-slot='confirm-dialog']
+  )
   [data-slot='text-area-input'] {
   min-height: calc(var(--set-control) * 1.4);
   padding: calc(var(--set-control) * 0.18) calc(var(--set-control) * 0.25);
   font-size: var(--set-text);
 }
-:is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+:is(
+    [data-slot='settings-page'],
+    [data-slot='ask-page'],
+    [data-slot='dialog'],
+    [data-slot='confirm-dialog']
+  )
   [data-slot='segmented-control-label'],
-:is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+:is(
+    [data-slot='settings-page'],
+    [data-slot='ask-page'],
+    [data-slot='dialog'],
+    [data-slot='confirm-dialog']
+  )
   [data-slot='radio-card-label'],
-:is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+:is(
+    [data-slot='settings-page'],
+    [data-slot='ask-page'],
+    [data-slot='dialog'],
+    [data-slot='confirm-dialog']
+  )
   [data-slot='stepper-label'] {
   font-size: var(--set-label);
   line-height: 1.3;
 }
-:is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+:is(
+    [data-slot='settings-page'],
+    [data-slot='ask-page'],
+    [data-slot='dialog'],
+    [data-slot='confirm-dialog']
+  )
   [data-slot='segmented-control']
   button {
   height: calc(var(--set-control) - 2px);
@@ -227,35 +278,70 @@
   font-size: var(--set-label);
   line-height: 1.3;
 }
-:is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+:is(
+    [data-slot='settings-page'],
+    [data-slot='ask-page'],
+    [data-slot='dialog'],
+    [data-slot='confirm-dialog']
+  )
   [data-slot='stepper']
   > div {
   height: var(--set-control);
 }
-:is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+:is(
+    [data-slot='settings-page'],
+    [data-slot='ask-page'],
+    [data-slot='dialog'],
+    [data-slot='confirm-dialog']
+  )
   [data-slot='stepper-lower'],
-:is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+:is(
+    [data-slot='settings-page'],
+    [data-slot='ask-page'],
+    [data-slot='dialog'],
+    [data-slot='confirm-dialog']
+  )
   [data-slot='stepper-raise'] {
   width: var(--set-control);
   height: var(--set-control);
 }
-:is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+:is(
+    [data-slot='settings-page'],
+    [data-slot='ask-page'],
+    [data-slot='dialog'],
+    [data-slot='confirm-dialog']
+  )
   [data-slot='stepper']
   svg,
-:is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+:is(
+    [data-slot='settings-page'],
+    [data-slot='ask-page'],
+    [data-slot='dialog'],
+    [data-slot='confirm-dialog']
+  )
   [data-slot='button']
   svg {
   width: var(--set-icon);
   height: var(--set-icon);
 }
-:is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+:is(
+    [data-slot='settings-page'],
+    [data-slot='ask-page'],
+    [data-slot='dialog'],
+    [data-slot='confirm-dialog']
+  )
   [data-slot='stepper']
   input {
   width: calc(var(--set-control) * 1.1);
   height: var(--set-control);
   font-size: calc(var(--set-label) * 1.25);
 }
-:is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+:is(
+    [data-slot='settings-page'],
+    [data-slot='ask-page'],
+    [data-slot='dialog'],
+    [data-slot='confirm-dialog']
+  )
   [data-slot='button'] {
   height: var(--set-control);
   padding-inline: var(--set-control-pad);
@@ -297,46 +383,86 @@
   padding-inline: 0.25em 0.5em;
 }
 /* The mark sets as tiles, three to a row: the dot and the name, the marks under them. */
-:is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+:is(
+    [data-slot='settings-page'],
+    [data-slot='ask-page'],
+    [data-slot='dialog'],
+    [data-slot='confirm-dialog']
+  )
   [data-slot='radio-card']
   [role='radiogroup'] {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: calc(var(--u) * 12);
 }
-:is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+:is(
+    [data-slot='settings-page'],
+    [data-slot='ask-page'],
+    [data-slot='dialog'],
+    [data-slot='confirm-dialog']
+  )
   [data-slot='radio-card-option'] {
   flex-wrap: wrap;
   row-gap: calc(var(--u) * 12);
   column-gap: calc(var(--u) * 14);
   padding: calc(var(--u) * 12) calc(var(--u) * 16);
 }
-:is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+:is(
+    [data-slot='settings-page'],
+    [data-slot='ask-page'],
+    [data-slot='dialog'],
+    [data-slot='confirm-dialog']
+  )
   [data-slot='radio-card-option'][aria-checked='true'] {
   padding: calc(var(--u) * 12 - 1px) calc(var(--u) * 16 - 1px);
 }
-:is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+:is(
+    [data-slot='settings-page'],
+    [data-slot='ask-page'],
+    [data-slot='dialog'],
+    [data-slot='confirm-dialog']
+  )
   [data-slot='radio-card-name'] {
   font-size: var(--set-text);
   line-height: 1.3;
 }
-:is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+:is(
+    [data-slot='settings-page'],
+    [data-slot='ask-page'],
+    [data-slot='dialog'],
+    [data-slot='confirm-dialog']
+  )
   [data-slot='radio-card-option'][aria-checked='true']
   [data-slot='radio-card-name'] {
   font-weight: 600;
 }
-:is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+:is(
+    [data-slot='settings-page'],
+    [data-slot='ask-page'],
+    [data-slot='dialog'],
+    [data-slot='confirm-dialog']
+  )
   [data-slot='radio-card-dot'] {
   width: calc(var(--set-icon) * 0.9);
   height: calc(var(--set-icon) * 0.9);
 }
-:is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+:is(
+    [data-slot='settings-page'],
+    [data-slot='ask-page'],
+    [data-slot='dialog'],
+    [data-slot='confirm-dialog']
+  )
   [data-slot='radio-card-dot']
   > * {
   width: 50%;
   height: 50%;
 }
-:is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+:is(
+    [data-slot='settings-page'],
+    [data-slot='ask-page'],
+    [data-slot='dialog'],
+    [data-slot='confirm-dialog']
+  )
   [data-slot='radio-card-picture'] {
   width: 100%;
   gap: calc(var(--u) * 10);
@@ -344,27 +470,62 @@
 }
 /* Folded: one set to a row, its marks beside its name. */
 @media screen and (orientation: portrait) and (width < 1000px), screen and (width < 760px) {
-  :is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+  :is(
+      [data-slot='settings-page'],
+      [data-slot='ask-page'],
+      [data-slot='dialog'],
+      [data-slot='confirm-dialog']
+    )
     [data-slot='radio-card']
     [role='radiogroup'] {
     grid-template-columns: minmax(0, 1fr);
   }
-  :is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+  :is(
+      [data-slot='settings-page'],
+      [data-slot='ask-page'],
+      [data-slot='dialog'],
+      [data-slot='confirm-dialog']
+    )
     [data-slot='radio-card-option'] {
     flex-wrap: nowrap;
     gap: 12px;
     padding: 10px 14px;
   }
-  :is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+  :is(
+      [data-slot='settings-page'],
+      [data-slot='ask-page'],
+      [data-slot='dialog'],
+      [data-slot='confirm-dialog']
+    )
     [data-slot='radio-card-option'][aria-checked='true'] {
     padding: 9px 13px;
   }
-  :is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])
+  :is(
+      [data-slot='settings-page'],
+      [data-slot='ask-page'],
+      [data-slot='dialog'],
+      [data-slot='confirm-dialog']
+    )
     [data-slot='radio-card-picture'] {
     width: auto;
     gap: 6px;
     padding-left: 0;
   }
+}
+
+/* The Ask page's question box is taller than a Settings field (the mockup's 120u), and its start
+   questions wrap inside their buttons, at the body weight, rather than run past a phone's edge. */
+[data-slot='ask-page'] [data-slot='text-area-input'] {
+  min-height: max(96px, calc(var(--u) * 120));
+  resize: vertical;
+}
+[data-slot='ask-page'] [data-ask-start] {
+  height: auto;
+  min-height: var(--set-control);
+  padding-block: calc(var(--u) * 8);
+  white-space: normal;
+  text-align: left;
+  font-weight: 400;
 }
 
 /* Type-style details tokens.css does not emit: the note is italic, the display smaller on phones.
@@ -465,6 +626,19 @@
   --text-base--line-height: 26px;
   --text-sm: 16px;
   --text-sm--line-height: 22px;
+
+  /* AnswerProgress's pen (its card, and the Ask mockup's `ask-write`): a stroke at 35% ink
+     brightens to full and back. Used only under motion-safe; at rest the stroke stays at 35%. */
+  --animate-pen-write: pen-write 1.2s ease-in-out infinite;
+  @keyframes pen-write {
+    0%,
+    100% {
+      opacity: 0.35;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
 }
 
 /* tokens.css already declares --font-sans/--font-serif and --radius-sm/md/lg on :root, in the

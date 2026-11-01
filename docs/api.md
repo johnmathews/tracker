@@ -200,8 +200,10 @@ import says the same.
 is seven marks, drawings included, or nulls. Its settings carry `goals`, which took no new version,
 as `foodPick` didn't: a reader from before them drops the key, and a file without them reads as no
 goals. The API's export also carries `conversations`, Ask's history, the one updated last first, in
-the shape `GET /ask/conversations/{id}` returns; it took no new version either. The browser's own
-export (Settings → Export) holds no conversations, since the browser keeps none. Import reads
+the shape `GET /ask/conversations/{id}` returns; it took no new version either. The browser keeps
+no conversations, so Settings → Export writes the device's plans, marks and settings and takes
+`conversations` from this export (`architecture.md` §4); with none, the file has no such key.
+Import reads
 version 4, version 3 (no notes), version 2 (kinds only, which read as the zigzag) and version 1,
 whose `true` days read as `great` and `false` days as empty; any other version gets `version`.
 
@@ -326,10 +328,11 @@ met days use exercises a day and foods a day, future days don't count), names an
 and never instructions, tools before judgement, no medical advice, short markdown with no
 headings, tables or images, and the voice. It holds nothing that varies, so it caches; the cache
 breakpoint is on it, and the tools render before it. Today, this week and the My goals note open
-the first user turn instead. The voice rules state facts against the goals, never count streaks
-and never quote the My goals note back. `VERDICT_RULE`, which lets answers say plainly that
-something is too little or too much and quote the goals back, waits on John's ruling (F7); setting
-`PLAIN_VERDICTS = True` in `ask.py` turns it on.
+the first user turn instead. The voice is John's ruling (F7, K65, voice.md "Ask"): facts first and
+no blame, exclamation marks or hype, and `VERDICT_RULE`, which lets an answer say plainly that
+something is too little or too much, count streaks and give scores or rankings when they help,
+and quote the person's goals and notes back as advice. `PLAIN_VERDICTS` (True) turns it on;
+False would put back the app's own rules (no streaks, scores or rankings, nothing quoted back).
 
 **The tools** are `consistency`, `goals`, `item_history`, `week_summary` and `weeks`, sorted by
 name, each with a strict schema. Each wraps the `insights` reader of the same name (§1.1) and is a

@@ -1184,7 +1184,9 @@ def test_frames_are_one_line_json(
 
 def test_the_system_prompt_is_frozen_and_holds_the_rules() -> None:
     prompt = ask.SYSTEM_PROMPT
-    assert prompt == ask.system_prompt(plain_verdicts=False)
+    # John's ruling on the voice (V2, extended; K65) is in force.
+    assert ask.PLAIN_VERDICTS is True
+    assert prompt == ask.system_prompt(plain_verdicts=True)
     for rule in (
         "carries forward",
         "missed",
@@ -1198,17 +1200,31 @@ def test_the_system_prompt_is_frozen_and_holds_the_rules() -> None:
         "No headings, tables or images",
         "Sentence case",
         "No exclamation marks",
-        "streaks",
+        "without blame",
+        ask.VERDICT_RULE,
     ):
         assert rule in prompt, rule
-    assert ask.VERDICT_RULE not in prompt
 
 
-def test_the_verdict_rule_turns_on_with_one_switch() -> None:
+def test_the_verdict_rule_is_johns_v2_extended() -> None:
+    """Plain verdicts, goals and notes quoted back as advice, and streaks, scores and rankings;
+    the rest of the voice holds (no exclamation marks, no hype, no blame)."""
+    rule = ask.VERDICT_RULE
+    for allowed in ("too little or too much", "streaks", "scores", "rankings", "goals and notes"):
+        assert allowed in rule, allowed
     plain = ask.system_prompt(plain_verdicts=True)
-    assert ask.VERDICT_RULE in plain
-    assert "quote the person's My goals note back" not in plain
-    assert "quote the person's My goals note back" in ask.system_prompt(plain_verdicts=False)
+    strict = ask.system_prompt(plain_verdicts=False)
+    for forbidden in (
+        "Don't count streaks",
+        "Don't give scores or rankings",
+        "Don't quote the person's notes back",
+        "Don't quote the person's My goals note back",
+    ):
+        assert forbidden not in plain, forbidden
+        assert forbidden in strict, forbidden
+    assert rule not in strict
+    for kept in ("No exclamation marks", "No hype", "without blame"):
+        assert kept in plain and kept in strict, kept
 
 
 # --- conversations -------------------------------------------------------------------------------

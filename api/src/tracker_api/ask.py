@@ -77,20 +77,27 @@ type RunTool = Callable[[str, object], Awaitable[tuple[str, bool]]]
 
 # --- The prompt ----------------------------------------------------------------------------------
 
-#: John's ruling on the voice (F7) is pending. Until then answers state facts against the goals
-#: and never quote the My goals note back. Setting PLAIN_VERDICTS to True adds this rule and
-#: drops that one; nothing else changes.
+#: John's ruling on the voice (F7, K65): V2, extended. "V2 - plain verdict, the app may qote a note
+#: back as advice. and also may include streaks scores or rankings." For Ask's answers only, this
+#: rule replaces the app's three (no streaks, scores or rankings; no note or goals quoted back).
+#: No exclamation marks, no hype and no blame still hold either way (voice.md, "Ask").
 VERDICT_RULE = (
-    "You may say plainly when something is too little or too much for the person's goals, and"
-    " you may quote the person's goals back to them."
+    "You may say plainly when something is too little or too much for the person's goals. You"
+    " may count streaks and runs of days or weeks, and give scores or rankings, when they help"
+    " answer the question. You may quote the person's goals and notes back to them as advice."
 )
-PLAIN_VERDICTS = False
-_NO_GOALS_QUOTE = "- Don't quote the person's My goals note back to them."
+PLAIN_VERDICTS = True
+#: The app's own voice, which Ask's answers followed before the ruling.
+_STRICT_VOICE = (
+    "- Don't count streaks or runs of days or weeks. Don't give scores or rankings.\n"
+    "- Don't quote the person's notes back to them as advice.\n"
+    "- Don't quote the person's My goals note back to them."
+)
 
 
 def system_prompt(plain_verdicts: bool) -> str:
     """The system prompt. It holds nothing that varies by request or person, so it caches."""
-    verdicts = f"- {VERDICT_RULE}" if plain_verdicts else _NO_GOALS_QUOTE
+    verdicts = f"- {VERDICT_RULE}" if plain_verdicts else _STRICT_VOICE
     return f"""\
 You answer one person's questions about what they track in Tracker. Tracker is a weekly planner \
 for exercise and food. Answer about this person's tracking only. Answer plainly and briefly. \
@@ -131,8 +138,6 @@ How to answer:
 - Facts first, then one next step.
 - Say what the numbers show without blame. Write "Two of four this week", not "You missed two \
 days".
-- Don't count streaks or runs of days or weeks. Don't give scores or rankings.
-- Don't quote the person's notes back to them as advice.
 {verdicts}
 - Write short markdown: paragraphs and lists. No headings, tables or images.
 - Sentence case. No exclamation marks. No hype, such as "amazing" or "crushed it".

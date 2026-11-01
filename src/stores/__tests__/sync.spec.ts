@@ -822,7 +822,10 @@ describe('importFile', () => {
     await settle()
     api.offline = false
     const outcome = await sync.importFile(data)
-    expect(outcome).toEqual({ ok: true, added: { weeks: 1, ticks: 2, settings: true } })
+    expect(outcome).toEqual({
+      ok: true,
+      added: { weeks: 1, ticks: 2, settings: true, conversations: 0 },
+    })
     const order = api.paths().filter((p) => !p.startsWith('GET'))
     expect(order.at(-1)).toBe('POST /import')
     expect(api.calls.find((c) => c.path === '/import')!.expectedUser).toBe(USER)
@@ -831,6 +834,25 @@ describe('importFile', () => {
     expect(planner.plans['2026-10-12']).toEqual([SQUATS])
     expect(planner.isDone('pu', 3) && planner.isDone('sq', 0)).toBe(true)
     expect(planner.accent).toBe('#0a84ff')
+  })
+
+  it('posts the file’s Ask conversations, which the server adds when it has none of their id', async () => {
+    const { sync } = await start(emptyState())
+    const turn = { question: 'Q', answer: 'A', stop: 'end_turn' as const, askedAt: 1 }
+    api.addConversation(USER, { id: 'kept', title: 'Mine', turns: [turn] })
+    const conversations = [
+      { id: 'kept', title: 'Theirs', createdAt: 1, updatedAt: 2, turns: [] },
+      { id: 'new', title: 'New', createdAt: 1, updatedAt: 2, turns: [turn] },
+    ]
+    const outcome = await sync.importFile({ ...data, conversations })
+    expect(outcome).toMatchObject({ ok: true, added: { conversations: 1 } })
+    const sent = api.calls.find((c) => c.path === '/import')!.body as Record<string, unknown>
+    expect(sent.conversations).toEqual(conversations)
+    expect(api.accounts.get(USER)!.conversations.map((c) => c.title)).toEqual(['Mine', 'New'])
+    // A file with no list sends none, as one from before Ask.
+    await sync.importFile(data)
+    const last = api.calls.filter((c) => c.path === '/import').at(-1)!.body as object
+    expect('conversations' in last).toBe(false)
   })
 
   it('fills empty goals from the file, and keeps goals already saved', async () => {

@@ -71,8 +71,8 @@ export type SyncState = {
   settings: KnownSettings | null
 }
 type Snapshot = { exercise: Tracked; diet: Tracked; settings: PortableSettings }
-/** What `POST /api/import` added. */
-export type ImportAdded = { weeks: number; ticks: number; settings: boolean }
+/** What `POST /api/import` added; `conversations` counts Ask's (docs/api.md §3). */
+export type ImportAdded = { weeks: number; ticks: number; settings: boolean; conversations: number }
 export type ImportOutcome =
   | { ok: true; added: ImportAdded }
   | { ok: false; code: 'offline' | 'server' | 'auth' | 'quota' | 'error' }
@@ -475,6 +475,8 @@ export const useSyncStore = defineStore('sync', () => {
       exercise: data.exercise,
       diet: data.diet,
       ...(data.settings ? { settings: data.settings } : {}),
+      // Ask's history: the server adds the ones it has no id for, and never changes the rest.
+      ...(data.conversations ? { conversations: data.conversations } : {}),
     }
     const res = await call<ImportAdded>('POST', '/import', file)
     if (gen !== generation) return { ok: false, code: 'error' }

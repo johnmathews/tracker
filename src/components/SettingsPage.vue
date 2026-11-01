@@ -1,13 +1,22 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, useId, useTemplateRef } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, useId, useTemplateRef, watch } from 'vue'
 import { ChevronLeft, Download, LogOut, Upload } from '@lucide/vue'
 import { usePlannerStore } from '@/stores/planner'
 import { useDietStore } from '@/stores/diet'
+import { useAskStore } from '@/stores/ask'
 import { useSessionStore } from '@/stores/session'
 import { useSyncStore } from '@/stores/sync'
+import { request } from '@/lib/api'
 import { describeProblem } from '@/lib/problems'
 import { useImportSummary } from '@/composables/importSummary'
-import { MARK_KINDS, MARK_SETS, isMarkSet, type MarkSet } from '@/lib/storage'
+import {
+  MARK_KINDS,
+  MARK_SETS,
+  MAX_GOALS,
+  isMarkSet,
+  normaliseGoals,
+  type MarkSet,
+} from '@/lib/storage'
 import { THEMES, type Theme } from '@/lib/theme'
 import { countOf } from '@/lib/words'
 import { APP_NAME } from '@/lib/app'
@@ -24,6 +33,7 @@ import { DayMarkDrawing } from '@/components/ui/day-mark'
 import { InlineMessage } from '@/components/ui/inline-message'
 import { RadioCard } from '@/components/ui/radio-card'
 import { SegmentedControl } from '@/components/ui/segmented-control'
+import { TextArea } from '@/components/ui/text-area'
 import { TextLink } from '@/components/ui/text-link'
 
 const THEME_NAMES: Record<Theme, string> = { system: 'System', light: 'Light', dark: 'Dark' }
@@ -52,21 +62,65 @@ const IMPORT_FAILED: Record<'offline' | 'server' | 'auth' | 'quota' | 'error', s
   error: 'The server refused the import, so nothing changed.',
 }
 
+const EXPORT_WITHOUT_HISTORY =
+  'Exported without your Ask conversations, because the server couldn’t be reached.'
+
+/** How long typing in Your goals rests before it is saved (F18). */
+const GOALS_PAUSE_MS = 600
+
 const store = usePlannerStore()
 const diet = useDietStore()
+const ask = useAskStore()
 const session = useSessionStore()
 const sync = useSyncStore()
 const heading = useTemplateRef<HTMLHeadingElement>('heading')
 const signOutButton = useTemplateRef<InstanceType<typeof Button>>('signOutButton')
-const ids = { look: useId(), data: useId(), account: useId() }
+const ids = { look: useId(), goals: useId(), data: useId(), account: useId() }
 
 // Arriving here moves focus to the page's heading, so a screen reader starts at the top.
 onMounted(() => heading.value!.focus())
 
+/*
+ * Your goals: the box keeps its own draft, saved when the person stops typing for a moment or
+ * leaves the box, so one pause is one write (F18). The draft is never trimmed while typing.
+ */
+const goalsDraft = ref(store.goals)
+let goalsTimer: ReturnType<typeof setTimeout> | undefined
+/**
+ * Typing may replace the goals only once they are known: read from the server or a cache that
+ * carried them, or an account the server says has no settings at all (a new one), whose goals
+ * are empty. Until then a stand-in would erase the saved ones (F1).
+ */
+const goalsEditable = computed(
+  () => store.goalsKnown || (sync.fresh && store.savedSettings() === null),
+)
+
+function commitGoals(): void {
+  clearTimeout(goalsTimer)
+  goalsTimer = undefined
+  if (goalsEditable.value) store.setGoals(goalsDraft.value)
+}
+function onGoalsInput(): void {
+  clearTimeout(goalsTimer)
+  goalsTimer = setTimeout(commitGoals, GOALS_PAUSE_MS)
+}
+// Goals saved elsewhere (another tab, the server) show here, unless the person is mid-pause.
+watch(
+  () => store.goals,
+  (saved) => {
+    if (goalsTimer === undefined && saved !== normaliseGoals(goalsDraft.value)) {
+      goalsDraft.value = saved
+    }
+  },
+)
+onBeforeUnmount(() => {
+  if (goalsTimer !== undefined) commitGoals()
+})
+
 const fileInput = ref<HTMLInputElement | null>(null)
 /** A parsed file waiting for "Import". */
 const pending = ref<ExportData | null>(null)
-const notice = ref<{ tone: 'error' | 'success'; text: string } | null>(null)
+const notice = ref<{ tone: 'error' | 'success' | 'info'; text: string } | null>(null)
 const signOutProblem = ref<string | null>(null)
 const importing = ref(false)
 const summary = useImportSummary()
@@ -82,19 +136,31 @@ const markSet = computed({
   },
 })
 
-function exportData(): void {
-  downloadExport(
-    buildExport({
-      exercise: { plans: store.plans, log: store.log },
-      diet: { plans: diet.plans, log: diet.log },
-      settings: {
-        accent: store.accent,
-        dailyPick: store.dailyPick,
-        foodPick: store.foodPick,
-        goals: store.goals,
-      },
-    }),
-  )
+/**
+ * The plans, marks and settings as this device has them, unsynced changes included, plus Ask's
+ * conversations, which only the server keeps: its own export carries them (docs/api.md §3), so
+ * one read fetches them all. Without a server the file still downloads, without them, and says so.
+ */
+async function exportData(): Promise<void> {
+  notice.value = null
+  const file = buildExport({
+    exercise: { plans: store.plans, log: store.log },
+    diet: { plans: diet.plans, log: diet.log },
+    settings: {
+      accent: store.accent,
+      dailyPick: store.dailyPick,
+      foodPick: store.foodPick,
+      goals: store.goals,
+    },
+  })
+  const res = await request<{ conversations?: unknown }>('GET', '/export', undefined, {
+    'X-Expected-User': session.user ?? '',
+  })
+  const conversations = res.ok ? res.data.conversations : undefined
+  // A file without the list reads as one from before Ask (transfer.ts), so none means no key.
+  const history = Array.isArray(conversations) && conversations.length ? { conversations } : {}
+  downloadExport({ ...file, ...history })
+  if (!res.ok) notice.value = { tone: 'info', text: EXPORT_WITHOUT_HISTORY }
 }
 
 async function onFile(ev: Event): Promise<void> {
@@ -117,6 +183,8 @@ async function onFile(ev: Event): Promise<void> {
     notice.value = { tone: 'error', text: IMPORT_ERRORS[result.error] }
     return
   }
+  // The summary counts only the file's conversations the account doesn't have yet.
+  if (result.data.conversations?.length) await ask.loadList()
   if (!summary.addsAnything(result.data)) {
     notice.value = {
       tone: 'success',
@@ -179,9 +247,11 @@ async function confirmSignOut(): Promise<void> {
 <!--
   The Settings page (brand/design-system/project/components/SettingsPage), at #/settings, with no
   Header (K52): a link back to the week, the heading, then Appearance (Marks, then Theme, K59),
-  Your data and Account. The daily targets are set in Edit plan (K56). Full width in rows like the week (K51): each section's
+  Your goals (the Ask mockup's row), Your data and Account. The daily targets are set in Edit
+  plan (K56). Full width in rows like the week (K51): each section's
   heading in the week's name column, its settings beside it, a line rule above each row, controls
-  beside their words (K53). Settings take effect at once; there is no Save.
+  beside their words (K53). Settings take effect at once; there is no Save. Your goals saves when
+  typing pauses.
 -->
 <template>
   <div
@@ -224,6 +294,29 @@ async function confirmSignOut(): Promise<void> {
           </template>
         </RadioCard>
         <SegmentedControl v-model="theme" label="Theme" :options="THEME_OPTIONS" />
+      </div>
+    </section>
+
+    <section
+      :aria-labelledby="ids.goals"
+      class="grid grid-cols-[var(--grid-name-w)_minmax(0,1fr)] items-start border-t border-line py-(--set-sec-y) folded:flex folded:flex-col folded:items-stretch folded:gap-4"
+    >
+      <h2 :id="ids.goals" class="title-2 text-(length:--set-h2) leading-tight text-ink">
+        Your goals
+      </h2>
+      <div class="flex min-w-0 flex-col gap-(--set-gap)">
+        <TextArea
+          v-model="goalsDraft"
+          label="What you’re working towards"
+          hint="Ask reads this when it answers. Nothing else does."
+          rows="4"
+          :maxlength="MAX_GOALS"
+          :disabled="!goalsEditable"
+          class="max-w-[calc(var(--u)*900)]"
+          data-testid="goals"
+          @input="onGoalsInput"
+          @blur="commitGoals"
+        />
       </div>
     </section>
 

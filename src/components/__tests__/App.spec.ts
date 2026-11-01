@@ -454,7 +454,7 @@ describe('the Settings page', () => {
         .get(PANEL)
         .findAll('h2')
         .map((h) => h.text()),
-    ).toEqual(['Appearance', 'Your data', 'Account'])
+    ).toEqual(['Appearance', 'Your goals', 'Your data', 'Account'])
     // Marks, then Theme (K59); the daily targets are set in Edit plan (K56).
     expect(
       wrapper
@@ -569,6 +569,8 @@ describe('export and import', () => {
     await rowCells('Squats')[3]!.trigger('click')
     await openSettings()
     await button('Export').trigger('click')
+    // Export reads Ask's conversations from the server first.
+    await flushPromises()
     expect(click).toHaveBeenCalledOnce()
     expect((click.mock.contexts[0] as HTMLAnchorElement).download).toBe('tracker-2026-10-23.json')
     const file = JSON.parse(await blob!.text())
@@ -828,6 +830,8 @@ describe('export and import with the sample data', () => {
     ).toEqual(['Push-ups', 'Pull-ups', 'Squats', 'Kettlebell halos', 'Plank'])
     await openSettings()
     await button('Export').trigger('click')
+    // The account has no Ask conversations, so the file is the sample as it was.
+    await flushPromises()
     expect(JSON.parse(await blob!.text())).toEqual({ ...sample, exportedAt: NOW.toISOString() })
   })
 
@@ -841,7 +845,7 @@ describe('export and import with the sample data', () => {
     await input.trigger('change')
     await flushPromises()
     expect(wrapper.get('[data-testid="import-summary"]').text()).toBe(
-      'Adds six weekly plans and 102 marked days, plus the exercises and foods a day. Existing plans and marks stay as they are.',
+      'Adds six weekly plans and 102 marked days, plus the exercises and foods a day and your goals. Existing plans and marks stay as they are.',
     )
     await button('Import').trigger('click')
     await flushPromises()

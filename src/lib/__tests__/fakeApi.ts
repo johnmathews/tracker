@@ -1,12 +1,20 @@
 /**
  * An in-memory stand-in for the API (docs/api.md), installed as `fetch` in tests. It keeps the
  * rules the client depends on: plan revisions with 409s, identical-items creates succeeding,
- * single-day ticks, settings, sessions, invite links and, with `mail` on, email confirmation and
- * reset requests. Controls let a test go offline, fail
- * a request, or hold replies back to provoke races.
+ * single-day ticks, settings, sessions, invite links, with `mail` on email confirmation and
+ * reset requests, and with `ask` on Ask's questions, caps and conversation history (§3.1).
+ * Controls let a test go offline, fail a request, hold replies back to provoke races, and script
+ * or drive an answer's stream.
  */
-import { normaliseGoals, type Days } from '@/lib/storage'
-import { mergeSettings, mergeSummary, parseExport } from '@/lib/transfer'
+import { normaliseGoals, type Conversation, type Days } from '@/lib/storage'
+import {
+  EXPORT_FORMAT,
+  EXPORT_VERSION,
+  mergeConversations,
+  mergeSettings,
+  mergeSummary,
+  parseExport,
+} from '@/lib/transfer'
 
 type Section = 'exercise' | 'diet'
 type Plan = { items: unknown[]; rev: number }
@@ -21,9 +29,44 @@ export type Account = {
   partial: Record<Section, Record<string, Record<string, number>>>
   missed: Record<Section, Record<string, Record<string, number>>>
   settings: Settings | null
+  /** Ask's history, the one updated last first, as `GET /api/ask/conversations` lists it. */
+  conversations: Conversation[]
 }
 
 export const PASSWORD = 'correct horse battery'
+
+/** One server-sent event, as the API frames it (docs/api.md §3.1). */
+export function sse(event: string, data: unknown): string {
+  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
+}
+
+/** The answer a question gets unless a test scripts another. */
+export const ANSWER = 'Three of four this week.'
+
+/** A stream a test writes to by hand: frames arrive when it pushes them. */
+export type StreamControl = {
+  push: (text: string) => void
+  end: () => void
+  /** The connection drops: the reader's next read fails. */
+  fail: () => void
+  /** True once the client cancelled its reader (Stop, a timeout, or a finished answer). */
+  cancelled: () => boolean
+}
+
+const encoder = new TextEncoder()
+
+function eventStream(body: ReadableStream<Uint8Array>): Response {
+  return new Response(body, { status: 200, headers: { 'Content-Type': 'text/event-stream' } })
+}
+
+function chunks(texts: string[]): ReadableStream<Uint8Array> {
+  return new ReadableStream({
+    start(c) {
+      for (const t of texts) c.enqueue(encoder.encode(t))
+      c.close()
+    },
+  })
+}
 
 function emptyAccount(password: string): Account {
   return {
@@ -33,6 +76,7 @@ function emptyAccount(password: string): Account {
     partial: { exercise: {}, diet: {} },
     missed: { exercise: {}, diet: {} },
     settings: null,
+    conversations: [],
   }
 }
 
@@ -73,6 +117,15 @@ export class FakeApi {
   /** Every address a reset link was asked for, sent or not. */
   forgotten: string[] = []
   offline = false
+  /** Whether Ask is on (an Anthropic key on the server); off, as on a planner without one. */
+  ask = false
+  /** Questions left today, and the per-account cap, as `GET /api/ask` says them. */
+  askRemaining = 30
+  askLimit = 30
+  /** Seconds until a question is free again, sent with 429 `too-many`. */
+  askRetryAfter = 3600
+  private askScripts: (string[] | ReadableStream<Uint8Array>)[] = []
+  private ids = 0
   calls: { method: string; path: string; body: unknown; expectedUser?: string }[] = []
   private failures: { method: string; path: string; status: number; body?: unknown }[] = []
   private held: (() => void)[] | null = null
@@ -111,6 +164,49 @@ export class FakeApi {
       this.held = null
       for (const go of waiting) go()
     }
+  }
+
+  /**
+   * The next question is answered with these frames, as they are, and changes nothing on the
+   * server beyond the claimed question: the test's frames are the whole answer.
+   */
+  answerNext(frames: string[]): void {
+    this.askScripts.push(frames)
+  }
+
+  /** The next question's stream stays open, and the test writes to it by hand. */
+  streamNext(): StreamControl {
+    let ctl!: ReadableStreamDefaultController<Uint8Array>
+    let cancelled = false
+    this.askScripts.push(
+      new ReadableStream<Uint8Array>({
+        start(c) {
+          ctl = c
+        },
+        cancel() {
+          cancelled = true
+        },
+      }),
+    )
+    return {
+      push: (text) => ctl.enqueue(encoder.encode(text)),
+      end: () => ctl.close(),
+      fail: () => ctl.error(new TypeError('network error')),
+      cancelled: () => cancelled,
+    }
+  }
+
+  /** A conversation as the API keeps it, added to `name`'s history at the top. */
+  addConversation(name: string, c: Partial<Conversation> & { id: string }): Conversation {
+    const conversation: Conversation = {
+      title: c.turns?.[0]?.question ?? 'A question',
+      createdAt: 1_700_000_000,
+      updatedAt: 1_700_000_000,
+      turns: [],
+      ...c,
+    }
+    this.accounts.get(name)!.conversations.unshift(conversation)
+    return conversation
   }
 
   /** The calls made, as `METHOD /path`, optionally only those starting with a prefix. */
@@ -177,7 +273,9 @@ export class FakeApi {
   ): Response {
     const error = (status: number, code: string, extra: object = {}) =>
       Response.json({ error: code, ...extra }, { status })
-    if (method === 'GET' && path === '/auth/options') return Response.json({ mail: this.mail })
+    if (method === 'GET' && path === '/auth/options') {
+      return Response.json({ mail: this.mail, ask: this.ask })
+    }
     if (method === 'POST' && path === '/auth/forgot') {
       if (!this.mail) return error(503, 'mail-off')
       const email = String(body.email).trim().toLowerCase()
@@ -242,7 +340,9 @@ export class FakeApi {
       return Response.json({}, { status: 202 })
     }
     if (method === 'GET' && path === '/state') return Response.json(this.state(user!))
+    if (method === 'GET' && path === '/export') return Response.json(this.exportFile(a))
     if (method === 'POST' && path === '/import') return this.import(a, body)
+    if (path === '/ask' || path.startsWith('/ask/')) return this.routeAsk(a, method, path, body)
     if (method === 'PUT' && path === '/settings') {
       a.settings = {
         accent: String(body.accent),
@@ -284,6 +384,85 @@ export class FakeApi {
     return error(404, 'not-found')
   }
 
+  /** Ask (docs/api.md §3.1): the questions left, a question's stream, and the history. */
+  private routeAsk(a: Account, method: string, path: string, body: Record<string, unknown>) {
+    const error = (status: number, code: string, extra: object = {}) =>
+      Response.json({ error: code, ...extra }, { status })
+    if (path === '/ask/conversations') {
+      if (method === 'GET') {
+        return Response.json({
+          conversations: a.conversations.map((c) => ({
+            id: c.id,
+            title: c.title,
+            updatedAt: c.updatedAt,
+            turns: c.turns.length,
+          })),
+        })
+      }
+      a.conversations = []
+      return new Response(null, { status: 204 })
+    }
+    const m = /^\/ask\/conversations\/([A-Za-z0-9_-]+)$/.exec(path)
+    if (m) {
+      const found = a.conversations.find((c) => c.id === m[1])
+      if (!found) return error(404, 'not-found')
+      if (method === 'GET') return Response.json(found)
+      a.conversations = a.conversations.filter((c) => c !== found)
+      return new Response(null, { status: 204 })
+    }
+    if (!this.ask) return error(503, 'ask-off')
+    if (method === 'GET')
+      return Response.json({ remaining: this.askRemaining, limit: this.askLimit })
+    const id = body.conversation
+    let conversation = a.conversations.find((c) => c.id === id)
+    if (id !== undefined && !conversation) return error(404, 'not-found')
+    if (this.askRemaining <= 0) {
+      return error(429, 'too-many', { retryAfter: this.askRetryAfter })
+    }
+    this.askRemaining--
+    const script = this.askScripts.shift()
+    if (script instanceof ReadableStream) return eventStream(script)
+    if (script) return eventStream(chunks(script))
+    // The default answer, saved as the API saves it.
+    const question = String(body.question)
+    const now = Math.floor(Date.now() / 1000)
+    conversation ??= {
+      id: `c${++this.ids}`,
+      title: question.slice(0, 80),
+      createdAt: now,
+      updatedAt: now,
+      turns: [],
+    }
+    conversation.turns.push({ question, answer: ANSWER, stop: 'end_turn', askedAt: now })
+    conversation.updatedAt = now
+    const saved = conversation
+    a.conversations = [saved, ...a.conversations.filter((c) => c !== saved)]
+    return eventStream(
+      chunks([
+        sse('start', { remaining: this.askRemaining, conversation: saved.id }),
+        ': keep-alive\n\n',
+        sse('tool', { name: 'week_summary' }),
+        sse('text', { delta: ANSWER.slice(0, 10) }),
+        sse('text', { delta: ANSWER.slice(10) }),
+        sse('done', { stop: 'end_turn', saved: true }),
+      ]),
+    )
+  }
+
+  /** `GET /api/export`: the account's data and its Ask history (docs/api.md §3). */
+  private exportFile(a: Account): object {
+    const state = this.state(this.signedIn!) as Record<Section, { plans: object; log: object }>
+    return {
+      format: EXPORT_FORMAT,
+      version: EXPORT_VERSION,
+      exportedAt: new Date().toISOString(),
+      exercise: { plans: state.exercise.plans, log: state.exercise.log },
+      diet: { plans: state.diet.plans, log: state.diet.log },
+      settings: a.settings,
+      conversations: a.conversations,
+    }
+  }
+
   /** The API's merge: existing weeks keep their plan and marks, settings only if none (goals aside). */
   private import(a: Account, body: unknown): Response {
     const parsed = parseExport(JSON.stringify(body))
@@ -317,6 +496,9 @@ export class FakeApi {
     const merged = mergeSettings(a.settings, parsed.data.settings)
     const settings = JSON.stringify(merged) !== JSON.stringify(a.settings)
     a.settings = merged
-    return Response.json({ weeks, ticks, settings })
+    // As the API: a conversation is added only when the account has none with its id.
+    const before = a.conversations.length
+    a.conversations = mergeConversations(a.conversations, parsed.data.conversations ?? [])
+    return Response.json({ weeks, ticks, settings, conversations: a.conversations.length - before })
   }
 }

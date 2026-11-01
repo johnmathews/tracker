@@ -5,12 +5,14 @@ import {
   ChevronLeft,
   ChevronRight,
   Maximize,
+  MessageCircle,
   Minimize,
   Pencil,
   Printer,
   Settings,
 } from '@lucide/vue'
 import { usePlannerStore } from '@/stores/planner'
+import { useSessionStore } from '@/stores/session'
 import { weekRange } from '@/lib/dates'
 import { BarAction } from '@/components/ui/bar-action'
 import { BrandMark } from '@/components/ui/brand-mark'
@@ -34,6 +36,7 @@ const reveal = useBarReveal(
 const fullscreen = useFullscreen()
 
 const store = usePlannerStore()
+const session = useSessionStore()
 const otherWeek = computed(() => store.weekKey !== store.currentWeekKey)
 
 function print(): void {
@@ -43,6 +46,11 @@ function print(): void {
 /** Settings is a page of its own (#/settings); App shows it on the hash change. */
 function openSettings(): void {
   location.hash = '#/settings'
+}
+
+/** Ask is a page of its own too (#/ask). */
+function openAsk(): void {
+  location.hash = '#/ask'
 }
 
 /**
@@ -65,8 +73,9 @@ function skipToToday(): void {
   The Header card (brand/design-system/project/components/Header), full width and as big as the
   week below it (K47): the wordmark, then "This week" while another week is on screen, beside
   the week navigation at the centre (K50), then the BarActions Edit plan (a toggle, filled while
-  on; K48), Settings (which opens the Settings page), Print and, last, Full screen (K49). The
-  Settings page has no bar (K52): it links back to the week itself. Every size is a `--bar-*`
+  on; K48), Ask (which opens the Ask page, only while the API answers questions), Settings (which
+  opens the Settings page), Print and, last, Full screen (K49). The Settings and Ask pages have no
+  bar (K52): they link back to the week themselves. Every size is a `--bar-*`
   size from main.css, so
   the bar follows the screen. Folded, the planner's bar drops the wordmark, the week takes the
   first row (CSS order) and the actions share the second; the markup stays in the desktop order,
@@ -189,6 +198,17 @@ function skipToToday(): void {
           data-testid="edit-plan-button"
           @click="store.setConfigMode(!store.configMode)"
           ><Pencil
+        /></BarAction>
+        <!-- Ask, just before Settings (the Ask mockup): only once the API has said it answers
+             questions, so it never flashes in or out while the flag loads. Folded, the actions'
+             row reads Edit plan, Ask, Settings. -->
+        <BarAction
+          v-if="session.ask === true"
+          label="Ask"
+          class="folded:flex-1 folded:basis-0"
+          data-testid="ask-button"
+          @click="openAsk"
+          ><MessageCircle
         /></BarAction>
         <BarAction
           label="Settings"
