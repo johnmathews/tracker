@@ -1,7 +1,7 @@
 import type { TrackerTypeId } from '@/lib/trackerTypes'
 
 /**
- * The item page's sections, shown or hidden and in order, per tracker type (K66, P24). A setting
+ * The item page's sections, shown or hidden and in order, per tracker type (K66, P29). A setting
  * that syncs with the account (`itemSections`), keyed by type id, not section, so every page of a
  * type shares one. `api/src/tracker_api/item_sections.py` normalises the same way, and
  * `fixtures/item-sections/normalise.json` keeps the two in step.

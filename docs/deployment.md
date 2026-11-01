@@ -33,6 +33,11 @@ so nothing compiles. The runtime stage is `python:3.13-slim`, running as uid 100
 as its volume and uvicorn on port **8000**. `tracker-admin` is on the `PATH`, and the `HEALTHCHECK`
 calls `/api/healthz` with Python's `urllib` (the slim image has no curl).
 
+**Time zone.** `TIMEZONE` (default `Europe/Amsterdam`, [api.md](api.md) §6) is the zone in which
+the MCP tools count today and this week. The container's clock stays in UTC. The slim image
+ships the IANA zone files (checked on 2026-11-01, and on every build by the arm64 smoke test), so
+any zone name works, and an unknown one stops the API at startup, as any bad setting does.
+
 **Memory.** Measured on the API image on 2026-10-24 by reading the container's
 `memory.peak` cgroup file:
 
@@ -43,7 +48,12 @@ calls `/api/healthz` with Python's `urllib` (the slim image has no curl).
 | three sequential logins, then four concurrent ones | 109 MiB |
 
 The four concurrent logins finished at 37, 67, 95 and 123 ms. The hashing semaphore runs them one
-after another, so the peak stays at one hash's 64 MiB. Give the API **`mem_limit: 160m`**. The web
+after another, so the peak stays at one hash's 64 MiB.
+
+The MCP SDK raised these on 2026-11-01. Measured the same way, after a sign-up, a login and ten
+MCP tool calls, the peak was 126 MiB in three runs. On the image before MCP it was 108–111 MiB.
+Resting memory rose from about 44 MiB to about 60 MiB. One run, the first start after a build,
+read 140 MiB. Give the API **`mem_limit: 160m`** at least; 192m leaves room for that first start. The web
 container's 64m would be killed by the first login.
 
 `docker compose up --build` runs both images locally: the app on `http://localhost:8083` and the API
@@ -108,21 +118,22 @@ file must pull `tracker` and `tracker-api`, or it silently stops getting deploys
 
 ### 3.1 Item details: the API first (2026-11-01)
 
-The release that adds item details (P21 in [decisions.md](decisions.md)) needs `tracker-api`
+The release that adds item details (P26 in [decisions.md](decisions.md)) needs `tracker-api`
 updated before `tracker`. Both images publish from the same CI run, so pull and restart the API
 first, then the web.
 
 - **Why the API first.** The new app saves notes and fields with `PUT /api/details/…`, which an
   older API answers 404. The app keeps that write and every write queued behind it, retrying with
-  the backoff (`sync.ts`, P23), so nothing is lost. Syncing stalls until the API is updated, and the
+  the backoff (`sync.ts`, P28), so nothing is lost. Syncing stalls until the API is updated, and the
   app shows itself as offline with the changes waiting.
-- **Migration 6 runs when the API starts.** `db.migrate` runs in the app's startup, and in every
-  `tracker-admin` command, before anything is served. Each step commits with its schema version
-  under the write lock, so the API and a `tracker-admin` command starting together can't both apply
-  it. Step 6 creates `item_details` and copies each item's latest note into it ([api.md](api.md)
-  §2). Step 7 adds the nullable `settings.item_sections` (each type's item-page arrangement, K66);
+- **Migrations 7 and 8 run when the API starts.** `db.migrate` runs in the app's startup, and in
+  every `tracker-admin` command, before anything is served. Each step commits with its schema
+  version under the write lock, so the API and a `tracker-admin` command starting together can't
+  both apply it. A database not yet at step 6 (`api_tokens`, the MCP release) takes it first.
+  Step 7 creates `item_details` and copies each item's latest note into it ([api.md](api.md) §2).
+  Step 8 adds the nullable `settings.item_sections` (each type's item-page arrangement, K66);
   existing rows read as NULL, every page as it was.
-- **Settings from the new app reach an older API safely.** An API from before step 7 ignores the
+- **Settings from the new app reach an older API safely.** An API from before step 8 ignores the
   `itemSections` key, so an arrangement made before the API updates is not saved there and the
   next read puts the pages back to the default. Updating the API first avoids it. Once it is
   updated, a tab on the old app sends settings without `itemSections`, and the API keeps the saved

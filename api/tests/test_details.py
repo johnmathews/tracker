@@ -56,7 +56,7 @@ def test_a_note_is_one_copy_for_every_week(client: TestClient, config: Config) -
 
 def test_plans_stored_with_notes_read_without_them(client: TestClient, config: Config) -> None:
     """A plan written before details keeps its items' notes in the database until it is next
-    written (migration 6 copies them, D3). Nothing reads them from there: not the state, not an
+    written (migration 7 copies them, D3). Nothing reads them from there: not the state, not an
     export, and not the plan write's same-items check (P7) or its conflict copy."""
     sign_up(client, config)
     conn = connect(config.db_path)

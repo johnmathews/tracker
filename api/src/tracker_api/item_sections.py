@@ -1,4 +1,4 @@
-"""The item page's sections, shown or hidden and in order, per tracker type (K66, P24).
+"""The item page's sections, shown or hidden and in order, per tracker type (K66, P29).
 
 The port of src/lib/itemSections.ts. `tests/test_item_sections.py` and the web app's
 `itemSections.spec.ts` both run `fixtures/item-sections/normalise.json`, which keeps the two in

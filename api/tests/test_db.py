@@ -13,16 +13,36 @@ def test_migrates_a_fresh_database_once(tmp_path: Path) -> None:
     migrate(c)  # a second run is a no-op
     assert c.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
     tables = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
-    assert {"users", "sessions", "invites", "settings", "plans", "ticks", "item_details"} <= tables
+    tables_wanted = {"users", "sessions", "invites", "settings", "plans", "ticks"}
+    assert tables_wanted | {"api_tokens", "item_details"} <= tables
     c.close()
 
 
-def at_version_5(path: Path, monkeypatch: pytest.MonkeyPatch) -> sqlite3.Connection:
-    """A database migrated to schema 5, the last one before item details, with two users."""
+def _step_of(marker: str) -> int:
+    """The index of the one step whose SQL holds `marker`, wherever a merge has put it."""
+    from tracker_api import db
+
+    (step,) = [i for i, sql in enumerate(db.MIGRATIONS) if marker in sql]
+    return step
+
+
+TOKENS_STEP = "CREATE TABLE IF NOT EXISTS api_tokens"
+DETAILS_STEP = "CREATE TABLE IF NOT EXISTS item_details"
+SECTIONS_STEP = "ADD COLUMN item_sections"
+
+
+def test_steps_are_numbered_as_the_docs_say() -> None:
+    """Schema 6 adds API tokens, 7 item details, 8 the item pages' arrangement (docs/api.md §2)."""
+    assert SCHEMA_VERSION == 8
+    assert [_step_of(m) + 1 for m in (TOKENS_STEP, DETAILS_STEP, SECTIONS_STEP)] == [6, 7, 8]
+
+
+def before_details(path: Path, monkeypatch: pytest.MonkeyPatch) -> sqlite3.Connection:
+    """A database migrated to schema 6, the last one before item details, with two users."""
     from tracker_api import db
 
     c = connect(path)
-    monkeypatch.setattr(db, "MIGRATIONS", db.MIGRATIONS[:5])
+    monkeypatch.setattr(db, "MIGRATIONS", db.MIGRATIONS[: _step_of(DETAILS_STEP)])
     db.migrate(c)
     monkeypatch.undo()
     for uid in (1, 2):
@@ -104,7 +124,7 @@ def test_details_migration_lifts_each_items_latest_note(
 ) -> None:
     from tracker_api.data import state
 
-    c = at_version_5(tmp_path / "f.db", monkeypatch)
+    c = before_details(tmp_path / "f.db", monkeypatch)
     for plan in DIRTY_PLANS:
         add_plan(c, *plan)
     migrate(c)
@@ -132,10 +152,10 @@ def test_details_migration_reruns_from_a_partial_state(
     """The table may already exist with rows in it: they are kept, and the rest are added."""
     from tracker_api import db
 
-    c = at_version_5(tmp_path / "f.db", monkeypatch)
+    c = before_details(tmp_path / "f.db", monkeypatch)
     add_plan(c, 1, "exercise", "2026-10-19", [{"id": "pu", "name": "P", "notes": "file"}])
     add_plan(c, 1, "exercise", "2026-10-12", [{"id": "sq", "name": "S", "notes": "squats"}])
-    step = db.MIGRATIONS[5]
+    step = db.MIGRATIONS[_step_of(DETAILS_STEP)]
     c.executescript(step)  # a first run, without the version bump
     c.execute('UPDATE item_details SET details_json = \'{"notes":"edited"}\', rev = 4')
     c.execute("DELETE FROM item_details WHERE item_id = 'sq'")
@@ -152,7 +172,7 @@ def test_details_migration_reruns_from_a_partial_state(
 def test_details_migration_on_an_empty_database(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    c = at_version_5(tmp_path / "f.db", monkeypatch)
+    c = before_details(tmp_path / "f.db", monkeypatch)
     migrate(c)
     assert details_rows(c) == []
     c.close()
@@ -161,18 +181,18 @@ def test_details_migration_on_an_empty_database(
 def test_item_sections_migration_adds_an_empty_column(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Migration 7: saved settings gain `item_sections`, NULL (every page as K65 lays it out)."""
+    """Migration 8: saved settings gain `item_sections`, NULL (every page as K65 lays it out)."""
     from tracker_api import db
     from tracker_api.data import load_settings
 
     c = connect(tmp_path / "f.db")
-    monkeypatch.setattr(db, "MIGRATIONS", db.MIGRATIONS[:6])
+    monkeypatch.setattr(db, "MIGRATIONS", db.MIGRATIONS[: _step_of(SECTIONS_STEP)])
     db.migrate(c)
     monkeypatch.undo()
     c.execute("INSERT INTO users (id, username, password_hash, created_at) VALUES (1, 'a', 'h', 0)")
     c.execute("INSERT INTO settings VALUES (1, '#30d158', 4, 3)")
     db.migrate(c)
-    assert c.execute("PRAGMA user_version").fetchone()[0] == 7
+    assert c.execute("PRAGMA user_version").fetchone()[0] == 8
     columns = {r["name"]: r for r in c.execute("PRAGMA table_info(settings)")}
     assert columns["item_sections"]["type"] == "TEXT"
     assert columns["item_sections"]["notnull"] == 0
@@ -196,7 +216,7 @@ def test_marks_migration_reads_existing_ticks_as_great(
     c.execute("INSERT INTO ticks VALUES (1, 'exercise', '2026-10-19', 'sq', 0)")
     monkeypatch.undo()
     db.migrate(c)
-    assert c.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION == 7
+    assert c.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
     rows = [
         tuple(r)
         for r in c.execute("SELECT item_id, days, partial, missed, solid, hatch FROM ticks")
@@ -208,6 +228,70 @@ def test_marks_migration_reads_existing_ticks_as_great(
             "sq": [None] * 7,
         }
     }
+    c.close()
+
+
+def _api_tokens_step() -> int:
+    """The index of the step that adds `api_tokens`, wherever a rebase has put it."""
+    from tracker_api import db
+
+    return next(i for i, sql in enumerate(db.MIGRATIONS) if "api_tokens" in sql)
+
+
+def _snapshot(c: sqlite3.Connection) -> dict[str, list[tuple[object, ...]]]:
+    tables = [
+        r[0]
+        for r in c.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name != 'api_tokens'"
+        )
+    ]
+    return {
+        t: sorted(tuple(r) for r in c.execute(f"SELECT * FROM {t}"))  # noqa: S608
+        for t in tables
+    }
+
+
+def test_api_tokens_step_keeps_every_row(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A populated database at the step before `api_tokens` keeps every row through it, and the
+    step can run a second time."""
+    from tracker_api import db
+
+    step = _api_tokens_step()
+    c = connect(tmp_path / "f.db")
+    monkeypatch.setattr(db, "MIGRATIONS", db.MIGRATIONS[:step])
+    db.migrate(c)
+    c.executescript(
+        """
+        INSERT INTO users (id, username, password_hash, created_at, email_confirmed_at)
+            VALUES (1, 'a@example.com', 'h', 0, 5), (2, 'john', 'h2', 1, NULL);
+        INSERT INTO sessions (token_hash, user_id, created_at, last_seen, expires_at)
+            VALUES ('s1', 1, 0, 0, 99), ('s2', 2, 0, 0, 99);
+        INSERT INTO invites (token_hash, kind, username, user_id, created_at, expires_at, mailed)
+            VALUES ('i1', 'reset', 'john', 2, 0, 9, 1),
+                   ('i2', 'invite', 'b@example.com', NULL, 0, 9, 0);
+        INSERT INTO confirmations (token_hash, user_id, created_at, expires_at)
+            VALUES ('c1', 1, 0, 9);
+        INSERT INTO mail_log (user_id, kind, sent_at) VALUES (1, 'confirm', 3);
+        INSERT INTO settings (user_id, accent, daily_pick, food_pick) VALUES (1, '#30d158', 3, 4);
+        INSERT INTO plans (user_id, section, week, items_json, rev)
+            VALUES (1, 'exercise', '2026-10-19', '[{"id":"pu","name":"Push-ups"}]', 3);
+        INSERT INTO ticks (user_id, section, week, item_id, days, partial, missed, solid, hatch)
+            VALUES (1, 'exercise', '2026-10-19', 'pu', 7, 2, 4, 1, 2);
+        """
+    )
+    before = _snapshot(c)
+    assert sum(len(rows) for rows in before.values()) == 11
+    assert "api_tokens" not in {r[0] for r in c.execute("SELECT name FROM sqlite_master")}
+    # Up to the token step only: later steps add tables and columns of their own.
+    monkeypatch.undo()
+    monkeypatch.setattr(db, "MIGRATIONS", db.MIGRATIONS[: step + 1])
+    db.migrate(c)
+    monkeypatch.undo()
+    assert c.execute("PRAGMA user_version").fetchone()[0] == step + 1
+    assert _snapshot(c) == before
+    assert c.execute("SELECT count(*) FROM api_tokens").fetchone()[0] == 0
+    c.executescript(db.MIGRATIONS[step])  # re-runnable: IF NOT EXISTS throughout
+    assert _snapshot(c) == before
     c.close()
 
 
@@ -230,8 +314,12 @@ def test_deleting_a_user_cascades_to_their_rows(conn: sqlite3.Connection) -> Non
     conn.execute("INSERT INTO confirmations VALUES ('c', 1, 0, 0, NULL)")
     conn.execute("INSERT INTO mail_log (user_id, kind, sent_at) VALUES (1, 'confirm', 0)")
     conn.execute("INSERT INTO item_details VALUES (1, 'exercise', 'pu', '{}', 1)")
+    conn.execute("INSERT INTO api_tokens VALUES ('t', 1, 'laptop', 'abcdefgh', 'read', 0, NULL)")
     conn.execute("DELETE FROM users WHERE id = 1")
-    tables = ("settings", "plans", "ticks", "sessions", "confirmations", "mail_log", "item_details")
+    tables = ("settings", "plans", "ticks", "sessions", "confirmations", "mail_log")
+    tables_too = ("item_details", "api_tokens")
+    for table in tables_too:
+        assert conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0  # noqa: S608
     for table in tables:
         assert conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0  # noqa: S608
 
@@ -264,7 +352,14 @@ def test_constraints_reject_bad_rows(conn: sqlite3.Connection) -> None:
         "INSERT INTO item_details VALUES (1, 'exercise', 'pu', '{}', 0)",
         "INSERT INTO item_details VALUES (1, 'exercise', 'pu', x'7b7d', 1)",  # STRICT
         "INSERT INTO item_details VALUES (2, 'exercise', 'pu', '{}', 1)",
+        # A token has one of two scopes and a name, belongs to a user, and its prefix is unique
+        # per user.
+        "INSERT INTO api_tokens VALUES ('t2', 1, 'n', 'p2', 'admin', 0, NULL)",
+        "INSERT INTO api_tokens VALUES ('t2', 2, 'n', 'p2', 'read', 0, NULL)",
+        "INSERT INTO api_tokens VALUES ('t2', 1, 'n', 'p1', 'write', 0, NULL)",
+        "INSERT INTO api_tokens VALUES ('t2', 1, NULL, 'p2', 'read', 0, NULL)",
     ]
+    conn.execute("INSERT INTO api_tokens VALUES ('t1', 1, 'n', 'p1', 'read', 0, NULL)")
     for sql in bad:
         with pytest.raises(sqlite3.IntegrityError):
             conn.execute(sql)

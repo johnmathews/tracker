@@ -31,21 +31,23 @@ From the plan, approved by John ("Go"):
 
 - **D1.** `section` stays the stored name (`exercise`, `diet`) and the type is an attribute of it.
   Nothing is renamed, because `section` is in URLs, the database, the cache and the outbox.
-  Recorded as P20.
+  Recorded as P25.
 - **D2.** Details are one JSON document per item, `{notes, fields}`, keyed `(user, section,
 item_id)`, with a revision like a plan's. The field list lives in the registry, and unknown
-  field keys survive validation, so changing fields needs no migration. P21.
-- **D3.** Notes move from plan items into details. Migration 6 lifts the latest week's note, and an
-  export of version 4 or a `-v3` cache lift notes the same way. P21 amends K43.
+  field keys survive validation, so changing fields needs no migration. P26.
+- **D3.** Notes move from plan items into details. Migration 7 lifts the latest week's note, and an
+  export of version 4 or a `-v3` cache lift notes the same way. P26 amends K43.
 - **D4.** The plan settings stay per week. The page edits the opened week's plan through the
   stores' own actions and says so.
 - **D5.** The page is `#/item/<section>/<id>`, a page like Settings: no bar, Back to the week, focus
   back on the name.
 - **D6.** A details write retries on a 404 rather than dropping, so a web image that lands before
-  the API can't lose queued edits. P23.
+  the API can't lose queued edits. P28.
 - **D7.** Migration and export numbers are whatever is free at rebase. The parallel `/ask` session
-  (PR #53, merged as 2199382) added no migration and no export change, so migration 6 and export
-  version 5 stayed ours.
+  (PR #53, merged as 2199382) added no migration and no export change. The MCP endpoint (PR #54,
+  0483c1a) merged first with migration 6 (`api_tokens`), so at the merge of `origin/main` this
+  branch's steps became 7 (`item_details`) and 8 (`settings.item_sections`). Export version 5
+  stayed ours.
 
 Made during the build:
 
@@ -65,15 +67,15 @@ Made during the build:
   Button at the head's right puts the page in arranging: each section's heading over a Switch,
   "Show", and Move up and Move down, with "Shown" or "Hidden" beside it. Changes apply at once, to
   every page of the type, and the button reads "Done".
-- **P24, the `itemSections` setting.** `{<type id>: {order, hidden}}`, normalised the same way in
+- **P29, the `itemSections` setting.** `{<type id>: {order, hidden}}`, normalised the same way in
   both languages through `fixtures/item-sections/normalise.json`, stored in
-  `settings.item_sections` (migration 7). Reading drops a type the registry lacks.
+  `settings.item_sections` (migration 8). Reading drops a type the registry lacks.
   `PUT /api/settings` refuses a shape the app never sends with 400 `invalid`, and keeps the saved
   value when the key is missing, so a tab on older code can't reset it.
 - **Recent weeks counts every mark** (K65). John: "count every mark because red is still a "done"
   mark. its just says "this was very difficult"". It already did; the RecentWeeks card now says
   so.
-- **P22.** An empty details document is stored rather than deleted, so its revision keeps counting
+- **P27.** An empty details document is stored rather than deleted, so its revision keeps counting
   and a device holding an older copy still conflicts. W2 asked for it to be recorded.
 - **First field lists.** Exercise: Equipment, Works, Link. Food: A serving, Examples. Plain text,
   and Link shows "Open youtube.com in a new tab" when it holds a web address.
@@ -107,7 +109,8 @@ New copy for John to approve at the preview:
   by `fixtures/types/registry.json`. The cycles and `exerciseDetails` moved into the registry, and
   `sync.ts`, `data.py` and `validate.py` read their sections from it. No behaviour changed, and
   the existing suites passed unchanged.
-- **W2, details in the API.** Migration 6 (`item_details`, no section CHECK, the note backfill),
+- **W2, details in the API.** Migration 7, built as 6 (`item_details`, no section CHECK, the note
+  backfill),
   `normalise_details`, `PUT /api/details/{section}/{item_id}`, details in `GET /api/state`, the
   quota counting details bytes, and export version 5 with the version 4 lift. It left 29 web tests
   red on purpose (`transfer.spec.ts` and two `App.spec.ts` cases), for W3 to match the fixtures.
@@ -121,7 +124,7 @@ New copy for John to approve at the preview:
   `src/composables/itemSource.ts`, the route in `App.vue`, the name as a link in `TrackerRow.vue`,
   Enter on a name in `gridNav.ts`, the style guide sections, and `e2e/item-page.spec.ts`.
 - **W6, docs and preview.** The architecture, API, deployment, development and brand docs and the
-  README describe what shipped, and P20 to P23 are in `docs/decisions.md` §3.1. `seed-demo` now says
+  README describe what shipped, and P25 to P28 are in `docs/decisions.md` §3.1. `seed-demo` now says
   what details it added (below).
 - **W7, layout A.** `ItemPage.vue` moved from B's two columns to four rows like Settings, in the
   order Notes, Details, This week's plan, Recent weeks. The plan's SegmentedControls no longer
@@ -129,18 +132,31 @@ New copy for John to approve at the preview:
   ItemPage card and its preview, the RecentWeeks card, the mockup README, K65 and the docs
   followed. The unit test for the section order failed against B first, then passed.
 - **W8, choosing and ordering the sections.** `src/lib/itemSections.ts` and
-  `api/src/tracker_api/item_sections.py` with their shared fixture; migration 7; `itemSections` in
+  `api/src/tracker_api/item_sections.py` with their shared fixture; migration 8; `itemSections` in
   `PUT /api/settings`, the state, the export and the import; the planner store's `itemSections`,
   `arrangementFor` and `setArrangement`, synced as a settings operation; the Switch's `context`
   (words for its name only, "Show Notes"); the IconButton's look at an `aria-disabled` end; and the
   arranging state in `ItemPage.vue`. The ItemPage, Switch and IconButton cards came first. Each
   behaviour's test failed before its code: the normaliser on both sides (the Python test against a
-  missing module, the web spec against a missing one), migration 7 (`user_version` 6, not 7), the
-  settings route (13 API cases, among them every malformed shape answering 200), the store (adopt,
-  save, the settings body and the diff), the export, the Switch's hidden words ("ShowNotes" before
-  the space was fixed), the IconButton's classes, and eight ItemPage cases (the button, the order,
-  Show, the moves and focus, Escape, every section hidden). The e2e flow and the axe checks were
-  written after the page and passed on their first run.
+  missing module, the web spec against a missing one), migration 8 (built as 7: `user_version` 6,
+  not 7), the settings route (13 API cases, among them every malformed shape answering 200), the
+  store (adopt, save, the settings body and the diff), the export, the Switch's hidden words
+  ("ShowNotes" before the space was fixed), the IconButton's classes, and eight ItemPage cases
+  (the button, the order, Show, the moves and focus, Escape, every section hidden). The e2e flow
+  and the axe checks were written after the page and passed on their first run.
+- **The merge of `origin/main`** (PRs #53 and #54). Main's `api_tokens` kept migration 6; this
+  branch's steps became 7 and 8, and `test_db.py` finds each step by its SQL and checks the
+  numbers. Main's P20 to P24 (the MCP endpoint) kept their numbers too, and this branch's became
+  P25 to P29 in `docs/decisions.md` §3.1 and everywhere that cites them. Main's REST checks (`check_item_id`, `Invalid`) now guard the details route too, beside
+  a new `check_details_body`. Two adaptations to notes living in details:
+  - `insights.py` reads each item's notes from its details (`data.notes_of`), the same in every
+    week, still cut to 500. Its tests failed first: every reader gave `""`, since plan items no
+    longer carry notes. `fixtures/insights/carry-forward.json` holds the note as details now, and
+    both suites check it, the web one through the details store.
+  - The MCP `note` argument writes the item's details (`data.set_notes_locked`), in one
+    transaction with the plan write, up to 20,000 characters as the item page allows. A note alone
+    writes no plan, so it copies no week. Results show each item with its note. Its tests failed
+    first: the note was dropped by the plan normaliser and never reached `item_details`.
 
 ## 4. Issues found, and what happened to each
 
@@ -211,12 +227,9 @@ W6 ran the API suite (333 passed, coverage 99%), ruff, ruff format and mypy, Vit
   shared custom selector or a wrapper slot would shorten them.
 - **A long note's popover with no link in it may not scroll from the keyboard.** Suspected, not
   checked: the panel scrolls with a pointer, but nothing in it takes focus.
-- **`insights.py` from PR #53 reads notes from plan items** (`_item_week`, through `load_tracked`).
-  At the merge of `origin/main` it must read them from `item_details`, and `fixtures/insights/`
-  must follow. The lead does this at the merge.
 - **The design system artifact** needs republishing with the ItemPage and RecentWeeks cards, and
   after W8 the Switch and IconButton cards.
-- **The API deploys before the web again** (W8): an API from before migration 7 answers 200 to a
+- **The API deploys before the web again** (W8): an API from before migration 8 answers 200 to a
   settings write and drops `itemSections`, so an arrangement made against it lasts only until the
   next read. `docs/deployment.md` §3.1 says so.
 - **RecentWeeks' `@dsCard` marker has no space before `subtitle`** (`height=820subtitle=…`, line 1

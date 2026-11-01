@@ -74,6 +74,10 @@
   it once you sign in: **Add to my account** merges it in, **Not mine** stops the question for you
   on that browser, **Later** asks next time. A log in another browser or profile can be moved with
   Export there and Import… here.
+- **Ask an agent.** An AI agent such as Claude Code can connect to the API's MCP endpoint
+  (`/api/mcp`) with a personal token from `tracker-admin token create`. It reads how your weeks are
+  going, as the app shows them, and with a write token it can edit plans and marks.
+  [docs/mcp.md](docs/mcp.md) says how to connect.
 
 ## 2. Getting started
 
@@ -205,6 +209,7 @@ end to end.
 | [docs/development.md](docs/development.md)                                     | Toolchain, scripts, conventions, tests                               |
 | [docs/deployment.md](docs/deployment.md)                                       | Docker images, nginx, CI, GHCR publishing, sign-up, turning on email |
 | [docs/api.md](docs/api.md)                                                     | The API service: endpoints, accounts, email, CLI, backups            |
+| [docs/mcp.md](docs/mcp.md)                                                     | Connecting an agent over MCP: tokens, clients, example questions     |
 | [docs/brand.md](docs/brand.md)                                                 | The brand, the design system and how to change them                  |
 | [docs/decisions.md](docs/decisions.md)                                         | Why accounts, sync and the design system are built the way they are  |
 | [docs/specs/2026-10-24-brand-design.md](docs/specs/2026-10-24-brand-design.md) | The approved brand spec (Notebook): intent, rules and calls K1–K8    |

@@ -110,6 +110,21 @@ MIGRATIONS = [
     """
     ALTER TABLE settings ADD COLUMN food_pick INTEGER NOT NULL DEFAULT 2;
     """,
+    # Personal API tokens, for the MCP endpoint. Stored hashed, as sessions are; `prefix` names one
+    # in `tracker-admin token` without revealing it, and is unique per user so a revoke hits one.
+    # Only adds a table, and IF NOT EXISTS lets it run again.
+    """
+    CREATE TABLE IF NOT EXISTS api_tokens (
+        token_hash TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        prefix TEXT NOT NULL,
+        scope TEXT NOT NULL CHECK (scope IN ('read', 'write')),
+        created_at INTEGER NOT NULL,
+        last_used_at INTEGER
+    ) STRICT;
+    CREATE UNIQUE INDEX IF NOT EXISTS api_tokens_by_user ON api_tokens (user_id, prefix);
+    """,
     # Item details: one document per item for every week (D2), revised like plans. No CHECK on
     # the section (F3): the API checks it against the registry, so a new tracker needs no rebuild.
     # Each item's note moves in from the latest week whose copy has one (D3), the first such copy
@@ -157,7 +172,7 @@ MIGRATIONS = [
     )
     SELECT user_id, section, item_id, json_object('notes', note), 1 FROM ranked WHERE n = 1;
     """,
-    # The item pages' arrangement per tracker type (K66, P24): JSON as `item_sections.py`
+    # The item pages' arrangement per tracker type (K66, P29): JSON as `item_sections.py`
     # normalises it, NULL for every page in the default order with every section shown.
     """
     ALTER TABLE settings ADD COLUMN item_sections TEXT;

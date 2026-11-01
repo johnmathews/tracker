@@ -212,7 +212,7 @@ listed in [api.md](api.md) §10):
   fields, daily-target key and new-item goal. `src/lib/__tests__/trackerTypes.spec.ts` and the
   API's `test_types.py` both check their registry against it, so a field added on one side only
   fails a suite.
-- `fixtures/item-sections/normalise.json`: the item pages' arrangement (K66, P24), inputs and their
+- `fixtures/item-sections/normalise.json`: the item pages' arrangement (K66, P29), inputs and their
   normal form. `src/lib/__tests__/itemSections.spec.ts` and the API's `test_item_sections.py` both
   run every case, and the web spec also covers showing, hiding and moving a section.
 - `src/lib/__tests__/trackerTypes.spec.ts`: also each type's cycle, which `cycleFor` reads, its

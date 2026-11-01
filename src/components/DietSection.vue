@@ -4,6 +4,7 @@ import { usePlannerStore } from '@/stores/planner'
 import { useDietStore } from '@/stores/diet'
 import { useDetailsStore } from '@/stores/details'
 import { dayMonth } from '@/lib/dates'
+import { metDays as daysMet } from '@/lib/tracker'
 import { MAX_DAILY_PICK, MIN_DAILY_PICK, type Food, type Mark } from '@/lib/storage'
 import { SECTIONS } from '@/lib/trackerTypes'
 import { SCREEN, SCREEN_GRID } from '@/lib/screens'
@@ -23,7 +24,7 @@ const details = useDetailsStore()
 const type = SECTIONS.diet
 
 /** The days whose marked foods reach foods a day (K57): their names turn green, underlined, as exercises'. */
-const metDays = computed(() => diet.dayCounts.map((n) => n >= planner.foodPick))
+const metDays = computed(() => daysMet(diet.dayCounts, planner.foodPick))
 /** Foods a day, set on the title line in Edit plan (K56). */
 const foodPick = computed({
   get: () => planner.foodPick,

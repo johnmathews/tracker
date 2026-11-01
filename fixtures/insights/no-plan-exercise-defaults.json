@@ -1,0 +1,76 @@
+{
+  "description": "With no plans at all, the exercises are the defaults",
+  "section": "exercise",
+  "week": "2026-10-19",
+  "today": "2026-11-04",
+  "dailyTarget": 3,
+  "plans": {},
+  "log": {
+    "2026-10-19": {
+      "pu": ["great", "great", "great", "great", null, null, null],
+      "pl": ["partial", null, "great", null, null, null, null],
+      "sq": ["great", null, "missed", null, null, null, null],
+      "kh": [null, null, null, null, null, "great", null]
+    }
+  },
+  "expected": {
+    "planWeek": null,
+    "dayCounts": [3, 1, 3, 1, 0, 1, 0],
+    "metDays": [true, false, true, false, false, false, false],
+    "future": [false, false, false, false, false, false, false],
+    "daysMet": 2,
+    "goalsMet": 1,
+    "items": [
+      {
+        "id": "pu",
+        "name": "Push-ups",
+        "target": 4,
+        "done": 4,
+        "great": 4,
+        "partial": 0,
+        "missed": 0,
+        "goalMet": true
+      },
+      {
+        "id": "pl",
+        "name": "Pull-ups",
+        "target": 4,
+        "done": 2,
+        "great": 1,
+        "partial": 1,
+        "missed": 0,
+        "goalMet": false
+      },
+      {
+        "id": "sq",
+        "name": "Squats",
+        "target": 4,
+        "done": 2,
+        "great": 1,
+        "partial": 0,
+        "missed": 1,
+        "goalMet": false
+      },
+      {
+        "id": "be",
+        "name": "Back extensions",
+        "target": 3,
+        "done": 0,
+        "great": 0,
+        "partial": 0,
+        "missed": 0,
+        "goalMet": false
+      },
+      {
+        "id": "kh",
+        "name": "Kettlebell halos",
+        "target": 3,
+        "done": 1,
+        "great": 1,
+        "partial": 0,
+        "missed": 0,
+        "goalMet": false
+      }
+    ]
+  }
+}

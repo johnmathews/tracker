@@ -293,7 +293,7 @@ export function normaliseDetailsMap(v: unknown): DetailsMap {
 /**
  * Plan notes as details (D3), from an export of version 4 or older or a `-v3` cache: per item, the
  * note from the latest week whose copy of the item has one, the first such copy in that week. Only
- * items the plan keeps count. As the API's `lift_notes`, and its migration 6.
+ * items the plan keeps count. As the API's `lift_notes`, and its migration 7.
  */
 export function liftNotes(v: unknown, normalise: (item: unknown) => object | null): DetailsMap {
   const out: DetailsMap = {}
@@ -427,7 +427,7 @@ export function parseDietData(
 
 /** The settings that belong to the person rather than the device: not the theme, totals or marks. */
 export type PortableSettings = Pick<Settings, 'accent' | 'dailyPick' | 'foodPick'> & {
-  /** Each type's item-page arrangement (K66, P24); left out while every page has the default. */
+  /** Each type's item-page arrangement (K66, P29); left out while every page has the default. */
   itemSections?: ItemSections
 }
 

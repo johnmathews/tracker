@@ -1,5 +1,5 @@
 {
-  "about": "The item page's arrangement per tracker type (K66, P24): src/lib/itemSections.ts and api/src/tracker_api/item_sections.py both normalise each input to its output. A type with the default arrangement is left out.",
+  "about": "The item page's arrangement per tracker type (K66, P29): src/lib/itemSections.ts and api/src/tracker_api/item_sections.py both normalise each input to its output. A type with the default arrangement is left out.",
   "keys": ["notes", "details", "plan", "history"],
   "cases": [
     { "name": "not an object", "input": null, "output": {} },

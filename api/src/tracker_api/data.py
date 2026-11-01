@@ -99,7 +99,7 @@ class DetailsConflict:
 
 def stored_items(items_json: str) -> list[Item]:
     """A stored plan's items. A plan written before item details still holds its items' notes
-    until it is next written; they are the item's details now (migration 6, D3), so they are
+    until it is next written; they are the item's details now (migration 7, D3), so they are
     left out here and nothing reads them from the plan."""
     items: list[Any] = json.loads(items_json)
     return [
@@ -120,6 +120,11 @@ def load_details(conn: sqlite3.Connection, user_id: int, section: Section) -> De
         if details:
             out[r["item_id"]] = details
     return out
+
+
+def notes_of(details: DetailsMap, item_id: str) -> str:
+    """An item's notes from its section's details, one copy for every week (D3); "" for none."""
+    return details.get(item_id, {}).get("notes", "")
 
 
 def load_tracked(conn: sqlite3.Connection, user_id: int, section: Section) -> Tracked:
@@ -154,7 +159,7 @@ def load_settings(conn: sqlite3.Connection, user_id: int) -> Portable | None:
         "dailyPick": row["daily_pick"],
         "foodPick": row["food_pick"],
     }
-    # Normalised on the way out too, so a type this version's registry lacks drops (P24).
+    # Normalised on the way out too, so a type this version's registry lacks drops (P29).
     stored = row["item_sections"]
     item_sections = normalise_item_sections(parse_json(stored) if stored is not None else None)
     if item_sections:
@@ -198,30 +203,45 @@ def put_plan(
     quota: int,
 ) -> PlanSaved | PlanConflict:
     """Store a week's plan if `rev` is current. A stale `rev` conflicts unless the items match."""
+    with transaction(conn):
+        return put_plan_locked(conn, user_id, section, week, raw_items, rev, quota=quota)
+
+
+def put_plan_locked(
+    conn: sqlite3.Connection,
+    user_id: int,
+    section: Section,
+    week: str,
+    raw_items: list[Any],
+    rev: int,
+    *,
+    quota: int,
+) -> PlanSaved | PlanConflict:
+    """`put_plan` for a caller already inside `transaction`, so that one transaction can hold
+    more writes (edits.py: a plan and an item's notes)."""
     items = normalise_items(section, raw_items)
     encoded = json.dumps(items)
-    with transaction(conn):
-        row = conn.execute(
-            "SELECT items_json, rev FROM plans WHERE user_id = ? AND section = ? AND week = ?",
-            (user_id, section, week),
-        ).fetchone()
-        current = 0 if row is None else int(row["rev"])
-        if rev == current:
-            before = usage(conn, user_id)
-            old_size = 0 if row is None else len(row["items_json"].encode())
-            _check_growth(before, before - old_size + len(encoded.encode()), quota)
-            conn.execute(
-                "INSERT INTO plans (user_id, section, week, items_json, rev) VALUES (?, ?, ?, ?, ?)"
-                " ON CONFLICT (user_id, section, week)"
-                " DO UPDATE SET items_json = excluded.items_json, rev = excluded.rev",
-                (user_id, section, week, encoded, current + 1),
-            )
-            return PlanSaved(current + 1)
-        stored = None if row is None else stored_items(row["items_json"])
-        # Two devices creating the same carried-forward week send identical items: not a conflict.
-        if stored is not None and stored == items:
-            return PlanSaved(current)
-        return PlanConflict(stored, current)
+    row = conn.execute(
+        "SELECT items_json, rev FROM plans WHERE user_id = ? AND section = ? AND week = ?",
+        (user_id, section, week),
+    ).fetchone()
+    current = 0 if row is None else int(row["rev"])
+    if rev == current:
+        before = usage(conn, user_id)
+        old_size = 0 if row is None else len(row["items_json"].encode())
+        _check_growth(before, before - old_size + len(encoded.encode()), quota)
+        conn.execute(
+            "INSERT INTO plans (user_id, section, week, items_json, rev) VALUES (?, ?, ?, ?, ?)"
+            " ON CONFLICT (user_id, section, week)"
+            " DO UPDATE SET items_json = excluded.items_json, rev = excluded.rev",
+            (user_id, section, week, encoded, current + 1),
+        )
+        return PlanSaved(current + 1)
+    stored = None if row is None else stored_items(row["items_json"])
+    # Two devices creating the same carried-forward week send identical items: not a conflict.
+    if stored is not None and stored == items:
+        return PlanSaved(current)
+    return PlanConflict(stored, current)
 
 
 def put_details(
@@ -242,29 +262,91 @@ def put_details(
     assert details is not None  # `raw` is an object
     if not details_fit(details):
         raise DetailsTooLarge
-    encoded = encode_details(details)
     with transaction(conn):
-        row = conn.execute(
-            "SELECT details_json, rev FROM item_details"
-            " WHERE user_id = ? AND section = ? AND item_id = ?",
-            (user_id, section, item_id),
-        ).fetchone()
+        row = _details_row(conn, user_id, section, item_id)
         current = 0 if row is None else int(row["rev"])
         if rev == current:
-            before = usage(conn, user_id)
-            old_size = 0 if row is None else len(row["details_json"].encode())
-            _check_growth(before, before - old_size + len(encoded.encode()), quota)
-            conn.execute(
-                "INSERT INTO item_details (user_id, section, item_id, details_json, rev)"
-                " VALUES (?, ?, ?, ?, ?) ON CONFLICT (user_id, section, item_id)"
-                " DO UPDATE SET details_json = excluded.details_json, rev = excluded.rev",
-                (user_id, section, item_id, encoded, current + 1),
-            )
-            return DetailsSaved(current + 1)
+            saved = _write_details(conn, user_id, section, item_id, details, row, quota)
+            return DetailsSaved(saved)
         stored: Details | None = None if row is None else json.loads(row["details_json"])
         if stored is not None and stored == details:
             return DetailsSaved(current)
         return DetailsConflict(stored, current)
+
+
+@dataclass(frozen=True)
+class NotesSet:
+    #: The item's notes before and after; "" for none.
+    before: str
+    after: str
+    #: The details' revision now: unchanged when the notes already read so.
+    rev: int
+
+
+def set_notes_locked(
+    conn: sqlite3.Connection,
+    user_id: int,
+    section: Section,
+    item_id: str,
+    text: str,
+    *,
+    quota: int,
+) -> NotesSet:
+    """Set an item's notes, or clear them with blank text, keeping its fields: the details
+    store's `setNotes` (src/stores/details.ts), for a caller already inside `transaction`.
+
+    The document is validated as `put_details` validates it, at the stored revision, so the
+    write never conflicts; it moves the revision on, so a device holding the older copy gets a
+    409 on its next write and adopts this one. Raises DetailsTooLarge or QuotaExceeded."""
+    row = _details_row(conn, user_id, section, item_id)
+    stored: Details = {} if row is None else json.loads(row["details_json"])
+    details = normalise_details({**stored, "notes": text})
+    assert details is not None  # an object
+    before, after = stored.get("notes", ""), details.get("notes", "")
+    current = 0 if row is None else int(row["rev"])
+    if details == stored:
+        return NotesSet(before, after, current)
+    if not details_fit(details):
+        raise DetailsTooLarge
+    return NotesSet(
+        before, after, _write_details(conn, user_id, section, item_id, details, row, quota)
+    )
+
+
+def _details_row(
+    conn: sqlite3.Connection, user_id: int, section: Section, item_id: str
+) -> sqlite3.Row | None:
+    row: sqlite3.Row | None = conn.execute(
+        "SELECT details_json, rev FROM item_details"
+        " WHERE user_id = ? AND section = ? AND item_id = ?",
+        (user_id, section, item_id),
+    ).fetchone()
+    return row
+
+
+def _write_details(
+    conn: sqlite3.Connection,
+    user_id: int,
+    section: Section,
+    item_id: str,
+    details: Details,
+    row: sqlite3.Row | None,
+    quota: int,
+) -> int:
+    """Store a validated document over `row` (read in this transaction) at the next revision,
+    within the quota; the new revision."""
+    encoded = encode_details(details)
+    current = 0 if row is None else int(row["rev"])
+    before = usage(conn, user_id)
+    old_size = 0 if row is None else len(row["details_json"].encode())
+    _check_growth(before, before - old_size + len(encoded.encode()), quota)
+    conn.execute(
+        "INSERT INTO item_details (user_id, section, item_id, details_json, rev)"
+        " VALUES (?, ?, ?, ?, ?) ON CONFLICT (user_id, section, item_id)"
+        " DO UPDATE SET details_json = excluded.details_json, rev = excluded.rev",
+        (user_id, section, item_id, encoded, current + 1),
+    )
+    return current + 1
 
 
 def set_tick(

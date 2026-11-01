@@ -41,6 +41,14 @@ export function goalsMet(items: Tracked[], week: WeekLog): number {
   return items.filter((it) => goalMet(totalFor(week, it.id), it.target)).length
 }
 
+/**
+ * The days whose marked items reach the day's target: exercises a day (K30) or foods a day (K57).
+ * A met day's name turns green, underlined (K60). The API's insights module counts the same way.
+ */
+export function metDays(counts: number[], target: number): boolean[] {
+  return counts.map((n) => n >= target)
+}
+
 // The cycles live with their types; they are named here too, where the week's logic reads them.
 export {
   EXERCISE_CYCLE,

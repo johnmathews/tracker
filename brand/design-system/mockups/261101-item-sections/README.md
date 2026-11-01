@@ -4,7 +4,7 @@
 what order. Where is that choice made? The page's sections and their content stay as they are.
 
 **Status:** decided (2026-11-01): option A, one arrangement per type, saved with the account (K66,
-P24 in [decisions.md](../../../../docs/decisions.md))
+P29 in [decisions.md](../../../../docs/decisions.md))
 
 **Link:** https://claude.ai/artifact/4j9Q3zPxTeVWSuWR7cSmoF (private)
 
@@ -39,7 +39,7 @@ John, 2026-11-01, his answers in his words:
 - Details: **"Start shown"**. The mockup started each option with Details hidden, John's example;
   the built page starts with every section shown, in the default order.
 
-Recorded as K66 (the design) and P24 (the settings field and its normalisation). The ItemPage card
+Recorded as K66 (the design) and P29 (the settings field and its normalisation). The ItemPage card
 has the arranging state.
 
 Calls made while building, beyond the mockup:

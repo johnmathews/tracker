@@ -678,7 +678,7 @@ export const useSyncStore = defineStore('sync', () => {
    * cell. The old keys go, so an old tab still open finds nothing of this tab's to overwrite.
    *
    * Every old cache is from before item details, so its plan notes lift into details (D3). The
-   * server lifted the same notes from its own plans (migration 6), so they are not sent, except in
+   * server lifted the same notes from its own plans (migration 7), so they are not sent, except in
    * a section whose plan writes were still queued: a note there may not have reached the server. A
    * note the server already holds is accepted as it is (P7); a different one is a conflict, which
    * brings the server's copy in.
