@@ -80,6 +80,24 @@ export type PlannerData = { plans: Plans<Exercise>; log: Log }
 
 export type DietData = { plans: Plans<Food>; log: Log }
 
+/**
+ * How an Ask turn ended (docs/api.md §3.1): with an answer (`end_turn`, or `max_tokens` cut
+ * short), or without one, keeping only its question.
+ */
+export type AskStop = 'end_turn' | 'max_tokens' | 'refused' | 'error' | 'cancelled'
+
+/** One question in an Ask conversation and its answer, text only. Times are Unix seconds. */
+export type AskTurn = { question: string; answer: string; stop: AskStop; askedAt: number }
+
+/** An Ask conversation as the API keeps it and exports it; keys camelCase, as the rest of the API's. */
+export type Conversation = {
+  id: string
+  title: string
+  createdAt: number
+  updatedAt: number
+  turns: AskTurn[]
+}
+
 export type Settings = {
   accent: string
   dailyPick: number
@@ -194,7 +212,7 @@ export function normaliseGoals(v: unknown): string {
 }
 
 /** A string trimmed of spaces, tabs and line breaks at its ends and cut to `max` code points. */
-function cutText(v: unknown, max: number): string {
+export function cutText(v: unknown, max: number): string {
   if (typeof v !== 'string') return ''
   const trim = (s: string) => s.replace(/^[ \t\n\r]+|[ \t\n\r]+$/g, '')
   return trim(Array.from(trim(v)).slice(0, max).join(''))

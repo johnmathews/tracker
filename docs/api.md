@@ -13,22 +13,22 @@ in SQLite at `$DATA_DIR/fitness.db` (WAL mode, foreign keys on). The web contain
 `/api/` to it, so the browser sees one origin and the CSP stays unchanged. Every user's rows are
 scoped by `user_id`, and no endpoint reads another user's data.
 
-| Module        | Holds                                                                                            |
-| ------------- | ------------------------------------------------------------------------------------------------ |
-| `config.py`   | `Config`, read from the environment (§6)                                                         |
-| `db.py`       | connections, the schema and its migrations                                                       |
-| `validate.py` | the port of `src/lib/storage.ts` and `src/lib/transfer.ts`                                       |
-| `auth.py`     | password hashing, lockout, sessions, sign-up and its caps, invite, reset and confirmation tokens |
-| `outbox.py`   | which emails go out and when: the limits (§4.1), the links, the message                          |
-| `emails.py`   | the two emails, built to the EmailLayout card, and that card's preview                           |
-| `mail.py`     | the Resend client, and sending after the response                                                |
-| `data.py`     | reading and writing plans, ticks and settings; import, export; the quota (`usage`)               |
-| `insights.py` | read-only views of a user's weeks, counted as the screen counts them (§1.1)                      |
-| `ask.py`      | Ask (§3.1): the question's checks, the daily caps, the prompt, the tools and the Claude loop     |
-| `app.py`      | the HTTP layer: routes, the write checks, error mapping                                          |
-| `backup.py`   | the daily `VACUUM INTO` copy                                                                     |
-| `cli.py`      | `tracker-admin`                                                                                  |
-| `seed.py`     | `tracker-admin seed-demo`: a demo account and three weeks of marks, on a local stack only        |
+| Module        | Holds                                                                                                                            |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `config.py`   | `Config`, read from the environment (§6)                                                                                         |
+| `db.py`       | connections, the schema and its migrations                                                                                       |
+| `validate.py` | the port of `src/lib/storage.ts` and `src/lib/transfer.ts`                                                                       |
+| `auth.py`     | password hashing, lockout, sessions, sign-up and its caps, invite, reset and confirmation tokens                                 |
+| `outbox.py`   | which emails go out and when: the limits (§4.1), the links, the message                                                          |
+| `emails.py`   | the two emails, built to the EmailLayout card, and that card's preview                                                           |
+| `mail.py`     | the Resend client, and sending after the response                                                                                |
+| `data.py`     | reading and writing plans, ticks, settings and Ask's history; import, export; the quota (`usage`)                                |
+| `insights.py` | read-only views of a user's weeks, counted as the screen counts them (§1.1)                                                      |
+| `ask.py`      | Ask (§3.1): the question's checks, the daily caps, the history sent, the prompt, the tools, the Claude loop and saving each turn |
+| `app.py`      | the HTTP layer: routes, the write checks, error mapping                                                                          |
+| `backup.py`   | the daily `VACUUM INTO` copy                                                                                                     |
+| `cli.py`      | `tracker-admin`                                                                                                                  |
+| `seed.py`     | `tracker-admin seed-demo`: a demo account and three weeks of marks, on a local stack only                                        |
 
 ### 1.1 Insights
 
@@ -67,21 +67,24 @@ Every reader keeps these rules:
 
 ## 2. Data model
 
-| Table           | Key                                 | Columns                                                                                                                                                                 |
-| --------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `users`         | `id`                                | `username` (unique, case-insensitive; the lower-cased email for a signed-up account), `password_hash`, `disabled`, lockout counters, `created_at`, `email_confirmed_at` |
-| `sessions`      | `token_hash`                        | `user_id`, `created_at`, `last_seen`, `expires_at`                                                                                                                      |
-| `invites`       | `token_hash`                        | `kind` (`invite` or `reset`), `username`, `user_id` (resets), `expires_at`, `used_at`, `mailed` (a reset sent by email)                                                 |
-| `confirmations` | `token_hash`                        | `user_id`, `created_at`, `expires_at`, `used_at`: confirm-your-email links                                                                                              |
-| `mail_log`      | `id`                                | `user_id`, `kind` (`confirm` or `reset`), `sent_at`: one row per email attempted (a failed send still counts), for the limits                                           |
-| `ask_log`       | `id`                                | `user_id`, `asked_at`: one row per question claimed (a failed answer still counts), for Ask's caps. It holds nothing of the question or the answer                      |
-| `settings`      | `user_id`                           | `accent`, `daily_pick`, `food_pick` (K57), `goals` (My goals, `''` for none)                                                                                            |
-| `plans`         | `(user_id, section, week)`          | `items_json`, `rev`                                                                                                                                                     |
-| `ticks`         | `(user_id, section, week, item_id)` | `days`, `partial`, `missed`, `solid`, `hatch`: 7-bit masks (bit 0 is Monday); see below                                                                                 |
+| Table               | Key                                 | Columns                                                                                                                                                                                                            |
+| ------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `users`             | `id`                                | `username` (unique, case-insensitive; the lower-cased email for a signed-up account), `password_hash`, `disabled`, lockout counters, `created_at`, `email_confirmed_at`                                            |
+| `sessions`          | `token_hash`                        | `user_id`, `created_at`, `last_seen`, `expires_at`                                                                                                                                                                 |
+| `invites`           | `token_hash`                        | `kind` (`invite` or `reset`), `username`, `user_id` (resets), `expires_at`, `used_at`, `mailed` (a reset sent by email)                                                                                            |
+| `confirmations`     | `token_hash`                        | `user_id`, `created_at`, `expires_at`, `used_at`: confirm-your-email links                                                                                                                                         |
+| `mail_log`          | `id`                                | `user_id`, `kind` (`confirm` or `reset`), `sent_at`: one row per email attempted (a failed send still counts), for the limits                                                                                      |
+| `ask_log`           | `id`                                | `user_id`, `asked_at`: one row per question claimed (a failed answer still counts), for Ask's caps. It holds nothing of the question or the answer                                                                 |
+| `ask_conversations` | `(user_id, id)`                     | `title` (the first question, trimmed and cut to 80 characters), `created_at`, `updated_at`: Ask's history (§3.1). The id is the account's own                                                                      |
+| `ask_turns`         | `(user_id, conversation_id, seq)`   | `question`, `answer`, `stop` (`end_turn`, `max_tokens`, `refused`, `error` or `cancelled`), `asked_at`: one question and its answer, text only. Only `end_turn` and `max_tokens` keep an answer; any other is `''` |
+| `settings`          | `user_id`                           | `accent`, `daily_pick`, `food_pick` (K57), `goals` (My goals, `''` for none)                                                                                                                                       |
+| `plans`             | `(user_id, section, week)`          | `items_json`, `rev`                                                                                                                                                                                                |
+| `ticks`             | `(user_id, section, week, item_id)` | `days`, `partial`, `missed`, `solid`, `hatch`: 7-bit masks (bit 0 is Monday); see below                                                                                                                            |
 
-`section` is `exercise` or `diet`. Every row cascades from its user. Tokens and session ids are
-stored only as SHA-256 hashes. A database lookup with a stolen copy of the file cannot recover a
-working cookie or link. Times are Unix seconds. The theme is not stored: it belongs to the device.
+`section` is `exercise` or `diet`. Every row cascades from its user, and an Ask turn from its
+conversation. Tokens and session ids are stored only as SHA-256 hashes. A database lookup with a
+stolen copy of the file cannot recover a working cookie or link. Times are Unix seconds. The theme
+is not stored: it belongs to the device.
 
 **Marks.** Each day of a tick row is empty or holds one mark: a kind (`great`, `partial` or
 `missed`) in one of three drawings. The zigzag is the plain kind; the solid and the hatch add
@@ -96,7 +99,10 @@ email: `email_confirmed_at`, `mailed`, `confirmations` and `mail_log`. Every acc
 it starts unconfirmed. Version 4 adds `solid` and `hatch` (default 0), so every older mark reads as
 the zigzag. Version 5 adds `food_pick` to `settings` (default 2), foods a day (K57). Version 6
 adds `goals` to `settings` (default `''`), so every saved row reads as having no goals. Version 7
-adds `ask_log`, indexed by user and time and by time alone, for Ask's caps (§3.1).
+adds `ask_log`, indexed by user and time and by time alone, for Ask's caps (§3.1). Version 8
+adds `ask_conversations` and `ask_turns`, Ask's history (§3.1). A conversation is keyed by its
+account and its id, so the same id in two accounts, as after one imports the other's file, is two
+conversations.
 
 Migrations are a list in `db.py`, and the version is its length. A step is appended, never
 inserted, and no code or test names its index: `test_db.py` finds the goals step by its text.
@@ -112,11 +118,12 @@ carries `Cache-Control: no-store`.
 else, it gets 401 `auth`. The client sends it on every read and write, so a tab left open as one
 person can never touch the data of someone who signed in later in another tab.
 
-**Writes** (`POST`, `PUT`) must send `Content-Type: application/json` and an `Origin` header equal
-to `PUBLIC_ORIGIN`; otherwise they get 403 `origin` or 415 `content-type`. `SameSite=Lax` alone
-would not stop a request from another `*.itsa-pizza.com` host, because the browser counts it as
-same-site. Bodies over 1 MiB get 413 `too-large`, counted as they stream in, so a chunked body is
-cut off at the limit rather than read whole. A body with nothing to send, such as logout's, is `{}`.
+**Writes** (`POST`, `PUT`, `DELETE`) must send `Content-Type: application/json` and an `Origin`
+header equal to `PUBLIC_ORIGIN`; otherwise they get 403 `origin` or 415 `content-type`.
+`SameSite=Lax` alone would not stop a request from another `*.itsa-pizza.com` host, because the
+browser counts it as same-site. Bodies over 1 MiB get 413 `too-large`, counted as they stream in, so
+a chunked body is cut off at the limit rather than read whole. A body with nothing to send, such as
+logout's, is `{}`. A `DELETE` sends no body at all, but the same `Content-Type` header.
 
 | Method and path                            | Auth    | Does                                                                                             |
 | ------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------ |
@@ -136,9 +143,13 @@ cut off at the limit rather than read whole. A body with nothing to send, such a
 | `PUT /ticks/{section}/{week}/{item}/{day}` | session | `{mark}` → `{days}`, the week's seven marks for that item                                        |
 | `PUT /settings`                            | session | `{accent, dailyPick, foodPick, goals}` → the stored settings; a key left out keeps the saved one |
 | `GET /export`                              | session | the export file (`architecture.md` §4)                                                           |
-| `POST /import`                             | session | an export file, merged in; → `{weeks, ticks, settings}` added                                    |
+| `POST /import`                             | session | an export file, merged in; → `{weeks, ticks, settings, conversations}` added                     |
 | `GET /ask`                                 | session | `{remaining, limit}`: questions left today, and the per-account cap (§3.1)                       |
-| `POST /ask`                                | session | `{question, history, today}` → Claude's answer as a stream of events (§3.1)                      |
+| `POST /ask`                                | session | `{question, conversation?, today}` → Claude's answer as a stream of events (§3.1)                |
+| `GET /ask/conversations`                   | session | `{conversations: [{id, title, updatedAt, turns}]}`, the one updated last first (§3.1)            |
+| `GET /ask/conversations/{id}`              | session | `{id, title, createdAt, updatedAt, turns: [{question, answer, stop, askedAt}]}`                  |
+| `DELETE /ask/conversations/{id}`           | session | deletes the conversation and its turns; 204                                                      |
+| `DELETE /ask/conversations`                | session | deletes every conversation of the account; 204, also when there are none                         |
 
 **The account** is `{username}`: the account's email (the field keeps its old name, so older
 tabs and clients work unchanged). While mail is on it also carries `confirmed`, true once the
@@ -175,20 +186,24 @@ A `mark` key is read first; any other value of it, or a `done` that is not a boo
 `invalid`. The app sends both keys (`{"mark": m, "done": m !== null}`), so an API from
 before marks had kinds, still running during a deploy, saves the day as done rather than refusing it. The server stores any mark in either section; only the client keeps foods to `great`.
 
-**Quota.** Each user may store 5 MiB: the bytes of their plans' JSON plus 64 for each tick row.
-A plan write, a tick that would add a row, or an import that would take the account over it gets
-413 `quota` and changes nothing. Writes that keep usage level or shrink it always succeed, so a full
-account can still change existing ticks and trim its plans. Settings do not count and are never
-refused. The quota measures what the account holds, not the bytes on disk, which include keys and
-indexes. The client drops a refused write with a notice that the account is full (`architecture.md`
-§7), and an import says the same.
+**Quota.** Each user may store 5 MiB: the bytes of their plans' JSON plus 64 for each tick row, and
+for Ask's history the UTF-8 bytes of each title, question and answer plus 64 for each conversation
+and each turn. A plan write, a tick that would add a row, or an import that would take the account
+over it gets 413 `quota` and changes nothing. An Ask turn that would is not saved, and its answer
+says so (§3.1). Writes that keep usage level or shrink it always succeed, so a full account can
+still change existing ticks and trim its plans. Settings do not count and are never refused. The
+quota measures what the account holds, not the bytes on disk, which include keys and indexes. The
+client drops a refused write with a notice that the account is full (`architecture.md` §7), and an
+import says the same.
 
-**Export** writes version 4 of the file: an exercise or a food may carry `notes`, and each log
-row is seven marks, drawings included, or nulls. Its settings carry `goals`, which took no new
-version, as `foodPick` didn't: a reader from before them drops the key, and a file without
-them reads as no goals. Import reads version 4, version 3 (no notes), version 2 (kinds only,
-which read as the zigzag) and version 1, whose `true` days read as `great` and `false` days as
-empty; any other version gets `version`.
+**Export** writes version 4 of the file: an exercise or a food may carry `notes`, and each log row
+is seven marks, drawings included, or nulls. Its settings carry `goals`, which took no new version,
+as `foodPick` didn't: a reader from before them drops the key, and a file without them reads as no
+goals. The API's export also carries `conversations`, Ask's history, the one updated last first, in
+the shape `GET /ask/conversations/{id}` returns; it took no new version either. The browser's own
+export (Settings → Export) holds no conversations, since the browser keeps none. Import reads
+version 4, version 3 (no notes), version 2 (kinds only, which read as the zigzag) and version 1,
+whose `true` days read as `great` and `false` days as empty; any other version gets `version`.
 
 **Notes** (K43) live in a plan's items, inside `items_json`, so they took no migration. An item's
 `notes` is markdown, trimmed of spaces, tabs and line breaks at its ends and cut to 500 characters
@@ -196,35 +211,39 @@ empty; any other version gets `version`.
 text as written and never renders it.
 
 **Import** applies the merge rule from `architecture.md` §4: existing weeks keep their plan; per
-week, item and day a marked day keeps its mark and an empty one takes the file's; and settings
-apply only when the account has none. My goals are the exception: the file's fill the
-account's goals when those are empty, and never replace goals already saved. It returns what
-it added (`ticks` counts the empty days that gained a mark; `settings` is true when the file
-changed the account's settings, its goals alone included), in one transaction. A file that
-fails to parse gets 400 with `json`, `format` or `version`, the same codes the client shows.
+week, item and day a marked day keeps its mark and an empty one takes the file's; and settings apply
+only when the account has none. My goals are the exception: the file's fill the account's goals when
+those are empty, and never replace goals already saved. It returns what it added (`ticks` counts the
+empty days that gained a mark; `settings` is true when the file changed the account's settings, its
+goals alone included; `conversations` counts the conversations added), in one transaction. A file's
+conversation is added only when the account has none with its id, and one the account has is never
+changed. The file's conversations are read as `normalise_conversations` reads them (§9): an entry
+with a bad id, title, time or turns list is dropped, a bad turn drops out of its conversation, the
+first of each id is kept, and at most 500 conversations of 200 turns each are read from a file. A
+file that fails to parse gets 400 with `json`, `format` or `version`, the same codes the client
+shows.
 
 ### 3.1 Ask
 
 Ask answers a person's questions about their own tracking with Claude. It is on when
-`ANTHROPIC_API_KEY` is set (§6). With no key, `GET /auth/options` says `"ask": false`, and both
-`/ask` routes get 503 `ask-off`. Unsetting the key turns Ask off with no deploy. The server
-stores no conversation: the browser holds the chat and sends it back with each question.
+`ANTHROPIC_API_KEY` is set (§6). With no key, `GET /auth/options` says `"ask": false`, and `GET` and
+`POST /ask` get 503 `ask-off`. Unsetting the key turns Ask off with no deploy. The history routes
+(below) work with Ask off, so a person can always read and delete what was kept.
 
 **The question.** `POST /ask` is a write, so it passes the same Origin and Content-Type checks as
-every other write, and it needs a session. The body is `{question, history, today}`:
+every other write, and it needs a session. The body is `{question, conversation?, today}`:
 
 - `question` is 1 to 2,000 characters after trimming spaces and line breaks at its ends.
-- `history` is the chat so far, up to 20 turns. Each turn is exactly `{role, text}`, with `role`
-  `user` or `assistant`. The turns alternate and start with `user`, so the last one is the
-  assistant's. Each `text` is a non-blank string of at most 8,000 characters, and all of them
-  together are at most 40,000. A turn with any other key, or a `text` that isn't a string, is
-  refused. No tool call, tool result or thinking block can reach the model from the browser.
-  A missing `history` is an empty one.
+- `conversation` is the id of the conversation the question continues, as `start` gave it. Left
+  out, the question starts a new conversation. It is a string of 1 to 64 letters, digits, `_` or
+  `-`. An id the account doesn't have, someone else's included, gets 404 `not-found` before the
+  question is claimed, so it costs nothing.
 - `today` is the browser's date, `YYYY-MM-DD`. It must be within a day of the server's UTC date,
   since every time zone's date is. The server can't know the browser's date, and "this week"
   depends on it.
 
-Anything else gets 400 `invalid` and costs no question. Other keys in the body are ignored.
+Anything else gets 400 `invalid` and costs no question, and so does any other key in the body.
+A `history`, which the browser sent before the server kept the history, is one of them.
 
 **The caps.** Each account may ask `ASK_PER_DAY` questions (30) in any rolling 24 hours. All
 accounts together may ask `ASK_PER_DAY_TOTAL` (300). A question is claimed in `ask_log` under the
@@ -242,10 +261,10 @@ no-store` and `X-Accel-Buffering: no`, so nginx passes each event on at once. Ea
 
 | Event   | Data                                         | When                                                                     |
 | ------- | -------------------------------------------- | ------------------------------------------------------------------------ |
-| `start` | `{"remaining": 29}`                          | first, with the questions left after this one                            |
+| `start` | `{"remaining": 29, "conversation": "Kq3x…"}` | first, with the questions left after this one and the conversation's id  |
 | `tool`  | `{"name": "week_summary"}`                   | as each tool runs, before its result goes back to Claude                 |
 | `text`  | `{"delta": "Three of four"}`                 | each piece of the answer, in order; join them for the markdown           |
-| `done`  | `{"stop": "end_turn"}`                       | last, when the answer is complete: `end_turn`, `max_tokens` or `refused` |
+| `done`  | `{"stop": "end_turn", "saved": true}`        | last, when the answer is complete: `end_turn`, `max_tokens` or `refused` |
 | `error` | `{"error": "busy"}` or `{"error": "error"}`  | last, in place of `done`, when the answer failed                         |
 
 - `end_turn` is a complete answer. `max_tokens` is an answer cut short: it ran out of output
@@ -258,6 +277,38 @@ no-store` and `X-Accel-Buffering: no`, so nginx passes each event on at once. Ea
 - During a silence of 15 seconds the stream sends the comment `: keep-alive`, so nginx's 60-second
   read timeout never fires while Claude thinks or a tool runs. Clients skip comments.
 - A client that disconnects ends the stream, and the request to Anthropic is cancelled with it.
+- `saved` says whether the turn was kept. It is false when the account is full (§3), and when
+  the conversation was deleted while the answer streamed. The answer was still streamed. When a
+  new conversation's first turn isn't kept, the conversation isn't either: the next question
+  leaves `conversation` out.
+
+**The history.** The server keeps each conversation, and the browser names it by its id.
+
+- A new conversation is created when its first question is claimed. Its id is 16 random
+  URL-safe characters (`secrets.token_urlsafe(12)`), and its title is that question, trimmed
+  and cut to 80 characters (code points).
+- Each question and its answer are saved as one turn when the answer ends, on a worker thread
+  with its own connection, before `done` goes out. After `end_turn` or `max_tokens` the turn
+  keeps the whole answer as streamed, the `"\n\n"` breaks included, trimmed and cut at 64,000
+  characters. A refused or failed answer (`error`, for `busy` too), or one whose client left
+  (`cancelled`), keeps the question with an empty answer, so the history shows what was asked.
+  The save on a disconnect is shielded from the cancellation, and a client gone before the
+  first event still has its question kept, by the response's own close. A turn is saved once,
+  and one that would take the account over its quota is not saved.
+- Each question sends Claude the conversation's earlier turns from the database, oldest first,
+  as alternating text-only user and assistant turns, then the new question. The context (today,
+  this week, My goals) opens the first user turn, as for a new conversation. A turn with an
+  empty answer is left out whole, since its question alone would put two user turns in a row.
+  Only the newest turns go: at most 20, with at most 40,000 characters of questions and answers
+  together; the first turn that doesn't fit, and every turn before it, stays out.
+- `GET /ask/conversations` lists the account's conversations, the one updated last first, each
+  with its number of turns. `GET /ask/conversations/{id}` returns one with its turns, oldest
+  first. Deleting `/ask/conversations/{id}` deletes one and its turns, and deleting
+  `/ask/conversations` deletes them all. Each reads only the session's account: a missing id and
+  another account's both get 404 `not-found`.
+- Times are Unix seconds. `updatedAt` is when the last turn was saved. The JSON keys are
+  camelCase (`createdAt`, `updatedAt`, `askedAt`), as in the rest of the API and the export
+  file; the columns (§2) keep their snake_case names.
 
 **Claude.** `ask.py` calls the Messages API with the SDK's `AsyncAnthropic`, the key passed
 explicitly. The model is `ASK_MODEL` (`claude-sonnet-5-5`). Each request has `max_tokens` 4,000,
@@ -464,12 +515,18 @@ Reviewed and kept on purpose, for a small service with open sign-up (D9 in
   be trusted. `tracker-admin reset` clears it.
 - **Sessions have no absolute lifetime.** A session used at least every 90 days lasts
   indefinitely. Logout, `revoke-sessions`, a reset and `disable` all end it.
-- **Ask sends a person's data to Anthropic.** A question goes to Anthropic's API with the chat so
-  far, the person's My goals note, and whatever the tools read for it: the plans, marks, item
-  names, notes and goals of the weeks Claude asks about. The app stores none of it, and the logs
-  hold none of it (§6). Anthropic's own retention applies to what it receives. A person's names
+- **Ask sends a person's data to Anthropic.** A question goes to Anthropic's API with the
+  conversation so far, the person's My goals note, and whatever the tools read for it: the plans,
+  marks, item names, notes and goals of the weeks Claude asks about. The logs hold none of it
+  (§6). Anthropic's own retention applies to what it receives. A person's names
   and notes can't steer the answer to anyone else, because every tool reads only the asker's data.
   At worst they steer the asker's own answer.
+- **Ask's questions and answers are stored.** Each conversation's questions and answers are
+  kept in the database (§2) and so in the daily backup (§7), which PBS copies off the VM. They
+  can be personal, about diet or health. They are deleted with their conversation, by the
+  person one by one or all at once, or with the account; a backup taken before keeps them
+  until it ages out (seven days on the VM, longer in PBS). They are never logged (§6). The
+  model's thinking and tool calls are never stored.
 - **Ask can spend money until a cap stops it.** With the defaults, 300 questions a day across
   everyone, each up to six requests of at most 4,000 output tokens. The spend limit in the
   Anthropic Console is the bound that holds whatever the app does.
@@ -494,7 +551,12 @@ differs by default:
 `tests/test_parity.py` runs every case in `fixtures/transfer/`, the same files the Vitest suite
 runs. A rule changed on one side without the other fails one of the two suites. The
 `parse/goals*.json` cases hold My goals to one normaliser, and `merge-settings.json` holds the
-import's settings rule, goals filling only empty ones included.
+import's settings rule, goals filling only empty ones included. The `parse/conversations*.json`
+cases hold Ask's conversations to one normaliser (`normalise_conversations`,
+`normaliseConversations`): the id rule, the cuts at 80, 2,000 and 64,000 code points, the times
+as whole numbers from 0 to 2^53 − 1, the five stops, no answer kept without `end_turn` or
+`max_tokens`, the first of each id, and the limits of 500 conversations and 200 turns.
+`merge-conversations.json` holds the import's rule: only ids the account doesn't have are added.
 
 `fixtures/insights/` holds the same contract for what a week shows (§1.1). Each case gives a
 section's plans and log, a week, today and the daily target, and expects the plan week, the
@@ -552,6 +614,11 @@ Tests sit in `api/tests/`:
   every validation refusal (forged tool and thinking blocks included), both caps and their
   `Retry-After`, parallel claims, keep-alives, a disconnect cancelling the answer, the prompt's
   rules and the verdict switch, and that no question, history, answer or goals reach the logs.
+  For the history: the earlier turn in a follow-up's request, read from the database; a
+  `history` or any other key refused; what each stop saves, a client that leaves included; the
+  title; the 20-turn and 40,000-character caps; another account's id refused on read, delete and
+  ask; listing, deleting one and deleting all; a full account; and a conversation deleted while
+  it answers.
 - `test_db.py`, `test_config.py`, `test_backup.py`, `test_cli.py`: migrations (including racing
   ones, the WAL switch, and old ticks reading as `great` after step 2), configuration from the environment, daily copies, `tracker-admin`.
 - `conftest.py` gives each test a temporary database, a controllable clock, a cheap hasher and a

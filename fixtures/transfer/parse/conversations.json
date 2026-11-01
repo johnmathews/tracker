@@ -1,0 +1,248 @@
+{
+  "description": "Ask's conversations (no new version): an entry with a bad id, title, time or turns list is dropped, a bad turn is dropped from its conversation, a second entry with the same id is dropped, extra keys go, and the title, question and answer are trimmed and cut at 80, 2,000 and 64,000 code points. A turn that didn't end with an answer (refused, error, cancelled) keeps none.",
+  "input": {
+    "format": "tracker-export",
+    "version": 4,
+    "conversations": [
+      {
+        "id": "Kq3xL0aZ-9_bQ2mR",
+        "title": "How was my week?",
+        "createdAt": 1792742400,
+        "updatedAt": 1792742460,
+        "turns": [
+          {
+            "question": "How was my week?",
+            "answer": "Four of five goals.",
+            "stop": "end_turn",
+            "askedAt": 1792742400
+          },
+          { "question": "And food?", "answer": "", "stop": "refused", "askedAt": 1792742460 }
+        ]
+      },
+      {
+        "id": "cut",
+        "title": "  💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪 and more\n",
+        "createdAt": 1792742400,
+        "updatedAt": 1792743000.0,
+        "turns": [
+          {
+            "question": "\tqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
+            "answer": "  Two of four.\n",
+            "stop": "max_tokens",
+            "askedAt": 1792742400
+          },
+          {
+            "question": "Why?",
+            "answer": "Partly written",
+            "stop": "refused",
+            "askedAt": 1792742400
+          },
+          { "question": "Again?", "answer": "Half", "stop": "error", "askedAt": 1792742400 },
+          { "question": "Still?", "answer": "Half", "stop": "cancelled", "askedAt": 1792742400 },
+          {
+            "question": "Extra",
+            "answer": "Kept.",
+            "stop": "end_turn",
+            "askedAt": 1792742400,
+            "thinking": "x",
+            "content": [{ "type": "tool_use" }]
+          }
+        ],
+        "user_id": 7
+      },
+      "nope",
+      null,
+      7,
+      [],
+      {
+        "id": "has a space",
+        "title": "A title",
+        "createdAt": 1792742400,
+        "updatedAt": 1792742400,
+        "turns": []
+      },
+      {
+        "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "title": "A title",
+        "createdAt": 1792742400,
+        "updatedAt": 1792742400,
+        "turns": []
+      },
+      {
+        "id": 12,
+        "title": "A title",
+        "createdAt": 1792742400,
+        "updatedAt": 1792742400,
+        "turns": []
+      },
+      { "title": "A title", "createdAt": 1792742400, "updatedAt": 1792742400, "turns": [] },
+      {
+        "id": "é",
+        "title": "A title",
+        "createdAt": 1792742400,
+        "updatedAt": 1792742400,
+        "turns": []
+      },
+      { "id": "t1", "title": 5, "createdAt": 1792742400, "updatedAt": 1792742400, "turns": [] },
+      {
+        "id": "t2",
+        "title": " \n\t ",
+        "createdAt": 1792742400,
+        "updatedAt": 1792742400,
+        "turns": []
+      },
+      { "id": "tm1", "title": "A title", "createdAt": -1, "updatedAt": 1792742400, "turns": [] },
+      {
+        "id": "tm2",
+        "title": "A title",
+        "createdAt": 1792742400.5,
+        "updatedAt": 1792742400,
+        "turns": []
+      },
+      {
+        "id": "tm3",
+        "title": "A title",
+        "createdAt": "1792742400",
+        "updatedAt": 1792742400,
+        "turns": []
+      },
+      {
+        "id": "tm4",
+        "title": "A title",
+        "createdAt": 1792742400,
+        "updatedAt": true,
+        "turns": []
+      },
+      {
+        "id": "tm5",
+        "title": "A title",
+        "createdAt": 1792742400,
+        "updatedAt": 9007199254740992,
+        "turns": []
+      },
+      { "id": "tm6", "title": "A title", "createdAt": 1792742400, "turns": [] },
+      {
+        "id": "tl1",
+        "title": "A title",
+        "createdAt": 1792742400,
+        "updatedAt": 1792742400,
+        "turns": {
+          "0": { "question": "Q", "answer": "Fine.", "stop": "end_turn", "askedAt": 1792742400 }
+        }
+      },
+      { "id": "tl2", "title": "A title", "createdAt": 1792742400, "updatedAt": 1792742400 },
+      {
+        "id": "Kq3xL0aZ-9_bQ2mR",
+        "title": "A second copy",
+        "createdAt": 1792742400,
+        "updatedAt": 1792742400,
+        "turns": []
+      },
+      {
+        "id": "bad-turns",
+        "title": "Bad turns",
+        "createdAt": 1792742400,
+        "updatedAt": 1792742400,
+        "turns": [
+          "nope",
+          null,
+          { "question": "  ", "answer": "a", "stop": "end_turn", "askedAt": 1792742400 },
+          { "question": 3, "answer": "a", "stop": "end_turn", "askedAt": 1792742400 },
+          { "question": "q", "answer": null, "stop": "end_turn", "askedAt": 1792742400 },
+          { "question": "q", "answer": "a", "stop": "thinking", "askedAt": 1792742400 },
+          { "question": "q", "answer": "a", "stop": "END_TURN", "askedAt": 1792742400 },
+          { "question": "q", "answer": "a", "stop": "end_turn" },
+          { "question": "q", "answer": "a", "stop": "end_turn", "askedAt": -5 },
+          { "question": "q", "answer": "a", "stop": "end_turn", "askedAt": true },
+          { "answer": "a", "stop": "end_turn", "askedAt": 1792742400 },
+          { "question": "The one good turn", "answer": "Fine.", "stop": "end_turn", "askedAt": 0 }
+        ]
+      },
+      {
+        "id": "no-turns",
+        "title": "Nothing yet",
+        "createdAt": 1792742400,
+        "updatedAt": 1792742400,
+        "turns": []
+      },
+      {
+        "id": "Az09_-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "title": "Long id",
+        "createdAt": 1792742400,
+        "updatedAt": 1792742400,
+        "turns": []
+      }
+    ]
+  },
+  "expected": {
+    "ok": true,
+    "data": {
+      "exercise": { "plans": {}, "log": {} },
+      "diet": { "plans": {}, "log": {} },
+      "settings": null,
+      "conversations": [
+        {
+          "id": "Kq3xL0aZ-9_bQ2mR",
+          "title": "How was my week?",
+          "createdAt": 1792742400,
+          "updatedAt": 1792742460,
+          "turns": [
+            {
+              "question": "How was my week?",
+              "answer": "Four of five goals.",
+              "stop": "end_turn",
+              "askedAt": 1792742400
+            },
+            { "question": "And food?", "answer": "", "stop": "refused", "askedAt": 1792742460 }
+          ]
+        },
+        {
+          "id": "cut",
+          "title": "💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪💪",
+          "createdAt": 1792742400,
+          "updatedAt": 1792743000,
+          "turns": [
+            {
+              "question": "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
+              "answer": "Two of four.",
+              "stop": "max_tokens",
+              "askedAt": 1792742400
+            },
+            { "question": "Why?", "answer": "", "stop": "refused", "askedAt": 1792742400 },
+            { "question": "Again?", "answer": "", "stop": "error", "askedAt": 1792742400 },
+            { "question": "Still?", "answer": "", "stop": "cancelled", "askedAt": 1792742400 },
+            { "question": "Extra", "answer": "Kept.", "stop": "end_turn", "askedAt": 1792742400 }
+          ]
+        },
+        {
+          "id": "bad-turns",
+          "title": "Bad turns",
+          "createdAt": 1792742400,
+          "updatedAt": 1792742400,
+          "turns": [
+            {
+              "question": "The one good turn",
+              "answer": "Fine.",
+              "stop": "end_turn",
+              "askedAt": 0
+            }
+          ]
+        },
+        {
+          "id": "no-turns",
+          "title": "Nothing yet",
+          "createdAt": 1792742400,
+          "updatedAt": 1792742400,
+          "turns": []
+        },
+        {
+          "id": "Az09_-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Long id",
+          "createdAt": 1792742400,
+          "updatedAt": 1792742400,
+          "turns": []
+        }
+      ]
+    }
+  }
+}

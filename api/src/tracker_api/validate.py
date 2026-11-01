@@ -12,7 +12,7 @@ import math
 import re
 import sys
 from collections.abc import Callable
-from typing import Any, Literal, TypedDict, TypeIs, cast
+from typing import Any, Literal, NotRequired, TypedDict, TypeIs, cast
 
 EXPORT_FORMAT = "tracker-export"
 #: Files exported under the app's earlier names (Fitness Planner, and Exercise Planner before it)
@@ -23,6 +23,7 @@ OLD_EXPORT_FORMATS = ("fitness-planner-export", "exercise-planner-export")
 #: carry the kinds alone, which read as the zigzag; version 1 files a `true` per done day, which
 #: reads as `great`. All four import. Settings may carry My goals (`goals`) with no new version, as
 #: `foodPick` came: a reader from before them drops the key, and a file without them reads as none.
+#: Ask's conversations (`conversations`) came the same way.
 EXPORT_VERSION = 4
 READ_VERSIONS = (1, 2, 3, EXPORT_VERSION)
 
@@ -41,6 +42,15 @@ DEFAULT_ACCENT = "#30d158"
 DEFAULT_DAILY_PICK = 3
 #: Foods a day (K57), in the same bounds as the daily pick.
 DEFAULT_FOOD_PICK = 2
+#: Ask's history, in characters (code points): a conversation's title, a question, an answer.
+MAX_TITLE = 80
+MAX_QUESTION = 2000
+MAX_ANSWER = 64_000
+#: What one file may bring: conversations, and turns in each. The rest are dropped.
+MAX_CONVERSATIONS = 500
+MAX_CONVERSATION_TURNS = 200
+#: A time in Unix seconds is a whole number from 0 to JavaScript's largest safe integer.
+MAX_TIME = 2**53 - 1
 
 Section = Literal["exercise", "diet"]
 SECTIONS: tuple[Section, ...] = ("exercise", "diet")
@@ -49,6 +59,8 @@ SECTIONS: tuple[Section, ...] = ("exercise", "diet")
 # `$`, which in Python also matches before a trailing newline.
 WEEK_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 ACCENT_RE = re.compile(r"#[0-9a-fA-F]{6}")
+#: A conversation's id: URL-safe, as `secrets.token_urlsafe` makes them, so it can sit in a path.
+CONVERSATION_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 
 type Item = dict[str, Any]
 type Plans = dict[str, list[Item]]
@@ -100,10 +112,36 @@ class Portable(TypedDict):
     goals: str
 
 
+#: How an Ask turn ended: with an answer (`end_turn`, or `max_tokens` cut short), or without one.
+type AskStop = Literal["end_turn", "max_tokens", "refused", "error", "cancelled"]
+STOPS: tuple[AskStop, ...] = ("end_turn", "max_tokens", "refused", "error", "cancelled")
+#: The stops that keep their answer; any other turn's answer is "".
+ANSWERED: tuple[AskStop, ...] = ("end_turn", "max_tokens")
+
+
+class Turn(TypedDict):
+    """One question in a conversation and how it was answered; text only."""
+
+    question: str
+    answer: str
+    stop: AskStop
+    askedAt: int
+
+
+class Conversation(TypedDict):
+    id: str
+    title: str
+    createdAt: int
+    updatedAt: int
+    turns: list[Turn]
+
+
 class ExportData(TypedDict):
     exercise: Tracked
     diet: Tracked
     settings: Portable | None
+    #: Present only when the file carries a list of them.
+    conversations: NotRequired[list[Conversation]]
 
 
 class Summary(TypedDict):
@@ -300,6 +338,82 @@ def normalise_portable(v: dict[str, Any]) -> Portable:
     }
 
 
+def is_conversation_id(v: object) -> TypeIs[str]:
+    return isinstance(v, str) and CONVERSATION_ID_RE.fullmatch(v) is not None
+
+
+def normalise_title(v: object) -> str:
+    """A conversation's title, trimmed and cut as a note is but to MAX_TITLE characters; "" for
+    anything that isn't a string or for nothing left."""
+    return _cut_text(v, MAX_TITLE)
+
+
+def normalise_answer(v: str, stop: AskStop) -> str:
+    """An answer as it is kept: trimmed and cut to MAX_ANSWER characters for a turn that ended
+    with one, and "" for any other, so a refusal's partial text is never kept."""
+    return _cut_text(v, MAX_ANSWER) if stop in ANSWERED else ""
+
+
+def _time(v: object) -> int | None:
+    n = as_number(v)
+    if n is None or not n.is_integer() or not 0 <= n <= MAX_TIME:
+        return None
+    return int(n)
+
+
+def normalise_turn(v: object) -> Turn | None:
+    """A usable turn, or None: the question is trimmed and cut to MAX_QUESTION characters and
+    must not be blank; the answer must be a string; the stop one of STOPS; `askedAt` a time.
+    Any other key is dropped, so no tool call or thinking block is ever kept."""
+    if not isinstance(v, dict):
+        return None
+    question = _cut_text(v.get("question"), MAX_QUESTION)
+    answer, stop, asked_at = v.get("answer"), v.get("stop"), _time(v.get("askedAt"))
+    if not question or not isinstance(answer, str) or stop not in STOPS or asked_at is None:
+        return None
+    kind = cast(AskStop, stop)
+    return {
+        "question": question,
+        "answer": normalise_answer(answer, kind),
+        "stop": kind,
+        "askedAt": asked_at,
+    }
+
+
+def normalise_conversation(v: object) -> Conversation | None:
+    """A usable conversation, or None: a URL-safe id, a title that isn't blank, two times and a
+    list of turns. Turns that fail drop out, and only the first MAX_CONVERSATION_TURNS stay."""
+    if not isinstance(v, dict) or not is_conversation_id(v.get("id")):
+        return None
+    title = normalise_title(v.get("title"))
+    created, updated = _time(v.get("createdAt")), _time(v.get("updatedAt"))
+    turns = v.get("turns")
+    if not title or created is None or updated is None or not isinstance(turns, list):
+        return None
+    kept = [t for t in map(normalise_turn, turns) if t is not None]
+    return {
+        "id": v["id"],
+        "title": title,
+        "createdAt": created,
+        "updatedAt": updated,
+        "turns": kept[:MAX_CONVERSATION_TURNS],
+    }
+
+
+def normalise_conversations(v: list[Any]) -> list[Conversation]:
+    """A file's conversations: the valid ones, the first of each id, at most MAX_CONVERSATIONS."""
+    out: list[Conversation] = []
+    seen: set[str] = set()
+    for conversation in map(normalise_conversation, v):
+        if conversation is None or conversation["id"] in seen:
+            continue
+        seen.add(conversation["id"])
+        out.append(conversation)
+        if len(out) == MAX_CONVERSATIONS:
+            break
+    return out
+
+
 def _reject_constant(name: str) -> None:
     raise ValueError(name)
 
@@ -337,11 +451,16 @@ def parse_export(text: str) -> ExportData:
     if as_number(parsed.get("version")) not in READ_VERSIONS:
         raise ExportError("version")
     settings = parsed.get("settings")
-    return {
+    out: ExportData = {
         "exercise": section("exercise", parsed.get("exercise")),
         "diet": section("diet", parsed.get("diet")),
         "settings": normalise_portable(settings) if isinstance(settings, dict) else None,
     }
+    # Conversations that aren't a list read as none, as in a file from before them.
+    conversations = parsed.get("conversations")
+    if isinstance(conversations, list):
+        out["conversations"] = normalise_conversations(conversations)
+    return out
 
 
 NO_DAYS: Days = [None] * 7
@@ -387,6 +506,21 @@ def merge_settings(existing: Portable | None, incoming: Portable | None) -> Port
     if not existing["goals"] and incoming is not None and incoming["goals"]:
         return {**existing, "goals": incoming["goals"]}
     return existing
+
+
+def merge_conversations(
+    existing: list[Conversation], incoming: list[Conversation]
+) -> list[Conversation]:
+    """The account's conversations as they are, then the file's whose id isn't among them, in the
+    file's order and the first of each id: an import never changes a conversation it has.
+    Returns new objects."""
+    out = copy.deepcopy(existing)
+    seen = {c["id"] for c in existing}
+    for conversation in incoming:
+        if conversation["id"] not in seen:
+            seen.add(conversation["id"])
+            out.append(copy.deepcopy(conversation))
+    return out
 
 
 type Masks = tuple[int, int, int, int, int]

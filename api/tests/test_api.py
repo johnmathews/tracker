@@ -656,15 +656,28 @@ def test_sample_import_then_export_round_trips(client: TestClient, config: Confi
     sample = read_fixture("sample/export.json")
     r = post_import(client, sample)
     # The same counts the browser's confirm step shows for this file (App.spec.ts).
-    assert r.json() == {"weeks": 6, "ticks": 102, "settings": True}
+    assert r.json() == {"weeks": 6, "ticks": 102, "settings": True, "conversations": 0}
     exported = client.get("/api/export")
     assert sample["version"] == exported.json()["version"] == 4
     assert (
         exported.headers["content-disposition"] == 'attachment; filename="tracker-2026-10-23.json"'
     )
-    assert exported.json() == {**sample, "exportedAt": "2026-10-23T08:00:00.000Z"}
-    assert post_import(client, sample).json() == {"weeks": 0, "ticks": 0, "settings": False}
-    assert client.get("/api/export").json() == {**sample, "exportedAt": "2026-10-23T08:00:00.000Z"}
+    assert exported.json() == {
+        **sample,
+        "exportedAt": "2026-10-23T08:00:00.000Z",
+        "conversations": [],
+    }
+    assert post_import(client, sample).json() == {
+        "weeks": 0,
+        "ticks": 0,
+        "settings": False,
+        "conversations": 0,
+    }
+    assert client.get("/api/export").json() == {
+        **sample,
+        "exportedAt": "2026-10-23T08:00:00.000Z",
+        "conversations": [],
+    }
 
 
 def test_import_merges_without_deleting(client: TestClient, config: Config) -> None:
@@ -685,7 +698,7 @@ def test_import_merges_without_deleting(client: TestClient, config: Config) -> N
             "settings": {"accent": "#0a84ff", "dailyPick": 4},
         },
     )
-    assert r.json() == {"weeks": 1, "ticks": 1, "settings": False}
+    assert r.json() == {"weeks": 1, "ticks": 1, "settings": False, "conversations": 0}
     state = client.get("/api/state").json()
     assert state["exercise"]["plans"] == {"2026-10-12": [squats], WEEK: [PUSHUPS]}
     assert state["exercise"]["revs"] == {"2026-10-12": 1, WEEK: 1}
@@ -700,7 +713,12 @@ def test_import_fills_empty_goals_only(client: TestClient, config: Config) -> No
     client.put("/api/settings", json={"accent": "#ff9f0a", "dailyPick": 2})
     settings = {"accent": "#0a84ff", "dailyPick": 4, "goals": "Run 5 km by March."}
     file = {"format": "tracker-export", "version": 4, "settings": settings}
-    assert post_import(client, file).json() == {"weeks": 0, "ticks": 0, "settings": True}
+    assert post_import(client, file).json() == {
+        "weeks": 0,
+        "ticks": 0,
+        "settings": True,
+        "conversations": 0,
+    }
     # Only the goals came from the file: the saved picks stay.
     assert client.get("/api/state").json()["settings"] == {
         "accent": "#ff9f0a",
@@ -753,7 +771,7 @@ def test_import_keeps_existing_marks_and_fills_empty_days(
             "exercise": {"log": {WEEK: {"pu": incoming, "sq": ["missed", _, _, _, _, _, _]}}},
         },
     )
-    assert r.json() == {"weeks": 0, "ticks": 4, "settings": False}
+    assert r.json() == {"weeks": 0, "ticks": 4, "settings": False, "conversations": 0}
     log = client.get("/api/state").json()["exercise"]["log"]
     assert log == {
         WEEK: {
@@ -766,7 +784,7 @@ def test_import_keeps_existing_marks_and_fills_empty_days(
     # The same file again adds nothing.
     assert post_import(
         client, {"format": "fitness-planner-export", "version": 2, "exercise": {"log": log}}
-    ).json() == {"weeks": 0, "ticks": 0, "settings": False}
+    ).json() == {"weeks": 0, "ticks": 0, "settings": False, "conversations": 0}
 
 
 def test_a_version_1_import_exports_as_version_4(client: TestClient, config: Config) -> None:
@@ -777,7 +795,12 @@ def test_a_version_1_import_exports_as_version_4(client: TestClient, config: Con
         "exercise": {"log": {WEEK: {"pu": [True, False, True, False, False, False, False]}}},
         "diet": {"log": {WEEK: {"veg": [False] * 7}}},
     }
-    assert post_import(client, old).json() == {"weeks": 0, "ticks": 2, "settings": False}
+    assert post_import(client, old).json() == {
+        "weeks": 0,
+        "ticks": 2,
+        "settings": False,
+        "conversations": 0,
+    }
     exported = client.get("/api/export").json()
     assert exported["version"] == 4
     assert exported["exercise"]["log"] == {
@@ -793,7 +816,7 @@ def test_import_accepts_a_byte_order_mark(client: TestClient, config: Config) ->
     r = client.post(
         "/api/import", content=body.encode(), headers={"Content-Type": "application/json"}
     )
-    assert r.json() == {"weeks": 0, "ticks": 0, "settings": False}
+    assert r.json() == {"weeks": 0, "ticks": 0, "settings": False, "conversations": 0}
 
 
 def test_ticks_on_different_days_from_many_connections_all_land(
@@ -857,3 +880,88 @@ def test_a_request_for_another_user_is_refused(client: TestClient, config: Confi
         client.get("/api/state", headers={"X-Expected-User": "BOB@example.com"}).status_code == 200
     )
     assert client.get("/api/auth/me").json() == {"username": "bob@example.com"}
+
+
+# --- Ask's history in export and import -----------------------------------------------------------
+
+CONVERSATION: dict[str, Any] = {
+    "id": "Kq3xL0aZ-9_bQ2mR",
+    "title": "How was my week?",
+    "createdAt": 1_792_742_400,
+    "updatedAt": 1_792_742_460,
+    "turns": [
+        {
+            "question": "How was my week?",
+            "answer": "Four of five goals, and push-ups on three days.",
+            "stop": "end_turn",
+            "askedAt": 1_792_742_400,
+        },
+        {"question": "And my food?", "answer": "", "stop": "refused", "askedAt": 1_792_742_460},
+    ],
+}
+
+
+def add_conversation(config: Config, uid: int, conversation: dict[str, Any]) -> None:
+    """A conversation saved as Ask saves one: the row, then each turn as its answer ends."""
+    conn = connect(config.db_path)
+    try:
+        cid = conversation["id"]
+        data.create_conversation(conn, uid, cid, conversation["title"], conversation["createdAt"])
+        for turn in conversation["turns"]:
+            saved = data.save_turn(conn, uid, cid, turn, conversation["updatedAt"], quota=QUOTA)
+            assert saved == "saved"
+    finally:
+        conn.close()
+
+
+def export_file(conversations: list[Any]) -> dict[str, Any]:
+    return {"format": "tracker-export", "version": 4, "conversations": conversations}
+
+
+def test_export_then_import_round_trips_conversations(client: TestClient, config: Config) -> None:
+    sign_up(client, config)
+    add_conversation(config, 1, CONVERSATION)
+    exported = client.get("/api/export").json()
+    assert exported["version"] == 4
+    assert exported["conversations"] == [CONVERSATION]
+    nothing = {"weeks": 0, "ticks": 0, "settings": False}
+    with other_client(config) as bob:
+        sign_up(bob, config, "bob@example.com")
+        # Ids belong to an account: the same id in Bob's is a conversation of his own.
+        assert post_import(bob, exported).json() == {**nothing, "conversations": 1}
+        assert bob.get("/api/export").json()["conversations"] == [CONVERSATION]
+        assert bob.get(f"/api/ask/conversations/{CONVERSATION['id']}").json() == CONVERSATION
+        assert post_import(bob, exported).json() == {**nothing, "conversations": 0}
+    # Alice's own file adds nothing to her account.
+    assert post_import(client, exported).json() == {**nothing, "conversations": 0}
+    assert client.get("/api/export").json()["conversations"] == [CONVERSATION]
+
+
+def test_import_never_changes_a_conversation_the_account_has(
+    client: TestClient, config: Config
+) -> None:
+    sign_up(client, config)
+    add_conversation(config, 1, CONVERSATION)
+    changed = {
+        **CONVERSATION,
+        "title": "Changed",
+        "turns": [{"question": "Other", "answer": "Other.", "stop": "end_turn", "askedAt": 1}],
+    }
+    new = {**CONVERSATION, "id": "a-new-one", "updatedAt": 1_792_742_999}
+    invalid = {**CONVERSATION, "id": "has a space"}
+    r = post_import(client, export_file([changed, invalid, new]))
+    assert r.json() == {"weeks": 0, "ticks": 0, "settings": False, "conversations": 1}
+    # Newest first, as the list shows them.
+    assert client.get("/api/export").json()["conversations"] == [new, CONVERSATION]
+
+
+def test_an_import_of_conversations_over_the_quota_adds_nothing(
+    client: TestClient, config: Config
+) -> None:
+    sign_up(client, config)
+    with other_client(replace(config, user_quota_bytes=100)) as c:
+        c.post("/api/auth/login", json={"username": "alice@example.com", "password": PASSWORD})
+        r = post_import(c, export_file([CONVERSATION]))
+        assert (r.status_code, r.json()) == (413, {"error": "quota"})
+    assert usage(config) == 0
+    assert client.get("/api/export").json()["conversations"] == []

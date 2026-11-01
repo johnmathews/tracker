@@ -1,0 +1,24 @@
+{
+  "description": "Conversations that aren't a list are as good as none: the data has no conversations key, as a file from before them reads.",
+  "input": {
+    "format": "tracker-export",
+    "version": 4,
+    "conversations": {
+      "c1": {
+        "id": "c1",
+        "title": "A title",
+        "createdAt": 1792742400,
+        "updatedAt": 1792742400,
+        "turns": []
+      }
+    }
+  },
+  "expected": {
+    "ok": true,
+    "data": {
+      "exercise": { "plans": {}, "log": {} },
+      "diet": { "plans": {}, "log": {} },
+      "settings": null
+    }
+  }
+}

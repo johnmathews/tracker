@@ -5,13 +5,14 @@ import {
   buildExport,
   downloadExport,
   exportFilename,
+  mergeConversations,
   mergeSettings,
   mergeSummary,
   mergeTracked,
   parseExport,
   type ExportData,
 } from '@/lib/transfer'
-import type { Exercise, Log } from '@/lib/storage'
+import type { Conversation, Exercise, Log } from '@/lib/storage'
 import type { Plans } from '@/lib/plans'
 import { fixtureCases, readFixture } from './fixtures'
 
@@ -24,10 +25,19 @@ type MergeCase = {
   summary: { weeks: number; ticks: number }
 }
 type SettingsCase = { existing: unknown; incoming: unknown; expected: unknown }
+type ConversationsCase = {
+  description: string
+  existing: Conversation[]
+  incoming: Conversation[]
+  expected: Conversation[]
+  added: number
+}
 
 describe('parseExport fixtures', () => {
   it('finds the fixture files', () => {
     expect(fixtureCases('parse').length).toBeGreaterThanOrEqual(8)
+    const conversations = fixtureCases('parse').filter(([n]) => n.startsWith('conversations'))
+    expect(conversations.length).toBeGreaterThanOrEqual(4)
   })
 
   it.each(fixtureCases<ParseCase>('parse'))('%s', (_, c) => {
@@ -55,6 +65,36 @@ describe('mergeSettings fixtures', () => {
       expect(mergeSettings(c.existing as never, c.incoming as never)).toEqual(c.expected)
     },
   )
+})
+
+describe('mergeConversations fixtures', () => {
+  const file = readFixture('merge-conversations.json') as { cases: ConversationsCase[] }
+  it('finds the cases', () => {
+    expect(file.cases.length).toBeGreaterThanOrEqual(5)
+  })
+
+  it.each(file.cases.map((c) => [c.description, c] as const))('%s', (_, c) => {
+    const merged = mergeConversations(c.existing, c.incoming)
+    expect(merged).toEqual(c.expected)
+    expect(merged.length - c.existing.length).toBe(c.added)
+  })
+})
+
+describe('mergeConversations', () => {
+  it('copies what it adds, so later edits do not reach the imported data', () => {
+    const incoming: Conversation[] = [
+      {
+        id: 'a',
+        title: 'A',
+        createdAt: 1,
+        updatedAt: 1,
+        turns: [{ question: 'Q', answer: 'A', stop: 'end_turn', askedAt: 1 }],
+      },
+    ]
+    const merged = mergeConversations([], incoming)
+    merged[0]!.turns[0]!.answer = 'Changed'
+    expect(incoming[0]!.turns[0]!.answer).toBe('A')
+  })
 })
 
 describe('mergeTracked', () => {

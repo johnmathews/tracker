@@ -8,10 +8,13 @@ message_stop); none was recorded from the live API, which these tests never call
 import asyncio
 import json
 import logging
+import re
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Iterator
 from dataclasses import replace
 from datetime import date
+from functools import partial
 from typing import Any, cast
+from unittest.mock import ANY
 
 import anthropic
 import httpx2
@@ -19,10 +22,10 @@ import pytest
 from anthropic import AsyncAnthropic, DefaultAsyncHttpxClient
 from fastapi.testclient import TestClient
 
-from tracker_api import ask, auth
+from tracker_api import ask, auth, data
 from tracker_api.app import create_app
 from tracker_api.config import Config
-from tracker_api.db import connect
+from tracker_api.db import connect, migrate
 
 from .conftest import ORIGIN, START, Clock
 
@@ -231,7 +234,7 @@ def sign_up(client: TestClient, config: Config, email: str = "alice@example.com"
 
 
 def body(question: Any = QUESTION, **extra: Any) -> dict[str, Any]:
-    return {"question": question, "history": [], "today": TODAY, **extra}
+    return {"question": question, "today": TODAY, **extra}
 
 
 def parse_events(stream: str) -> list[Event]:
@@ -278,10 +281,10 @@ def test_a_question_streams_start_text_done_in_order(
     assert r.headers["cache-control"] == "no-store"
     assert r.headers["x-accel-buffering"] == "no"
     assert parse_events(r.text) == [
-        ("start", {"remaining": 29}),
+        ("start", {"remaining": 29, "conversation": ANY}),
         ("text", {"delta": "Three of four "}),
         ("text", {"delta": "push-up days so far."}),
-        ("done", {"stop": "end_turn"}),
+        ("done", {"stop": "end_turn", "saved": True}),
     ]
 
 
@@ -343,24 +346,35 @@ def test_no_goals_note_says_so(
     assert "<my_goals>" not in context
 
 
-def test_history_goes_before_the_question_with_the_context_first(
+def conversation_of(events: list[Event]) -> str:
+    name, start = events[0]
+    assert name == "start"
+    return cast(str, start["conversation"])
+
+
+def test_a_follow_up_sends_the_earlier_turn_from_the_database(
     ask_client: TestClient, ask_config: Config, upstream: Upstream
 ) -> None:
+    """The browser names the conversation; the server reads its turns and sends them, text only,
+    oldest first, with the context opening the first."""
     sign_up(ask_client, ask_config)
-    history = [
-        {"role": "user", "text": "How was last week?"},
-        {"role": "assistant", "text": "Four of five goals."},
-    ]
-    ask_events(ask_client, body(history=history))
-    first, second, third = upstream.requests[0]["messages"]
-    assert first["role"] == "user"
-    assert first["content"][0]["text"].startswith("Context for this conversation")
-    assert first["content"][1] == {"type": "text", "text": "How was last week?"}
-    assert second == {
+    upstream.replies = [answer("Four of five goals.")]
+    first = ask_events(ask_client, body(question="How was last week?"))
+    conversation = conversation_of(first)
+    # A new conversation sends the question alone.
+    (only,) = upstream.requests[0]["messages"]
+    assert only["content"][1] == {"type": "text", "text": "How was last week?"}
+    second = ask_events(ask_client, body(conversation=conversation))
+    assert second[0] == ("start", {"remaining": 28, "conversation": conversation})
+    q1, a1, q2 = upstream.requests[1]["messages"]
+    assert q1["role"] == "user"
+    assert q1["content"][0]["text"].startswith("Context for this conversation")
+    assert q1["content"][1] == {"type": "text", "text": "How was last week?"}
+    assert a1 == {
         "role": "assistant",
         "content": [{"type": "text", "text": "Four of five goals."}],
     }
-    assert third == {"role": "user", "content": [{"type": "text", "text": QUESTION}]}
+    assert q2 == {"role": "user", "content": [{"type": "text", "text": QUESTION}]}
 
 
 def test_a_tool_round_then_an_answer(
@@ -376,13 +390,13 @@ def test_a_tool_round_then_an_answer(
     ]
     events = ask_events(ask_client)
     assert events == [
-        ("start", {"remaining": 29}),
+        ("start", {"remaining": 29, "conversation": ANY}),
         ("text", {"delta": "Checking your week."}),
         ("tool", {"name": "week_summary"}),
         # A text block after another one starts a new paragraph.
         ("text", {"delta": "\n\n"}),
         ("text", {"delta": "One of four so far."}),
-        ("done", {"stop": "end_turn"}),
+        ("done", {"stop": "end_turn", "saved": True}),
     ]
     first, second = upstream.requests
     # The assistant turn goes back whole, its thinking block unchanged, before the results.
@@ -495,7 +509,7 @@ def test_an_insights_error_is_an_error_result_that_names_the_field(
         answer("That isn't a Monday."),
     ]
     events = ask_events(ask_client)
-    assert events[-1] == ("done", {"stop": "end_turn"})
+    assert events[-1] == ("done", {"stop": "end_turn", "saved": True})
     (result,) = upstream.tool_results(1)
     assert result["is_error"] is True
     assert json.loads(result["content"]) == {
@@ -574,7 +588,7 @@ def test_the_last_round_may_not_call_tools(
     assert len(upstream.requests) == ask.MAX_ROUNDS == 6
     assert all("tool_choice" not in r for r in upstream.requests[:-1])
     assert upstream.requests[-1]["tool_choice"] == {"type": "none"}
-    assert events[-1] == ("done", {"stop": "end_turn"})
+    assert events[-1] == ("done", {"stop": "end_turn", "saved": True})
 
 
 def test_a_tool_call_on_the_last_round_ends_as_cut_short(
@@ -585,7 +599,7 @@ def test_a_tool_call_on_the_last_round_ends_as_cut_short(
     events = ask_events(ask_client)
     assert len(upstream.requests) == ask.MAX_ROUNDS
     assert [e for e, _ in events].count("tool") == ask.MAX_ROUNDS - 1
-    assert events[-1] == ("done", {"stop": "max_tokens"})
+    assert events[-1] == ("done", {"stop": "max_tokens", "saved": True})
 
 
 # --- stop reasons and errors ----------------------------------------------------------------------
@@ -606,7 +620,7 @@ def test_a_refusal_ends_with_done_refused_and_runs_no_tool(
         )
     ]
     events = ask_events(ask_client)
-    assert events[-1] == ("done", {"stop": "refused"})
+    assert events[-1] == ("done", {"stop": "refused", "saved": True})
     assert "tool" not in [e for e, _ in events]
     assert len(upstream.requests) == 1
 
@@ -627,9 +641,9 @@ def test_max_tokens_ends_with_done_max_tokens_and_runs_no_tool(
     ]
     events = ask_events(ask_client)
     assert events == [
-        ("start", {"remaining": 29}),
+        ("start", {"remaining": 29, "conversation": ANY}),
         ("text", {"delta": "A long answer"}),
-        ("done", {"stop": "max_tokens"}),
+        ("done", {"stop": "max_tokens", "saved": True}),
     ]
     assert len(upstream.requests) == 1
 
@@ -657,7 +671,7 @@ def test_an_unavailable_upstream_is_busy(
     sign_up(ask_client, ask_config)
     upstream.replies = [reply]
     events = ask_events(ask_client)
-    assert events[0] == ("start", {"remaining": 29})
+    assert events[0] == ("start", {"remaining": 29, "conversation": ANY})
     assert events[-1] == ("error", {"error": "busy"})
     assert "done" not in [e for e, _ in events]
 
@@ -683,7 +697,10 @@ def test_a_refused_request_is_an_error_logged_without_content(
     upstream.replies = [reply]
     caplog.set_level(logging.INFO)
     events = ask_events(ask_client)
-    assert events == [("start", {"remaining": 29}), ("error", {"error": "error"})]
+    assert events == [
+        ("start", {"remaining": 29, "conversation": ANY}),
+        ("error", {"error": "error"}),
+    ]
     errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
     assert len(errors) == 1
     assert errors[0].name == "tracker_api.ask"
@@ -724,22 +741,23 @@ def test_no_question_history_or_answer_reaches_the_logs(
     # Everything the app logs, and the libraries at INFO, as production runs them.
     caplog.set_level(logging.INFO)
     caplog.set_level(logging.DEBUG, logger="tracker_api")
+    upstream.replies = [answer("HISTORY-MARKER-56")]
+    first = ask_events(ask_client, body(question="HISTORY-MARKER-55"))
     upstream.replies = [tool_round("goals", {}), answer("ANSWER-MARKER-33")]
-    history = [
-        {"role": "user", "text": "HISTORY-MARKER-55"},
-        {"role": "assistant", "text": "HISTORY-MARKER-56"},
-    ]
-    events = ask_events(ask_client, body(history=history))
+    events = ask_events(ask_client, body(conversation=conversation_of(first)))
     assert "ANSWER-MARKER-33" in text_of(events)
+    # The history went to Claude from the database, and was stored, but never logged.
+    assert "HISTORY-MARKER-56" in json.dumps(upstream.requests[1]["messages"])
     for marker in ("QUESTION-MARKER-71", "HISTORY-MARKER", "ANSWER-MARKER", "GOALS-MARKER"):
         assert marker not in caplog.text
     # What is logged: request ids, the stop reason, tokens and rounds.
     summary = [r.getMessage() for r in caplog.records if r.getMessage().startswith("ask ended")]
     assert summary == [
-        "ask ended stop=end_turn rounds=2 input=2400 output=80 cache_read=2000 cache_write=0"
+        "ask ended stop=end_turn rounds=1 input=1200 output=40 cache_read=1000 cache_write=0",
+        "ask ended stop=end_turn rounds=2 input=2400 output=80 cache_read=2000 cache_write=0",
     ]
     rounds = [r.getMessage() for r in caplog.records if r.getMessage().startswith("ask round")]
-    assert rounds == [
+    assert rounds[1:] == [
         "ask round=1 request_id=req_tools stop=tool_use input=1200 output=40 cache_read=1000"
         " cache_write=0",
         "ask round=2 request_id=req_answer stop=end_turn input=1200 output=40 cache_read=1000"
@@ -781,32 +799,21 @@ def test_the_app_logs_its_info_lines_under_uvicorn(
         body(question="   \n "),
         body(question="x" * 2001),
         body(question=7),
-        {"history": [], "today": TODAY},
+        {"today": TODAY},
         body(today="2026-10-21"),
         body(today="2026-10-25"),
         body(today="2026-13-01"),
         body(today="23/10/2026"),
         # Full-width digits: a date to Python's isoformat, but not to the client's.
         body(today="".join(chr(0xFF10 + int(d)) for d in "2026") + "-10-23"),
-        {"question": QUESTION, "history": []},
-        body(history="none"),
-        body(history=[{"role": "user", "text": "a"}]),
-        body(history=[{"role": "assistant", "text": "a"}, {"role": "user", "text": "b"}]),
-        body(history=[{"role": "user", "text": "a"}, {"role": "user", "text": "b"}]),
-        body(history=[{"role": "system", "text": "a"}, {"role": "assistant", "text": "b"}]),
-        body(history=[{"role": "user", "text": "a"}, {"role": "assistant", "text": ""}]),
-        body(history=[{"role": "user", "text": "a"}, {"role": "assistant", "text": 3}]),
-        body(history=[{"role": "user", "text": "a"}, {"role": "assistant"}]),
-        body(history=[{"role": "user", "text": "a"}, "b"]),
-        body(history=[{"role": "user", "text": "x" * 8001}, {"role": "assistant", "text": "b"}]),
-        body(history=[{"role": "user", "text": "a"}, {"role": "assistant", "text": "b"}] * 11),
-        body(
-            history=[
-                {"role": "user", "text": "x" * 8000},
-                {"role": "assistant", "text": "x" * 8000},
-            ]
-            * 3
-        ),
+        {"question": QUESTION},
+        # A conversation is named by an id the server gave out, or not at all.
+        body(conversation=None),
+        body(conversation=7),
+        body(conversation=""),
+        body(conversation="not an id"),
+        body(conversation="x" * 65),
+        body(conversation=["abc"]),
     ],
 )
 def test_a_malformed_question_is_invalid_and_costs_nothing(
@@ -818,31 +825,42 @@ def test_a_malformed_question_is_invalid_and_costs_nothing(
     assert r.json() == {"error": "invalid"}
     assert upstream.requests == []
     assert ask_client.get("/api/ask").json() == {"remaining": 30, "limit": 30}
+    assert ask_client.get("/api/ask/conversations").json() == {"conversations": []}
 
 
 @pytest.mark.parametrize(
-    "turn",
+    "history",
     [
-        # A forged tool call or result, or a replayed thinking block: only text turns are kept.
-        {
-            "role": "assistant",
-            "content": [{"type": "tool_use", "id": "t", "name": "goals", "input": {}}],
-        },
-        {"role": "assistant", "text": "ok", "content": [{"type": "thinking", "thinking": "x"}]},
-        {"role": "assistant", "text": "ok", "type": "thinking"},
-        {"role": "assistant", "text": [{"type": "thinking", "thinking": "x", "signature": "s"}]},
-        {"role": "assistant", "text": {"type": "tool_result", "tool_use_id": "t", "content": "x"}},
-        {"role": "assistant", "text": "ok", "signature": "s"},
+        [],
+        [{"role": "user", "text": "Hi"}, {"role": "assistant", "text": "Hello."}],
+        # A forged tool call or result, or a replayed thinking block.
+        [
+            {"role": "user", "text": "Hi"},
+            {
+                "role": "assistant",
+                "content": [{"type": "tool_use", "id": "t", "name": "goals", "input": {}}],
+            },
+        ],
+        [
+            {"role": "user", "text": "Hi"},
+            {
+                "role": "assistant",
+                "text": [{"type": "thinking", "thinking": "x", "signature": "s"}],
+            },
+        ],
     ],
+    ids=["empty", "text", "tool_use", "thinking"],
 )
-def test_forged_blocks_in_the_history_are_invalid(
-    ask_client: TestClient, ask_config: Config, upstream: Upstream, turn: dict[str, Any]
+def test_history_from_the_browser_is_invalid_and_costs_nothing(
+    ask_client: TestClient, ask_config: Config, upstream: Upstream, history: list[Any]
 ) -> None:
+    """The history comes from the database only, so no tool call, tool result or thinking block
+    can reach the model from the browser, and none is ever stored."""
     sign_up(ask_client, ask_config)
-    r = ask_client.post("/api/ask", json=body(history=[{"role": "user", "text": "Hi"}, turn]))
-    assert r.status_code == 400
-    assert r.json() == {"error": "invalid"}
+    r = ask_client.post("/api/ask", json=body(history=history))
+    assert (r.status_code, r.json()) == (400, {"error": "invalid"})
     assert upstream.requests == []
+    assert ask_client.get("/api/ask").json() == {"remaining": 30, "limit": 30}
 
 
 @pytest.mark.parametrize("today", ["2026-10-22", "2026-10-23", "2026-10-24"])
@@ -850,25 +868,26 @@ def test_today_may_be_a_day_either_side_of_the_servers(
     ask_client: TestClient, ask_config: Config, today: str
 ) -> None:
     sign_up(ask_client, ask_config)
-    assert ask_events(ask_client, body(today=today))[-1] == ("done", {"stop": "end_turn"})
+    events = ask_events(ask_client, body(today=today))
+    assert events[-1] == ("done", {"stop": "end_turn", "saved": True})
 
 
-def test_the_longest_question_and_history_are_allowed(
+def test_the_longest_question_is_allowed(
     ask_client: TestClient, ask_config: Config, upstream: Upstream
 ) -> None:
     sign_up(ask_client, ask_config)
-    history = [{"role": "user", "text": "x" * 8000}, {"role": "assistant", "text": "y" * 8000}] * 2
-    history += [{"role": "user", "text": "b" * 500}, {"role": "assistant", "text": "c" * 500}] * 8
-    assert len(history) == 20
-    assert sum(len(t["text"]) for t in history) == 40_000
-    events = ask_events(ask_client, body(question="  " + "q" * 2000 + "\n", history=history))
-    assert events[-1] == ("done", {"stop": "end_turn"})
-    assert upstream.requests[0]["messages"][-1]["content"][0]["text"] == "q" * 2000
+    events = ask_events(ask_client, body(question="  " + "q" * 2000 + "\n"))
+    assert events[-1] == ("done", {"stop": "end_turn", "saved": True})
+    assert upstream.requests[0]["messages"][-1]["content"][1]["text"] == "q" * 2000
 
 
-def test_unknown_top_level_keys_are_ignored(ask_client: TestClient, ask_config: Config) -> None:
+def test_unknown_top_level_keys_are_invalid(
+    ask_client: TestClient, ask_config: Config, upstream: Upstream
+) -> None:
     sign_up(ask_client, ask_config)
-    assert ask_events(ask_client, body(pending=True))[-1] == ("done", {"stop": "end_turn"})
+    r = ask_client.post("/api/ask", json=body(pending=True))
+    assert (r.status_code, r.json()) == (400, {"error": "invalid"})
+    assert upstream.requests == []
 
 
 # --- the write guard, auth and the switch ---------------------------------------------------------
@@ -919,8 +938,8 @@ def test_with_a_key_the_app_builds_its_own_client(ask_config: Config) -> None:
 def test_questions_left_count_down(ask_client: TestClient, ask_config: Config) -> None:
     sign_up(ask_client, ask_config)
     assert ask_client.get("/api/ask").json() == {"remaining": 30, "limit": 30}
-    assert ask_events(ask_client)[0] == ("start", {"remaining": 29})
-    assert ask_events(ask_client)[0] == ("start", {"remaining": 28})
+    assert ask_events(ask_client)[0] == ("start", {"remaining": 29, "conversation": ANY})
+    assert ask_events(ask_client)[0] == ("start", {"remaining": 28, "conversation": ANY})
     r = ask_client.get("/api/ask")
     assert r.json() == {"remaining": 28, "limit": 30}
     assert r.headers["cache-control"] == "no-store"
@@ -931,7 +950,7 @@ def test_the_31st_question_of_the_day_gets_429(
 ) -> None:
     sign_up(ask_client, ask_config)
     for i in range(30):
-        assert ask_events(ask_client)[0] == ("start", {"remaining": 29 - i})
+        assert ask_events(ask_client)[0] == ("start", {"remaining": 29 - i, "conversation": ANY})
         clock.advance(60)
     sent = len(upstream.requests)
     r = ask_client.post("/api/ask", json=body())
@@ -943,7 +962,7 @@ def test_the_31st_question_of_the_day_gets_429(
     assert len(upstream.requests) == sent
     assert ask_client.get("/api/ask").json() == {"remaining": 0, "limit": 30}
     clock.now = START + DAY
-    assert ask_events(ask_client)[0] == ("start", {"remaining": 0})
+    assert ask_events(ask_client)[0] == ("start", {"remaining": 0, "conversation": ANY})
 
 
 def test_the_total_cap_applies_across_users(
@@ -953,14 +972,14 @@ def test_the_total_cap_applies_across_users(
     app = create_app(config, run_backups=False, ask_client=upstream.client)
     with TestClient(app, base_url=ORIGIN, headers={"Origin": ORIGIN}) as c:
         sign_up(c, config, "alice@example.com")
-        assert ask_events(c)[0] == ("start", {"remaining": 2})
+        assert ask_events(c)[0] == ("start", {"remaining": 2, "conversation": ANY})
         clock.advance(10)
-        assert ask_events(c)[0] == ("start", {"remaining": 1})
+        assert ask_events(c)[0] == ("start", {"remaining": 1, "conversation": ANY})
         clock.advance(10)
         sign_up(c, config, "bob@example.com")
         assert c.get("/api/ask").json() == {"remaining": 1, "limit": 30}
         # Bob's first question is the last anyone may ask today.
-        assert ask_events(c)[0] == ("start", {"remaining": 0})
+        assert ask_events(c)[0] == ("start", {"remaining": 0, "conversation": ANY})
         clock.advance(10)
         r = c.post("/api/ask", json=body())
         assert r.status_code == 429
@@ -1190,3 +1209,480 @@ def test_the_verdict_rule_turns_on_with_one_switch() -> None:
     assert ask.VERDICT_RULE in plain
     assert "quote the person's My goals note back" not in plain
     assert "quote the person's My goals note back" in ask.system_prompt(plain_verdicts=False)
+
+
+# --- conversations -------------------------------------------------------------------------------
+
+
+def rows(config: Config, sql: str, *args: object) -> list[tuple[Any, ...]]:
+    conn = connect(config.db_path)
+    try:
+        return [tuple(r) for r in conn.execute(sql, args)]
+    finally:
+        conn.close()
+
+
+def sign_in(client: TestClient, email: str) -> None:
+    client.cookies.clear()
+    r = client.post("/api/auth/login", json={"username": email, "password": PASSWORD})
+    assert r.status_code == 200, r.text
+
+
+JSON_TYPE = {"Content-Type": "application/json"}
+
+
+def test_the_turn_is_saved_with_the_answer_once_it_ends(
+    ask_client: TestClient, ask_config: Config, upstream: Upstream
+) -> None:
+    sign_up(ask_client, ask_config)
+    upstream.replies = [tool_round("goals", {}), answer("Three of four ", "push-up days.")]
+    events = ask_events(ask_client, body(question="  How are my push-ups going?\n"))
+    assert events[-1] == ("done", {"stop": "end_turn", "saved": True})
+    conversation = conversation_of(events)
+    r = ask_client.get(f"/api/ask/conversations/{conversation}")
+    assert r.status_code == 200
+    assert r.headers["cache-control"] == "no-store"
+    # The answer as the stream showed it, the paragraph break after the tool round included.
+    assert r.json() == {
+        "id": conversation,
+        "title": "How are my push-ups going?",
+        "createdAt": START,
+        "updatedAt": START,
+        "turns": [
+            {
+                "question": "How are my push-ups going?",
+                "answer": "Checking your week.\n\nThree of four push-up days.",
+                "stop": "end_turn",
+                "askedAt": START,
+            }
+        ],
+    }
+
+
+def test_an_answer_cut_short_is_saved_as_far_as_it_went(
+    ask_client: TestClient, ask_config: Config, upstream: Upstream
+) -> None:
+    sign_up(ask_client, ask_config)
+    upstream.replies = [answer("Two of four", stop="max_tokens")]
+    events = ask_events(ask_client)
+    assert events[-1] == ("done", {"stop": "max_tokens", "saved": True})
+    turns = ask_client.get(f"/api/ask/conversations/{conversation_of(events)}").json()["turns"]
+    assert [(t["answer"], t["stop"]) for t in turns] == [("Two of four", "max_tokens")]
+
+
+@pytest.mark.parametrize(
+    ("reply", "last", "stop"),
+    [
+        (
+            answer("Partly written", stop="refusal"),
+            ("done", {"stop": "refused", "saved": True}),
+            "refused",
+        ),
+        (api_error(401, "authentication_error"), ("error", {"error": "error"}), "error"),
+        (api_error(529, "overloaded_error"), ("error", {"error": "busy"}), "error"),
+    ],
+    ids=["refused", "error", "busy"],
+)
+def test_an_answer_that_did_not_end_keeps_only_its_question(
+    ask_client: TestClient,
+    ask_config: Config,
+    upstream: Upstream,
+    reply: Reply,
+    last: Event,
+    stop: str,
+) -> None:
+    """So the history shows what was asked; a refusal's partial text is never kept."""
+    sign_up(ask_client, ask_config)
+    upstream.replies = [reply]
+    events = ask_events(ask_client)
+    assert events[-1] == last
+    turns = ask_client.get(f"/api/ask/conversations/{conversation_of(events)}").json()["turns"]
+    assert turns == [{"question": QUESTION, "answer": "", "stop": stop, "askedAt": START}]
+
+
+def test_the_title_is_the_first_question_trimmed_and_cut_to_80_code_points(
+    ask_client: TestClient, ask_config: Config
+) -> None:
+    sign_up(ask_client, ask_config)
+    question = "  " + "💪" * 79 + " and the rest of a long question\n"
+    conversation = conversation_of(ask_events(ask_client, body(question=question)))
+    ask_events(ask_client, body(question="Another question", conversation=conversation))
+    got = ask_client.get(f"/api/ask/conversations/{conversation}").json()
+    assert got["title"] == "💪" * 79
+    assert [t["question"] for t in got["turns"]] == [question.strip(), "Another question"]
+
+
+def test_conversation_ids_are_random_and_url_safe(
+    ask_client: TestClient, ask_config: Config
+) -> None:
+    sign_up(ask_client, ask_config)
+    ids = {conversation_of(ask_events(ask_client)) for _ in range(3)}
+    assert len(ids) == 3
+    for conversation in ids:
+        assert re.fullmatch(r"[A-Za-z0-9_-]{16}", conversation)
+
+
+def test_turns_with_no_answer_are_left_out_of_the_history(
+    ask_client: TestClient, ask_config: Config, upstream: Upstream
+) -> None:
+    """A refused, failed or abandoned turn has a question and no answer. Sent alone it would put
+    two user turns in a row, so it is left out whole."""
+    sign_up(ask_client, ask_config)
+    upstream.replies = [answer("A1."), answer("No.", stop="refusal"), answer("A3.")]
+    conversation = conversation_of(ask_events(ask_client, body(question="Q1")))
+    for question in ("Q2", "Q3", "Q4"):
+        ask_events(ask_client, body(question=question, conversation=conversation))
+    sent = upstream.requests[3]["messages"]
+    assert [(m["role"], m["content"][-1]["text"]) for m in sent] == [
+        ("user", "Q1"),
+        ("assistant", "A1."),
+        ("user", "Q3"),
+        ("assistant", "A3."),
+        ("user", "Q4"),
+    ]
+
+
+def test_the_history_keeps_the_newest_twenty_turns() -> None:
+    turns = [(f"Q{i}", f"A{i}") for i in range(25)]
+    assert ask.history(turns) == turns[5:]
+
+
+def test_the_history_keeps_the_newest_turns_within_40000_characters() -> None:
+    older, newer = ("q" * 10_000, "a" * 10_000), ("Q" * 10_000, "A" * 10_000)
+    # Exactly 40,000 characters fit; one more leaves out that turn and everything before it.
+    assert ask.history([("x", "y"), older, newer]) == [older, newer]
+    longer = ("q" * 10_000, "a" * 10_001)
+    assert ask.history([("x", "y"), longer, newer]) == [newer]
+    assert ask.history([("x", "y"), ("q", "a" * 40_000)]) == []
+    # A turn with no answer is neither sent nor counted.
+    assert ask.history([older, ("Q" * 30_000, ""), newer]) == [older, newer]
+
+
+def test_a_missing_conversation_is_not_found_and_costs_nothing(
+    ask_client: TestClient, ask_config: Config, upstream: Upstream
+) -> None:
+    sign_up(ask_client, ask_config)
+    r = ask_client.post("/api/ask", json=body(conversation="nothing-here"))
+    assert (r.status_code, r.json()) == (404, {"error": "not-found"})
+    assert upstream.requests == []
+    assert ask_client.get("/api/ask").json() == {"remaining": 30, "limit": 30}
+    for method in ("GET", "DELETE"):
+        r = ask_client.request(method, "/api/ask/conversations/nothing-here", headers=JSON_TYPE)
+        assert (r.status_code, r.json()) == (404, {"error": "not-found"})
+
+
+def test_another_accounts_conversation_is_not_found_on_read_delete_and_ask(
+    ask_client: TestClient, ask_config: Config, upstream: Upstream
+) -> None:
+    sign_up(ask_client, ask_config, "alice@example.com")
+    conversation = conversation_of(ask_events(ask_client))
+    path = f"/api/ask/conversations/{conversation}"
+    sign_up(ask_client, ask_config, "bob@example.com")
+    sent = len(upstream.requests)
+    r = ask_client.post("/api/ask", json=body(conversation=conversation))
+    assert (r.status_code, r.json()) == (404, {"error": "not-found"})
+    assert len(upstream.requests) == sent
+    assert ask_client.get("/api/ask").json() == {"remaining": 30, "limit": 30}
+    r = ask_client.get(path)
+    assert (r.status_code, r.json()) == (404, {"error": "not-found"})
+    r = ask_client.delete(path, headers=JSON_TYPE)
+    assert (r.status_code, r.json()) == (404, {"error": "not-found"})
+    assert ask_client.get("/api/ask/conversations").json() == {"conversations": []}
+    # Bob's delete-all leaves Alice's alone.
+    assert ask_client.delete("/api/ask/conversations", headers=JSON_TYPE).status_code == 204
+    sign_in(ask_client, "alice@example.com")
+    assert ask_client.get(path).json()["turns"][0]["answer"] == "Fine."
+
+
+def test_conversations_are_listed_newest_first(
+    ask_client: TestClient, ask_config: Config, clock: Clock
+) -> None:
+    sign_up(ask_client, ask_config)
+    assert ask_client.get("/api/ask/conversations").json() == {"conversations": []}
+    first = conversation_of(ask_events(ask_client, body(question="First")))
+    clock.advance(60)
+    second = conversation_of(ask_events(ask_client, body(question="Second")))
+    clock.advance(60)
+    ask_events(ask_client, body(question="More", conversation=first))
+    r = ask_client.get("/api/ask/conversations")
+    assert r.headers["cache-control"] == "no-store"
+    assert r.json() == {
+        "conversations": [
+            {"id": first, "title": "First", "updatedAt": START + 120, "turns": 2},
+            {"id": second, "title": "Second", "updatedAt": START + 60, "turns": 1},
+        ]
+    }
+    got = ask_client.get(f"/api/ask/conversations/{first}").json()
+    assert (got["createdAt"], got["updatedAt"]) == (START, START + 120)
+    assert [t["askedAt"] for t in got["turns"]] == [START, START + 120]
+
+
+def test_deleting_a_conversation_removes_it_and_its_turns(
+    ask_client: TestClient, ask_config: Config
+) -> None:
+    uid = sign_up(ask_client, ask_config)
+    gone = conversation_of(ask_events(ask_client, body(question="Gone")))
+    ask_events(ask_client, body(question="Gone too", conversation=gone))
+    kept = conversation_of(ask_events(ask_client, body(question="Kept")))
+    r = ask_client.delete(f"/api/ask/conversations/{gone}", headers=JSON_TYPE)
+    assert r.status_code == 204
+    assert ask_client.get(f"/api/ask/conversations/{gone}").status_code == 404
+    listed = ask_client.get("/api/ask/conversations").json()["conversations"]
+    assert [c["id"] for c in listed] == [kept]
+    turns = rows(ask_config, "SELECT conversation_id FROM ask_turns WHERE user_id = ?", uid)
+    assert turns == [(kept,)]
+    # Asking in a deleted conversation is asking in a missing one.
+    r = ask_client.post("/api/ask", json=body(conversation=gone))
+    assert (r.status_code, r.json()) == (404, {"error": "not-found"})
+
+
+def test_deleting_every_conversation_leaves_no_rows(
+    ask_client: TestClient, ask_config: Config
+) -> None:
+    uid = sign_up(ask_client, ask_config)
+    first = conversation_of(ask_events(ask_client))
+    ask_events(ask_client, body(conversation=first))
+    ask_events(ask_client)
+    assert len(rows(ask_config, "SELECT * FROM ask_turns WHERE user_id = ?", uid)) == 3
+    assert ask_client.delete("/api/ask/conversations", headers=JSON_TYPE).status_code == 204
+    for table in ("ask_conversations", "ask_turns"):
+        assert rows(ask_config, f"SELECT * FROM {table} WHERE user_id = ?", uid) == []  # noqa: S608
+    assert ask_client.get("/api/ask/conversations").json() == {"conversations": []}
+    # Nothing left to delete is still a success.
+    assert ask_client.delete("/api/ask/conversations", headers=JSON_TYPE).status_code == 204
+
+
+def test_conversation_deletes_are_guarded_writes(
+    ask_client: TestClient, ask_config: Config
+) -> None:
+    """A DELETE has no body, but passes the same Origin and Content-Type checks as any write."""
+    sign_up(ask_client, ask_config)
+    conversation = conversation_of(ask_events(ask_client))
+    for path in (f"/api/ask/conversations/{conversation}", "/api/ask/conversations"):
+        r = ask_client.delete(path, headers={**JSON_TYPE, "Origin": "https://evil.example"})
+        assert (r.status_code, r.json()) == (403, {"error": "origin"})
+        r = ask_client.delete(path)
+        assert (r.status_code, r.json()) == (415, {"error": "content-type"})
+    assert ask_client.get(f"/api/ask/conversations/{conversation}").status_code == 200
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("GET", "/api/ask/conversations"),
+        ("GET", "/api/ask/conversations/abc"),
+        ("DELETE", "/api/ask/conversations/abc"),
+        ("DELETE", "/api/ask/conversations"),
+    ],
+)
+def test_conversations_need_a_session(ask_client: TestClient, method: str, path: str) -> None:
+    r = ask_client.request(method, path, headers=JSON_TYPE)
+    assert (r.status_code, r.json()) == (401, {"error": "auth"})
+
+
+def test_history_can_be_read_and_deleted_with_ask_off(client: TestClient, config: Config) -> None:
+    """Turning Ask off leaves the history the person's to read and to delete."""
+    uid = sign_up(client, config)
+    conn = connect(config.db_path)
+    try:
+        data.create_conversation(conn, uid, "kept", "Kept", START)
+    finally:
+        conn.close()
+    listed = client.get("/api/ask/conversations").json()["conversations"]
+    assert [c["id"] for c in listed] == ["kept"]
+    assert client.get("/api/ask/conversations/kept").json()["turns"] == []
+    assert client.delete("/api/ask/conversations", headers=JSON_TYPE).status_code == 204
+    assert client.get("/api/ask/conversations").json() == {"conversations": []}
+
+
+def quota_app(config: Config, upstream: Upstream, quota: int) -> TestClient:
+    app = create_app(
+        replace(config, user_quota_bytes=quota), run_backups=False, ask_client=upstream.client
+    )
+    return TestClient(app, base_url=ORIGIN, headers={"Origin": ORIGIN})
+
+
+def usage_of(config: Config, uid: int) -> int:
+    conn = connect(config.db_path)
+    try:
+        return data.usage(conn, uid)
+    finally:
+        conn.close()
+
+
+def test_a_full_account_answers_but_saves_nothing_and_says_so(
+    ask_config: Config, upstream: Upstream
+) -> None:
+    with quota_app(ask_config, upstream, quota=100) as c:
+        uid = sign_up(c, ask_config)
+        upstream.replies = [answer("Three of four.")]
+        events = ask_events(c)
+        assert text_of(events) == "Three of four."
+        assert events[-1] == ("done", {"stop": "end_turn", "saved": False})
+        # Nothing is kept, not even the new conversation, so asking again starts a new one.
+        assert c.get("/api/ask/conversations").json() == {"conversations": []}
+        r = c.post("/api/ask", json=body(conversation=conversation_of(events)))
+        assert (r.status_code, r.json()) == (404, {"error": "not-found"})
+        assert usage_of(ask_config, uid) == 0
+
+
+def test_a_full_account_keeps_its_conversation_but_not_the_new_turn(
+    ask_config: Config, upstream: Upstream
+) -> None:
+    with quota_app(ask_config, upstream, quota=1000) as c:
+        uid = sign_up(c, ask_config)
+        conversation = conversation_of(ask_events(c))
+    used = usage_of(ask_config, uid)
+    with quota_app(ask_config, upstream, quota=used) as c:
+        sign_in(c, "alice@example.com")
+        events = ask_events(c, body(conversation=conversation))
+        assert events[-1] == ("done", {"stop": "end_turn", "saved": False})
+        # A question with no answer is a turn too, so a full account doesn't keep it either.
+        upstream.replies = [api_error(401, "authentication_error")]
+        assert ask_events(c, body(conversation=conversation))[-1] == ("error", {"error": "error"})
+        assert len(c.get(f"/api/ask/conversations/{conversation}").json()["turns"]) == 1
+    assert usage_of(ask_config, uid) == used
+
+
+def test_the_quota_counts_the_history(ask_client: TestClient, ask_config: Config) -> None:
+    """Titles, questions and answers by their UTF-8 bytes, plus 64 for each conversation and
+    turn, as a tick row counts 64."""
+    uid = sign_up(ask_client, ask_config)
+    assert usage_of(ask_config, uid) == 0
+    ask_events(ask_client, body(question="Café?"))
+    title, question, answer_ = len("Café?".encode()), len("Café?".encode()), len(b"Fine.")
+    assert data.CONVERSATION_BYTES == data.TURN_BYTES == 64
+    assert usage_of(ask_config, uid) == 64 + title + 64 + question + answer_
+
+
+def test_a_conversation_deleted_while_it_answers_keeps_nothing(
+    ask_client: TestClient, ask_config: Config, upstream: Upstream
+) -> None:
+    uid = sign_up(ask_client, ask_config)
+    conversation = conversation_of(ask_events(ask_client))
+
+    def delete_then_answer(request: httpx2.Request) -> httpx2.Response:
+        conn = connect(ask_config.db_path)
+        try:
+            assert data.delete_conversation(conn, uid, conversation)
+        finally:
+            conn.close()
+        return answer("Too late.")
+
+    upstream.replies = [delete_then_answer]
+    events = ask_events(ask_client, body(conversation=conversation))
+    assert events[-1] == ("done", {"stop": "end_turn", "saved": False})
+    for table in ("ask_conversations", "ask_turns"):
+        assert rows(ask_config, f"SELECT * FROM {table}") == []  # noqa: S608
+
+
+def abandoned(config: Config, upstream: Upstream) -> tuple[AsyncIterator[ask.Event], ask.Save]:
+    """A question in a new conversation, set up as the route sets it up, whose answer stalls
+    after its first words."""
+    conn = connect(config.db_path)
+    migrate(conn)
+    conn.execute(
+        "INSERT INTO users (id, username, password_hash, created_at) VALUES (1, 'a', 'h', 0)"
+    )
+    data.create_conversation(conn, 1, "c1", "Q", START)
+    conn.close()
+
+    async def stalled() -> AsyncIterator[bytes]:
+        yield sse(message_start(), *text(0, "First part. "))
+        await asyncio.sleep(60)
+
+    upstream.replies = [
+        httpx2.Response(200, headers={"content-type": "text/event-stream"}, content=stalled())
+    ]
+
+    async def no_tools(name: str, args: object) -> tuple[str, bool]:  # pragma: no cover
+        raise AssertionError("no tool runs")
+
+    save = ask.saver(config, 1, "c1", "Q", START)
+    start = {"remaining": 1, "conversation": "c1"}
+    return ask.converse(upstream.client, config.ask_model, [], no_tools, save, start), save
+
+
+def test_a_client_that_leaves_still_keeps_the_question(
+    ask_config: Config, upstream: Upstream
+) -> None:
+    events, _ = abandoned(ask_config, upstream)
+
+    async def run() -> None:
+        frames = ask.frames(events)
+        while not (await anext(frames)).startswith("event: text"):
+            pass
+        await frames.aclose()
+
+    asyncio.run(run())
+    assert rows(ask_config, "SELECT seq, question, answer, stop, asked_at FROM ask_turns") == [
+        (0, "Q", "", "cancelled", START)
+    ]
+
+
+def test_a_disconnect_through_the_response_still_keeps_the_question(
+    ask_config: Config, upstream: Upstream
+) -> None:
+    events, save = abandoned(ask_config, upstream)
+    sent: list[dict[str, Any]] = []
+
+    async def run() -> None:
+        texts = asyncio.Event()
+
+        async def send(message: dict[str, Any]) -> None:
+            sent.append(message)
+            if message.get("body", b"").startswith(b"event: text"):
+                texts.set()
+
+        async def receive() -> dict[str, Any]:
+            await texts.wait()
+            return {"type": "http.disconnect"}
+
+        response = ask.EventStream(ask.frames(events), on_close=partial(save, "", "cancelled"))
+        scope = {"type": "http", "asgi": {"spec_version": "2.4"}}
+        await asyncio.wait_for(response(scope, receive, send), 5)  # type: ignore[arg-type]
+
+    asyncio.run(run())
+    assert b"event: done" not in b"".join(m.get("body", b"") for m in sent)
+    assert rows(ask_config, "SELECT answer, stop FROM ask_turns") == [("", "cancelled")]
+
+
+def test_a_disconnect_before_the_first_frame_still_keeps_the_question(
+    ask_config: Config, upstream: Upstream
+) -> None:
+    """A client gone before the stream began never runs the answer at all; the response's own
+    close saves the question, once."""
+    events, save = abandoned(ask_config, upstream)
+
+    async def run() -> None:
+        async def send(message: dict[str, Any]) -> None:
+            await asyncio.sleep(0)
+
+        async def receive() -> dict[str, Any]:
+            return {"type": "http.disconnect"}
+
+        response = ask.EventStream(ask.frames(events), on_close=partial(save, "", "cancelled"))
+        scope = {"type": "http", "asgi": {"spec_version": "2.4"}}
+        await asyncio.wait_for(response(scope, receive, send), 5)  # type: ignore[arg-type]
+
+    asyncio.run(run())
+    assert upstream.requests == []
+    assert rows(ask_config, "SELECT answer, stop FROM ask_turns") == [("", "cancelled")]
+
+
+def test_a_turn_is_saved_once(ask_config: Config, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The response's close after an answer that ended saves nothing more."""
+    stops: list[object] = []
+
+    def save_turn(*args: object) -> bool:
+        stops.append(args[-1])
+        return False
+
+    monkeypatch.setattr(ask, "save_turn", save_turn)
+    save = ask.saver(ask_config, 1, "c1", "Q", START)
+
+    async def run() -> list[bool]:
+        return [await save("A", "end_turn"), await save("", "cancelled")]
+
+    assert asyncio.run(run()) == [False, False]
+    assert stops == ["end_turn"]

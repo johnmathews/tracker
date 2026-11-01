@@ -126,6 +126,35 @@ MIGRATIONS = [
     CREATE INDEX ask_log_by_user ON ask_log (user_id, asked_at);
     CREATE INDEX ask_log_by_time ON ask_log (asked_at);
     """,
+    # Ask's history: each account's conversations, and their turns as text only (never a tool
+    # call or a thinking block). An id is the account's own, so an import can't meet another
+    # account's. A turn that didn't end with an answer keeps its question alone.
+    """
+    CREATE TABLE ask_conversations (
+        user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (user_id, id)
+    ) STRICT, WITHOUT ROWID;
+    CREATE INDEX ask_conversations_by_time ON ask_conversations (user_id, updated_at);
+
+    CREATE TABLE ask_turns (
+        user_id INTEGER NOT NULL,
+        conversation_id TEXT NOT NULL,
+        seq INTEGER NOT NULL CHECK (seq >= 0),
+        question TEXT NOT NULL,
+        answer TEXT NOT NULL,
+        stop TEXT NOT NULL
+            CHECK (stop IN ('end_turn', 'max_tokens', 'refused', 'error', 'cancelled')),
+        asked_at INTEGER NOT NULL,
+        PRIMARY KEY (user_id, conversation_id, seq),
+        FOREIGN KEY (user_id, conversation_id)
+            REFERENCES ask_conversations (user_id, id) ON DELETE CASCADE,
+        CHECK (stop IN ('end_turn', 'max_tokens') OR answer = '')
+    ) STRICT, WITHOUT ROWID;
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

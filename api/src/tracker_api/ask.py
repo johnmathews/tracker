@@ -2,19 +2,28 @@
 (docs/api.md §3.1).
 
 A question is checked (`parse`), claimed against the daily caps (`claim`), then answered as a
-stream of events (`answer`), framed as server-sent events with keep-alives (`frames`,
-`EventStream`). Claude reads the person's weeks only through the tools here, which close over
-the session's user, so nothing the model writes can point a tool at another account.
+stream of events (`converse` around `answer`), framed as server-sent events with keep-alives
+(`frames`, `EventStream`). Claude reads the person's weeks only through the tools here, which
+close over the session's user, so nothing the model writes can point a tool at another account.
 
-Nothing of a question, its history or its answer is stored or logged. The logs carry request
-ids, stop reasons, token counts and rounds (docs/api.md §6).
+The conversation's earlier turns come from the database, text only, never from the browser.
+Each question and its answer are saved as one turn once the answer ends (`saver`), but never
+logged. The logs carry request ids, stop reasons, token counts and rounds (docs/api.md §6).
 """
 
 import asyncio
 import json
 import logging
+import secrets
 import sqlite3
-from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Mapping
+from collections.abc import (
+    AsyncGenerator,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Mapping,
+    Sequence,
+)
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
@@ -29,18 +38,28 @@ from anthropic.types import MessageParam, TextBlockParam, ToolParam, ToolResultB
 from starlette.responses import StreamingResponse
 from starlette.types import Receive, Scope, Send
 
-from . import insights
+from . import data, insights
 from .config import Config
 from .db import connect, transaction
-from .validate import Section, is_week
+from .validate import (
+    MAX_QUESTION,
+    AskStop,
+    Section,
+    Turn,
+    is_conversation_id,
+    is_week,
+    normalise_answer,
+)
 
 log = logging.getLogger(__name__)
 
 DAY = 86_400
-MAX_QUESTION = 2_000
+#: The most of a conversation's saved turns that go back to Claude, newest kept, and their
+#: questions and answers' characters together.
 MAX_TURNS = 20
-MAX_TURN = 8_000
 MAX_HISTORY = 40_000
+#: The keys a question's body may have; any other, a `history` from older code included, is 400.
+KEYS = frozenset({"question", "today", "conversation"})
 #: Output tokens per model request, thinking included, and model requests per question.
 MAX_TOKENS = 4_000
 MAX_ROUNDS = 6
@@ -202,34 +221,23 @@ class AskInvalid(ValueError):
 @dataclass(frozen=True)
 class Question:
     text: str
-    #: (role, text) turns, user first, alternating, ending with the assistant's.
-    history: tuple[tuple[Literal["user", "assistant"], str], ...]
     #: The asker's date, which the server can't know.
     today: date
+    #: The conversation it continues, or None to start one.
+    conversation: str | None = None
 
 
 def parse(body: Mapping[str, object], server_today: date) -> Question:
-    """Check a question. The history is text only: a turn is exactly `{role, text}`, so no
-    forged tool call, tool result or thinking block can reach the model."""
+    """Check a question. The body has no history: the earlier turns come from the database, so
+    no forged tool call, tool result or thinking block can reach the model from the browser."""
+    if not set(body) <= KEYS:
+        raise AskInvalid("body")
     question = body.get("question")
     if not isinstance(question, str) or not 1 <= len(question.strip()) <= MAX_QUESTION:
         raise AskInvalid("question")
-    history = body.get("history", [])
-    # An even count: the question that follows is the user's turn.
-    if not isinstance(history, list) or len(history) > MAX_TURNS or len(history) % 2:
-        raise AskInvalid("history")
-    turns: list[tuple[Literal["user", "assistant"], str]] = []
-    for i, turn in enumerate(history):
-        role: Literal["user", "assistant"] = "assistant" if i % 2 else "user"
-        if not isinstance(turn, dict) or set(turn) != {"role", "text"} or turn["role"] != role:
-            raise AskInvalid("history")
-        text = turn["text"]
-        # The API refuses an empty text block, so a blank turn is refused here.
-        if not isinstance(text, str) or not text.strip() or len(text) > MAX_TURN:
-            raise AskInvalid("history")
-        turns.append((role, text))
-    if sum(len(t) for _, t in turns) > MAX_HISTORY:
-        raise AskInvalid("history")
+    conversation = body.get("conversation")
+    if "conversation" in body and not is_conversation_id(conversation):
+        raise AskInvalid("conversation")
     today = body.get("today")
     if not isinstance(today, str) or not is_week(today):
         raise AskInvalid("today")
@@ -240,7 +248,7 @@ def parse(body: Mapping[str, object], server_today: date) -> Question:
     # Every time zone's date is within a day of UTC's.
     if abs((day - server_today).days) > 1:
         raise AskInvalid("today")
-    return Question(question.strip(), tuple(turns), day)
+    return Question(question.strip(), day, cast(str | None, conversation))
 
 
 def server_today(config: Config) -> date:
@@ -288,16 +296,24 @@ def remaining(conn: sqlite3.Connection, config: Config, user_id: int) -> int:
     return _left(conn, config, user_id, config.clock())[0]
 
 
-def claim(conn: sqlite3.Connection, config: Config, user_id: int) -> int:
+def claim(
+    conn: sqlite3.Connection,
+    config: Config,
+    user_id: int,
+    start: tuple[str, str] | None = None,
+) -> int:
     """Log a question and return the questions left after it, or raise AskLimit. Checked and
     logged under one write lock, as `outbox._claim` is, so parallel questions can't both pass a
-    cap. The claim stands whatever happens to the answer, as a failed email's does."""
+    cap. The claim stands whatever happens to the answer, as a failed email's does. `start`, an
+    (id, title), creates the new conversation the question opens, in the same transaction."""
     now = config.clock()
     with transaction(conn):
         left, wait = _left(conn, config, user_id, now)
         if wait:
             raise AskLimit(wait)
         conn.execute("INSERT INTO ask_log (user_id, asked_at) VALUES (?, ?)", (user_id, now))
+        if start is not None:
+            data.create_conversation(conn, user_id, *start, now)
     return left - 1
 
 
@@ -389,17 +405,38 @@ def context(today: date, goals: str) -> str:
     return "\n".join(lines)
 
 
-def messages(question: Question, goals: str) -> list[MessageParam]:
-    """The history and the question as text turns, the context opening the first."""
+def new_conversation_id() -> str:
+    """16 URL-safe characters, 96 random bits."""
+    return secrets.token_urlsafe(12)
+
+
+def history(turns: Sequence[tuple[str, str]]) -> list[tuple[str, str]]:
+    """The saved (question, answer) turns that go back to Claude, oldest first: the newest that
+    fit in MAX_TURNS turns and MAX_HISTORY characters. A turn with no answer (refused, failed or
+    abandoned) is left out whole: its question alone would put two user turns in a row."""
+    kept: list[tuple[str, str]] = []
+    size = 0
+    for question, answer in reversed(turns):
+        if not answer:
+            continue
+        size += len(question) + len(answer)
+        if len(kept) == MAX_TURNS or size > MAX_HISTORY:
+            break
+        kept.append((question, answer))
+    return kept[::-1]
+
+
+def messages(
+    question: Question, turns: Sequence[tuple[str, str]], goals: str
+) -> list[MessageParam]:
+    """The history and the question as alternating text turns, the context opening the first."""
     out: list[MessageParam] = []
-    for role, text in [*question.history, ("user", question.text)]:
-        blocks: list[TextBlockParam] = [{"type": "text", "text": text}]
-        if not out:
-            blocks.insert(0, {"type": "text", "text": context(question.today, goals)})
-        if role == "user":
-            out.append({"role": "user", "content": blocks})
-        else:
-            out.append({"role": "assistant", "content": blocks})
+    for asked, answered in history(turns):
+        out.append({"role": "user", "content": [{"type": "text", "text": asked}]})
+        out.append({"role": "assistant", "content": [{"type": "text", "text": answered}]})
+    out.append({"role": "user", "content": [{"type": "text", "text": question.text}]})
+    first = cast(list[TextBlockParam], out[0]["content"])
+    first.insert(0, {"type": "text", "text": context(question.today, goals)})
     return out
 
 
@@ -551,6 +588,93 @@ async def answer(
         )
 
 
+# --- The turn ------------------------------------------------------------------------------------
+
+type Save = Callable[[str, AskStop], Awaitable[bool]]
+
+
+def save_turn(
+    config: Config,
+    user_id: int,
+    conversation_id: str,
+    question: str,
+    asked_at: int,
+    answer: str,
+    stop: AskStop,
+) -> bool:
+    """Save a question and its answer as one turn, on a connection of its own; it runs on a
+    worker thread. False when nothing was kept: the account is full, or the conversation was
+    deleted while the answer streamed."""
+    turn: Turn = {
+        "question": question,
+        "answer": normalise_answer(answer, stop),
+        "stop": stop,
+        "askedAt": asked_at,
+    }
+    conn = connect(config.db_path)
+    try:
+        saved = data.save_turn(
+            conn, user_id, conversation_id, turn, config.clock(), quota=config.user_quota_bytes
+        )
+    finally:
+        conn.close()
+    return saved == "saved"
+
+
+def saver(config: Config, user_id: int, conversation_id: str, question: str, asked_at: int) -> Save:
+    """How one question's turn is saved, once its answer ends. It saves once: a later call, such
+    as the response's own when it closes, does nothing and returns the first call's result."""
+    first: list[bool] = []
+    called = False
+
+    async def save(answer: str, stop: AskStop) -> bool:
+        nonlocal called
+        if called:
+            return bool(first and first[0])
+        called = True
+        saved = await anyio.to_thread.run_sync(
+            partial(save_turn, config, user_id, conversation_id, question, asked_at, answer, stop)
+        )
+        first.append(saved)
+        return saved
+
+    return save
+
+
+async def converse(
+    client: anthropic.AsyncAnthropic,
+    model: str,
+    conversation: list[MessageParam],
+    run_tool: RunTool,
+    save: Save,
+    start: dict[str, object],
+) -> AsyncIterator[Event]:
+    """One question's events: `start`, then the answer's, the turn saved before the last one.
+    `done` carries whether it was saved. A refused or failed answer keeps its question with no
+    answer, and so does one the client leaves: the save is shielded from the cancellation."""
+    yield ("start", start)
+    parts: list[str] = []
+    ended = False
+    try:
+        async for name, event in answer(client, model, conversation, run_tool):
+            if name == "text":
+                parts.append(cast(str, event["delta"]))
+            elif name in ("done", "error"):
+                ended = True
+                stop = cast(AskStop, event["stop"]) if name == "done" else "error"
+                with anyio.CancelScope(shield=True):
+                    saved = await save("".join(parts), stop)
+                if name == "done":
+                    event = {**event, "saved": saved}
+            yield (name, event)
+    finally:
+        if not ended:
+            # Shielded as well: a second cancellation, such as a server shutting down, must not
+            # stop the save once it has begun.
+            with anyio.CancelScope(shield=True):
+                await save("", "cancelled")
+
+
 # --- The stream ----------------------------------------------------------------------------------
 
 
@@ -594,14 +718,21 @@ async def frames(events: AsyncIterator[Event]) -> AsyncGenerator[str]:
 class EventStream(StreamingResponse):
     """A `text/event-stream` response that stops on a disconnect. Starlette's own, under ASGI
     2.4, notices one only when a write fails and leaves the unfinished frames to the garbage
-    collector; this one listens for it and closes the frames at once."""
+    collector; this one listens for it and closes the frames at once. `on_close` runs after the
+    frames close, however the response ends, even when a client gone before the first frame meant
+    the frames never ran."""
 
     media_type = "text/event-stream"
 
-    def __init__(self, content: AsyncGenerator[str]) -> None:
+    def __init__(
+        self,
+        content: AsyncGenerator[str],
+        on_close: Callable[[], Awaitable[object]] | None = None,
+    ) -> None:
         # No buffering at nginx (F2); never stored by the browser.
         super().__init__(content, headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
         self._frames = content
+        self._on_close = on_close
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         try:
@@ -619,3 +750,5 @@ class EventStream(StreamingResponse):
         finally:
             with anyio.CancelScope(shield=True):
                 await self._frames.aclose()
+                if self._on_close is not None:
+                    await self._on_close()

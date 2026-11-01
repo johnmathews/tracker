@@ -11,6 +11,7 @@ from tracker_api.validate import (
     ExportError,
     days_to_masks,
     masks_to_days,
+    merge_conversations,
     merge_settings,
     merge_summary,
     merge_tracked,
@@ -23,6 +24,7 @@ from .fixtures import fixture_cases, read_fixture
 PARSE = fixture_cases("parse")
 MERGE = fixture_cases("merge")
 SETTINGS = read_fixture("merge-settings.json")["cases"]
+CONVERSATIONS = read_fixture("merge-conversations.json")["cases"]
 
 
 def run_parse(text: str) -> dict[str, Any]:
@@ -36,6 +38,8 @@ def test_finds_the_fixture_files() -> None:
     assert len(PARSE) >= 14
     assert len(MERGE) >= 6
     assert len(SETTINGS) >= 3
+    assert len(CONVERSATIONS) >= 5
+    assert len([n for n, _ in PARSE if n.startswith("conversations")]) >= 4
 
 
 @pytest.mark.parametrize(("name", "case"), PARSE, ids=[n for n, _ in PARSE])
@@ -53,6 +57,28 @@ def test_merge(name: str, case: dict[str, Any]) -> None:
 @pytest.mark.parametrize("case", SETTINGS, ids=[c["description"] for c in SETTINGS])
 def test_merge_settings(case: dict[str, Any]) -> None:
     assert merge_settings(case["existing"], case["incoming"]) == case["expected"]
+
+
+@pytest.mark.parametrize("case", CONVERSATIONS, ids=[c["description"] for c in CONVERSATIONS])
+def test_merge_conversations(case: dict[str, Any]) -> None:
+    merged = merge_conversations(case["existing"], case["incoming"])
+    assert merged == case["expected"]
+    assert len(merged) - len(case["existing"]) == case["added"]
+
+
+def test_merge_conversations_does_not_alias_its_inputs() -> None:
+    incoming: Any = [
+        {
+            "id": "a",
+            "title": "A",
+            "createdAt": 1,
+            "updatedAt": 1,
+            "turns": [{"question": "Q", "answer": "A", "stop": "end_turn", "askedAt": 1}],
+        }
+    ]
+    merged = merge_conversations([], incoming)
+    merged[0]["turns"][0]["answer"] = "Changed"
+    assert incoming[0]["turns"][0]["answer"] == "A"
 
 
 def test_sample_export_parses_to_itself() -> None:

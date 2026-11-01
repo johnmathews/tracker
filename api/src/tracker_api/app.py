@@ -4,6 +4,7 @@ import logging
 import sqlite3
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from contextlib import asynccontextmanager, suppress
+from functools import partial
 from typing import Annotated, Any
 
 from anthropic import AsyncAnthropic
@@ -24,6 +25,7 @@ from .validate import (
     Section,
     is_mark,
     is_week,
+    normalise_title,
     parse_export,
     parse_json,
 )
@@ -435,21 +437,58 @@ def create_app(
             question = ask.parse(body, ask.server_today(config))
         except ask.AskInvalid:
             raise ApiError(400, "invalid") from None
+        # A missing or another account's conversation is refused before the claim: it costs
+        # no question.
+        cid = question.conversation
+        if cid is not None and not data.has_conversation(conn, user.id, cid):
+            raise ApiError(404, "not-found")
+        start = None
+        if cid is None:
+            cid = ask.new_conversation_id()
+            start = (cid, normalise_title(question.text))
         try:
-            left = ask.claim(conn, config, user.id)
+            left = ask.claim(conn, config, user.id, start)
         except ask.AskLimit as e:
             wait = e.retry_after
             raise ApiError(429, "too-many", {"Retry-After": str(wait)}, retryAfter=wait) from None
+        asked_at = config.clock()
+        turns = [(t["question"], t["answer"]) for t in data.load_turns(conn, user.id, cid)]
         settings = data.load_settings(conn, user.id)
-        conversation = ask.messages(question, "" if settings is None else settings["goals"])
-        tools = ask.tools_for(config.db_path, user.id, question.today)
+        goals = "" if settings is None else settings["goals"]
+        save = ask.saver(config, user.id, cid, question.text, asked_at)
+        events = ask.converse(
+            client,
+            config.ask_model,
+            ask.messages(question, turns, goals),
+            ask.tools_for(config.db_path, user.id, question.today),
+            save,
+            {"remaining": left, "conversation": cid},
+        )
+        # A client gone before the first frame never runs `converse`, so the response's close
+        # saves the question too; after any earlier save it does nothing.
+        return ask.EventStream(ask.frames(events), on_close=partial(save, "", "cancelled"))
 
-        async def events() -> AsyncIterator[ask.Event]:
-            yield ("start", {"remaining": left})
-            async for event in ask.answer(client, config.ask_model, conversation, tools):
-                yield event
+    @app.get("/api/ask/conversations")
+    def conversations(user: User, conn: Conn) -> dict[str, Any]:
+        """Ask's history, newest first. It works with Ask off, so it stays the person's to read
+        and to delete."""
+        return {"conversations": data.list_conversations(conn, user.id)}
 
-        return ask.EventStream(ask.frames(events()))
+    @app.get("/api/ask/conversations/{conversation_id}")
+    def conversation(conversation_id: str, user: User, conn: Conn) -> dict[str, Any]:
+        found = data.load_conversation(conn, user.id, conversation_id)
+        if found is None:
+            raise ApiError(404, "not-found")
+        return dict(found)
+
+    @app.delete("/api/ask/conversations/{conversation_id}", status_code=204)
+    def delete_conversation(conversation_id: str, user: User, conn: Conn) -> None:
+        if not data.delete_conversation(conn, user.id, conversation_id):
+            raise ApiError(404, "not-found")
+
+    @app.delete("/api/ask/conversations", status_code=204)
+    def delete_conversations(user: User, conn: Conn) -> None:
+        data.delete_conversations(conn, user.id)
 
     return app
 

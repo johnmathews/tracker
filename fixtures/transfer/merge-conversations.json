@@ -1,0 +1,226 @@
+{
+  "description": "Import adds the file's conversations whose id the account doesn't have, after the account's own, in the file's order, and never changes one it has.",
+  "cases": [
+    {
+      "description": "Into an account with none.",
+      "existing": [],
+      "incoming": [
+        {
+          "id": "a",
+          "title": "A",
+          "createdAt": 1792742400,
+          "updatedAt": 1792742400,
+          "turns": [
+            { "question": "Q a", "answer": "Fine.", "stop": "end_turn", "askedAt": 1792742400 }
+          ]
+        },
+        {
+          "id": "b",
+          "title": "B",
+          "createdAt": 1792742400,
+          "updatedAt": 1792742400,
+          "turns": [
+            { "question": "Q b", "answer": "Fine.", "stop": "end_turn", "askedAt": 1792742400 }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "id": "a",
+          "title": "A",
+          "createdAt": 1792742400,
+          "updatedAt": 1792742400,
+          "turns": [
+            { "question": "Q a", "answer": "Fine.", "stop": "end_turn", "askedAt": 1792742400 }
+          ]
+        },
+        {
+          "id": "b",
+          "title": "B",
+          "createdAt": 1792742400,
+          "updatedAt": 1792742400,
+          "turns": [
+            { "question": "Q b", "answer": "Fine.", "stop": "end_turn", "askedAt": 1792742400 }
+          ]
+        }
+      ],
+      "added": 2
+    },
+    {
+      "description": "An id the account has keeps the account's conversation.",
+      "existing": [
+        {
+          "id": "a",
+          "title": "A",
+          "createdAt": 1792742400,
+          "updatedAt": 1792742400,
+          "turns": [
+            { "question": "Q a", "answer": "Fine.", "stop": "end_turn", "askedAt": 1792742400 }
+          ]
+        }
+      ],
+      "incoming": [
+        {
+          "id": "a",
+          "title": "A from the file",
+          "createdAt": 1792742400,
+          "updatedAt": 1792742499,
+          "turns": [
+            {
+              "question": "Q a, changed",
+              "answer": "Changed.",
+              "stop": "end_turn",
+              "askedAt": 1792742400
+            }
+          ]
+        },
+        { "id": "c", "title": "C", "createdAt": 1792742400, "updatedAt": 1792742400, "turns": [] }
+      ],
+      "expected": [
+        {
+          "id": "a",
+          "title": "A",
+          "createdAt": 1792742400,
+          "updatedAt": 1792742400,
+          "turns": [
+            { "question": "Q a", "answer": "Fine.", "stop": "end_turn", "askedAt": 1792742400 }
+          ]
+        },
+        { "id": "c", "title": "C", "createdAt": 1792742400, "updatedAt": 1792742400, "turns": [] }
+      ],
+      "added": 1
+    },
+    {
+      "description": "The same file twice adds nothing the second time.",
+      "existing": [
+        {
+          "id": "a",
+          "title": "A",
+          "createdAt": 1792742400,
+          "updatedAt": 1792742400,
+          "turns": [
+            { "question": "Q a", "answer": "Fine.", "stop": "end_turn", "askedAt": 1792742400 }
+          ]
+        },
+        {
+          "id": "b",
+          "title": "B",
+          "createdAt": 1792742400,
+          "updatedAt": 1792742400,
+          "turns": [
+            { "question": "Q b", "answer": "Fine.", "stop": "end_turn", "askedAt": 1792742400 }
+          ]
+        }
+      ],
+      "incoming": [
+        {
+          "id": "b",
+          "title": "B",
+          "createdAt": 1792742400,
+          "updatedAt": 1792742400,
+          "turns": [
+            { "question": "Q b", "answer": "Fine.", "stop": "end_turn", "askedAt": 1792742400 }
+          ]
+        },
+        {
+          "id": "a",
+          "title": "A",
+          "createdAt": 1792742400,
+          "updatedAt": 1792742400,
+          "turns": [
+            { "question": "Q a", "answer": "Fine.", "stop": "end_turn", "askedAt": 1792742400 }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "id": "a",
+          "title": "A",
+          "createdAt": 1792742400,
+          "updatedAt": 1792742400,
+          "turns": [
+            { "question": "Q a", "answer": "Fine.", "stop": "end_turn", "askedAt": 1792742400 }
+          ]
+        },
+        {
+          "id": "b",
+          "title": "B",
+          "createdAt": 1792742400,
+          "updatedAt": 1792742400,
+          "turns": [
+            { "question": "Q b", "answer": "Fine.", "stop": "end_turn", "askedAt": 1792742400 }
+          ]
+        }
+      ],
+      "added": 0
+    },
+    {
+      "description": "A file with none changes nothing.",
+      "existing": [
+        {
+          "id": "b",
+          "title": "B",
+          "createdAt": 1792742400,
+          "updatedAt": 1792742400,
+          "turns": [
+            { "question": "Q b", "answer": "Fine.", "stop": "end_turn", "askedAt": 1792742400 }
+          ]
+        }
+      ],
+      "incoming": [],
+      "expected": [
+        {
+          "id": "b",
+          "title": "B",
+          "createdAt": 1792742400,
+          "updatedAt": 1792742400,
+          "turns": [
+            { "question": "Q b", "answer": "Fine.", "stop": "end_turn", "askedAt": 1792742400 }
+          ]
+        }
+      ],
+      "added": 0
+    },
+    {
+      "description": "An id twice in what comes in is added once, the first time.",
+      "existing": [],
+      "incoming": [
+        {
+          "id": "a",
+          "title": "A",
+          "createdAt": 1792742400,
+          "updatedAt": 1792742400,
+          "turns": [
+            { "question": "Q a", "answer": "Fine.", "stop": "end_turn", "askedAt": 1792742400 }
+          ]
+        },
+        {
+          "id": "a",
+          "title": "A from the file",
+          "createdAt": 1792742400,
+          "updatedAt": 1792742499,
+          "turns": [
+            {
+              "question": "Q a, changed",
+              "answer": "Changed.",
+              "stop": "end_turn",
+              "askedAt": 1792742400
+            }
+          ]
+        }
+      ],
+      "expected": [
+        {
+          "id": "a",
+          "title": "A",
+          "createdAt": 1792742400,
+          "updatedAt": 1792742400,
+          "turns": [
+            { "question": "Q a", "answer": "Fine.", "stop": "end_turn", "askedAt": 1792742400 }
+          ]
+        }
+      ],
+      "added": 1
+    }
+  ]
+}

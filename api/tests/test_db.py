@@ -86,6 +86,50 @@ def test_ask_log_holds_times_only_and_goes_with_its_user(tmp_path: Path) -> None
     c.close()
 
 
+def test_ask_history_is_text_per_account_and_goes_with_its_user(tmp_path: Path) -> None:
+    """Ask's history: conversations keyed by account and id, and text-only turns that go with
+    their conversation, which goes with its user."""
+    c = connect(tmp_path / "f.db")
+    migrate(c)
+    conversation = [r["name"] for r in c.execute("PRAGMA table_info(ask_conversations)")]
+    assert conversation == ["user_id", "id", "title", "created_at", "updated_at"]
+    turn = [r["name"] for r in c.execute("PRAGMA table_info(ask_turns)")]
+    assert turn == ["user_id", "conversation_id", "seq", "question", "answer", "stop", "asked_at"]
+    for uid in (1, 2):
+        c.execute(
+            "INSERT INTO users (id, username, password_hash, created_at) VALUES (?, ?, 'h', 0)",
+            (uid, f"u{uid}"),
+        )
+    # The same id in two accounts is two conversations: an import never meets another's.
+    for uid in (1, 2):
+        c.execute(
+            "INSERT INTO ask_conversations VALUES (?, 'c1', 'How was my week?', 10, 20)", (uid,)
+        )
+        c.execute(
+            "INSERT INTO ask_turns VALUES (?, 'c1', 0, 'How was it?', 'Fine.', 'end_turn', 10)",
+            (uid,),
+        )
+    bad = [
+        # No answer is kept with a turn that didn't end with one.
+        "INSERT INTO ask_turns VALUES (1, 'c1', 1, 'q', 'Half an answer', 'cancelled', 11)",
+        "INSERT INTO ask_turns VALUES (1, 'c1', 1, 'q', '', 'thinking', 11)",
+        "INSERT INTO ask_turns VALUES (1, 'c1', 0, 'q', '', 'error', 11)",  # the same seq
+        "INSERT INTO ask_turns VALUES (1, 'c2', 0, 'q', '', 'error', 11)",  # no such conversation
+        "INSERT INTO ask_turns VALUES (1, 'c1', -1, 'q', '', 'error', 11)",
+        "INSERT INTO ask_conversations VALUES (3, 'c1', 't', 0, 0)",  # no such user
+    ]
+    for sql in bad:
+        with pytest.raises(sqlite3.IntegrityError):
+            c.execute(sql)
+    c.execute("INSERT INTO ask_turns VALUES (1, 'c1', 1, 'q', '', 'refused', 11)")
+    c.execute("DELETE FROM ask_conversations WHERE user_id = 1")
+    assert [tuple(r) for r in c.execute("SELECT user_id FROM ask_turns")] == [(2,)]
+    c.execute("DELETE FROM users WHERE id = 2")
+    for table in ("ask_conversations", "ask_turns"):
+        assert c.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0  # noqa: S608
+    c.close()
+
+
 def test_connections_use_wal_and_foreign_keys(tmp_path: Path) -> None:
     c = connect(tmp_path / "f.db")
     migrate(c)
