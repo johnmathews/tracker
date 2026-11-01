@@ -1,0 +1,292 @@
+<title>An Ask page for questions about your week</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="settings.css">
+<link rel="stylesheet" href="ask.css">
+<link rel="stylesheet" href="side.css">
+<!--
+  A mockup (design-system skill, references/mockups.md). The question: how a new Ask page looks,
+  where it starts from, and how it writes. The week, the bar's other actions and the Settings
+  page's other rows stay as they are. The page is live: ask.js draws it on the shipped Settings
+  page's frame (settings.css, copied from the 261026-settings-page mockup) and ask.css adds what is
+  new as --candidate-* values. try.html shows it full size, with a switch for layout, state and theme.
+-->
+<style>
+  body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font-sans); }
+  .mockup-page {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: var(--space-8, 32px) var(--space-16, 64px);
+    max-width: 1200px; margin: 0 auto; display: grid; gap: var(--space-12, 48px);
+  }
+  .mockup-head { display: grid; gap: var(--space-2, 8px); max-width: 70ch; }
+  .mockup-head h1, .option h2 { margin: 0; text-wrap: balance; }
+  .mockup-head p, .option p { margin: 0; }
+  .mockup-meta { color: var(--ink-secondary); }
+  .option { display: grid; gap: var(--space-4, 16px); }
+  .option-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2, 8px) var(--space-3, 12px); }
+  .option-tag { color: var(--ink-secondary); }
+  .option[data-recommended] .option-tag::after { content: " · Recommended"; color: var(--ink); }
+  .panes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--space-4, 16px); }
+  .pane { min-width: 0; background: var(--canvas); color: var(--ink); border: 1px solid var(--line);
+          border-radius: var(--radius-lg, 10px); padding: var(--space-4, 16px); overflow-x: auto; }
+  .pane-label { color: var(--ink-secondary); margin: 0 0 var(--space-3, 12px); }
+  .measures { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); }
+  .measures li { border: 1px solid var(--line); border-radius: var(--radius-sm, 4px); padding: 2px var(--space-2, 8px); font-variant-numeric: tabular-nums; }
+  .measures li[data-pass="no"] { border-color: currentColor; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .try { margin: 0; }
+  .try a, .mockup-head a { color: var(--ink); font-weight: 600; text-underline-offset: 3px; }
+  .question { display: grid; gap: var(--space-8, 32px); }
+  .question > header { display: grid; gap: var(--space-2, 8px); max-width: 70ch; }
+  .question > header h2, .question > header p { margin: 0; }
+  .notes { margin: 0; padding-left: 1.2em; display: grid; gap: var(--space-1, 4px); }
+  .device { position: relative; width: 100%; }
+  .device > div { position: absolute; top: 0; left: 0; transform-origin: 0 0; border: 1px solid var(--line); border-radius: var(--radius-lg); }
+  .device.phone > div { border-radius: 28px; border-width: 2px; }
+  .phones { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+  .phones .device { max-width: 260px; }
+  .states { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: var(--space-4); }
+  .states figure { margin: 0; display: grid; gap: var(--space-2); }
+  .states figcaption { color: var(--ink-secondary); }
+  .voice { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--space-4); }
+  .voice .pane p { margin: 0 0 0.6em; max-width: 60ch; }
+  .voice .pane p:last-child { margin-bottom: 0; }
+  ol.asks { margin: 0; padding-left: 1.4em; display: grid; gap: var(--space-2); max-width: 70ch; }
+</style>
+
+<main class="mockup-page">
+  <header class="mockup-head">
+    <p class="caption mockup-meta">Mockup · 2026-11-01 · Tracker</p>
+    <h1 class="title-1">An Ask page for questions about your week</h1>
+    <p class="body">A new page where you ask an AI about what you track: whether you’re doing too much or too little for your goals, whether your diet is good enough, whether your weeks are steady. The answer streams in as it’s written. Both options start from the Settings page you picked (K51, K52): no bar, “Back to the week”, the serif title, the page’s own margins and sizes. They differ in how a conversation sits on the page.</p>
+    <ul class="notes body">
+      <li>The week, the bar’s other actions and the other Settings rows stay as they are.</li>
+      <li>Everything is drawn in the system’s tokens; the only new pairings are measured below each option.</li>
+      <li>The numbers are a plausible seed month; the copy is written to the voice rules, with one open question about them (4 below).</li>
+    </ul>
+    <p class="body"><strong>Four things to decide</strong>, in order: 1. the layout (A or B); 2. where Ask sits in the bar; 3. the goals row in Settings; 4. how plainly answers may judge. Then three short questions at the end.</p>
+    <p class="body"><strong>Round 3 (decided: S1, a strip of icons when hidden).</strong> From your note on H2: “a proper side panel that can be hidden/shown”, the way Anthropic’s apps do it, with a vertical border between history and conversation. Round 2 (H2, the rail) is superseded by this. Your picks so far: layout A, voice V2 (plain verdicts, notes and goals quoted as advice, streaks, scores and rankings allowed), the chip always shown, and conversations saved on the server as history. Round 1 stays below for reference.</p>
+    <p class="try body"><a href="try.html#a-chat">Try it full size</a>. The second answer streams; the switch at the bottom left changes the layout, the state and the theme.</p>
+  </header>
+
+  <section class="question" aria-labelledby="q00">
+    <header><h2 class="title-2" id="q00">Round 3. A side panel that hides and shows (decided: S1)</h2>
+      <p class="body">The history becomes its own panel down the left edge, the full height of the screen, on the panel surface, with a 1px line between it and the conversation. At its top: “History” and a button to hide it. Then “New conversation”, and the conversations grouped by when they were last used: Today, Last week, Earlier. The open one has a tile background and is bold. The bin to delete one shows on the open conversation and on hover or focus (always on a touch screen). “Delete all conversations” is at its foot. Each side scrolls on its own. The panel remembers whether it was hidden, per device. On a phone it’s a drawer that slides over the page, behind a dimmed scrim; picking a conversation closes it.</p>
+      <p class="body">The options differ only in what is left when the panel is hidden. Press the panel icon in any frame below to try it.</p></header>
+
+    <section class="option" id="s1" data-recommended aria-labelledby="s1-h">
+      <div class="option-head"><h2 class="title-2" id="s1-h">S1. Hides to a strip of icons</h2><span class="label option-tag">Option S1</span></div>
+      <p class="body">Hidden, the panel leaves a 64u strip with two icons, show history and new conversation, and the line stays. Recommended: the way back, and a new conversation, are always in the same place.</p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · 1440×900, open</p><div class="device" data-w="1440" data-h="900" data-layout="a" data-state="cap" data-history="s1" data-panel="open"></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · 1440×900, hidden</p><div class="device" data-w="1440" data-h="900" data-layout="a" data-state="cap" data-history="s1" data-panel="closed"></div></div>
+      </div>
+      <p class="try body"><a href="try.html#a-cap-s1">Try S1 full size</a></p>
+    </section>
+
+    <section class="option" id="s2" aria-labelledby="s2-h">
+      <div class="option-head"><h2 class="title-2" id="s2-h">S2. Hides away entirely</h2><span class="label option-tag">Option S2</span></div>
+      <p class="body">Hidden, the panel and its line go, and the conversation takes the whole width. The show-history button moves beside “Back to the week”.</p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · 1440×900, open</p><div class="device" data-w="1440" data-h="900" data-layout="a" data-state="cap" data-history="s2" data-panel="open"></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · 1440×900, hidden</p><div class="device" data-w="1440" data-h="900" data-layout="a" data-state="cap" data-history="s2" data-panel="closed"></div></div>
+      </div>
+      <p class="try body"><a href="try.html#a-cap-s2">Try S2 full size</a></p>
+    </section>
+
+    <section class="option" aria-labelledby="sp-h">
+      <div class="option-head"><h2 class="title-2" id="sp-h">On a phone, both</h2><span class="label option-tag">Same in S1 and S2</span></div>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · phone, hidden</p><div class="phones"><div class="device phone" data-w="390" data-h="844" data-layout="a" data-state="cap" data-history="s1" data-panel="closed"></div></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · phone, the drawer open</p><div class="phones"><div class="device phone" data-w="390" data-h="844" data-layout="a" data-state="cap" data-history="s1" data-panel="open"></div></div></div>
+      </div>
+    </section>
+    <ul class="measures caption">
+      <li data-fg="var(--ink)" data-bg="var(--panel)" data-min="4.5">A conversation on the panel</li>
+      <li data-fg="var(--ink-secondary)" data-bg="var(--panel)" data-min="4.5">Today, Last week, Earlier</li>
+      <li data-fg="var(--ink)" data-bg="var(--tile)" data-min="4.5">The open conversation</li>
+      <li data-fg="var(--line)" data-bg="var(--panel)" data-min="1">The vertical line (decorative)</li>
+    </ul>
+  </section>
+
+  <section class="question" aria-labelledby="q0">
+    <header><h2 class="title-2" id="q0">Round 2. Where the history sits (H2 picked, then replaced by round 3)</h2><p class="body">Past conversations, newest first: the first question and the day, a bin to delete one, “Delete all conversations” at the foot, and “New conversation” on top. The open one is bold with a bar at its edge. Everything else is layout A as picked.</p></header>
+
+    <section class="option" id="h1" data-recommended aria-labelledby="h1-h">
+      <div class="option-head"><h2 class="title-2" id="h1-h">H1. A History row above the conversation</h2><span class="label option-tag">Option H1</span></div>
+      <p class="body">A row of its own, like a Settings section: “History” in the question column, the four latest conversations to its right in two columns, and “Show all” for the rest. The conversation's rows keep their full width. On a phone the row sits above the conversation. Recommended: it keeps A's rows whole and reads like Settings.</p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · 1920×1200</p><div class="device" data-w="1920" data-h="1300" data-layout="a" data-state="cap" data-history="h1"></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · 1280×800</p><div class="device" data-w="1280" data-h="1150" data-layout="a" data-state="cap" data-history="h1"></div></div>
+      </div>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · phone</p><div class="phones"><div class="device phone" data-w="390" data-h="1100" data-layout="a" data-state="cap" data-history="h1"></div></div></div>
+      </div>
+      <p class="try body"><a href="try.html#a-cap-h1">Try H1 full size</a></p>
+    </section>
+
+    <section class="option" id="h2" aria-labelledby="h2-h">
+      <div class="option-head"><h2 class="title-2" id="h2-h">H2. A rail beside the conversation</h2><span class="label option-tag">Option H2</span></div>
+      <p class="body">The whole list in a 300u rail on the left that stays put as you scroll, the conversation to its right with a narrower question column. More like a chat app; every past conversation is one press away. On a phone the rail sits above the conversation.</p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · 1920×1200</p><div class="device" data-w="1920" data-h="1300" data-layout="a" data-state="cap" data-history="h2"></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · 1280×800</p><div class="device" data-w="1280" data-h="1150" data-layout="a" data-state="cap" data-history="h2"></div></div>
+      </div>
+      <p class="try body"><a href="try.html#a-cap-h2">Try H2 full size</a></p>
+    </section>
+    <ul class="measures caption">
+      <li data-fg="var(--ink-secondary)" data-bg="var(--canvas)" data-min="4.5">The day beside each conversation</li>
+      <li data-fg="var(--ink)" data-bg="var(--tile)" data-min="4.5">A conversation under the pointer</li>
+    </ul>
+  </section>
+
+  <section class="question" aria-labelledby="q1">
+    <header><h2 class="title-2" id="q1">1. The layout (decided: A)</h2><p class="body">One conversation: an answer that’s finished and one that’s being written, with the box at the foot.</p></header>
+
+    <section class="option" id="a" data-recommended aria-labelledby="a-h">
+      <div class="option-head"><h2 class="title-2" id="a-h">A. Rows like Settings</h2><span class="label option-tag">Option A</span></div>
+      <p class="body">Full width on the page’s margins. Each question and its answer is a row: the question in the left column, as wide as the week’s names (320u) and where Settings puts its headings; the answer to its right, held to about 68 characters a line; hairlines between rows. The box is the last row. Recommended: it reads like Settings and the week, and a long answer keeps a comfortable line.</p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · 1920×1200</p><div class="device" data-w="1920" data-h="1200" data-layout="a" data-state="chat"></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · 1280×800</p><div class="device" data-w="1280" data-h="900" data-layout="a" data-state="chat"></div></div>
+      </div>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · phone, the question over its answer</p><div class="phones"><div class="device phone" data-w="390" data-h="1300" data-layout="a" data-state="chat"></div></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · phone</p><div class="phones"><div class="device phone" data-w="390" data-h="1300" data-layout="a" data-state="chat"></div></div></div>
+      </div>
+      <ul class="measures caption">
+        <li data-fg="var(--ink-secondary)" data-bg="var(--tile)" data-min="4.5">Questions left: ink-secondary on tile</li>
+        <li data-fg="var(--ink-secondary)" data-bg="var(--canvas)" data-min="4.5">Notes under the box</li>
+      </ul>
+      <p class="try body"><a href="try.html#a-chat">Try A full size</a></p>
+    </section>
+
+    <section class="option" id="b" aria-labelledby="b-h">
+      <div class="option-head"><h2 class="title-2" id="b-h">B. One reading column</h2><span class="label option-tag">Option B</span></div>
+      <p class="body">A centred column, 760u wide. Your question is a grey tile on the right; the answer is plain text under it, on the canvas, with no bubble. More like a chat app; on a wide screen the sides stay empty. On a phone B looks much like A, with the question as a tile.</p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · 1920×1200</p><div class="device" data-w="1920" data-h="1200" data-layout="b" data-state="chat"></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · 1280×800</p><div class="device" data-w="1280" data-h="900" data-layout="b" data-state="chat"></div></div>
+      </div>
+      <ul class="measures caption">
+        <li data-fg="var(--ink)" data-bg="var(--tile)" data-min="4.5">Your question: ink on tile</li>
+        <li data-fg="var(--ink-secondary)" data-bg="var(--tile)" data-min="4.5">Questions left: ink-secondary on tile</li>
+      </ul>
+      <p class="try body"><a href="try.html#b-chat">Try B full size</a></p>
+    </section>
+
+    <section class="option" aria-labelledby="st-h">
+      <div class="option-head"><h2 class="title-2" id="st-h">The other states, in A</h2><span class="label option-tag">Same in B</span></div>
+      <div class="states">
+        <figure><div class="pane" data-theme="light"><div class="device" data-w="1280" data-h="760" data-layout="a" data-state="empty"></div></div><figcaption class="caption">Empty: what it reads, three questions to start from.</figcaption></figure>
+        <figure><div class="pane" data-theme="dark"><div class="device" data-w="1280" data-h="760" data-layout="a" data-state="nogoals"></div></div><figcaption class="caption">Empty, with no goals in Settings yet.</figcaption></figure>
+        <figure><div class="pane" data-theme="light"><div class="device" data-w="1280" data-h="1100" data-layout="a" data-state="cap"></div></div><figcaption class="caption">No questions left today: the box is off and says when it’s back.</figcaption></figure>
+        <figure><div class="pane" data-theme="dark"><div class="device" data-w="1280" data-h="900" data-layout="a" data-state="error"></div></div><figcaption class="caption">The answer stopped: what happened, and Try again. The question is kept.</figcaption></figure>
+        <figure><div class="pane" data-theme="light"><div class="device" data-w="1280" data-h="900" data-layout="a" data-state="offline"></div></div><figcaption class="caption">Offline: the box is off; the conversation stays.</figcaption></figure>
+        <figure><div class="pane" data-theme="dark"><div class="device" data-w="1280" data-h="1100" data-layout="a" data-state="unsynced"></div></div><figcaption class="caption">Changes still on this device: one line says the answer won’t include them.</figcaption></figure>
+      </div>
+      <ul class="measures caption">
+        <li data-fg="var(--error-ink)" data-bg="var(--canvas)" data-min="4.5">The stopped answer: error ink</li>
+      </ul>
+    </section>
+  </section>
+
+  <section class="question" aria-labelledby="q2">
+    <header><h2 class="title-2" id="q2">2. Ask in the bar</h2><p class="body">A new action, a speech bubble over “Ask”, just before Settings. It shows only when the planner has an AI key. Folded on a phone, the second row holds Edit plan, Ask and Settings.</p></header>
+    <div class="panes">
+      <div class="pane" data-theme="light"><p class="label pane-label">Light · the bar’s right side</p><div id="bar-l"></div></div>
+      <div class="pane" data-theme="dark"><p class="label pane-label">Dark · folded, on a phone</p><div id="bar-d"></div></div>
+    </div>
+  </section>
+
+  <section class="question" aria-labelledby="q3">
+    <header><h2 class="title-2" id="q3">3. Your goals, in Settings</h2><p class="body">A new row, “Your goals”, between Planner and Your data: a text box for what you’re working towards, in your words. Ask reads it; nothing else does. It saves as you type, as the rest of Settings does.</p></header>
+    <div class="panes">
+      <div class="pane" data-theme="light"><p class="label pane-label">Light · 1280×800</p><div class="device" data-w="1280" data-h="760" data-goals></div></div>
+      <div class="pane" data-theme="dark"><p class="label pane-label">Dark · phone</p><div class="phones"><div class="device phone" data-w="390" data-h="900" data-goals></div></div></div>
+    </div>
+  </section>
+
+  <section class="question" aria-labelledby="q4">
+    <header><h2 class="title-2" id="q4">4. How plainly answers may judge (decided: V2, with streaks, scores and rankings)</h2>
+      <p class="body">The voice rules say “No guilt: never ‘You missed 3 days’”, “No streaks, scores or rankings”, and that the app never quotes a note back as advice. You asked whether you’re doing too much or too little, which needs a verdict. Two ways to write the same answer:</p></header>
+    <div class="voice">
+      <div class="pane" data-theme="light"><p class="label pane-label">V1. As the rules stand: facts, then the next step</p>
+        <p class="body">Pull-ups: three of four days this week, and four of four in two of the last four weeks.</p>
+        <p class="body">Your goals mention ten pull-ups in a row by March. One more rep a set every second week would get there.</p></div>
+      <div class="pane" data-theme="light" data-recommended><p class="label pane-label">V2. A plain verdict, still calm (recommended)</p>
+        <p class="body">A little too little for March. Three or four days of three reps is steady, but the reps haven’t gone up since 12 October.</p>
+        <p class="body">One more rep a set every second week would get you to ten in a row by March.</p></div>
+    </div>
+    <p class="body" style="max-width:70ch">V2 keeps the rest of the rules (no exclamation marks, no hype, no blame, no streak counts) but lets Ask say “too little” or “too much” when you ask, and quote your goals and notes back to you. It would be recorded as a carve-out for Ask in the voice rules.</p>
+  </section>
+
+  <section class="question" aria-labelledby="q5">
+    <header><h2 class="title-2" id="q5">And three short ones</h2></header>
+    <ol class="asks body">
+      <li><strong>Keep a conversation across a reload?</strong> Recommended: yes, in this tab only (it’s gone when the tab closes, and never on the server). The alternative is to clear it on every reload.</li>
+      <li><strong>Import and your goals.</strong> Recommended: an imported file fills your goals only when they’re empty. Otherwise yours stay.</li>
+      <li><strong>Thirty questions a day each.</strong> Shown as “27 questions left today” under the box, and in words from three down. Keep the chip, or show it only near the end?</li>
+    </ol>
+  </section>
+</main>
+
+<script src="icons.js"></script>
+<script src="ask.js"></script>
+<script>
+  for (const device of document.querySelectorAll('.device')) {
+    const w = Number(device.dataset.w), h = Number(device.dataset.h)
+    const screen = document.createElement('div')
+    screen.style.width = w + 'px'
+    screen.style.height = h + 'px'
+    device.append(screen)
+    const fit = () => {
+      const s = Math.min(1, device.clientWidth / w)
+      screen.style.transform = `scale(${s})`
+      device.style.height = Math.ceil(h * s) + 'px'
+    }
+    new ResizeObserver(fit).observe(device)
+    fit()
+    if ('goals' in device.dataset) AP.goals(screen)
+    else AP.mount(screen, { layout: device.dataset.layout, state: device.dataset.state, history: device.dataset.history, panel: device.dataset.panel })
+  }
+  const act = (name, icon, isNew) => `<button type="button" class="bar-action"${isNew ? ' data-new' : ''}>${AP.icon(icon)}<span class="name">${name}</span></button>`
+  const ICON_EXTRA = {
+    pencil: '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>',
+    settings: '<path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/>',
+    printer: '<path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/>',
+    full: '<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>',
+  }
+  const svg = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_EXTRA[k]}</svg>`
+  const a2 = (name, k) => `<button type="button" class="bar-action">${svg(k)}<span class="name">${name}</span></button>`
+  document.getElementById('bar-l').innerHTML = `<div class="bar-strip"><span></span><div class="group">${a2('Edit plan', 'pencil')}${act('Ask', 'message-circle', true)}${a2('Settings', 'settings')}${a2('Print…', 'printer')}${a2('Full screen', 'full')}</div></div>`
+  document.getElementById('bar-d').innerHTML = `<div class="bar-folded">${a2('Edit plan', 'pencil')}${act('Ask', 'message-circle', true)}${a2('Settings', 'settings')}</div>`;
+
+  // Measures: WCAG contrast of each pairing in both themes.
+  (() => {
+    const rgb = (value, scope, theme) => {
+      const probe = document.createElement('span')
+      probe.dataset.theme = theme
+      probe.style.color = value
+      scope.append(probe)
+      const parts = getComputedStyle(probe).color.match(/[\d.]+/g).map(Number)
+      probe.remove()
+      return parts.slice(0, 3)
+    }
+    const lum = ([r, g, b]) => [r, g, b]
+      .map((c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4 })
+      .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0)
+    const ratio = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05) }
+    for (const li of document.querySelectorAll('.measures li[data-fg]')) {
+      const scope = li.closest('.option') || document.body
+      const min = Number(li.dataset.min || 0)
+      const results = ['light', 'dark'].map((theme) => {
+        const r = ratio(rgb(li.dataset.fg, scope, theme), rgb(li.dataset.bg, scope, theme))
+        return { theme, r, ok: !min || r >= min }
+      })
+      li.dataset.pass = results.every((x) => x.ok) ? 'yes' : 'no'
+      li.append(`: ${results.map((x) => `${x.theme} ${x.r.toFixed(1)}:1${x.ok ? '' : ' (below ' + min + ':1)'}`).join(', ')}`)
+    }
+  })()
+</script>

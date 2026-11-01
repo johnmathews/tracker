@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>An Ask page, to try</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="settings.css">
+<link rel="stylesheet" href="ask.css">
+<link rel="stylesheet" href="side.css">
+<style>
+  html, body { margin: 0; height: 100%; background: var(--canvas); }
+  #screen { width: 100vw; height: 100vh; height: 100dvh; }
+  .mock { position: fixed; z-index: 50; left: 8px; bottom: 8px; font: 600 14px/20px var(--font-sans); color: var(--ink-secondary); }
+  .mock > button { height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius-full); background: var(--canvas); color: inherit; font: inherit; cursor: pointer; }
+  .mock .panel { display: none; position: absolute; left: 0; bottom: 40px; width: max-content; max-width: calc(100vw - 16px); padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-overlay); color: var(--ink); }
+  .mock.open .panel { display: grid; gap: 10px; }
+  .mock .panel div { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .mock .panel span { width: 64px; color: var(--ink-secondary); font-weight: 400; }
+  .mock .panel button { min-width: 44px; height: 36px; padding: 0 10px; border: 1px solid var(--control-border); border-radius: var(--radius-md); background: transparent; color: var(--ink); font: inherit; cursor: pointer; }
+  .mock .panel button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+</style>
+</head>
+<body>
+<div id="screen"></div>
+<div class="mock">
+  <div class="panel" role="group" aria-label="Mockup">
+    <div><span>Layout</span><button data-k="layout" data-v="a">A</button><button data-k="layout" data-v="b">B</button></div>
+    <div><span>State</span><button data-k="state" data-v="chat">Answering</button><button data-k="state" data-v="empty">Empty</button><button data-k="state" data-v="nogoals">No goals</button><button data-k="state" data-v="cap">None left</button><button data-k="state" data-v="error">Error</button><button data-k="state" data-v="offline">Offline</button><button data-k="state" data-v="unsynced">Unsynced</button></div>
+    <div><span>History</span><button data-k="history" data-v="none">None</button><button data-k="history" data-v="h1">H1</button><button data-k="history" data-v="h2">H2</button><button data-k="history" data-v="s1">S1</button><button data-k="history" data-v="s2">S2</button></div>
+    <div><span>Theme</span><button data-k="theme" data-v="system">System</button><button data-k="theme" data-v="light">Light</button><button data-k="theme" data-v="dark">Dark</button></div>
+  </div>
+  <button type="button" aria-expanded="false">Mockup</button>
+</div>
+<script src="icons.js"></script>
+<script src="ask.js"></script>
+<script>
+  // The hash carries the choice: "#b-error-dark" is layout B, the error state, the dark theme.
+  const STATES = ['chat', 'empty', 'nogoals', 'cap', 'error', 'offline', 'unsynced']
+  const read = () => {
+    const parts = location.hash.slice(1).split('-')
+    return {
+      layout: parts.find((p) => p === 'a' || p === 'b') || 'a',
+      state: parts.find((p) => STATES.includes(p)) || 'chat',
+      theme: parts.find((p) => p === 'light' || p === 'dark') || 'system',
+      history: parts.find((p) => ['h1', 'h2', 's1', 's2'].includes(p)) || 'none',
+    }
+  }
+  const write = (s) => { location.hash = [s.layout, s.state, s.history === 'none' ? '' : s.history, s.theme === 'system' ? '' : s.theme].filter(Boolean).join('-') }
+  function start() {
+    const s = read()
+    if (s.theme === 'system') document.documentElement.removeAttribute('data-theme')
+    else document.documentElement.dataset.theme = s.theme
+    const el = document.createElement('div')
+    el.id = 'screen'
+    document.getElementById('screen').replaceWith(el)
+    AP.mount(el, { layout: s.layout, state: s.state, live: s.state === 'chat', history: s.history === 'none' ? undefined : s.history, panel: innerWidth < 760 ? 'closed' : 'open' })
+    document.querySelectorAll('.mock .panel button').forEach((b) => b.setAttribute('aria-pressed', String(s[b.dataset.k] === b.dataset.v)))
+  }
+  const mock = document.querySelector('.mock')
+  mock.querySelector(':scope > button').addEventListener('click', (e) => {
+    mock.classList.toggle('open')
+    e.currentTarget.setAttribute('aria-expanded', String(mock.classList.contains('open')))
+  })
+  mock.querySelector('.panel').addEventListener('click', (e) => {
+    const b = e.target.closest('button')
+    if (!b) return
+    write({ ...read(), [b.dataset.k]: b.dataset.v })
+  })
+  addEventListener('hashchange', start)
+  start()
+</script>
+</body>
+</html>
