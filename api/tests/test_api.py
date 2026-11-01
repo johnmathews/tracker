@@ -178,6 +178,31 @@ def test_data_endpoints_need_a_session(client: TestClient, method: str, path: st
     assert (r.status_code, r.json()) == (401, {"error": "auth"})
 
 
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("GET", "/api/state"),
+        ("GET", "/api/auth/me"),
+        ("PUT", f"/api/plans/exercise/{WEEK}"),
+        ("PUT", "/api/settings"),
+    ],
+)
+def test_rest_refuses_a_bearer_token(
+    client: TestClient, config: Config, method: str, path: str
+) -> None:
+    """A personal API token is for /api/mcp only (§3.1): REST reads the session cookie alone."""
+    conn = connect(config.db_path)
+    try:
+        auth.signup(conn, config, "alice@example.com", PASSWORD)
+        for scope in ("read", "write"):
+            token = auth.create_token(conn, config, "alice@example.com", scope, scope)
+            headers = {"Authorization": f"Bearer {token}"}
+            r = client.request(method, path, json={"items": [], "rev": 0}, headers=headers)
+            assert (r.status_code, r.json()) == (401, {"error": "auth"})
+    finally:
+        conn.close()
+
+
 # --- accounts -----------------------------------------------------------------------------------
 
 

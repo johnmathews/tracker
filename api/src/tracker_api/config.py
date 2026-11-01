@@ -5,11 +5,14 @@ import re
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 ORIGIN_RE = re.compile(r"https?://[^/\s]+")
 # `planner@example.com`, or a display name before it: `Tracker <planner@example.com>`.
 SENDER_RE = re.compile(r"(?:[^<>@]+ <[^<>@\s]+@[^<>@\s]+>|[^<>@\s]+@[^<>@\s]+)")
+DEFAULT_TIMEZONE = "Europe/Amsterdam"
 
 
 def _now() -> int:
@@ -23,6 +26,16 @@ def _flag(env: Mapping[str, str], name: str, default: bool) -> bool:
     if raw.lower() not in ("true", "false"):
         raise ValueError(f"{name} must be true or false, not {raw!r}")
     return raw.lower() == "true"
+
+
+def _zone(env: Mapping[str, str]) -> ZoneInfo:
+    raw = env.get("TIMEZONE", DEFAULT_TIMEZONE)
+    try:
+        return ZoneInfo(raw)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise ValueError(
+            f"TIMEZONE must be an IANA time zone such as {DEFAULT_TIMEZONE}, not {raw!r}"
+        ) from None
 
 
 def _count(env: Mapping[str, str], name: str, default: int, least: int = 0) -> int:
@@ -58,8 +71,19 @@ class Config:
     confirm_days: int = 7
     #: A reset link sent by email; one minted by `tracker-admin reset` lasts `reset_hours`.
     mail_reset_minutes: int = 60
+    #: Where today and this week are counted (`today`, `this_week`).
+    timezone: ZoneInfo = field(default_factory=lambda: ZoneInfo(DEFAULT_TIMEZONE))
     #: Unix seconds; injectable so tests can move time.
     clock: Callable[[], int] = field(default=_now)
+
+    def today(self) -> date:
+        """The date now in `timezone`."""
+        return datetime.fromtimestamp(self.clock(), self.timezone).date()
+
+    def this_week(self) -> str:
+        """The Monday of today's week in `timezone`, as YYYY-MM-DD: the app's week key."""
+        today = self.today()
+        return (today - timedelta(days=today.weekday())).isoformat()
 
     @property
     def mail_enabled(self) -> bool:
@@ -100,4 +124,5 @@ class Config:
             mail_from=sender,
             # At least one: the limit is a cap, and 0 would make every reset request fail.
             mail_per_hour=_count(env, "MAIL_PER_HOUR", 30, least=1),
+            timezone=_zone(env),
         )

@@ -24,6 +24,10 @@ labels, `DAY_NAMES`); `src/lib/theme.ts` holds the theme names and `isDark`. The
 (`src/composables/barReveal.ts`, the navbar out of sight) and `useFullscreen`
 (`src/composables/fullscreen.ts`, the browser's full screen).
 
+The API has a second client besides the app: agents that connect over MCP (`mcp_server.py`). Their
+tools read through `insights.py` and write through `edits.py`, so they follow the same rules as the
+app. [api.md](api.md) §3.1 describes the endpoint and [mcp.md](mcp.md) how to connect an agent.
+
 Every screen is built from the primitives in `src/components/ui/` (§6.3), which follow the design
 system's cards ([brand.md](brand.md)). `TrackerGrid` and `TrackerRow` (on the `DayMark`, `Chip`
 and `IconButton` primitives) take props, emit events, and serve both sections.

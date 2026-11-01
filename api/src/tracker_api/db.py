@@ -110,6 +110,21 @@ MIGRATIONS = [
     """
     ALTER TABLE settings ADD COLUMN food_pick INTEGER NOT NULL DEFAULT 2;
     """,
+    # Personal API tokens, for the MCP endpoint. Stored hashed, as sessions are; `prefix` names one
+    # in `tracker-admin token` without revealing it, and is unique per user so a revoke hits one.
+    # Only adds a table, and IF NOT EXISTS lets it run again.
+    """
+    CREATE TABLE IF NOT EXISTS api_tokens (
+        token_hash TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        prefix TEXT NOT NULL,
+        scope TEXT NOT NULL CHECK (scope IN ('read', 'write')),
+        created_at INTEGER NOT NULL,
+        last_used_at INTEGER
+    ) STRICT;
+    CREATE UNIQUE INDEX IF NOT EXISTS api_tokens_by_user ON api_tokens (user_id, prefix);
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

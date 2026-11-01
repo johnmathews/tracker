@@ -33,6 +33,11 @@ so nothing compiles. The runtime stage is `python:3.13-slim`, running as uid 100
 as its volume and uvicorn on port **8000**. `tracker-admin` is on the `PATH`, and the `HEALTHCHECK`
 calls `/api/healthz` with Python's `urllib` (the slim image has no curl).
 
+**Time zone.** `TIMEZONE` (default `Europe/Amsterdam`, [api.md](api.md) §6) is the zone in which
+the MCP tools count today and this week. The container's clock stays in UTC. The slim image
+ships the IANA zone files (checked on 2026-11-01, and on every build by the arm64 smoke test), so
+any zone name works, and an unknown one stops the API at startup, as any bad setting does.
+
 **Memory.** Measured on the API image on 2026-10-24 by reading the container's
 `memory.peak` cgroup file:
 
@@ -43,7 +48,12 @@ calls `/api/healthz` with Python's `urllib` (the slim image has no curl).
 | three sequential logins, then four concurrent ones | 109 MiB |
 
 The four concurrent logins finished at 37, 67, 95 and 123 ms. The hashing semaphore runs them one
-after another, so the peak stays at one hash's 64 MiB. Give the API **`mem_limit: 160m`**. The web
+after another, so the peak stays at one hash's 64 MiB.
+
+The MCP SDK raised these on 2026-11-01. Measured the same way, after a sign-up, a login and ten
+MCP tool calls, the peak was 126 MiB in three runs. On the image before MCP it was 108–111 MiB.
+Resting memory rose from about 44 MiB to about 60 MiB. One run, the first start after a build,
+read 140 MiB. Give the API **`mem_limit: 160m`** at least; 192m leaves room for that first start. The web
 container's 64m would be killed by the first login.
 
 `docker compose up --build` runs both images locally: the app on `http://localhost:8083` and the API

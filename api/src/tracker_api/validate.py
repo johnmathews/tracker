@@ -12,6 +12,7 @@ import math
 import re
 import sys
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import Any, Literal, TypedDict, TypeIs, cast
 
 EXPORT_FORMAT = "tracker-export"
@@ -34,6 +35,10 @@ MAX_SETS = 20
 MAX_DURATION = 3600
 #: A note's length, in characters.
 MAX_NOTES = 500
+#: An item's name, in characters, for `strict_item` (MCP writes). REST and the web app set no cap.
+MAX_NAME = 80
+#: An item id, in characters.
+MAX_ITEM_ID = 128
 DEFAULT_ACCENT = "#30d158"
 DEFAULT_DAILY_PICK = 3
 #: Foods a day (K57), in the same bounds as the daily pick.
@@ -217,6 +222,95 @@ NORMALISERS = {"exercise": normalise_exercise, "diet": normalise_food}
 
 def is_week(key: str) -> bool:
     return WEEK_RE.fullmatch(key) is not None
+
+
+class Invalid(ValueError):
+    """A request rejected by a shared check. REST answers it `400 invalid`; MCP tools say why."""
+
+
+def week_key(week: str) -> str:
+    """`week` when it has the `yyyy-mm-dd` shape, else `Invalid`. Not checked as a date or a
+    Monday: REST keeps this shape-only rule so older clients can't break. MCP tools also check
+    `insights.is_monday`."""
+    if not is_week(week):
+        raise Invalid("week must look like 2026-10-19")
+    return week
+
+
+def check_plan_body(body: dict[str, Any]) -> tuple[list[Any], int]:
+    """A plan write's `items` (a list) and `rev` (an int from 0 up, not a bool)."""
+    items, rev = body.get("items"), body.get("rev")
+    if not isinstance(items, list) or type(rev) is not int or rev < 0:
+        raise Invalid("items must be a list and rev a whole number from 0")
+    return items, rev
+
+
+def check_item_id(item_id: str) -> str:
+    if not 1 <= len(item_id) <= MAX_ITEM_ID:
+        raise Invalid(f"item id must be 1 to {MAX_ITEM_ID} characters")
+    return item_id
+
+
+def check_day(day: int) -> int:
+    if not 0 <= day <= 6:
+        raise Invalid("day must be 0 (Monday) to 6 (Sunday)")
+    return day
+
+
+def tick_mark(body: dict[str, Any]) -> Mark | None:
+    """`{"mark": ...}`, or `{"done": bool}` from a client (or a queued tick) from before marks
+    had kinds: true is `great`, false clears the day."""
+    if "mark" in body:
+        mark = body["mark"]
+        if mark is not None and not is_mark(mark):
+            raise Invalid("mark is not one of the nine marks")
+        return mark
+    done = body.get("done")
+    if not isinstance(done, bool):
+        raise Invalid("send mark, or done as true or false")
+    return "great" if done else None
+
+
+@dataclass(frozen=True)
+class StrictItem:
+    """`item` is the normalised item, or None with `problems` saying why in plain English."""
+
+    item: Item | None
+    problems: list[str] = field(default_factory=list)
+
+
+def strict_item(section: Section, raw: object) -> StrictItem:
+    """Like the section's normaliser, but names what is wrong rather than dropping the item.
+
+    Follows the web app's rules (`src/stores/planner.ts`): names are trimmed and may not be empty,
+    and an exercise counts reps or seconds, not both. It also caps names at `MAX_NAME`.
+    """
+    if not isinstance(raw, dict):
+        return StrictItem(None, ["item is not an object"])
+    problems: list[str] = []
+    item_id = raw.get("id")
+    if not isinstance(item_id, str):
+        problems.append("id is missing")
+    elif not 1 <= len(item_id) <= MAX_ITEM_ID:
+        problems.append(f"id must be 1 to {MAX_ITEM_ID} characters")
+    name = raw.get("name")
+    name = name.strip() if isinstance(name, str) else ""
+    if not name:
+        problems.append("name is empty")
+    elif len(name) > MAX_NAME:
+        problems.append(f"name is over {MAX_NAME} characters")
+    if (
+        section == "exercise"
+        and to_int(raw.get("reps"), 0) > 0
+        and to_int(raw.get("duration"), 0) > 0
+    ):
+        problems.append("give reps or seconds, not both")
+    if problems:
+        return StrictItem(None, problems)
+    item = NORMALISERS[section]({**raw, "name": name})
+    # The checks above cover what the normaliser rejects, so it never returns None here.
+    assert item is not None
+    return StrictItem(item)
 
 
 def is_mark(v: object) -> TypeIs[Mark]:

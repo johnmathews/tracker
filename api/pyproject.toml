@@ -6,6 +6,7 @@ requires-python = ">=3.13,<3.14"
 dependencies = [
     "argon2-cffi>=25.1",
     "fastapi>=0.160",
+    "mcp>=2.3,<3",
     "uvicorn>=0.54",
 ]
 
