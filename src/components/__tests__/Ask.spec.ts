@@ -269,6 +269,53 @@ describe('the Ask page', () => {
     expect(open.text()).toBe('Am I doing enough?')
   })
 
+  it('sends on Return in the box; Shift+Return and a Return that ends a composition do not', async () => {
+    await mountApp({ hash: '#/ask' })
+    await box().setValue('Am I doing enough?')
+    const shifted = new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, cancelable: true })
+    box().element.dispatchEvent(shifted)
+    const composing = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      isComposing: true,
+      cancelable: true,
+    })
+    box().element.dispatchEvent(composing)
+    await settle()
+    // Both leave the textarea to do its own thing: a new line, or the IME's pick.
+    expect(shifted.defaultPrevented).toBe(false)
+    expect(composing.defaultPrevented).toBe(false)
+    expect(turns()).toHaveLength(0)
+    expect(box().element.value).toBe('Am I doing enough?')
+
+    const plain = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true })
+    box().element.dispatchEvent(plain)
+    await settle()
+    expect(plain.defaultPrevented).toBe(true)
+    expect(box().element.value).toBe('')
+    expect(turns()).toHaveLength(1)
+    expect(turns()[0]!.get('[data-slot="transcript-question"]').text()).toBe('Am I doing enough?')
+  })
+
+  it('ignores Return while an answer is being written, keeping the next draft', async () => {
+    await mountApp({ hash: '#/ask' })
+    const control = api.streamNext()
+    await box().setValue('Is my diet good enough?')
+    void wrapper.get('[data-testid="ask-form"]').trigger('submit')
+    await settle()
+    control.push(sse('start', { remaining: 29, conversation: 'c5' }))
+    await settle()
+    await box().setValue('And my sleep?')
+    const plain = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true })
+    box().element.dispatchEvent(plain)
+    await settle()
+    expect(plain.defaultPrevented).toBe(true)
+    expect(send().text()).toBe('Stop')
+    expect(box().element.value).toBe('And my sleep?')
+    expect(turns()).toHaveLength(1)
+    await send().trigger('click')
+    await settle()
+  })
+
   it('turns Send into Stop while answering, and Stop keeps what came', async () => {
     await mountApp({ hash: '#/ask' })
     const control = api.streamNext()

@@ -199,6 +199,10 @@ return the sentence for the ConfirmDialog when they can't. Every call sends `X-E
 store clears itself, with any answer still streaming, when the session signs out or changes user;
 `App.vue` creates it so that watch always runs.
 
+In `AskPage.vue`, Return in the question box sends, like Send, and Shift+Return starts a new
+line. A Return that picks an input method's candidate (`isComposing`) is left to the input method.
+While an answer is being written, Return does nothing, so a next question can wait in the box.
+
 The planner writes only the theme and `markSet`, each merged into whatever
 `tracker-settings-v1` already holds.
 `writeKey` skips the write when the stored string already matches, and swallows storage errors, so

@@ -81,6 +81,17 @@ function submit(): void {
   void ask.ask()
 }
 
+/**
+ * Return in the box sends, like Send; Shift+Return is a new line. A Return that picks an IME
+ * candidate (`isComposing`) is the input method's, not ours. While an answer is being written,
+ * Return does nothing, so the next question stays in the box.
+ */
+function onKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return
+  event.preventDefault()
+  if (!answering.value) submit()
+}
+
 /** The New conversation button in the list, where focus goes when nothing nearer is left. */
 function newButton(): HTMLElement | null {
   return document.querySelector<HTMLElement>('[data-slot="history-list"] > button')
@@ -295,6 +306,7 @@ function deleteFocus(): HTMLElement | null {
                 rows="3"
                 data-testid="ask-question"
                 :disabled="closed"
+                @keydown="onKeydown"
               />
               <Button
                 data-testid="ask-send"

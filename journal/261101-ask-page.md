@@ -34,6 +34,8 @@ On the mockup `brand/design-system/mockups/261101-ask-page` (three rounds, plan 
   state from the mockup: empty, no goals, answering (Send becomes Stop), cap reached (with the
   time when the 429 gave one), error with Try again, offline, unsynced, and "Your account is full,
   so this answer wasn't saved." Deleting asks in a ConfirmDialog; Cancel returns to the bin.
+  Return in the box sends (John, after the preview: "pressing return when the text input box
+  is focussed will send the message"); Shift+Return is a new line, and an IME's Return is its own.
 - **`App.vue`**: `#/ask` shows only while the flag is `true`; it waits on the week while the flag
   is unknown and drops the address once it is `false`. Leaving returns focus to the bar's Ask
   button, and signing out on the page lands on sign-in with the transcript cleared.
