@@ -12,40 +12,58 @@ import math
 import re
 import sys
 from collections.abc import Callable
-from typing import Any, Literal, TypedDict, TypeIs, cast
+from typing import Any, Literal, NotRequired, TypedDict, TypeIs, cast
+
+from .item_sections import ItemSections, normalise_item_sections
+
+# Re-exported: the rest of the API reads the sections from here, beside the normalisers.
+from .types import EXERCISE, FOOD, SECTION_TYPES, TypeId
+from .types import SECTIONS as SECTIONS
+from .types import Section as Section
 
 EXPORT_FORMAT = "tracker-export"
 #: Files exported under the app's earlier names (Fitness Planner, and Exercise Planner before it)
 #: carry these formats; they import as if current.
 OLD_EXPORT_FORMATS = ("fitness-planner-export", "exercise-planner-export")
-#: Version 4 files may carry a note on an exercise or a food (K43). Version 3 files carry a mark
+#: Version 5 files carry each item's details (notes and fields) once per section, beside its plans
+#: and log. Version 4 files may carry a note on an exercise or a food in a week's plan (K43); it
+#: lifts into the item's details on import, the latest week's winning. Version 3 files carry a mark
 #: per day with its drawing (`great`, `partial-solid`, `missed-hatch` … or null). Version 2 files
 #: carry the kinds alone, which read as the zigzag; version 1 files a `true` per done day, which
-#: reads as `great`. All four import.
-EXPORT_VERSION = 4
-READ_VERSIONS = (1, 2, 3, EXPORT_VERSION)
+#: reads as `great`. All five import.
+EXPORT_VERSION = 5
+#: The last version whose notes live in plan items.
+LAST_ITEM_NOTES_VERSION = 4
+READ_VERSIONS = (1, 2, 3, LAST_ITEM_NOTES_VERSION, EXPORT_VERSION)
 
 MIN_TARGET, MAX_TARGET = 0, 7
 MIN_DAILY_PICK, MAX_DAILY_PICK = 1, 8
-NEW_EXERCISE_TARGET = 3
-NEW_FOOD_TARGET = 3
+NEW_EXERCISE_TARGET = EXERCISE.new_target
+NEW_FOOD_TARGET = FOOD.new_target
 MAX_WEIGHT = 500
 MAX_SETS = 20
 MAX_DURATION = 3600
-#: A note's length, in characters.
+#: A plan item's note's length, in characters, from export version 4 (K43).
 MAX_NOTES = 500
+#: An item's id, in characters: the bounds of the ticks and details paths.
+MAX_ITEM_ID = 128
+#: An item's details: its notes in code points, each field's text in code points, how many fields,
+#: and the whole document as stored (compact JSON, UTF-8) in bytes.
+MAX_DETAILS_NOTES = 20_000
+MAX_FIELD = 500
+MAX_FIELDS = 32
+MAX_DETAILS_BYTES = 32 * 1024
 DEFAULT_ACCENT = "#30d158"
 DEFAULT_DAILY_PICK = 3
 #: Foods a day (K57), in the same bounds as the daily pick.
 DEFAULT_FOOD_PICK = 2
 
-Section = Literal["exercise", "diet"]
-SECTIONS: tuple[Section, ...] = ("exercise", "diet")
-
 # `[0-9]` rather than `\d`, which in Python also matches non-ASCII digits; fullmatch rather than
 # `$`, which in Python also matches before a trailing newline.
 WEEK_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 ACCENT_RE = re.compile(r"#[0-9a-fA-F]{6}")
+#: A details field's key: lower case, a letter first, at most 32 characters.
+FIELD_KEY_RE = re.compile(r"[a-z][a-z0-9_]{0,31}")
 
 type Item = dict[str, Any]
 type Plans = dict[str, list[Item]]
@@ -82,9 +100,24 @@ type Days = list[Mark | None]
 type Log = dict[str, dict[str, Days]]
 
 
+class Details(TypedDict, total=False):
+    """One item's details, the same for every week (D2). A key is left out when blank, so `{}` is
+    an item with none."""
+
+    notes: str
+    #: Text fields by key. The type's field list (types.py) names the ones the app shows; keys it
+    #: does not list are kept, so changing the list never loses text.
+    fields: dict[str, str]
+
+
+#: Each item's details by item id; an item with none (an empty document) is left out.
+type DetailsMap = dict[str, Details]
+
+
 class Tracked(TypedDict):
     plans: Plans
     log: Log
+    details: DetailsMap
 
 
 class Portable(TypedDict):
@@ -93,6 +126,8 @@ class Portable(TypedDict):
     accent: str
     dailyPick: int
     foodPick: int
+    #: Each type's item-page arrangement (K66, P24); left out while every page has the default.
+    itemSections: NotRequired[ItemSections]
 
 
 class ExportData(TypedDict):
@@ -104,6 +139,7 @@ class ExportData(TypedDict):
 class Summary(TypedDict):
     weeks: int
     ticks: int
+    details: int
 
 
 class ExportError(ValueError):
@@ -160,14 +196,102 @@ def normalise_weight(v: object) -> int | float | None:
     return whole(min(MAX_WEIGHT, kg)) if kg > 0 else None
 
 
-def normalise_notes(v: object) -> str | None:
-    """A usable note: a string with spaces, tabs and line breaks trimmed from its ends, cut to
-    MAX_NOTES characters; None for anything else or for nothing left. The web app's
-    `normaliseNotes` does the same."""
+BLANK = " \t\n\r"
+
+
+def normalise_text(v: object, limit: int) -> str | None:
+    """A usable text: a string with spaces, tabs and line breaks trimmed from its ends, cut to
+    `limit` code points and trimmed again; None for anything else or for nothing left."""
     if not isinstance(v, str):
         return None
-    notes = v.strip(" \t\n\r")[:MAX_NOTES].strip(" \t\n\r")
-    return notes or None
+    text = v.strip(BLANK)[:limit].strip(BLANK)
+    return text or None
+
+
+def normalise_notes(v: object) -> str | None:
+    """A plan item's note from export version 4 (K43): text cut to MAX_NOTES characters. The web
+    app's `normaliseNotes` does the same."""
+    return normalise_text(v, MAX_NOTES)
+
+
+def normalise_fields(v: object) -> dict[str, str]:
+    """Text fields: keys matching FIELD_KEY_RE, any of them (D2), with text cut to MAX_FIELD code
+    points; blanks drop out, and the first MAX_FIELDS that remain are kept."""
+    fields: dict[str, str] = {}
+    if not isinstance(v, dict):
+        return fields
+    for key, raw in v.items():
+        if len(fields) == MAX_FIELDS:
+            break
+        text = normalise_text(raw, MAX_FIELD)
+        if text is not None and FIELD_KEY_RE.fullmatch(key):
+            fields[key] = text
+    return fields
+
+
+def normalise_details(v: object) -> Details | None:
+    """An item's details document, or None when `v` is not an object. Blank notes and an empty
+    `fields` are left out, so an item with no details is `{}`; other keys are dropped. The size
+    cap is separate (`details_fit`): normalising never refuses."""
+    if not isinstance(v, dict):
+        return None
+    out: Details = {}
+    notes = normalise_text(v.get("notes"), MAX_DETAILS_NOTES)
+    if notes is not None:
+        out["notes"] = notes
+    fields = normalise_fields(v.get("fields"))
+    if fields:
+        out["fields"] = fields
+    return out
+
+
+def encode_details(details: Details) -> str:
+    """The stored form: compact JSON with text as written, so its UTF-8 length is what the
+    quota and the size cap count. JavaScript's `JSON.stringify` writes the same text."""
+    return json.dumps(details, ensure_ascii=False, separators=(",", ":"))
+
+
+def details_fit(details: Details) -> bool:
+    """Whether a document is within MAX_DETAILS_BYTES as stored."""
+    return len(encode_details(details).encode()) <= MAX_DETAILS_BYTES
+
+
+def is_item_id(v: object) -> TypeIs[str]:
+    """An id the ticks and details paths can name: a string of 1 to MAX_ITEM_ID characters."""
+    return isinstance(v, str) and 1 <= len(v) <= MAX_ITEM_ID
+
+
+def normalise_details_map(v: object) -> DetailsMap:
+    """A file's details for one section: a usable document per usable item id. Documents that are
+    empty or over the size cap drop out, as does a `__proto__` key (JavaScript would set the
+    object's prototype instead)."""
+    out: DetailsMap = {}
+    if not isinstance(v, dict):
+        return out
+    for item_id, raw in v.items():
+        details = normalise_details(raw)
+        if is_item_id(item_id) and item_id != "__proto__" and details and details_fit(details):
+            out[item_id] = details
+    return out
+
+
+def lift_notes(section: Section, v: object) -> DetailsMap:
+    """A version 4 file's plan notes as details (D3): per item, the note from the latest week
+    whose copy of the item has one, the first such copy in that week. Only items the plan keeps
+    count. Migration 6 (db.py) reads stored plans by the same rule."""
+    out: DetailsMap = {}
+    if not isinstance(v, dict):
+        return out
+    normalise = NORMALISERS[section]
+    weeks = sorted((w for w, items in v.items() if is_week(w) and isinstance(items, list)))
+    for week in reversed(weeks):
+        for raw in v[week]:
+            if normalise(raw) is None:
+                continue
+            item_id, notes = raw["id"], normalise_notes(raw.get("notes"))
+            if notes is not None and is_item_id(item_id) and item_id != "__proto__":
+                out.setdefault(item_id, {"notes": notes})
+    return out
 
 
 def normalise_exercise(v: object) -> Item | None:
@@ -191,9 +315,7 @@ def normalise_exercise(v: object) -> Item | None:
     if weight is not None:
         out["weight"] = weight
     out["target"] = clamp(to_int(v.get("target"), NEW_EXERCISE_TARGET), MIN_TARGET, MAX_TARGET)
-    notes = normalise_notes(v.get("notes"))
-    if notes is not None:
-        out["notes"] = notes
+    # An item keeps no `notes` (D3): they are the item's details, one copy for every week.
     return out
 
 
@@ -205,14 +327,19 @@ def normalise_food(v: object) -> Item | None:
     ):
         return None
     target = clamp(to_int(v.get("target"), NEW_FOOD_TARGET), MIN_TARGET, MAX_TARGET)
-    out: Item = {"id": v["id"], "name": v["name"], "target": target}
-    notes = normalise_notes(v.get("notes"))
-    if notes is not None:
-        out["notes"] = notes
-    return out
+    return {"id": v["id"], "name": v["name"], "target": target}
 
 
-NORMALISERS = {"exercise": normalise_exercise, "diet": normalise_food}
+type Normaliser = Callable[[object], Item | None]
+
+#: Each type's item normaliser, and through the registry each section's.
+_TYPE_NORMALISERS: dict[TypeId, Normaliser] = {
+    EXERCISE.id: normalise_exercise,
+    FOOD.id: normalise_food,
+}
+NORMALISERS: dict[Section, Normaliser] = {
+    name: _TYPE_NORMALISERS[tracker_type.id] for name, tracker_type in SECTION_TYPES.items()
+}
 
 
 def is_week(key: str) -> bool:
@@ -270,7 +397,7 @@ def normalise_plans(section: Section, v: object) -> Plans:
 
 def normalise_portable(v: dict[str, Any]) -> Portable:
     accent = v.get("accent")
-    return {
+    out: Portable = {
         "accent": accent
         if isinstance(accent, str) and ACCENT_RE.fullmatch(accent)
         else DEFAULT_ACCENT,
@@ -281,6 +408,10 @@ def normalise_portable(v: dict[str, Any]) -> Portable:
             to_int(v.get("foodPick"), DEFAULT_FOOD_PICK), MIN_DAILY_PICK, MAX_DAILY_PICK
         ),
     }
+    item_sections = normalise_item_sections(v.get("itemSections"))
+    if item_sections:
+        out["itemSections"] = item_sections
+    return out
 
 
 def _reject_constant(name: str) -> None:
@@ -302,10 +433,18 @@ def parse_json(text: str) -> object:
     return parsed
 
 
-def section(name: Section, v: object) -> Tracked:
+def section(name: Section, v: object, *, item_notes: bool) -> Tracked:
+    """One section of a file. With `item_notes` (a file of version 4 or older) the details come
+    from the plans' notes, and any `details` key is not read."""
     if not isinstance(v, dict):
-        return {"plans": {}, "log": {}}
-    return {"plans": normalise_plans(name, v.get("plans")), "log": normalise_log(v.get("log"))}
+        return {"plans": {}, "log": {}, "details": {}}
+    plans = v.get("plans")
+    details = lift_notes(name, plans) if item_notes else normalise_details_map(v.get("details"))
+    return {
+        "plans": normalise_plans(name, plans),
+        "log": normalise_log(v.get("log")),
+        "details": details,
+    }
 
 
 def parse_export(text: str) -> ExportData:
@@ -317,26 +456,34 @@ def parse_export(text: str) -> ExportData:
         raise ExportError("format")
     if parsed.get("format") not in (EXPORT_FORMAT, *OLD_EXPORT_FORMATS):
         raise ExportError("format")
-    if as_number(parsed.get("version")) not in READ_VERSIONS:
+    version = as_number(parsed.get("version"))
+    if version is None or version not in READ_VERSIONS:
         raise ExportError("version")
+    item_notes = version <= LAST_ITEM_NOTES_VERSION
     settings = parsed.get("settings")
-    return {
-        "exercise": section("exercise", parsed.get("exercise")),
-        "diet": section("diet", parsed.get("diet")),
-        "settings": normalise_portable(settings) if isinstance(settings, dict) else None,
+    # ExportData's keys are the registry's sections and settings (tests/test_types.py).
+    data: dict[str, object] = {
+        name: section(name, parsed.get(name), item_notes=item_notes) for name in SECTIONS
     }
+    data["settings"] = normalise_portable(settings) if isinstance(settings, dict) else None
+    return cast(ExportData, data)
 
 
 NO_DAYS: Days = [None] * 7
 
 
 def merge_tracked(existing: Tracked, incoming: Tracked) -> Tracked:
-    """Merge without deleting: existing weeks keep their plan, and per week, item and day a marked
-    day keeps its mark while an empty one takes the file's. Returns new objects."""
+    """Merge without deleting: existing weeks keep their plan, per week, item and day a marked
+    day keeps its mark while an empty one takes the file's, and an item with details keeps them
+    while one without takes the file's. Returns new objects."""
     plans = copy.deepcopy(existing["plans"])
     for week, items in incoming["plans"].items():
         if week not in plans:
             plans[week] = copy.deepcopy(items)
+    details = copy.deepcopy(existing["details"])
+    for item_id, doc in incoming["details"].items():
+        if item_id not in details:
+            details[item_id] = copy.deepcopy(doc)
     log: Log = {}
     for week in {**existing["log"], **incoming["log"]}:
         mine = existing["log"].get(week, {})
@@ -348,18 +495,20 @@ def merge_tracked(existing: Tracked, incoming: Tracked) -> Tracked:
             ]
             for i in {**mine, **theirs}
         }
-    return {"plans": plans, "log": log}
+    return {"plans": plans, "log": log, "details": details}
 
 
 def merge_summary(existing: Tracked, incoming: Tracked) -> Summary:
-    """What a merge would add: weeks that gain a plan, and empty days that gain a mark."""
+    """What a merge would add: weeks that gain a plan, empty days that gain a mark, and items
+    that gain details."""
     weeks = sum(1 for w in incoming["plans"] if w not in existing["plans"])
     ticks = 0
     for week, entries in incoming["log"].items():
         for item_id, days in entries.items():
             mine = existing["log"].get(week, {}).get(item_id, NO_DAYS)
             ticks += sum(1 for i, m in enumerate(days) if m is not None and mine[i] is None)
-    return {"weeks": weeks, "ticks": ticks}
+    details = sum(1 for i in incoming["details"] if i not in existing["details"])
+    return {"weeks": weeks, "ticks": ticks, "details": details}
 
 
 def merge_settings(existing: Portable | None, incoming: Portable | None) -> Portable | None:

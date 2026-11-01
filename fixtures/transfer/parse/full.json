@@ -43,11 +43,13 @@
             "pu": ["great", null, "partial", null, "missed", null, null],
             "sq": [null, "great", null, null, null, null, "partial"]
           }
-        }
+        },
+        "details": {}
       },
       "diet": {
         "plans": { "2026-10-19": [{ "id": "veg", "name": "Vegetables", "target": 7 }] },
-        "log": { "2026-10-19": { "veg": ["great", "great", null, null, null, null, null] } }
+        "log": { "2026-10-19": { "veg": ["great", "great", null, null, null, null, null] } },
+        "details": {}
       },
       "settings": { "accent": "#0a84ff", "dailyPick": 4, "foodPick": 3 }
     }

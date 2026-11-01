@@ -8,7 +8,8 @@ import pytest
 from tracker_api import auth, seed
 from tracker_api.cli import main
 from tracker_api.config import Config
-from tracker_api.data import export_file, set_tick
+from tracker_api.data import export_file, put_details, set_tick
+from tracker_api.types import SECTION_TYPES, Section
 from tracker_api.validate import parse_export
 
 from .conftest import Clock
@@ -89,6 +90,30 @@ def test_fills_three_weeks_ending_today_with_every_kind_and_drawing(
     assert exported["settings"] == {"accent": "#30d158", "dailyPick": 3, "foodPick": 2}
 
 
+def test_gives_demo_items_details_for_the_item_page(
+    local: Config, conn: sqlite3.Connection
+) -> None:
+    seed.seed(conn, local, seed.DEMO_EMAIL, None)
+    exported = export_file(conn, user_id(conn, seed.DEMO_EMAIL), local.clock())
+    demo: tuple[tuple[Section, str], ...] = (("exercise", "pu"), ("diet", "fish"))
+    for section, item_id in demo:
+        details = exported[section]["details"][item_id]
+        assert details["notes"]
+        assert details["fields"]
+        # Every demo field is one the type lists, so the page shows it.
+        keys = {f.key for f in SECTION_TYPES[section].fields}
+        assert set(details["fields"]) <= keys
+
+
+def test_keeps_an_accounts_own_details(local: Config, conn: sqlite3.Connection) -> None:
+    uid = auth.signup(conn, local, "alice@example.com", "her own password")
+    mine = {"notes": "My own push-up note."}
+    put_details(conn, uid, "exercise", "pu", mine, 0, quota=local.user_quota_bytes)
+    seed.seed(conn, local, "alice@example.com", None)
+    details = export_file(conn, uid, local.clock())["exercise"]["details"]
+    assert details["pu"] == mine
+
+
 def test_leaves_the_days_after_today_empty(local: Config, conn: sqlite3.Connection) -> None:
     seed.seed(conn, local, seed.DEMO_EMAIL, None)
     data = export_file(conn, user_id(conn, seed.DEMO_EMAIL), local.clock())
@@ -102,7 +127,7 @@ def test_a_second_run_changes_nothing(local: Config, conn: sqlite3.Connection) -
     seed.seed(conn, local, seed.DEMO_EMAIL, None)
     before = export_file(conn, user_id(conn, seed.DEMO_EMAIL), local.clock())
     again = seed.seed(conn, local, seed.DEMO_EMAIL, None)
-    assert again == {"created": False, "weeks": 0, "ticks": 0}
+    assert again == {"created": False, "weeks": 0, "ticks": 0, "details": 0}
     assert export_file(conn, user_id(conn, seed.DEMO_EMAIL), local.clock()) == before
 
 
@@ -128,12 +153,27 @@ def test_cli_prints_the_login_and_what_it_added(
     assert main(["seed-demo"], env, clock=Clock()) == 0
     out = capsys.readouterr().out
     assert f"Created {seed.DEMO_EMAIL} with the password '{seed.DEMO_PASSWORD}'." in out
-    assert "Added 6 week plans and" in out
+    assert "Added 6 week plans, " in out
+    assert " marks and details for 2 items." in out
     assert f"Sign in at {LOCAL}/" in out
     assert main(["seed-demo"], env, clock=Clock()) == 0
     out = capsys.readouterr().out
     assert "already exists; its password is unchanged." in out
     assert "Nothing to add: the demo weeks are already there." in out
+
+
+def test_cli_reports_details_added_to_weeks_already_there(
+    local: Config, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+) -> None:
+    env = {"DATA_DIR": str(local.data_dir), "PUBLIC_ORIGIN": LOCAL, "COOKIE_SECURE": "false"}
+    assert main(["seed-demo"], env, clock=Clock()) == 0
+    # An account seeded before item details: its weeks and marks are there, its details aren't.
+    conn.execute("DELETE FROM item_details")
+    capsys.readouterr()
+    assert main(["seed-demo"], env, clock=Clock()) == 0
+    out = capsys.readouterr().out
+    assert "Added details for 2 items." in out
+    assert "Nothing to add" not in out
 
 
 def test_cli_refuses_a_deployed_config(config: Config, capsys: pytest.CaptureFixture[str]) -> None:

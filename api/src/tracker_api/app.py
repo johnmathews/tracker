@@ -14,8 +14,10 @@ from . import auth, data, outbox
 from .backup import BackupThread
 from .config import Config
 from .db import connect, migrate
+from .item_sections import item_sections_valid
 from .mail import Mailer, Message, ResendMailer, send_quietly
 from .validate import (
+    MAX_ITEM_ID,
     Days,
     ExportError,
     Mark,
@@ -27,6 +29,8 @@ from .validate import (
 )
 
 MAX_BODY = 1 << 20
+#: An item id in a path: the ticks' and details' bounds.
+ItemId = Annotated[str, Path(min_length=1, max_length=MAX_ITEM_ID)]
 WRITES = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 # The HTTP status for each refusal code an auth step can raise.
 AUTH_STATUS = {
@@ -115,6 +119,10 @@ def create_app(config: Config, run_backups: bool = True, mailer: Mailer | None =
     @app.exception_handler(data.QuotaExceeded)
     async def on_quota(_: Request, __: data.QuotaExceeded) -> JSONResponse:
         return error_response(413, "quota")
+
+    @app.exception_handler(data.DetailsTooLarge)
+    async def on_details_too_large(_: Request, __: data.DetailsTooLarge) -> JSONResponse:
+        return error_response(413, "too-large")
 
     @app.exception_handler(RequestValidationError)
     async def on_invalid(_: Request, __: RequestValidationError) -> JSONResponse:
@@ -357,11 +365,25 @@ def create_app(config: Config, run_backups: bool = True, mailer: Mailer | None =
             raise ApiError(409, "conflict", items=result.items, rev=result.rev)
         return {"rev": result.rev}
 
+    @app.put("/api/details/{section}/{item_id}")
+    def put_details(
+        section: Section, item_id: ItemId, body: Body, user: User, conn: Conn
+    ) -> dict[str, int]:
+        details, rev = body.get("details"), body.get("rev")
+        if not isinstance(details, dict) or type(rev) is not int or rev < 0:
+            raise ApiError(400, "invalid")
+        result = data.put_details(
+            conn, user.id, section, item_id, details, rev, quota=config.user_quota_bytes
+        )
+        if isinstance(result, data.DetailsConflict):
+            raise ApiError(409, "conflict", details=result.details, rev=result.rev)
+        return {"rev": result.rev}
+
     @app.put("/api/ticks/{section}/{week}/{item_id}/{day}")
     def put_tick(
         section: Section,
         week: str,
-        item_id: Annotated[str, Path(min_length=1, max_length=128)],
+        item_id: ItemId,
         day: Annotated[int, Path(ge=0, le=6)],
         body: Body,
         user: User,
@@ -381,6 +403,10 @@ def create_app(config: Config, run_backups: bool = True, mailer: Mailer | None =
 
     @app.put("/api/settings")
     def put_settings(body: Body, user: User, conn: Conn) -> dict[str, Any]:
+        # Left out, the saved arrangement stays (an older tab); sent, its shape must be one the
+        # app writes (P24). Within that shape it normalises, as the other settings do.
+        if "itemSections" in body and not item_sections_valid(body["itemSections"]):
+            raise ApiError(400, "invalid")
         return dict(data.put_settings(conn, user.id, body))
 
     @app.get("/api/export")

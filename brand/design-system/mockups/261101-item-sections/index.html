@@ -1,0 +1,170 @@
+<title>Choosing the item page's sections</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="item.css">
+<link rel="stylesheet" href="arrange.css">
+<!--
+  A mockup (design-system skill, references/mockups.md). The item page (layout A, K65) gets a way
+  to choose which sections show and in what order. One question: where that choice is made. The
+  page is live: item.js draws it, sized from its frame (item.css, arrange.css); marks.js and
+  icons.js hold the app's drawings and Lucide icons. try.html shows it full size with a switch
+  for the option, the item, the state and the theme.
+-->
+<style>
+  body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font-sans); }
+  .mockup-page {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: var(--space-8, 32px) var(--space-16, 64px);
+    max-width: 1200px; margin: 0 auto; display: grid; gap: var(--space-12, 48px);
+  }
+  .mockup-head { display: grid; gap: var(--space-2, 8px); max-width: 70ch; }
+  .mockup-head h1, .option h2 { margin: 0; text-wrap: balance; }
+  .mockup-head p, .option p { margin: 0; }
+  .mockup-meta { color: var(--ink-secondary); }
+  .option { display: grid; gap: var(--space-4, 16px); }
+  .option-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2, 8px) var(--space-3, 12px); }
+  .option-tag { color: var(--ink-secondary); }
+  .option[data-recommended] .option-tag::after { content: " · Recommended"; color: var(--ink); }
+  .panes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--space-4, 16px); }
+  .pane { min-width: 0; background: var(--canvas); color: var(--ink); border: 1px solid var(--line);
+          border-radius: var(--radius-lg, 10px); padding: var(--space-4, 16px); overflow-x: auto; }
+  .pane-label { color: var(--ink-secondary); margin: 0 0 var(--space-3, 12px); }
+  .measures { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); }
+  .measures li { border: 1px solid var(--line); border-radius: var(--radius-sm, 4px); padding: 2px var(--space-2, 8px); font-variant-numeric: tabular-nums; }
+  .measures li[data-pass="no"] { border-color: currentColor; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .try { margin: 0; }
+  .try a, .mockup-head a { color: var(--ink); font-weight: 600; text-underline-offset: 3px; }
+  .list { margin: 0; padding-left: 1.2em; display: grid; gap: var(--space-1, 4px); }
+  .device { position: relative; width: 100%; }
+  .device > .ip { position: absolute; top: 0; left: 0; transform-origin: 0 0; border: 1px solid var(--line); border-radius: var(--radius-lg); }
+  .device.phone > .ip { border-radius: 28px; border-width: 2px; }
+  .phones { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+  .phones .device { max-width: 260px; flex: 1 1 200px; }
+</style>
+
+<main class="mockup-page">
+  <header class="mockup-head">
+    <p class="caption mockup-meta">Mockup · 2026-11-01 · Tracker</p>
+    <h1 class="title-1">Choosing the item page's sections</h1>
+    <p class="body">You asked to choose which sections the item page shows, and in what order. Each option here starts with Details hidden, as in your example. The question is <strong>where you make that choice</strong>. The page itself stays layout A (K65).</p>
+    <p class="body">What is the same in every option:</p>
+    <ul class="list body">
+      <li>Each section has a <em>Show</em> switch, and <em>Move up</em> and <em>Move down</em> buttons. Buttons move a section by keyboard and screen reader as well as by mouse; dragging could come later.</li>
+      <li>Changes apply at once, like the rest of the page. There is no Save.</li>
+      <li>The choice is made once for each type: every exercise's page shares one layout, and every food's page another. That is a proposal; the question that follows the pick asks about it.</li>
+    </ul>
+    <p class="try body"><a href="try.html#a">Try it full size</a>. The switch at the bottom left changes the option, the item, the state and the theme. The switches and the move buttons work.</p>
+  </header>
+
+  <section class="option" id="a" data-recommended aria-labelledby="a-h">
+    <div class="option-head"><h2 class="title-2" id="a-h">A. Arrange on the page</h2><span class="label option-tag">Option A</span></div>
+    <p class="body">An <em>Arrange sections</em> button at the top right of the page. Pressing it folds every section to its heading, with its switch and move buttons under the heading, and turns the button into <em>Done</em>. You see the new order in place. Recommended: the choice lives where it shows, and it reads like Edit plan does in the week.</p>
+    <div class="panes">
+      <div class="pane" data-theme="light"><p class="label pane-label">Light · 1440×900 · the page, Details hidden</p><div class="device" data-w="1440" data-h="900" data-option="a"></div></div>
+      <div class="pane" data-theme="light"><p class="label pane-label">Light · 1440×900 · arranging</p><div class="device" data-w="1440" data-h="900" data-option="a" data-state="arranging"></div></div>
+    </div>
+    <div class="panes">
+      <div class="pane" data-theme="dark"><p class="label pane-label">Dark · 1280×800 · Fish, arranging</p><div class="device" data-w="1280" data-h="800" data-option="a" data-item="food" data-state="arranging"></div></div>
+      <div class="pane" data-theme="light"><p class="label pane-label">Phone, light and dark, arranging</p><div class="phones">
+        <div class="device phone" data-w="390" data-h="844" data-option="a" data-state="arranging"></div>
+        <div class="device phone" data-w="390" data-h="844" data-option="a" data-theme="dark" data-state="arranging"></div>
+      </div></div>
+    </div>
+    <p class="try body"><a href="try.html#a-arranging">Try A full size</a></p>
+  </section>
+
+  <section class="option" id="b" aria-labelledby="b-h">
+    <div class="option-head"><h2 class="title-2" id="b-h">B. A Sections dialog</h2><span class="label option-tag">Option B</span></div>
+    <p class="body">The same <em>Arrange sections</em> button opens a dialog, "Sections", listing the four sections with their switches and move buttons, and <em>Done</em>. The page behind updates as you go.</p>
+    <div class="panes">
+      <div class="pane" data-theme="light"><p class="label pane-label">Light · 1440×900 · the dialog open</p><div class="device" data-w="1440" data-h="900" data-option="b" data-state="arranging"></div></div>
+      <div class="pane" data-theme="dark"><p class="label pane-label">Dark · 1280×800 · Fish, the dialog open</p><div class="device" data-w="1280" data-h="800" data-option="b" data-item="food" data-state="arranging"></div></div>
+    </div>
+    <div class="panes"><div class="pane" data-theme="light"><p class="label pane-label">Phone, light and dark</p><div class="phones">
+      <div class="device phone" data-w="390" data-h="844" data-option="b" data-state="arranging"></div>
+      <div class="device phone" data-w="390" data-h="844" data-option="b" data-theme="dark" data-state="arranging"></div>
+    </div></div></div>
+    <p class="try body"><a href="try.html#b-arranging">Try B full size</a></p>
+  </section>
+
+  <section class="option" id="c" aria-labelledby="c-h">
+    <div class="option-head"><h2 class="title-2" id="c-h">C. On the Settings page</h2><span class="label option-tag">Option C</span></div>
+    <p class="body">No button on the item page. Settings gets an <em>Item pages</em> row with one list for Exercises and one for Food. The item page only shows the result. The least on the page, but the choice is two screens away from what it changes.</p>
+    <div class="panes">
+      <div class="pane" data-theme="light"><p class="label pane-label">Light · 1440×900 · Settings</p><div class="device" data-w="1440" data-h="900" data-option="c"></div></div>
+      <div class="pane" data-theme="dark"><p class="label pane-label">Dark · 1280×800 · Settings</p><div class="device" data-w="1280" data-h="800" data-option="c"></div></div>
+    </div>
+    <div class="panes"><div class="pane" data-theme="light"><p class="label pane-label">Phone, light and dark</p><div class="phones">
+      <div class="device phone" data-w="390" data-h="844" data-option="c" data-scroll="items"></div>
+      <div class="device phone" data-w="390" data-h="844" data-option="c" data-theme="dark" data-scroll="items"></div>
+    </div></div></div>
+    <p class="try body"><a href="try.html#c">Try C full size</a></p>
+  </section>
+
+  <section class="option" aria-labelledby="m-h">
+    <h2 class="title-2" id="m-h">Contrast</h2>
+    <p class="body">Every pairing is already in the system: the Switch card's track and thumb, and a hidden section's name in <code>ink-secondary</code>.</p>
+    <ul class="measures caption">
+      <li data-fg="var(--ink-secondary)" data-bg="var(--canvas)" data-min="4.5">Hidden section, ink-secondary on canvas</li>
+      <li data-fg="var(--ink-secondary)" data-bg="var(--panel)" data-min="4.5">Hidden section in the dialog, ink-secondary on panel</li>
+      <li data-fg="var(--on-ink)" data-bg="var(--ink)" data-min="3">Switch on, thumb on track</li>
+      <li data-fg="var(--control-border)" data-bg="var(--canvas)" data-min="3">Switch off, track edge on canvas</li>
+    </ul>
+  </section>
+</main>
+
+<script src="icons.js"></script>
+<script src="marks.js"></script>
+<script src="item.js"></script>
+<script>
+  for (const device of document.querySelectorAll('.device')) {
+    const w = Number(device.dataset.w), h = Number(device.dataset.h)
+    const screen = document.createElement('div')
+    screen.style.width = w + 'px'
+    screen.style.height = h + 'px'
+    if (device.dataset.theme) screen.dataset.theme = device.dataset.theme
+    device.append(screen)
+    const fit = () => {
+      const s = Math.min(1, device.clientWidth / w)
+      screen.style.transform = `scale(${s})`
+      device.style.height = Math.ceil(h * s) + 'px'
+    }
+    new ResizeObserver(fit).observe(device)
+    fit()
+    IP.mount(screen, { option: device.dataset.option, item: device.dataset.item || 'exercise', state: device.dataset.state || 'page' })
+    if (device.dataset.scroll) {
+      const scroller = screen.querySelector('.ip-scroll')
+      const sec = scroller.querySelectorAll('.ip-sec')[1]
+      scroller.scrollTop = sec.offsetTop - 8
+    }
+  }
+</script>
+<script>
+  (() => {
+    const rgb = (value, scope, theme) => {
+      const probe = document.createElement('span')
+      probe.dataset.theme = theme
+      probe.style.color = value
+      scope.append(probe)
+      const parts = getComputedStyle(probe).color.match(/[\d.]+/g).map(Number)
+      probe.remove()
+      return parts.slice(0, 3)
+    }
+    const lum = ([r, g, b]) => [r, g, b]
+      .map((c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4 })
+      .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0)
+    const ratio = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05) }
+    for (const li of document.querySelectorAll('.measures li[data-fg]')) {
+      const scope = li.closest('.option') || document.body
+      const min = Number(li.dataset.min || 0)
+      const results = ['light', 'dark'].map((theme) => {
+        const r = ratio(rgb(li.dataset.fg, scope, theme), rgb(li.dataset.bg, scope, theme))
+        return { theme, r, ok: !min || r >= min }
+      })
+      li.dataset.pass = results.every((x) => x.ok) ? 'yes' : 'no'
+      li.append(`: ${results.map((x) => `${x.theme} ${x.r.toFixed(1)}:1${x.ok ? '' : ' (below ' + min + ':1)'}`).join(', ')}`)
+    }
+  })()
+</script>

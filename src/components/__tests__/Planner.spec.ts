@@ -5,8 +5,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { nextTick } from 'vue'
 import App from '@/App.vue'
 import { emptyState, signedIn } from '@/lib/__tests__/signedIn'
+import { usePlannerStore } from '@/stores/planner'
 import type { SyncState } from '@/stores/sync'
 
 // Friday 23 October 2026: today is the fifth column; Saturday and Sunday are still to come.
@@ -52,22 +54,22 @@ describe('the planner grids (W10)', () => {
   })
 
   describe('notes on an item (K43)', () => {
+    /** Three exercises and a food, their notes in their details (D2), on two weeks' own plans. */
     function withNotes(): SyncState {
       const state = emptyState()
-      state.exercise.plans = {
-        [WEEK]: [
-          {
-            id: 'pu',
-            name: 'Push-ups',
-            reps: 10,
-            target: 4,
-            notes: 'Slow **down**.\n[Form video](https://example.com/push-ups)',
-          },
-          { id: 'sq', name: 'Squats', sets: 3, reps: 15, target: 3 },
-          { id: 'kh', name: 'Halos', reps: 8, target: 2, notes: '<script>alert(1)</script>' },
-        ],
+      const exercises = [
+        { id: 'pu', name: 'Push-ups', reps: 10, target: 4 },
+        { id: 'sq', name: 'Squats', sets: 3, reps: 15, target: 3 },
+        { id: 'kh', name: 'Halos', reps: 8, target: 2 },
+      ]
+      state.exercise.plans = { [WEEK]: exercises, '2026-10-26': exercises }
+      state.exercise.details = {
+        pu: { notes: 'Slow **down**.\n[Form video](https://example.com/push-ups)' },
+        kh: { notes: '<script>alert(1)</script>', fields: { equipment: 'Kettlebell' } },
+        sq: { fields: { works: 'Legs' } },
       }
-      state.diet.plans = { [WEEK]: [{ id: 'fr', name: 'Fruit', target: 5, notes: 'Not juice' }] }
+      state.diet.plans = { [WEEK]: [{ id: 'fr', name: 'Fruit', target: 5 }] }
+      state.diet.details = { fr: { notes: 'Not juice' } }
       return state
     }
     const row = (name: string) =>
@@ -87,6 +89,16 @@ describe('the planner grids (W10)', () => {
       expect(row('Halos').get('[data-testid="item-note"]').text()).toBe('<script>alert(1)</script>')
       expect(row('Halos').find('script').exists()).toBe(false)
       expect(row('Fruit').get('[data-testid="item-note"]').text()).toBe('Not juice')
+    })
+
+    it('shows the same note on every week, a week with its own plan included (F1)', async () => {
+      mountApp(withNotes())
+      usePlannerStore().nextWeek()
+      await nextTick() // the cache, before the server's read answers
+      expect(usePlannerStore().weekKey).toBe('2026-10-26')
+      expect(row('Push-ups').get('[data-testid="item-note"]').text()).toBe('Slow down. Form video')
+      // Fields alone are no note.
+      expect(row('Squats').find('[data-testid="item-note"]').exists()).toBe(false)
     })
 
     it('keeps the grid one tab stop: the note waits behind its cell', () => {
@@ -320,8 +332,9 @@ describe('the planner grids (W10)', () => {
       await press('End')
       expect(name(focused())).toBe('Pull-ups, Sunday 25 October')
       await press('Home')
-      expect(focused().getAttribute('role')).toBe('rowheader')
-      expect(focused().textContent).toContain('Pull-ups')
+      // A name cell's focus is its name's link (WeekGrid card).
+      expect(focused().getAttribute('data-slot')).toBe('item-link')
+      expect(focused().textContent).toBe('Pull-ups')
       // The tab stop follows, so Tab comes back to the last cell used.
       expect(tabStops().filter((el) => ex().element.contains(el))).toEqual([focused()])
       await press('End', { ctrlKey: true })
@@ -373,22 +386,24 @@ describe('the planner grids (W10)', () => {
       expect(name(focused())).toBe('Push-ups, Monday 12 October')
     })
 
-    it('keeps one stop per grid in Edit plan; Enter on a name reaches its controls', async () => {
+    it('keeps one stop per grid in Edit plan; F2 on a name reaches its controls', async () => {
       await mountConfig()
       expect(tabStops().filter((el) => ex().element.contains(el))).toHaveLength(1)
       ;(marks('Squats')[0]!.element as HTMLElement).focus()
       await press('Home')
-      expect(focused().getAttribute('role')).toBe('rowheader')
-      await press('Enter')
+      const link = focused()
+      expect(link.getAttribute('data-slot')).toBe('item-link')
+      // Enter on the name is its link's (it opens the item's page, F9); F2 lets the controls in.
+      await press('F2')
       expect(name(focused())).toBe('Edit Squats')
       const header = focused().closest('th')!
-      // The name cell keeps the tab stop (Shift+Tab returns to it), then its controls in order.
+      // The name's link keeps the tab stop (Shift+Tab returns to it), then its controls in order.
       const inHeader = tabStops().filter((el) => header.contains(el))
-      expect(inHeader[0]).toBe(header)
+      expect(inHeader[0]).toBe(link)
       expect(inHeader.slice(1).map((el) => el.getAttribute('aria-label'))).toEqual(['Edit Squats'])
       await press('Escape')
-      expect(focused()).toBe(header)
-      expect(tabStops().filter((el) => ex().element.contains(el))).toEqual([header])
+      expect(focused()).toBe(link)
+      expect(tabStops().filter((el) => ex().element.contains(el))).toEqual([link])
       // End reaches the row's Remove cell; Enter there reaches its button.
       await press('End')
       const cell = focused()

@@ -6,6 +6,7 @@ import StateExample from '../parts/StateExample.vue'
 
 const off = ref(false)
 const on = ref(true)
+const shown = ref(true)
 </script>
 
 <!-- The card's states (components/Switch/preview.html). Below 640px the visible label shortens
@@ -17,6 +18,9 @@ const on = ref(true)
     </StateExample>
     <StateExample state="On">
       <Switch id="sg-switch-edit-plan-on" v-model="on" label="Edit plan" short-label="Edit" />
+    </StateExample>
+    <StateExample state="In a list: reads “Show Notes” (the item page, K66)">
+      <Switch id="sg-switch-show-notes" v-model="shown" label="Show" context="Notes" />
     </StateExample>
     <StateExample state="Disabled">
       <Switch

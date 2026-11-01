@@ -2,8 +2,10 @@
 import { computed, ref, watch } from 'vue'
 import { usePlannerStore } from '@/stores/planner'
 import { useDietStore } from '@/stores/diet'
+import { useDetailsStore } from '@/stores/details'
 import { dayMonth } from '@/lib/dates'
 import { MAX_DAILY_PICK, MIN_DAILY_PICK, type Food, type Mark } from '@/lib/storage'
+import { SECTIONS } from '@/lib/trackerTypes'
 import { SCREEN, SCREEN_GRID } from '@/lib/screens'
 import { ChevronUp, Plus } from '@lucide/vue'
 import { SectionHeader } from '@/components/ui/section-header'
@@ -16,6 +18,9 @@ import EditFoodDialog from '@/components/EditFoodDialog.vue'
 
 const planner = usePlannerStore()
 const diet = useDietStore()
+const details = useDetailsStore()
+/** The section's type: its names and its chips, which for a food are none (src/lib/trackerTypes.ts). */
+const type = SECTIONS.diet
 
 /** The days whose marked foods reach foods a day (K57): their names turn green, underlined, as exercises'. */
 const metDays = computed(() => diet.dayCounts.map((n) => n >= planner.foodPick))
@@ -27,6 +32,11 @@ const foodPick = computed({
 
 function marksFor(id: string): (Mark | null)[] {
   return planner.days.map((_, i) => diet.markOf(id, i))
+}
+
+/** A food's notes, from its details: one copy for every week (D2). */
+function noteFor(item: { id: string }): string {
+  return details.notesOf('diet', item.id)
 }
 
 const editing = ref<Food | null>(null)
@@ -55,7 +65,7 @@ watch(
 </script>
 
 <!--
-  The Food section: the same WeekGrid without chips (foods have no daily pick), under its own
+  The Food section: the same WeekGrid without chips (the food type has none), under its own
   SectionHeader, and in Edit plan Foods a day centred on the title line, reading "2 per day" (K56, K62, K63) and the Add food
   button under the grid (K54). On screen 56u of space
   sets it apart from Exercises, with no rule. On paper the heading and the grid stay on one page
@@ -84,7 +94,7 @@ watch(
       data-print-keep
     >
       <SectionHeader
-        title="Food"
+        :title="type.label"
         heading-id="diet-heading"
         :week="planner.configMode ? undefined : planner.label"
       >
@@ -108,12 +118,15 @@ watch(
       </SectionHeader>
       <TrackerGrid
         :class="SCREEN_GRID"
-        label="Food"
+        :label="type.itemLabel"
         :mark-set="planner.markSet"
-        :table-label="`Food, week of ${dayMonth(planner.monday)}`"
+        section="diet"
+        :table-label="`${type.label}, week of ${dayMonth(planner.monday)}`"
         :items="diet.foods"
         :days="planner.days"
         :marks-for="marksFor"
+        :details-for="type.details"
+        :note-for="noteFor"
         editable
         :config-mode="planner.configMode"
         :met-days="metDays"
@@ -123,7 +136,7 @@ watch(
         @edit="edit"
       >
         <template #corner>
-          <span class="title-1 text-[24px] leading-7 text-ink">Food</span>
+          <span class="title-1 text-[24px] leading-7 text-ink">{{ type.label }}</span>
         </template>
       </TrackerGrid>
     </div>

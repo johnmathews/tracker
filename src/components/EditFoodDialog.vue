@@ -1,7 +1,15 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useDietStore } from '@/stores/diet'
-import { MAX_NOTES, MAX_TARGET, MIN_TARGET, NEW_FOOD_TARGET, type Food } from '@/lib/storage'
+import { useDetailsStore } from '@/stores/details'
+import {
+  MAX_DETAILS_NOTES,
+  MAX_TARGET,
+  MIN_TARGET,
+  NEW_FOOD_TARGET,
+  NOTES_COUNT_FROM,
+  type Food,
+} from '@/lib/storage'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 import { Stepper } from '@/components/ui/stepper'
@@ -15,19 +23,38 @@ const props = defineProps<{
 const emit = defineEmits<{ close: [] }>()
 
 const diet = useDietStore()
+const details = useDetailsStore()
 const name = ref(props.food?.name ?? '')
 const target = ref(props.food?.target ?? NEW_FOOD_TARGET)
-const notes = ref(props.food?.notes ?? '')
+// The Note field is the food's notes, the same on every week (D2); the rest is this week's.
+const notes = ref(props.food ? details.notesOf('diet', props.food.id) : '')
 /** Add or edit: the title, the fields' ids and the primary action follow. */
 const adding = !props.food
 const id = adding ? 'add-food' : 'edit-food'
 /** The Dialog card's hint under Note (K43). */
 const NOTE_HINT = 'Markdown works: **bold**, *italic*, links.'
+/** Notes the API could not store, though within the field's 20,000 characters (32 KB). */
+const NOTE_TOO_BIG = 'These notes are too long to save. Shorten them, then save again.'
+/** The count shows once the notes near their limit (TextArea card). */
+const noteCount = computed(() =>
+  notes.value.length >= NOTES_COUNT_FROM ? MAX_DETAILS_NOTES : undefined,
+)
+const noteError = ref<string | undefined>()
+watch(notes, () => (noteError.value = undefined))
 
 function save(): void {
-  const input = { name: name.value, target: target.value, notes: notes.value }
-  const ok = props.food ? diet.updateFood(props.food.id, input) : diet.addFood(input)
-  if (ok) emit('close')
+  // Nothing changes unless the notes can be saved too.
+  if (!details.canSetNotes('diet', props.food?.id ?? null, notes.value)) {
+    noteError.value = NOTE_TOO_BIG
+    return
+  }
+  const input = { name: name.value, target: target.value }
+  const saved = props.food
+    ? diet.updateFood(props.food.id, input) && props.food.id
+    : diet.addFood(input)
+  if (!saved) return
+  details.setNotes('diet', saved, notes.value)
+  emit('close')
 }
 </script>
 
@@ -63,8 +90,9 @@ function save(): void {
         v-model="notes"
         label="Note"
         :hint="NOTE_HINT"
-        :max-length="MAX_NOTES"
-        :maxlength="MAX_NOTES"
+        :error="noteError"
+        :max-length="noteCount"
+        :maxlength="MAX_DETAILS_NOTES"
         rows="3"
       />
     </form>

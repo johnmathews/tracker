@@ -1,0 +1,72 @@
+/*
+  Choosing the item page's sections: the controls added to the page in layout A (K65). Shapes and
+  colours are the system's cards (Switch, IconButton, Button, Dialog) at the Settings page's sizes;
+  the proposed values are --candidate-*.
+*/
+.ip-scroll {
+  --candidate-ctl-gap: calc(var(--u) * 8);
+  --candidate-ib: max(44px, calc(var(--u) * 52));
+  --candidate-row-y: calc(var(--u) * 14);
+}
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* The head's first line: Back at the left, Arrange sections at the right. */
+.ip-topline { display: flex; align-items: center; justify-content: space-between; gap: calc(var(--u) * 16); flex-wrap: wrap; }
+.ip .btn-quiet { border-color: transparent; }
+.ip .btn-quiet:hover { background: var(--tile); }
+.ip .btn-quiet[aria-pressed="true"] { border-color: var(--control-border); }
+.ip .btn-primary { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+
+/* Switch (its card): the label inside the button, a 40 × 24 track. */
+.ip .sw { display: inline-flex; align-items: center; gap: calc(var(--u) * 10); min-height: var(--candidate-ib); padding: 0 calc(var(--u) * 10);
+  border: 0; border-radius: var(--radius-md); background: transparent; cursor: pointer; font-size: var(--candidate-label); font-weight: 600; }
+.ip .sw:hover { background: var(--tile); }
+.ip .sw-track { position: relative; width: 40px; height: 24px; flex: none; border: 1px solid var(--control-border); border-radius: var(--radius-full); }
+.ip .sw-thumb { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: var(--radius-full); background: var(--ink-secondary); }
+.ip .sw[aria-checked="true"] .sw-track { background: var(--ink); border-color: var(--ink); }
+.ip .sw[aria-checked="true"] .sw-thumb { left: 19px; background: var(--on-ink); }
+
+/* IconButton (its card) at the row buttons' size. */
+.ip .ib { display: grid; place-items: center; width: var(--candidate-ib); height: var(--candidate-ib); padding: 0; border: 0; border-radius: var(--radius-md);
+  background: transparent; color: var(--ink); cursor: pointer; }
+.ip .ib:hover { background: var(--tile); }
+.ip .ib svg { width: var(--candidate-icon); height: var(--candidate-icon); }
+.ip .ib[aria-disabled="true"] { color: var(--ink-secondary); cursor: default; background: transparent; }
+
+.ar-ctl { display: flex; align-items: center; gap: var(--candidate-ctl-gap); flex-wrap: wrap; }
+
+/* A: arranging in place. The page's rows stay, each heading with its controls under it; the
+   content folds to one word so the order reads at a glance. */
+.ar-lede { margin: 0 0 calc(var(--u) * 16); }
+.ip[data-layout="a"] .ar-sec { padding: var(--candidate-row-y) 0; align-items: center; }
+.ar-head { display: flex; flex-direction: column; gap: calc(var(--u) * 6); align-items: flex-start; }
+.ar-summary { margin: 0; font-size: var(--candidate-body); color: var(--ink-secondary); }
+.ar-sec[data-shown="true"] .ar-summary { color: var(--ink); }
+
+/* B and C: the list, one row per section, its name then its controls. */
+.ar-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.ar-row { display: flex; align-items: center; justify-content: space-between; gap: calc(var(--u) * 16); padding: calc(var(--u) * 6) 0; border-top: 1px solid var(--line); }
+.ar-row:last-child { border-bottom: 1px solid var(--line); }
+.ar-name { font: 600 var(--candidate-body) / 1.3 var(--font-sans); }
+.ar-row[data-shown="false"] .ar-name { color: var(--ink-secondary); font-weight: 400; }
+
+/* B: the Dialog card at the page's size, over the scrim. */
+.scrim { position: absolute; inset: 0; background: var(--scrim); opacity: 0.4; }
+.dlg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(calc(100% - 32px), max(416px, calc(var(--u) * 640)));
+  padding: max(24px, calc(var(--u) * 32)); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-overlay);
+  display: grid; gap: calc(var(--u) * 16); }
+.dlg-title { margin: 0; font: 600 var(--candidate-h2) / 1.25 var(--font-sans); }
+.dlg-btns { justify-content: flex-end; }
+
+@container ip ((orientation: portrait) and (width < 1000px)) or (width < 760px) {
+  .ip-scroll { --candidate-ib: 44px; }
+  .ar-head { flex-direction: row; justify-content: space-between; align-items: center; width: 100%; gap: 8px; }
+  .ar-head h2 { flex: 1; min-width: 0; }
+  .ar-ctl { flex-wrap: nowrap; gap: 0; }
+  .ip .sw { padding: 0 6px; }
+  /* Folded, the switch says it all: the one-word summary goes. */
+  .ar-sec .ip-body { display: none; }
+  .ar-row { gap: 8px; }
+  .ar-name { flex: 1; min-width: 0; }
+  .dlg { padding: 16px; }
+}

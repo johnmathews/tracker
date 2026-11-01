@@ -14,6 +14,39 @@
       "expected": { "accent": "#30d158", "dailyPick": 3, "foodPick": 2 }
     },
     {
+      "description": "The item pages' arrangement goes with the rest (K66): saved settings keep theirs, even when they have none.",
+      "existing": { "accent": "#30d158", "dailyPick": 3, "foodPick": 2 },
+      "incoming": {
+        "accent": "#0a84ff",
+        "dailyPick": 4,
+        "foodPick": 5,
+        "itemSections": {
+          "food": { "order": ["history", "notes", "details", "plan"], "hidden": [] }
+        }
+      },
+      "expected": { "accent": "#30d158", "dailyPick": 3, "foodPick": 2 }
+    },
+    {
+      "description": "Nothing saved: the file's arrangement applies with its other settings.",
+      "existing": null,
+      "incoming": {
+        "accent": "#0a84ff",
+        "dailyPick": 4,
+        "foodPick": 5,
+        "itemSections": {
+          "food": { "order": ["history", "notes", "details", "plan"], "hidden": [] }
+        }
+      },
+      "expected": {
+        "accent": "#0a84ff",
+        "dailyPick": 4,
+        "foodPick": 5,
+        "itemSections": {
+          "food": { "order": ["history", "notes", "details", "plan"], "hidden": [] }
+        }
+      }
+    },
+    {
       "description": "Nothing saved and nothing in the file: still nothing.",
       "existing": null,
       "incoming": null,

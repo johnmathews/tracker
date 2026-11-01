@@ -3,6 +3,7 @@ import { computed, onMounted, ref, useId, useTemplateRef } from 'vue'
 import { ChevronLeft, Download, LogOut, Upload } from '@lucide/vue'
 import { usePlannerStore } from '@/stores/planner'
 import { useDietStore } from '@/stores/diet'
+import { useDetailsStore } from '@/stores/details'
 import { useSessionStore } from '@/stores/session'
 import { useSyncStore } from '@/stores/sync'
 import { describeProblem } from '@/lib/problems'
@@ -54,6 +55,7 @@ const IMPORT_FAILED: Record<'offline' | 'server' | 'auth' | 'quota' | 'error', s
 
 const store = usePlannerStore()
 const diet = useDietStore()
+const details = useDetailsStore()
 const session = useSessionStore()
 const sync = useSyncStore()
 const heading = useTemplateRef<HTMLHeadingElement>('heading')
@@ -85,9 +87,14 @@ const markSet = computed({
 function exportData(): void {
   downloadExport(
     buildExport({
-      exercise: { plans: store.plans, log: store.log },
-      diet: { plans: diet.plans, log: diet.log },
-      settings: { accent: store.accent, dailyPick: store.dailyPick, foodPick: store.foodPick },
+      exercise: { plans: store.plans, log: store.log, details: details.docs.exercise },
+      diet: { plans: diet.plans, log: diet.log, details: details.docs.diet },
+      settings: {
+        accent: store.accent,
+        dailyPick: store.dailyPick,
+        foodPick: store.foodPick,
+        itemSections: store.itemSections,
+      },
     }),
   )
 }

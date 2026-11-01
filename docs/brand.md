@@ -19,8 +19,8 @@ are in the [brand design](specs/2026-10-24-brand-design.md), and the rulings in
 
 The design system is a claude.ai Design System artifact:
 <https://claude.ai/artifact/9pkE17ugXFGGyBirapyCgH>. It holds the brand book, the tokens in a light
-and a dark theme, 31 components with live previews and guidelines (Basics, Forms, Overlays, Planner,
-Feedback), the cover and the assets. The artifact is private to its owner until it is shared, so
+and a dark theme, 33 components with live previews and guidelines (Basics, Forms, Overlays, Planner,
+Feedback, Screens), the cover and the assets. The artifact is private to its owner until it is shared, so
 other readers work from the source below. Agents designing for Tracker read its README
 first.
 
@@ -52,16 +52,16 @@ dialog.
 
 Four project roles each mean one thing, and nothing else may use them:
 
-| Role          | Means                                                                         | Never                      |
-| ------------- | ----------------------------------------------------------------------------- | -------------------------- |
-| `pen`         | Great: a day's mark, and a day that met the daily pick (its name, underlined) | Links, buttons, decoration |
-| `pen-partial` | Partly done: a day's mark                                                     | Over the pick, warnings    |
-| `pen-missed`  | Tried and couldn't: a day's mark                                              | Errors                     |
-| `caution-ink` | A caution, always with words; nothing on the planner uses it (K28)            | Errors                     |
+| Role          | Means                                                                                                                               | Never                      |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| `pen`         | Great: a day's mark, a day that met the daily pick (its name, underlined), and a met week's count in Recent weeks (underlined, K64) | Links, buttons, decoration |
+| `pen-partial` | Partly done: a day's mark                                                                                                           | Over the pick, warnings    |
+| `pen-missed`  | Tried and couldn't: a day's mark                                                                                                    | Errors                     |
+| `caution-ink` | A caution, always with words; nothing on the planner uses it (K28)                                                                  | Errors                     |
 
 The primary action is `ink`, not a brand colour (K8): one colour for "act", the pens for "done".
-Outside the day's mark, no meaning rests on colour alone: a met day's name is underlined as well
-as green (K60), and today adds "today" to the name. The day's mark is the one exception, by the
+Outside the day's mark, no meaning rests on colour alone: a met day's name and a met week's count
+are underlined as well as green (K60, K64), and today adds "today" to the name. The day's mark is the one exception, by the
 owner's choice (K15): its pen alone tells great, partial and missed apart on screen, and the
 accessible name says "partly done" or "couldn't do it".
 
@@ -76,7 +76,7 @@ K15, K18). The pens are fixed: there is no Ink setting any more.
 | `pen-partial` | Partial: the box filled | `#f2b300` | `#ffc21a` |
 | `pen-missed`  | Missed: the box filled  | `#c0392b` | `#ff5c4d` |
 
-`pen` reaches 4.5:1 as text on `canvas` and `panel` (a met day's name), and `pen` and `pen-missed` reach
+`pen` reaches 4.5:1 as text on `canvas` and `panel` (a met day's name, a met week's count), and `pen` and `pen-missed` reach
 3:1 as a mark on `canvas`, `panel` and `tile` in both themes; the gate measures every
 pair. `pen-partial` is a sunny marker yellow by the owner's choice (K18): 1.5–1.9:1 on the light
 grounds, below the 3:1 a mark should reach, and above 7:1 in dark. The dark pens are vivid, a grass

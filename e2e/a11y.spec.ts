@@ -11,6 +11,7 @@ import {
   THEMES,
   canvasToken,
   expectNoAxeViolations,
+  expectNoSidewaysScroll,
   openApp,
   openSignIn,
   openSignUp,
@@ -78,6 +79,45 @@ test.describe('the app passes axe', () => {
       await settle(page)
       await expectNoAxeViolations(page)
     })
+
+    test(`an item’s page, desktop, notes being edited, ${theme}`, async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 900 })
+      await openApp(page, { theme })
+      await page.getByTestId('exercise-grid').getByRole('link', { name: 'Push-ups' }).click()
+      await page.getByRole('heading', { level: 1, name: 'Push-ups' }).waitFor()
+      await settle(page)
+      await expectNoAxeViolations(page)
+      await page.getByRole('button', { name: 'Edit notes' }).click()
+      await settle(page)
+      await expectNoAxeViolations(page)
+    })
+
+    test(`an item’s page, folded, 390px, ${theme}`, async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 })
+      await openApp(page, { theme })
+      await page.getByTestId('diet-grid').getByRole('link', { name: 'Vegetables' }).click()
+      await page.getByRole('heading', { level: 1, name: 'Vegetables' }).waitFor()
+      await settle(page)
+      await expectNoAxeViolations(page)
+    })
+
+    for (const [width, height, where] of [
+      [1280, 900, 'desktop'],
+      [390, 844, 'folded, 390px'],
+    ] as const) {
+      test(`an item’s page while arranging, ${where}, ${theme}`, async ({ page }) => {
+        await page.setViewportSize({ width, height })
+        await openApp(page, { theme })
+        await page.getByTestId('exercise-grid').getByRole('link', { name: 'Push-ups' }).click()
+        await page.getByRole('heading', { level: 1, name: 'Push-ups' }).waitFor()
+        await page.getByRole('button', { name: 'Arrange sections' }).click()
+        // One section hidden and the first section's Move up at an end, so both looks are checked.
+        await page.getByRole('switch', { name: 'Show Details' }).click()
+        await settle(page)
+        await expectNoAxeViolations(page)
+        await expectNoSidewaysScroll(page)
+      })
+    }
 
     test(`the folded week, 375px, ${theme}`, async ({ page }) => {
       await page.setViewportSize({ width: 375, height: 800 })

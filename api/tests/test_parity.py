@@ -73,12 +73,18 @@ def test_merge_does_not_alias_its_inputs() -> None:
     incoming: Any = {
         "plans": {"2026-10-19": [{"id": "pu", "name": "Push-ups", "reps": 10, "target": 4}]},
         "log": {"2026-10-19": {"pu": ["great", None, None, None, None, None, None]}},
+        "details": {"pu": {"notes": "Slow.", "fields": {"equipment": "Mat"}}},
     }
-    merged = merge_tracked({"plans": {}, "log": {}}, incoming)
+    existing: Any = {"plans": {}, "log": {}, "details": {"sq": {"notes": "Mine."}}}
+    merged = merge_tracked(existing, incoming)
     merged["plans"]["2026-10-19"][0]["reps"] = 99
     merged["log"]["2026-10-19"]["pu"][1] = "partial"
+    merged["details"]["pu"]["fields"]["equipment"] = "Bench"
+    merged["details"]["sq"]["notes"] = "Changed."
     assert incoming["plans"]["2026-10-19"][0]["reps"] == 10
     assert incoming["log"]["2026-10-19"]["pu"][1] is None
+    assert incoming["details"]["pu"]["fields"]["equipment"] == "Mat"
+    assert existing["details"]["sq"]["notes"] == "Mine."
 
 
 @pytest.mark.parametrize(

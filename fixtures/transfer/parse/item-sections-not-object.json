@@ -1,0 +1,16 @@
+{
+  "description": "An item-page arrangement that isn't an object means every page as it comes (K66): the key drops and the other settings stay.",
+  "input": {
+    "format": "tracker-export",
+    "version": 5,
+    "settings": { "accent": "#0a84ff", "dailyPick": 4, "foodPick": 5, "itemSections": ["history"] }
+  },
+  "expected": {
+    "ok": true,
+    "data": {
+      "exercise": { "plans": {}, "log": {}, "details": {} },
+      "diet": { "plans": {}, "log": {}, "details": {} },
+      "settings": { "accent": "#0a84ff", "dailyPick": 4, "foodPick": 5 }
+    }
+  }
+}

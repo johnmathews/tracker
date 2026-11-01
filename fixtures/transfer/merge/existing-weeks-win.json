@@ -2,21 +2,24 @@
   "description": "A week that already has a plan keeps it; a week only the file has is added.",
   "existing": {
     "plans": { "2026-10-19": [{ "id": "pu", "name": "Push-ups", "reps": 12, "target": 5 }] },
-    "log": {}
+    "log": {},
+    "details": {}
   },
   "incoming": {
     "plans": {
       "2026-10-19": [{ "id": "pu", "name": "Push-ups", "reps": 10, "target": 4 }],
       "2026-10-12": [{ "id": "sq", "name": "Squats", "reps": 15, "target": 3 }]
     },
-    "log": {}
+    "log": {},
+    "details": {}
   },
   "expected": {
     "plans": {
       "2026-10-19": [{ "id": "pu", "name": "Push-ups", "reps": 12, "target": 5 }],
       "2026-10-12": [{ "id": "sq", "name": "Squats", "reps": 15, "target": 3 }]
     },
-    "log": {}
+    "log": {},
+    "details": {}
   },
-  "summary": { "weeks": 1, "ticks": 0 }
+  "summary": { "weeks": 1, "ticks": 0, "details": 0 }
 }

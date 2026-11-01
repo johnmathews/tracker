@@ -16,16 +16,17 @@ scoped by `user_id`, and no endpoint reads another user's data.
 | ------------- | ------------------------------------------------------------------------------------------------ |
 | `config.py`   | `Config`, read from the environment (§6)                                                         |
 | `db.py`       | connections, the schema and its migrations                                                       |
-| `validate.py` | the port of `src/lib/storage.ts` and `src/lib/transfer.ts`                                       |
+| `types.py`    | the tracker-type registry, the port of `src/lib/trackerTypes.ts`: sections, types, their fields  |
+| `validate.py` | the port of `src/lib/storage.ts` and `src/lib/transfer.ts`; its sections come from `types.py`    |
 | `auth.py`     | password hashing, lockout, sessions, sign-up and its caps, invite, reset and confirmation tokens |
 | `outbox.py`   | which emails go out and when: the limits (§4.1), the links, the message                          |
 | `emails.py`   | the two emails, built to the EmailLayout card, and that card's preview                           |
 | `mail.py`     | the Resend client, and sending after the response                                                |
-| `data.py`     | reading and writing plans, ticks and settings; import, export; the quota (`usage`)               |
+| `data.py`     | reading and writing plans, ticks, item details and settings; import, export; the quota (`usage`) |
 | `app.py`      | the HTTP layer: routes, the write checks, error mapping                                          |
 | `backup.py`   | the daily `VACUUM INTO` copy                                                                     |
 | `cli.py`      | `tracker-admin`                                                                                  |
-| `seed.py`     | `tracker-admin seed-demo`: a demo account and three weeks of marks, on a local stack only        |
+| `seed.py`     | `tracker-admin seed-demo`: a demo account, three weeks of marks and two items' details, locally  |
 
 ## 2. Data model
 
@@ -36,11 +37,14 @@ scoped by `user_id`, and no endpoint reads another user's data.
 | `invites`       | `token_hash`                        | `kind` (`invite` or `reset`), `username`, `user_id` (resets), `expires_at`, `used_at`, `mailed` (a reset sent by email)                                                 |
 | `confirmations` | `token_hash`                        | `user_id`, `created_at`, `expires_at`, `used_at`: confirm-your-email links                                                                                              |
 | `mail_log`      | `id`                                | `user_id`, `kind` (`confirm` or `reset`), `sent_at`: one row per email attempted (a failed send still counts), for the limits                                           |
-| `settings`      | `user_id`                           | `accent`, `daily_pick`, `food_pick` (K57)                                                                                                                               |
+| `settings`      | `user_id`                           | `accent`, `daily_pick`, `food_pick` (K57), `item_sections` (JSON or NULL, K66)                                                                                          |
 | `plans`         | `(user_id, section, week)`          | `items_json`, `rev`                                                                                                                                                     |
 | `ticks`         | `(user_id, section, week, item_id)` | `days`, `partial`, `missed`, `solid`, `hatch`: 7-bit masks (bit 0 is Monday); see below                                                                                 |
+| `item_details`  | `(user_id, section, item_id)`       | `details_json` (one document per item for every week: `{notes?, fields?}`), `rev`                                                                                       |
 
-`section` is `exercise` or `diet`. Every row cascades from its user. Tokens and session ids are
+`section` is `exercise` or `diet`, the registry's sections (`types.py`). `plans` and `ticks` CHECK
+it in the schema, so a new section there needs a table rebuild. `item_details` has no such CHECK:
+the API checks the section against the registry. Every row cascades from its user. Tokens and session ids are
 stored only as SHA-256 hashes. A database lookup with a stolen copy of the file cannot recover a
 working cookie or link. Times are Unix seconds. The theme is not stored: it belongs to the device.
 
@@ -57,6 +61,18 @@ email: `email_confirmed_at`, `mailed`, `confirmations` and `mail_log`. Every acc
 it starts unconfirmed. Version 4 adds `solid` and `hatch` (default 0), so every older mark reads as
 the zigzag. Version 5 adds `food_pick` to `settings` (default 2), foods a day (K57).
 
+Version 6 adds `item_details` and moves each item's note into it. Per user, section and item, the
+note comes from the latest week whose copy of the item has a non-blank one, the first such copy in
+that week, trimmed. It is stored as `{"notes": …}` at revision 1. Items without a string `id` and
+`name`, ids outside 1 to 128 characters and `__proto__` are skipped, as the normalisers skip them.
+The step finishes on any `items_json` and can run again over a table already there. Plans keep
+their notes in `items_json` until each is next written, but nothing reads them: `stored_items`
+drops `notes` from every plan it loads.
+
+Version 7 adds `item_sections` to `settings`, nullable: each type's item-page arrangement (K66) as
+compact JSON in `item_sections.py`'s normal form, or NULL for every page in the default order with
+every section shown. Existing rows read as NULL.
+
 ## 3. Endpoints
 
 All paths start with `/api`. Bodies are JSON, and errors are `{"error": "<code>"}`. Every response
@@ -72,34 +88,57 @@ would not stop a request from another `*.itsa-pizza.com` host, because the brows
 same-site. Bodies over 1 MiB get 413 `too-large`, counted as they stream in, so a chunked body is
 cut off at the limit rather than read whole. A body with nothing to send, such as logout's, is `{}`.
 
-| Method and path                            | Auth    | Does                                                                                           |
-| ------------------------------------------ | ------- | ---------------------------------------------------------------------------------------------- |
-| `GET /healthz`                             | no      | `SELECT 1`; `{"ok": true}`                                                                     |
-| `POST /auth/login`                         | no      | `{username, password}` → the account and the session cookie                                    |
-| `POST /auth/signup`                        | no      | `{email, password}` creates an account → the account and the cookie                            |
-| `POST /auth/logout`                        | session | ends this session and clears the cookie; 204                                                   |
-| `GET /auth/me`                             | session | the account: `{username}`, plus `confirmed` (below)                                            |
-| `GET /auth/options`                        | no      | `{mail}`: whether this API sends email (§4.1)                                                  |
-| `POST /auth/forgot`                        | no      | `{email}` → 202 `{}` for any well-formed email; a reset link goes to a matching account (§4.1) |
-| `POST /auth/confirm`                       | no      | `{token}` confirms the email → the account; 410 `gone` otherwise                               |
-| `POST /auth/confirm/resend`                | session | a new confirm link → 202 `{}`; refusals in §4.1                                                |
-| `POST /invites/lookup`                     | no      | `{token}` → `{kind, username}` for a live link; 410 `gone` otherwise                           |
-| `POST /invites/redeem`                     | no      | `{token, password}` sets the password, consumes the link, signs in                             |
-| `GET /state`                               | session | everything the client renders (below)                                                          |
-| `PUT /plans/{section}/{week}`              | session | `{items, rev}` → `{rev}`; 409 `conflict` with the server copy                                  |
-| `PUT /ticks/{section}/{week}/{item}/{day}` | session | `{mark}` → `{days}`, the week's seven marks for that item                                      |
-| `PUT /settings`                            | session | `{accent, dailyPick, foodPick}` → the stored settings; no `foodPick` keeps the saved one       |
-| `GET /export`                              | session | the export file (`architecture.md` §4)                                                         |
-| `POST /import`                             | session | an export file, merged in; → `{weeks, ticks, settings}` added                                  |
+| Method and path                            | Auth    | Does                                                                                                           |
+| ------------------------------------------ | ------- | -------------------------------------------------------------------------------------------------------------- |
+| `GET /healthz`                             | no      | `SELECT 1`; `{"ok": true}`                                                                                     |
+| `POST /auth/login`                         | no      | `{username, password}` → the account and the session cookie                                                    |
+| `POST /auth/signup`                        | no      | `{email, password}` creates an account → the account and the cookie                                            |
+| `POST /auth/logout`                        | session | ends this session and clears the cookie; 204                                                                   |
+| `GET /auth/me`                             | session | the account: `{username}`, plus `confirmed` (below)                                                            |
+| `GET /auth/options`                        | no      | `{mail}`: whether this API sends email (§4.1)                                                                  |
+| `POST /auth/forgot`                        | no      | `{email}` → 202 `{}` for any well-formed email; a reset link goes to a matching account (§4.1)                 |
+| `POST /auth/confirm`                       | no      | `{token}` confirms the email → the account; 410 `gone` otherwise                                               |
+| `POST /auth/confirm/resend`                | session | a new confirm link → 202 `{}`; refusals in §4.1                                                                |
+| `POST /invites/lookup`                     | no      | `{token}` → `{kind, username}` for a live link; 410 `gone` otherwise                                           |
+| `POST /invites/redeem`                     | no      | `{token, password}` sets the password, consumes the link, signs in                                             |
+| `GET /state`                               | session | everything the client renders (below)                                                                          |
+| `PUT /plans/{section}/{week}`              | session | `{items, rev}` → `{rev}`; 409 `conflict` with the server copy                                                  |
+| `PUT /ticks/{section}/{week}/{item}/{day}` | session | `{mark}` → `{days}`, the week's seven marks for that item                                                      |
+| `PUT /details/{section}/{item}`            | session | `{details, rev}` → `{rev}`; 409 `conflict` with the server copy (below)                                        |
+| `PUT /settings`                            | session | `{accent, dailyPick, foodPick, itemSections}` → the stored settings; a missing key keeps the saved one (below) |
+| `GET /export`                              | session | the export file (`architecture.md` §4)                                                                         |
+| `POST /import`                             | session | an export file, merged in; → `{weeks, ticks, details, settings}` added                                         |
 
 **The account** is `{username}`: the account's email (the field keeps its old name, so older
 tabs and clients work unchanged). While mail is on it also carries `confirmed`, true once the
 address is confirmed. A legacy account still named by a username (below), and every account while
 mail is off, has no such key.
 
-`GET /state` returns `{exercise, diet, settings}`. Each section is `{plans, log, revs}`: `plans`
-and `log` have the same shape as in `localStorage` (a log row is seven marks or nulls), and `revs`
-maps each planned week to its revision. `settings` is `{accent, dailyPick, foodPick}`, or null before any are saved.
+`GET /state` returns `{exercise, diet, settings}`. Each section is
+`{plans, log, details, revs, detailRevs}`:
+
+- `plans` and `log` have the same shape as in the app's cache (a log row is seven marks or nulls).
+  Plan items never carry `notes`.
+- `details` maps each item id to its `{notes?, fields?}`, leaving out items whose details were
+  cleared.
+- `revs` maps each planned week to its revision, and `detailRevs` each item id to its details'
+  revision, cleared ones included.
+
+`settings` is `{accent, dailyPick, foodPick, itemSections?}`, or null before any are saved.
+
+**Settings.** `PUT /settings` normalises the accent and daily picks (a bad accent reads as the
+default, a pick is clamped to 1 to 8) and returns what it stored. A body without `foodPick` (K57)
+or `itemSections` (K66) keeps the saved value, so a tab on older code cannot reset it.
+`itemSections` is each tracker type's item-page arrangement, keyed by type id (`exercise`,
+`food`): `{"exercise": {"order": ["history", "notes", "details", "plan"], "hidden": ["details"]}}`.
+The keys are `notes`, `details`, `plan` and `history`. A shape the app never sends is refused
+with 400 `invalid` and nothing changes: `itemSections` not an object, a key that is not a
+registry type id, or a type whose `order` or `hidden` is not a list of strings. Within that shape
+it normalises like the other settings (P24): unknown and repeated section keys drop, missing ones
+follow in the default order, `hidden` keeps known keys in the default order, and a type with the
+default arrangement is left out. `{}` stores the default; the state and the export leave the key
+out then. Reading a stored or exported arrangement never refuses: a type this version's registry
+lacks is dropped, so a newer version's value still reads.
 
 **Plans.** `rev` is the revision the client last saw, 0 for a week it has never seen planned.
 A matching `rev` stores the items and returns `rev + 1`. A stale `rev` gets 409 with `{items, rev}`
@@ -117,28 +156,63 @@ A `mark` key is read first; any other value of it, or a `done` that is not a boo
 `invalid`. The app sends both keys (`{"mark": m, "done": m !== null}`), so an API from
 before marks had kinds, still running during a deploy, saves the day as done rather than refusing it. The server stores any mark in either section; only the client keeps foods to `great`.
 
-**Quota.** Each user may store 5 MiB: the bytes of their plans' JSON plus 64 for each tick row.
-A plan write, a tick that would add a row, or an import that would take the account over it gets
-413 `quota` and changes nothing. Writes that keep usage level or shrink it always succeed, so a full
-account can still change existing ticks and trim its plans. Settings do not count and are never
+**Item details** are one document per item, the same for every week, keyed by section and item id
+(an id of 1 to 128 characters). The body of `PUT /details/{section}/{item}` is
+`{"details": {...}, "rev": n}`, where `rev` is the revision the client last saw, 0 for an item it
+has never seen with details. The rules follow plans:
+
+- A matching `rev` stores the document and returns `{"rev": rev + 1}`.
+- A stale `rev` gets 409 `{"error": "conflict", "details": d, "rev": n}`, where `d` is the server's
+  copy, `{}` once cleared, or null when the item has never had details. A stale write of a document
+  equal to the stored one after validation succeeds with the current `rev`, as P7 does for plans.
+- An empty document is stored rather than deleted, so the revision keeps counting and a device
+  holding an older copy still conflicts (P22 in [decisions.md](decisions.md)).
+- `details` that is not an object, a `rev` that is not a whole number from 0, an unknown section
+  or an item id over 128 characters get 400 `invalid`.
+- A document over 32 KB as stored gets 413 `too-large`, and one that would take the account over
+  its quota 413 `quota`. Neither changes anything.
+
+The document is validated before it is stored (`normalise_details`), so a bad part drops out
+rather than failing the write:
+
+- `notes` is markdown, trimmed of spaces, tabs and line breaks at its ends and cut to 20,000 code
+  points. A blank note, or one that isn't a string, is left out.
+- `fields` keeps keys matching `[a-z][a-z0-9_]{0,31}`, listed by the type or not, so changing a
+  type's field list never loses text. Values are trimmed and cut to 500 code points, blanks drop
+  out, and the first 32 that remain are kept.
+- Other keys are dropped. The stored form is compact JSON with text as written
+  (`encode_details`), and the 32 KB cap counts its UTF-8 bytes.
+
+The API stores the text as written and never renders it.
+
+**Quota.** Each user may store 5 MiB: the bytes of their plans' and item details' JSON plus 64 for
+each tick row. A plan or details write, a tick that would add a row, or an import that would take
+the account over it gets 413 `quota` and changes nothing. Writes that keep usage level or shrink it always succeed, so a full
+account can still change existing ticks and trim its plans and details. Settings do not count and are never
 refused. The quota measures what the account holds, not the bytes on disk, which include keys and
 indexes. The client drops a refused write with a notice that the account is full (`architecture.md`
 §7), and an import says the same.
 
-**Export** writes version 4 of the file: an exercise or a food may carry `notes`, and each log
-row is seven marks, drawings included, or nulls. Import reads version 4, version 3 (no notes),
-version 2 (kinds only, which read as the zigzag) and version 1, whose `true` days read as `great`
-and `false` days as empty; any other version gets `version`.
+**Export** writes version 5 of the file. Each section carries `details`, each item id's
+`{notes?, fields?}` without revisions, and each log row is seven marks, drawings included, or
+nulls. Import reads:
 
-**Notes** (K43) live in a plan's items, inside `items_json`, so they took no migration. An item's
-`notes` is markdown, trimmed of spaces, tabs and line breaks at its ends and cut to 500 characters
-(`normalise_notes`); a blank note, or one that isn't a string, is left out. The API stores the
-text as written and never renders it.
+- version 5;
+- version 4, whose notes sit on plan items (K43). They lift into `details` by migration 6's rule
+  (`lift_notes`: the latest week with a non-blank note, the first copy in it, cut to 500
+  characters), and any `details` key in the file is ignored;
+- version 3 (no notes) and version 2 (kinds only, which read as the zigzag);
+- version 1, whose `true` days read as `great` and `false` days as empty.
+
+Any other version gets `version`. A file's details document over 32 KB drops out.
 
 **Import** applies the merge rule from `architecture.md` §4: existing weeks keep their plan; per
-week, item and day a marked day keeps its mark and an empty one takes the file's; and settings
-apply only when the account has none. It returns what it added (`ticks` counts the empty days
-that gained a mark), in one transaction. A file that fails to parse gets 400 with `json`,
+week, item and day a marked day keeps its mark and an empty one takes the file's; an item with
+details keeps them, and one without takes the file's; and settings apply only when the account has
+none. An item whose details were cleared counts as without, and takes the file's as a new
+revision, so a device holding the cleared copy conflicts. It returns what it added (`ticks`
+counts the empty days that gained a mark, `details` the items that gained details), in one
+transaction. A file that fails to parse gets 400 with `json`,
 `format` or `version`, the same codes the client shows.
 
 ## 4. Accounts and sessions
@@ -244,9 +318,12 @@ docker compose exec fitness-api tracker-admin revoke-sessions alice@example.com
 It creates the account when it doesn't exist (`demo@example.com` with the password
 `demo-password` by default), confirms its email, and merges in three weeks of plans and marks
 ending today through the same merge as Settings → Import. That merge adds a week's plan only where
-the account has none and fills only empty days, so a second run adds nothing, and an existing
-account keeps its password and every mark it has. The demo uses the default plan's ids, and shows
-every kind in every drawing, met and unmet goals, and a day over the pick.
+the account has none, fills only empty days and gives details only to items that have none, so a
+second run adds nothing, and an existing account keeps its password and every mark and note it
+has. The demo uses the default plan's ids, and shows every kind in every drawing, met and unmet
+goals, and a day over the pick. Push-ups and Fish get notes and fields, so the item page has
+something to show. The command prints what it added ("Added 6 week plans, `<n>` marks and
+details for 2 items.", the marks depending on the day of the week), or "Nothing to add" when the account already has all of it.
 
 ## 6. Configuration
 
@@ -317,12 +394,16 @@ differs by default:
   nearest double.
 - `NaN` and `Infinity` are not JSON.
 - Week keys need ASCII digits, and a trailing newline is not allowed.
-- A log entry keyed `__proto__` is dropped.
+- A log entry keyed `__proto__` is dropped, and so are an item's details keyed `__proto__`.
+- Notes and field values count code points, as Python's `len` does. The app counts them with
+  `codePoints`, since a JavaScript string's `length` counts UTF-16 units.
 - A day's mark is `great`, `partial` or `missed` exactly; a literal `true` reads as `great`, and
   anything else (`1`, `"true"`, `"GREAT"`) is empty.
 
 `tests/test_parity.py` runs every case in `fixtures/transfer/`, the same files the Vitest suite
 runs. A rule changed on one side without the other fails one of the two suites.
+`tests/test_types.py` and the app's `trackerTypes.spec.ts` both read `fixtures/types/registry.json`,
+so the two registries keep the same sections, types, fields, daily-target keys and new-item goals.
 
 Two inputs that JavaScript parses are refused on purpose as `json`. One is nesting deep enough to
 exhaust Python's recursion limit. The other is a string holding a lone surrogate, which SQLite
@@ -360,8 +441,20 @@ Tests sit in `api/tests/`:
   (links, expiry, resend and its limits, invited accounts, mail off, a failed send), forgot
   password (same answer for anyone, the hour's lifetime, confirming by a mailed reset only, silent
   limits) and `MAIL_PER_HOUR` across kinds.
+- `test_details.py`: item details: one copy for every week, plans stored with notes read without
+  them, validation (trimming, the 20,000 and 500 code-point cuts, field keys and their count, the
+  32 KB cap as stored), revisions and conflicts, an empty document keeping its revision, sections
+  and users kept apart, 400s, the quota, export version 5, import keeping existing details, and a
+  version 4 file's notes lifting into details.
+- `test_types.py`: the registry against `fixtures/types/registry.json`, the `Section` literal and
+  `validate.py` reading it.
+- `test_seed.py`: `seed-demo` only on a local stack, a confirmed account, three weeks of every mark,
+  details for two items, an account's own marks and details kept, a second run adding nothing,
+  and what the CLI prints.
 - `test_db.py`, `test_config.py`, `test_backup.py`, `test_cli.py`: migrations (including racing
-  ones, the WAL switch, and old ticks reading as `great` after step 2), configuration from the environment, daily copies, `tracker-admin`.
+  ones, the WAL switch, old ticks reading as `great` after step 2, and step 6 lifting each item's
+  latest note, rerunning and on an empty database), configuration from the environment, daily
+  copies, `tracker-admin`.
 - `conftest.py` gives each test a temporary database, a controllable clock, a cheap hasher and a
   mailer that records instead of sending (`mail_client`);
   `fixtures.py` reads `fixtures/transfer/`.

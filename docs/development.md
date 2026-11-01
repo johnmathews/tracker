@@ -61,7 +61,7 @@ build and coverage output. ESLint also ignores Playwright's `playwright-report/`
 - **Role utilities only.** Colours come from the roles (`bg-canvas`, `text-ink-secondary`,
   `border-control-border`, `text-pen`), never a palette class, a hex value or an arbitrary colour.
   The palette is switched off, so a class such as `bg-red-500` silently draws nothing.
-  [brand.md](brand.md) §3 says what each role means. `pen` is for done and a met day, nothing else.
+  [brand.md](brand.md) §3 says what each role means. `pen` is for done, a met day and a met week's count, nothing else.
   `caution-ink` is kept for InlineMessage's caution tone; nothing on the planner uses it (K28).
 - **Type-style classes for text.** Set text with `display`, `title-1`, `title-2`, `body-large`,
   `body`, `caption`, `label` or `note`, rather than font-size and line-height utilities. The type
@@ -87,7 +87,11 @@ and planner component, in each state, rendered by its real source. Its Theme men
 look, and the address keeps it (`/styleguide?theme=dark`), so a link or a browser test opens
 either theme. It needs no API and no sign-in, and the production build leaves it out.
 Add a section for each new component in `src/styleguide/sections/` and one entry in
-`src/styleguide/sections.ts`.
+`src/styleguide/sections.ts`. A component that reads the stores, as ItemPage does, gets a Pinia of
+its own in its section (`ItemPageSection.vue` sets one up with the card's items), so edits there
+save nowhere. Show one example at a time if two would repeat the same landmarks: ItemPage's section
+picks its state with a SegmentedControl, because two pages on one screen would repeat the same
+named regions, which axe's `landmark-unique` rule fails.
 
 ### 3.2 The design gate and the tokens
 
@@ -128,7 +132,7 @@ hand.
 clock is fixed to Wednesday 21 October 2026, so every run sees the same week.
 
 - `a11y.spec.ts`: axe (WCAG 2.0–2.2 A and AA plus best practice) on the style guide in both themes,
-  and on the app's (its mocked week holds every kind of mark) week view, the bar called up, Edit plan, open Settings, the folded week at 375px,
+  and on the app's (its mocked week holds every kind of mark) week view, the bar called up, Edit plan, open Settings, an item's page (desktop with its notes being edited, folded at 390px, and while arranging at both sizes, with nothing scrolling sideways), the folded week at 375px,
   sign-in, and create an account (empty and with errors showing), in light and dark; and the focus ring's shape, a solid 2px outline at 2px offset. Two
   "dark really is dark" tests guard the audit: on the style guide and on the app, the `.dark` class
   must be set and `--canvas` must differ from light, so a dark audit can never quietly re-run
@@ -139,8 +143,20 @@ clock is fixed to Wednesday 21 October 2026, so every run sees the same week.
   controls, since on the planner's screens it is out of sight.
 - `notes.spec.ts`: an item's note on one line under the name and chips, and a press opening it
   whole in a popover whose link opens a new tab, focus moving to the link and back to the cell on
-  Escape (K43). The mocked week (`e2e/support.ts`) has notes on Push-ups and Kettlebell halos, so
-  the axe checks cover the note line too.
+  Escape (K43), and a long note opening in a panel that fits the window and scrolls. The mocked
+  state (`e2e/support.ts`) has details with notes for Push-ups and Kettlebell halos, so the axe
+  checks cover the note line too.
+- `item-page.spec.ts`: a press on a name opens its page, laid out in rows (Notes, Details, This
+  week's plan, Recent weeks, each heading in the 320px name column, K65), and Back returns with
+  focus on the name. Enter on a name's cell opens it in one press. A note typed on the page shows
+  in the row on every week, and a plan change in this week's row. Recent weeks match the log, print
+  keeps the head, the notes and the details only, and at 390px the page folds to one column in the
+  same order, each heading over its content, with nothing scrolling sideways. Arranging (K66),
+  by keyboard: Space on Show Details hides it, Enter on Move Recent weeks up three times takes it to
+  the top with focus kept and then on its Move down, Escape leaves with focus on Arrange sections;
+  the arrangement reaches the mocked server's settings, every exercise's page follows, a food's
+  page doesn't, and a reload reads it back. Folded, each section's controls sit on its heading's
+  line. The mock keeps `PUT /api/settings` and returns it from `GET /api/state`, as the API does.
 - `screens.spec.ts`: a tall Exercises screen and a tall Food screen (`openApp`'s `moreExercises`
   and `moreFoods`), wheel-scrolled down and back up a notch at a time at 1280×800: the page never
   rests showing part of both, and it reaches Food (K38); a rotation (and back, and a phone on
@@ -179,15 +195,35 @@ listed in [api.md](api.md) §10):
   merging one), plus building an export, the merge summary and the download. Add a fixture rather
   than an inline case when the behaviour is part of the export contract: the API's tests
   (`api/tests/test_parity.py`) read the same files.
-- `fixtures/transfer/sample/`: `storage.json` is a realistic `localStorage` snapshot. It spans five
-  weeks (2026-09-21 to 2026-10-19): four with data, and 2026-09-28 left empty so it carries the
-  plan before it forward. It has plans edited over time (sets, weights, Back extensions removed,
-  Plank added), 102 ticks, a diet with an added food, and non-default settings. `export.json` is
-  the export it must produce. `App.spec.ts` seeds the snapshot and checks Export gives
+- `fixtures/transfer/sample/`: `storage.json` is a realistic `localStorage` snapshot: alice's cache
+  under the current key, `tracker-cache-v4:alice`, as the sync store keeps it, and a
+  `tracker-settings-v1` holding the dark theme. Each section holds `plans`, `log`, `details`,
+  `revs` and `detailRevs`. It spans five weeks (2026-09-21 to 2026-10-19): four with data, and
+  2026-09-28 left empty so it carries the plan before it forward. It has plans edited over time
+  (sets, weights, Back extensions removed, Plank added), 102 ticks, a diet with an added food,
+  details for Push-ups (notes and two fields) and Fish (one field), and non-default settings.
+  `export.json` is the version 5 export it must produce. A new cache format needs a new snapshot:
+  `App.spec.ts` fails when the key isn't `CACHE_PREFIX`'s. `App.spec.ts` seeds the snapshot and checks Export gives
   `export.json`. It also imports `export.json` into an empty account and checks the cache and the
   (fake) server both end up holding the sample, with the theme left on the device. To see the app populated while
   developing, import `fixtures/transfer/sample/export.json` from Settings → Import… on a scratch
   origin. Tests read fixtures through `src/lib/__tests__/fixtures.ts`.
+- `fixtures/types/registry.json`: the tracker-type registry, each section's type and each type's
+  fields, daily-target key and new-item goal. `src/lib/__tests__/trackerTypes.spec.ts` and the
+  API's `test_types.py` both check their registry against it, so a field added on one side only
+  fails a suite.
+- `fixtures/item-sections/normalise.json`: the item pages' arrangement (K66, P24), inputs and their
+  normal form. `src/lib/__tests__/itemSections.spec.ts` and the API's `test_item_sections.py` both
+  run every case, and the web spec also covers showing, hiding and moving a section.
+- `src/lib/__tests__/trackerTypes.spec.ts`: also each type's cycle, which `cycleFor` reads, its
+  labels, an exercise's chips and a food's none, and `isSection`.
+- `src/lib/__tests__/history.spec.ts`: an item's recent weeks (eight ending with the opened week,
+  newest first, none before its first plan, goals from the plan each week shows, the default plan
+  when nothing is planned), the latest plan holding an item, a week's count and whether it met its
+  goal, and the line over the weeks in words.
+- `src/lib/__tests__/routes.spec.ts`: the item page's address written and read back, addresses that
+  name no section or no good id, the history mark for a page opened from the week, Back going back
+  through history or replacing the entry, a modified press left to the browser, and `webHost`.
 - `src/lib/__tests__/tracker.spec.ts`: the shared tick-per-day helpers (totals, day counts, goals
   met, toggling, ids), including that `toggleDay` changes a reactive log through its proxy.
 - `src/lib/__tests__/api.spec.ts`: how every kind of reply becomes a typed result (success, 204,
@@ -197,7 +233,8 @@ listed in [api.md](api.md) §10):
 - `src/lib/__tests__/nginx.spec.ts`: reads `nginx.conf`: the CSP is unchanged, and `/api/` proxies
   to `fitness-api:8000` through a variable upstream with the body cap and one `Cache-Control`.
 - `src/lib/__tests__/fakeApi.ts` (a helper, not a spec): an in-memory API installed as `fetch`. It
-  keeps plan revisions and 409s, identical-item creates, single-day marks (in the API's three masks,
+  keeps plan and details revisions and 409s, identical writes on a stale revision, a cleared
+  details document keeping its revision, single-day marks (in the API's three masks,
   and the old `done` body), settings, sessions,
   sign-up (`email`, `password` and `exists` refusals) and invite links. Controls let a test go offline, fail the next matching request, `hold()` every
   reply, `holdNext()` one, or `stall()` one forever. `signedIn.ts` sets up a browser already signed
@@ -224,7 +261,9 @@ listed in [api.md](api.md) §10):
 - `src/composables/__tests__/gridNav.spec.ts`: the grid keyboard model on a small table: the one
   tab stop (today, the first day, the last cell focused), arrows, Home and End with and without
   Ctrl, Space and Enter left to the DayMark, Edit plan's
-  controls (Enter or F2 in, Escape out, parked when focus leaves), and rows coming and going.
+  controls (Enter or F2 in, Escape out, parked when focus leaves), rows coming and going, and a name
+  that is a link (its cell's widget, Enter its own in one press, Space doing nothing, F2 into the
+  cell's other controls and Escape back to the link).
 - `src/components/ui/__tests__/`: one spec per primitive (BarAction, Banner, BrandMark, Button, Chip,
   ConfirmDialog, DayMark, Dialog, IconButton, InlineMessage, Popover, RadioCard, SectionHeader,
   SegmentedControl, Stepper, Switch, TextArea, TextField, TextLink), each checking its
@@ -237,14 +276,29 @@ listed in [api.md](api.md) §10):
   round trip back to it, and the class it sets.
 - `src/stores/__tests__/planner.spec.ts`: stepping a day through its marks, totals, week navigation, goal clamping, adding,
   removal's effect on totals, settings, detail chips, editing exercises, sets, weekly plans
-  (defaults, carry forward, a week getting its own plan, copying to the next week), config mode,
+  (defaults, carry forward, a week getting its own plan), config mode,
   the midnight refresh, `adopt`, `adoptWeek` and `clear`, the theme being the only thing stored
   (merged into the settings key), the keys from before accounts never being written, and
   `savedSettings` (tracked in memory, set by adopting or changing settings, never by the theme),
-  and a note saved, kept by an update that leaves it out, and cleared when empty (K43).
+  no note kept in the week (an exercise's notes are its details), and `clear` forgetting the
+  details too.
 - `src/stores/__tests__/diet.spec.ts`: food toggling in the planner's week, shared week navigation,
-  goal clamping, add/remove, carrying and copying food plans, `adopt`, `adoptWeek` and `clear`, the
-  old diet keys never being written, and a food's note saved, kept and cleared (K43).
+  goal clamping, renaming, add/remove, carrying food plans forward, `adopt`, `adoptWeek` and `clear`, the
+  old diet keys never being written, and no note kept in the week.
+- `src/stores/__tests__/details.spec.ts`: the details store: a note edited on one week showing on
+  every week (owned plans included), readers updating when an item's first details arrive, storing
+  as the API would, fields beside the notes (unknown keys kept), and refusing a bad field key, notes
+  over 20,000 characters or 32 KB, a field over 500 characters, a 33rd field and an id the API
+  can't name.
+- `src/stores/__tests__/syncDetails.spec.ts`: details through the sync store against the fake API:
+  reading them and their revisions, sending with the revision last seen (a food's under `diet`, an
+  id as a path segment), clearing as `{}`, waiting for the typing to pause while a tick goes at
+  once, an offline edit surviving a reload, conflicts (the server's copy with the notice, a cleared
+  copy, a create again, no notice for the same details), a 404 kept and retried while a tick's 404
+  is dropped, `too-large` and `quota` dropped with a notice, the outbox read back, an import sending
+  held details first, and sign-out. Also moving a `-v3` cache and outbox (notes lifted with the
+  latest week winning, lifted notes sent only for a section with queued plan writes, an old tab
+  ignored), and details in `diff` and `normaliseState`.
 - `src/stores/__tests__/sync.spec.ts`: the sync store against the fake API:
   - the cache shown at once, then the server's state; no cache, or a broken one;
   - a first tick creating the week's plan before the tick, and revisions carried forward;
@@ -258,7 +312,7 @@ listed in [api.md](api.md) §10):
   - other tabs' cache and outbox writes (a cache adopted, never written back, even from older
     code), stop and forget, the old keys never written, `diff` and
     `normaliseState`;
-  - the `-v2` and `-v1` cache and outbox moved at sign-in, the newer winning, and a tab from before
+  - the older caches and outboxes moved at sign-in, the newer winning, and a tab from before
     the solid and hatch drawings unable to empty a `great-solid` day (K41);
   - `importFile`: queued writes first, then one server import and a read; offline, refused, a
     full account (`quota`), 401, and nobody signed in.
@@ -282,7 +336,13 @@ listed in [api.md](api.md) §10):
   `document.body`, where Reka's portal renders it), normal mode hiding every editing control, export (with
   `URL.createObjectURL` stubbed) and import through the file input (summary, confirm, cancel,
   errors), Edit plan's daily targets (centred on each title line, reading "per day", 1–8,
-  synced), and no Copy plan button (K58). Tests that
+  synced), and no Copy plan button (K58). Also an item's page: each name a link in both grids and
+  Edit plan, the page with no bar and focus on its name, Back through history or replacing an
+  address with focus on the name again, an address naming no item, an old address showing the
+  latest plan, waiting for the data, signing out on the page, another tab removing the item, and a
+  note, a field or a plan change typed there showing on the week. The dialogs' Note field saves
+  the notes for every week, counts near the limit and keeps everything when they're too big to
+  save. Tests that
   edit the plan mount with `mountConfig()`, which turns config mode on. Queries that would also
   match the diet grid scope to `[data-testid="exercise-grid"]`; the rest rely on exercise-only
   labels or on the exercise form coming first in the DOM. Every mount is signed in as alice through
@@ -299,11 +359,25 @@ listed in [api.md](api.md) §10):
   today (full-date names with "today", `aria-current`, no band, K36), rows with no goal or total
   (K33), Edit plan's rows (Edit in the name
   cell, Remove in its own last column, stable row height, focus after a removal), the keyboard (one tab stop per grid,
-  arrows, the skip link, the arrows between the screens, Edit plan's controls), an item's note on
-  its own line and parked behind its cell (K43), and headings and print attributes. The layouts themselves (filling, folding, the out-of-sight navbar) depend on media
+  arrows, the skip link, the arrows between the screens, Edit plan's controls reached with F2), an
+  item's note on its own line, parked behind its cell and the same on every week (K43), and headings
+  and print attributes. The layouts themselves (filling, folding, the out-of-sight navbar) depend on media
   queries jsdom doesn't apply, so the e2e suite covers them.
 - `src/components/__tests__/TrackerRow.spec.ts`: one row on its own: a note's popover opening with
-  the note rendered and its link opening a new tab, and no note line without a note (K43).
+  the note rendered and its link opening a new tab, no note line without a note or with an empty
+  one (K43), and a long note kept to one line in the row and whole in a panel that scrolls.
+- `src/components/__tests__/ItemPage.spec.ts`: the item page on its own: the head and focus on the
+  name, layout A's rows in order, each labelled by its heading (K65), notes (markdown, Add or Edit notes, saving
+  as you type, Done and Escape, the count from 19,000, over 20,000 and over 32 KB, the server's copy
+  arriving while editing), details (the type's fields, the 500 limit, the Link's "Open … in a new
+  tab", printing filled fields), this week's plan (each change applied at once, a number that isn't
+  valid, another week, a food's goal), an item not in the week (its latest plan, read-only),
+  recent weeks, and arranging (K66: the shown sections in the type's order, Show, Move up and
+  Move down, focus kept on the moved section's button, the ends, Escape, every section hidden).
+- `src/components/__tests__/RecentWeeks.spec.ts`: the list labelled by its heading, newest first,
+  "This week" and the dates read aloud, the marks as pictures hidden from a screen reader, each line
+  as one sentence, the count against the goal with a met week in pen and underlined, and the line
+  over the list.
 - `src/components/__tests__/Email.spec.ts`: Forgot your password? (offered only when the planner
   sends email, the same words whatever the answer, a malformed email, one request however often
   it's pressed) and confirming an email (the banner, Send it again, too soon, already confirmed,

@@ -4,8 +4,8 @@
   "expected": {
     "ok": true,
     "data": {
-      "exercise": { "plans": {}, "log": {} },
-      "diet": { "plans": {}, "log": {} },
+      "exercise": { "plans": {}, "log": {}, "details": {} },
+      "diet": { "plans": {}, "log": {}, "details": {} },
       "settings": null
     }
   }

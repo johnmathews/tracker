@@ -19,6 +19,9 @@ import { dismissConfirm } from '@/composables/useConfirm'
 import { useMediaQuery } from '@/composables/useMediaQuery'
 import { useScreenSprint } from '@/composables/screenSprint'
 import { isDark } from '@/lib/theme'
+import { isItemHash, itemHref, markFromWeek, parseItemHash, type ItemRoute } from '@/lib/routes'
+import { itemExists, useItemSource } from '@/composables/itemSource'
+import ItemPage from '@/components/ItemPage.vue'
 import { useSessionStore } from '@/stores/session'
 import { useSyncStore } from '@/stores/sync'
 
@@ -50,34 +53,73 @@ function confirmToken(): string | null {
 }
 const confirmLink = ref(confirmToken())
 
-/** The page the hash asks for: Settings at `#/settings`, otherwise the planner. */
-type Page = 'planner' | 'settings'
+/**
+ * The page the hash asks for: Settings at `#/settings`, an item's page at `#/item/<section>/<id>`
+ * (ItemPage card, D5), otherwise the planner.
+ */
+type Page = 'planner' | 'settings' | 'item'
 function pageFor(): Page {
-  return location.hash === '#/settings' ? 'settings' : 'planner'
+  if (location.hash === '#/settings') return 'settings'
+  return parseItemHash(location.hash) ? 'item' : 'planner'
 }
+/** Drop the hash from the address bar and history: the page it named doesn't apply. */
+function dropHash(): void {
+  history.replaceState(null, '', location.pathname + location.search)
+}
+// An item address naming no section or no good id opens the week (ItemPage card).
+if (isItemHash(location.hash) && !parseItemHash(location.hash)) dropHash()
 const page = ref<Page>(pageFor())
+const item = ref<ItemRoute | null>(parseItemHash(location.hash))
+/** The item whose page was open last, so Back can put focus on its name. */
+let leftItem: ItemRoute | null = null
 function onHash(): void {
   link.value = linkToken()
   confirmLink.value = confirmToken()
   signup.value = isSignup()
   forgot.value = isForgot()
+  if (isItemHash(location.hash) && !parseItemHash(location.hash)) dropHash()
+  const before = page.value
+  leftItem = item.value ?? leftItem
+  item.value = parseItemHash(location.hash)
   page.value = pageFor()
+  // Opened from the week in this tab: its Back goes back through history (lib/routes).
+  if (page.value === 'item' && before === 'planner') markFromWeek()
 }
-// Back from Settings, focus returns to the Settings button that opened it.
-watch(page, async (now) => {
+// Back from Settings, focus returns to the Settings button that opened it; back from an item's
+// page, to that item's name in its row (WeekGrid card).
+watch(page, async (now, before) => {
   if (now !== 'planner') return
   await nextTick()
-  document.querySelector<HTMLElement>('[data-testid="settings-button"]')?.focus()
+  if (before === 'settings')
+    document.querySelector<HTMLElement>('[data-testid="settings-button"]')?.focus()
+  else if (before === 'item' && leftItem) {
+    const href = itemHref(leftItem.section, leftItem.id)
+    ;[...document.querySelectorAll<HTMLElement>('[data-slot="item-link"]')]
+      .find((a) => a.getAttribute('href') === href)
+      ?.focus()
+  }
 })
-// Signing out on the Settings page lands on the sign-in screen, and the next sign-in on the week.
+// Signing out on Settings or an item's page lands on the sign-in screen, and the next sign-in on
+// the week.
 watch(
   () => session.status,
   (status) => {
-    if (status !== 'signed-out' || page.value !== 'settings') return
-    history.replaceState(null, '', location.pathname + location.search)
+    if (status !== 'signed-out' || page.value === 'planner') return
+    dropHash()
+    item.value = null
     page.value = 'planner'
   },
 )
+// An address naming no item in any week's plan opens the week instead (ItemPage card), once the
+// data is here to say so; so does an item's page whose item another tab removed from every plan.
+const itemSource = useItemSource()
+watchEffect(() => {
+  if (page.value !== 'item' || !sync.loaded) return
+  if (itemExists(itemSource(item.value!.section), item.value!.id)) return
+  dropHash()
+  item.value = null
+  page.value = 'planner'
+})
 /** Drop the token from the address bar and history, where a used or dead one has no place. */
 function forgetToken(): void {
   history.replaceState(null, '', location.pathname + location.search)
@@ -201,13 +243,14 @@ onBeforeUnmount(() => {
     @leave="closeLink"
   />
   <template v-else-if="session.status === 'signed-in'">
-    <!-- The Settings page has no bar: it links back to the week itself (K52). -->
-    <AppNavbar v-if="page !== 'settings'" :overlay="screens" />
-    <!-- Settings and Edit plan are full width on the page's margins, like the week (K51, K54). -->
+    <!-- The Settings page and an item's page have no bar: each links back to the week (K52). -->
+    <AppNavbar v-if="page === 'planner'" :overlay="screens" />
+    <!-- Settings, an item's page and Edit plan are full width on the page's margins, like the week
+         (K51, K54, K64). -->
     <main
       class="print:max-w-none print:p-0 full:max-w-none full:p-0"
       :class="
-        page === 'settings' || store.configMode
+        page !== 'planner' || store.configMode
           ? 'px-(--screen-pad-x) pb-[calc(var(--u)*64)]'
           : 'mx-auto max-w-6xl px-4 pb-16 sm:px-6 lg:px-8'
       "
@@ -216,6 +259,15 @@ onBeforeUnmount(() => {
         <SyncStatus />
         <EmailStatus />
         <SettingsPage />
+      </template>
+      <template v-else-if="page === 'item' && sync.loaded">
+        <SyncStatus />
+        <EmailStatus />
+        <ItemPage
+          :key="`${item!.section}/${item!.id}`"
+          :section="item!.section"
+          :item-id="item!.id"
+        />
       </template>
       <!-- On the planner the messages sit at the top of the first screen (PlannerScreen card). -->
       <template v-else-if="sync.loaded">

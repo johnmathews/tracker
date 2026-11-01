@@ -1,0 +1,174 @@
+<title>An item's own page</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="item.css">
+<!--
+  A mockup (design-system skill, references/mockups.md). Pressing an exercise's or a food's name
+  opens a page of its own: notes, details for its type, this week's plan, and recent weeks. One
+  question: how the page is laid out. The page is live: item.js draws it, sized from its frame
+  (item.css); marks.js and icons.js hold the app's drawings and Lucide icons. try.html shows it
+  full size with a switch for the option, the item and the theme.
+-->
+<style>
+  body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font-sans); }
+  .mockup-page {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: var(--space-8, 32px) var(--space-16, 64px);
+    max-width: 1200px; margin: 0 auto; display: grid; gap: var(--space-12, 48px);
+  }
+  .mockup-head { display: grid; gap: var(--space-2, 8px); max-width: 70ch; }
+  .mockup-head h1, .option h2 { margin: 0; text-wrap: balance; }
+  .mockup-head p, .option p { margin: 0; }
+  .mockup-meta { color: var(--ink-secondary); }
+  .option { display: grid; gap: var(--space-4, 16px); }
+  .option-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2, 8px) var(--space-3, 12px); }
+  .option-tag { color: var(--ink-secondary); }
+  .option[data-recommended] .option-tag::after { content: " · Recommended"; color: var(--ink); }
+  .panes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--space-4, 16px); }
+  .pane { min-width: 0; background: var(--canvas); color: var(--ink); border: 1px solid var(--line);
+          border-radius: var(--radius-lg, 10px); padding: var(--space-4, 16px); overflow-x: auto; }
+  .pane-label { color: var(--ink-secondary); margin: 0 0 var(--space-3, 12px); }
+  .measures { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); }
+  .measures li { border: 1px solid var(--line); border-radius: var(--radius-sm, 4px); padding: 2px var(--space-2, 8px); font-variant-numeric: tabular-nums; }
+  .measures li[data-pass="no"] { border-color: currentColor; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .try { margin: 0; }
+  .try a, .mockup-head a { color: var(--ink); font-weight: 600; text-underline-offset: 3px; }
+  .list { margin: 0; padding-left: 1.2em; display: grid; gap: var(--space-1, 4px); }
+
+  /* A device: the screen at its real size in pixels, scaled down to fit (the script sets the scale). */
+  .device { position: relative; width: 100%; }
+  .device > .ip { position: absolute; top: 0; left: 0; transform-origin: 0 0; border: 1px solid var(--line); border-radius: var(--radius-lg); }
+  .device.phone > .ip { border-radius: 28px; border-width: 2px; }
+  .phones { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+  .phones .device { max-width: 260px; flex: 1 1 200px; }
+</style>
+
+<main class="mockup-page">
+  <header class="mockup-head">
+    <p class="caption mockup-meta">Mockup · 2026-11-01 · Tracker</p>
+    <h1 class="title-1">An item's own page</h1>
+    <p class="body">Pressing an exercise's or a food's name in the week opens its own page. The page holds four sections: <strong>Notes</strong>, <strong>Details</strong> for its type, <strong>This week's plan</strong> and <strong>Recent weeks</strong>. The question is how they are laid out. The page uses the Settings page's sizes (K51) and has no bar, like Settings (K52).</p>
+    <p class="body">What is the same in every option:</p>
+    <ul class="list body">
+      <li>The name in the week looks as it does now. It underlines under the pointer, and pressing it opens the page.</li>
+      <li>Notes and details are one copy for every week. Notes show as written. <em>Edit notes</em> turns them into a text box, and <em>Done</em> turns them back.</li>
+      <li>Fields save as you type, the way a mark saves when you press it. There is no Save button.</li>
+      <li>The plan section changes this week's plan, the same as the Edit dialog, and says so.</li>
+      <li>Recent weeks shows eight weeks, newest first. A week that met its goal shows its count in green, underlined, like a met day.</li>
+      <li>The field lists are a first guess: Equipment, Works and Link for an exercise; A serving and Examples for a food. They will change as we iterate.</li>
+    </ul>
+    <p class="try body"><a href="try.html#a">Try it full size</a>. The switch at the bottom left changes the option, the item and the theme. Everything on the page works.</p>
+  </header>
+
+  <section class="option" id="a" data-recommended aria-labelledby="a-h">
+    <div class="option-head"><h2 class="title-2" id="a-h">A. Rows like Settings</h2><span class="label option-tag">Option A</span></div>
+    <p class="body">Full width. Each section is a row: its heading in the 320u left column, like the week's names and Settings' headings, its content to the right, hairlines between rows. The order is Notes, Details, Plan, then Recent weeks. Recommended: it reads like the two pages you already know, and it has room for more sections as the page grows.</p>
+    <div class="panes">
+      <div class="pane" data-theme="light"><p class="label pane-label">Light · 1440×900 · Kettlebell swings</p><div class="device" data-w="1440" data-h="900" data-layout="a"></div></div>
+      <div class="pane" data-theme="dark"><p class="label pane-label">Dark · 1280×800 · Nuts</p><div class="device" data-w="1280" data-h="800" data-layout="a" data-item="food"></div></div>
+    </div>
+    <div class="panes"><div class="pane" data-theme="light"><p class="label pane-label">Phone, light and dark</p><div class="phones">
+      <div class="device phone" data-w="390" data-h="844" data-layout="a"></div>
+      <div class="device phone" data-w="390" data-h="844" data-layout="a" data-theme="dark" data-scroll="history"></div>
+    </div></div></div>
+    <p class="try body"><a href="try.html#a">Try A full size</a></p>
+  </section>
+
+  <section class="option" id="b" aria-labelledby="b-h">
+    <div class="option-head"><h2 class="title-2" id="b-h">B. Notes as the page</h2><span class="label option-tag">Option B</span></div>
+    <p class="body">Two columns under the name. The notes fill the wider left column, a step larger, like a page in a notebook. The plan, recent weeks and details sit in a narrower column on the right. On a phone the notes come first and the rest follows.</p>
+    <div class="panes">
+      <div class="pane" data-theme="light"><p class="label pane-label">Light · 1440×900 · Kettlebell swings</p><div class="device" data-w="1440" data-h="900" data-layout="b"></div></div>
+      <div class="pane" data-theme="dark"><p class="label pane-label">Dark · 1280×800 · Nuts</p><div class="device" data-w="1280" data-h="800" data-layout="b" data-item="food"></div></div>
+    </div>
+    <div class="panes"><div class="pane" data-theme="light"><p class="label pane-label">Phone, light and dark</p><div class="phones">
+      <div class="device phone" data-w="390" data-h="844" data-layout="b"></div>
+      <div class="device phone" data-w="390" data-h="844" data-layout="b" data-theme="dark" data-scroll="history"></div>
+    </div></div></div>
+    <p class="try body"><a href="try.html#b">Try B full size</a></p>
+  </section>
+
+  <section class="option" id="c" aria-labelledby="c-h">
+    <div class="option-head"><h2 class="title-2" id="c-h">C. How it's going, first</h2><span class="label option-tag">Option C</span></div>
+    <p class="body">One centred column, 880u wide. Recent weeks comes straight under the name, so the page opens on how the item is going. Notes, Details and the plan follow.</p>
+    <div class="panes">
+      <div class="pane" data-theme="light"><p class="label pane-label">Light · 1440×900 · Kettlebell swings</p><div class="device" data-w="1440" data-h="900" data-layout="c"></div></div>
+      <div class="pane" data-theme="dark"><p class="label pane-label">Dark · 1280×800 · Nuts</p><div class="device" data-w="1280" data-h="800" data-layout="c" data-item="food"></div></div>
+    </div>
+    <div class="panes"><div class="pane" data-theme="light"><p class="label pane-label">Phone, light and dark</p><div class="phones">
+      <div class="device phone" data-w="390" data-h="844" data-layout="c"></div>
+      <div class="device phone" data-w="390" data-h="844" data-layout="c" data-theme="dark" data-item="food"></div>
+    </div></div></div>
+    <p class="try body"><a href="try.html#c">Try C full size</a></p>
+  </section>
+
+  <section class="option" aria-labelledby="m-h">
+    <h2 class="title-2" id="m-h">Contrast</h2>
+    <p class="body">Every pairing on the page is already in the system. The met count reuses the met day's pen (K60).</p>
+    <ul class="measures caption">
+      <li data-fg="var(--pen)" data-bg="var(--canvas)" data-min="4.5">Met count, pen on canvas</li>
+      <li data-fg="var(--ink-secondary)" data-bg="var(--canvas)" data-min="4.5">Type and lede, ink-secondary on canvas</li>
+      <li data-fg="var(--ink)" data-bg="var(--tile)" data-min="4.5">Notes being edited, ink on tile</li>
+      <li data-fg="var(--ink)" data-bg="var(--tile)" data-min="4.5">Chip, ink on tile</li>
+    </ul>
+  </section>
+</main>
+
+<script src="icons.js"></script>
+<script src="marks.js"></script>
+<script src="item.js"></script>
+<script>
+  // Each .device gets a live page at its real pixel size, scaled to the space it has.
+  for (const device of document.querySelectorAll('.device')) {
+    const w = Number(device.dataset.w), h = Number(device.dataset.h)
+    const screen = document.createElement('div')
+    screen.style.width = w + 'px'
+    screen.style.height = h + 'px'
+    if (device.dataset.theme) screen.dataset.theme = device.dataset.theme
+    device.append(screen)
+    const fit = () => {
+      const s = Math.min(1, device.clientWidth / w)
+      screen.style.transform = `scale(${s})`
+      device.style.height = Math.ceil(h * s) + 'px'
+    }
+    new ResizeObserver(fit).observe(device)
+    fit()
+    IP.mount(screen, { layout: device.dataset.layout, item: device.dataset.item || 'exercise' })
+    if (device.dataset.scroll) {
+      const scroller = screen.querySelector('.ip-scroll')
+      const sec = screen.querySelector(`[data-sec="${device.dataset.scroll}"]`)
+      scroller.scrollTop = sec.offsetTop - 8
+    }
+  }
+</script>
+<script>
+  // Measures: for each <li data-fg data-bg data-min>, the WCAG contrast of the two colours in each
+  // theme, resolved inside the option (so --candidate-* values apply), written after the label.
+  (() => {
+    const rgb = (value, scope, theme) => {
+      const probe = document.createElement('span')
+      probe.dataset.theme = theme
+      probe.style.color = value
+      scope.append(probe)
+      const parts = getComputedStyle(probe).color.match(/[\d.]+/g).map(Number)
+      probe.remove()
+      return parts.slice(0, 3)
+    }
+    const lum = ([r, g, b]) => [r, g, b]
+      .map((c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4 })
+      .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0)
+    const ratio = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05) }
+    for (const li of document.querySelectorAll('.measures li[data-fg]')) {
+      const scope = li.closest('.option') || document.body
+      const min = Number(li.dataset.min || 0)
+      const results = ['light', 'dark'].map((theme) => {
+        const r = ratio(rgb(li.dataset.fg, scope, theme), rgb(li.dataset.bg, scope, theme))
+        return { theme, r, ok: !min || r >= min }
+      })
+      li.dataset.pass = results.every((x) => x.ok) ? 'yes' : 'no'
+      li.append(`: ${results.map((x) => `${x.theme} ${x.r.toFixed(1)}:1${x.ok ? '' : ' (below ' + min + ':1)'}`).join(', ')}`)
+    }
+  })()
+</script>

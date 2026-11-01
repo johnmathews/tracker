@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>An item's own page, to try</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="item.css">
+<style>
+  html, body { margin: 0; height: 100%; background: var(--canvas); }
+  #screen { width: 100vw; height: 100vh; height: 100dvh; }
+  /* The mockup's own switch, out of the way at the bottom left: which option, which item, which theme. */
+  .mock { position: fixed; z-index: 50; left: 8px; bottom: 8px; font: 600 14px/20px var(--font-sans); color: var(--ink-secondary); }
+  .mock > button { height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius-full); background: var(--canvas); color: inherit; font: inherit; cursor: pointer; }
+  .mock .panel { display: none; position: absolute; left: 0; bottom: 40px; width: max-content; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-overlay); color: var(--ink); }
+  .mock.open .panel { display: grid; gap: 10px; }
+  .mock .panel div { display: flex; gap: 6px; align-items: center; }
+  .mock .panel span { width: 64px; color: var(--ink-secondary); font-weight: 400; }
+  .mock .panel button { min-width: 44px; height: 36px; padding: 0 10px; border: 1px solid var(--control-border); border-radius: var(--radius-md); background: transparent; color: var(--ink); font: inherit; cursor: pointer; }
+  .mock .panel button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+</style>
+</head>
+<body>
+<div id="screen"></div>
+<div class="mock">
+  <div class="panel" role="group" aria-label="Mockup">
+    <div><span>Option</span><button data-k="layout" data-v="a">A</button><button data-k="layout" data-v="b">B</button><button data-k="layout" data-v="c">C</button></div>
+    <div><span>Item</span><button data-k="item" data-v="exercise">Exercise</button><button data-k="item" data-v="food">Food</button></div>
+    <div><span>Theme</span><button data-k="theme" data-v="system">System</button><button data-k="theme" data-v="light">Light</button><button data-k="theme" data-v="dark">Dark</button></div>
+  </div>
+  <button type="button" aria-expanded="false">Mockup</button>
+</div>
+<script src="icons.js"></script>
+<script src="marks.js"></script>
+<script src="item.js"></script>
+<script>
+  // The hash carries the choice: the option (a, b, c), the item and the theme ("#b-food-dark").
+  const read = () => {
+    const h = location.hash.slice(1)
+    return {
+      layout: (h.match(/(^|-)(a|b|c)(-|$)/) || [])[2] || 'a',
+      item: (h.match(/(exercise|food)/) || [])[1] || 'exercise',
+      theme: (h.match(/(light|dark)/) || [])[1] || 'system',
+    }
+  }
+  function start() {
+    const s = read()
+    if (s.theme === 'system') document.documentElement.removeAttribute('data-theme')
+    else document.documentElement.dataset.theme = s.theme
+    const old = document.getElementById('screen')
+    const el = document.createElement('div')
+    el.id = 'screen'
+    old.replaceWith(el)
+    IP.mount(el, { layout: s.layout, item: s.item })
+    document.querySelectorAll('.mock .panel button').forEach((b) => b.setAttribute('aria-pressed', String(s[b.dataset.k] === b.dataset.v)))
+  }
+  const mock = document.querySelector('.mock')
+  mock.querySelector(':scope > button').addEventListener('click', (e) => {
+    mock.classList.toggle('open')
+    e.currentTarget.setAttribute('aria-expanded', String(mock.classList.contains('open')))
+  })
+  mock.querySelector('.panel').addEventListener('click', (e) => {
+    const b = e.target.closest('button')
+    if (!b) return
+    const s = { ...read(), [b.dataset.k]: b.dataset.v }
+    location.hash = [s.layout, s.item === 'exercise' ? '' : s.item, s.theme === 'system' ? '' : s.theme].filter(Boolean).join('-')
+  })
+  addEventListener('hashchange', start)
+  start()
+</script>
+</body>
+</html>

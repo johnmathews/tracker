@@ -1,20 +1,29 @@
 /**
  * An in-memory stand-in for the API (docs/api.md), installed as `fetch` in tests. It keeps the
- * rules the client depends on: plan revisions with 409s, identical-items creates succeeding,
- * single-day ticks, settings, sessions, invite links and, with `mail` on, email confirmation and
- * reset requests. Controls let a test go offline, fail
+ * rules the client depends on: plan and details revisions with 409s, identical writes on a stale
+ * revision succeeding, single-day ticks, settings, sessions, invite links and, with `mail` on,
+ * email confirmation and reset requests. Controls let a test go offline, fail
  * a request, or hold replies back to provoke races.
  */
-import type { Days } from '@/lib/storage'
+import {
+  normaliseDetails,
+  normalisePortableSettings,
+  type Days,
+  type ItemDetails,
+  type PortableSettings,
+} from '@/lib/storage'
 import { mergeSummary, parseExport } from '@/lib/transfer'
+import type { Section } from '@/lib/trackerTypes'
 
-type Section = 'exercise' | 'diet'
 type Plan = { items: unknown[]; rev: number }
-type Settings = { accent: string; dailyPick: number; foodPick: number }
+/** An item's stored details: `{}` once cleared, which still holds its revision. */
+type Details = { doc: ItemDetails; rev: number }
+type Settings = PortableSettings
 
 export type Account = {
   password: string
   plans: Record<Section, Record<string, Plan>>
+  details: Record<Section, Record<string, Details>>
   /** Week → item → a 7-bit mask of its marked days, Monday in bit 0, as the API's `days`. */
   ticks: Record<Section, Record<string, Record<string, number>>>
   /** The marked days that are partial, and those missed, as the API's `partial` and `missed`. */
@@ -29,6 +38,7 @@ function emptyAccount(password: string): Account {
   return {
     password,
     plans: { exercise: {}, diet: {} },
+    details: { exercise: {}, diet: {} },
     ticks: { exercise: {}, diet: {} },
     partial: { exercise: {}, diet: {} },
     missed: { exercise: {}, diet: {} },
@@ -128,7 +138,14 @@ export class FakeApi {
           Object.fromEntries(Object.keys(items).map((id) => [id, marksOf(a, s, w, id)])),
         ]),
       ),
+      // As the API: a cleared document is left out of `details` but keeps its revision.
+      details: Object.fromEntries(
+        Object.entries(a.details[s])
+          .filter(([, d]) => Object.keys(d.doc).length)
+          .map(([id, d]) => [id, d.doc]),
+      ),
       revs: Object.fromEntries(Object.entries(a.plans[s]).map(([w, p]) => [w, p.rev])),
+      detailRevs: Object.fromEntries(Object.entries(a.details[s]).map(([id, d]) => [id, d.rev])),
     })
     return { exercise: section('exercise'), diet: section('diet'), settings: a.settings }
   }
@@ -244,12 +261,14 @@ export class FakeApi {
     if (method === 'GET' && path === '/state') return Response.json(this.state(user!))
     if (method === 'POST' && path === '/import') return this.import(a, body)
     if (method === 'PUT' && path === '/settings') {
-      a.settings = {
+      // As the API: a client that sends no foodPick (K57) or itemSections (K66) keeps the saved
+      // one; an arrangement is normalised, and left out when every page has the default.
+      a.settings = normalisePortableSettings({
         accent: String(body.accent),
         dailyPick: Number(body.dailyPick),
-        // As the API: a client that sends none keeps the saved one (K57).
         foodPick: Number(body.foodPick ?? a.settings?.foodPick ?? 2),
-      }
+        itemSections: 'itemSections' in body ? body.itemSections : a.settings?.itemSections,
+      })
       return Response.json(a.settings)
     }
     let m = path.match(/^\/plans\/(exercise|diet)\/(\d{4}-\d{2}-\d{2})$/)
@@ -266,6 +285,23 @@ export class FakeApi {
       }
       return error(409, 'conflict', { items: current?.items ?? null, rev })
     }
+    m = path.match(/^\/details\/(exercise|diet)\/([^/]+)$/)
+    if (method === 'PUT' && m) {
+      const all = a.details[m[1] as Section]
+      const id = decodeURIComponent(m[2]!)
+      const doc = normaliseDetails(body.details)
+      if (!doc || typeof body.rev !== 'number') return error(400, 'invalid')
+      const current = all[id]
+      const rev = current?.rev ?? 0
+      if (body.rev === rev) {
+        all[id] = { doc, rev: rev + 1 }
+        return Response.json({ rev: rev + 1 })
+      }
+      if (current && JSON.stringify(current.doc) === JSON.stringify(doc)) {
+        return Response.json({ rev })
+      }
+      return error(409, 'conflict', { details: current?.doc ?? null, rev })
+    }
     m = path.match(/^\/ticks\/(exercise|diet)\/(\d{4}-\d{2}-\d{2})\/([^/]+)\/([0-6])$/)
     if (method === 'PUT' && m) {
       const [s, week] = [m[1] as Section, m[2]!]
@@ -281,20 +317,31 @@ export class FakeApi {
     return error(404, 'not-found')
   }
 
-  /** The API's merge: existing weeks keep their plan and marks, settings only if none. */
+  /**
+   * The API's merge: existing weeks keep their plan and marks, items with details keep them, and
+   * settings apply only if none.
+   */
   private import(a: Account, body: unknown): Response {
     const parsed = parseExport(JSON.stringify(body))
     if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 })
     let weeks = 0
     let ticks = 0
+    let details = 0
     for (const section of ['exercise', 'diet'] as const) {
       const incoming = parsed.data[section]
-      const existing = this.state(this.signedIn!) as Record<Section, { plans: object; log: object }>
-      const added = mergeSummary(existing[section] as never, incoming)
+      const existing = this.state(this.signedIn!) as Record<Section, never>
+      const added = mergeSummary(existing[section], incoming)
       weeks += added.weeks
       ticks += added.ticks
+      details += added.details
       for (const [week, items] of Object.entries(incoming.plans)) {
         a.plans[section][week] ??= { items, rev: 1 }
+      }
+      for (const [id, doc] of Object.entries(incoming.details)) {
+        const current = a.details[section][id]
+        if (!current?.doc || !Object.keys(current.doc).length) {
+          a.details[section][id] = { doc, rev: (current?.rev ?? 0) + 1 }
+        }
       }
       for (const [week, entries] of Object.entries(incoming.log)) {
         for (const [id, days] of Object.entries(entries)) {
@@ -312,6 +359,6 @@ export class FakeApi {
     }
     const settings = parsed.data.settings !== null && a.settings === null
     if (settings) a.settings = parsed.data.settings
-    return Response.json({ weeks, ticks, settings })
+    return Response.json({ weeks, ticks, details, settings })
   }
 }

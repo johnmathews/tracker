@@ -11,7 +11,9 @@ export { default as IconButton } from './IconButton.vue'
 export const iconButtonVariants = cva(
   [
     'inline-flex size-11 shrink-0 items-center justify-center rounded-md border border-transparent',
-    'bg-transparent p-0 text-ink hover:not-disabled:bg-tile aria-expanded:bg-tile',
+    'bg-transparent p-0 text-ink hover:not-disabled:not-aria-disabled:bg-tile aria-expanded:bg-tile',
+    // At an end (the item page's first Move up, K66) it stays focusable: the icon fades instead.
+    'aria-disabled:cursor-default aria-disabled:[&_svg]:opacity-40',
     'disabled:cursor-not-allowed disabled:opacity-40',
     'motion-safe:transition-[color,background-color,border-color] motion-safe:duration-120 motion-safe:ease-out',
     '[&_svg]:pointer-events-none [&_svg]:shrink-0',

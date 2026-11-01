@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   EXPORT_FORMAT,
-  EXPORT_VERSION,
   buildExport,
   downloadExport,
   exportFilename,
@@ -11,17 +10,18 @@ import {
   parseExport,
   type ExportData,
 } from '@/lib/transfer'
-import type { Exercise, Log } from '@/lib/storage'
+import type { DetailsMap, Exercise, Log } from '@/lib/storage'
+import type { ItemSections } from '@/lib/itemSections'
 import type { Plans } from '@/lib/plans'
 import { fixtureCases, readFixture } from './fixtures'
 
-type Tracked = { plans: Plans<Exercise>; log: Log }
+type Tracked = { plans: Plans<Exercise>; log: Log; details: DetailsMap }
 type ParseCase = { input?: unknown; inputText?: string; expected: unknown }
 type MergeCase = {
   existing: Tracked
   incoming: Tracked
   expected: Tracked
-  summary: { weeks: number; ticks: number }
+  summary: { weeks: number; ticks: number; details: number }
 }
 type SettingsCase = { existing: unknown; incoming: unknown; expected: unknown }
 
@@ -62,26 +62,33 @@ describe('mergeTracked', () => {
     const incoming: Tracked = {
       plans: { '2026-10-19': [{ id: 'pu', name: 'Push-ups', reps: 10, target: 4 }] },
       log: { '2026-10-19': { pu: ['great', null, null, null, null, null, null] } },
+      details: { pu: { notes: 'Slow.', fields: { equipment: 'Mat' } } },
     }
-    const merged = mergeTracked({ plans: {}, log: {} }, incoming)
+    const merged = mergeTracked({ plans: {}, log: {}, details: {} }, incoming)
     merged.plans['2026-10-19']![0]!.reps = 99
     merged.log['2026-10-19']!.pu![1] = 'missed'
+    merged.details.pu!.fields!.equipment = 'Bar'
     expect(incoming.plans['2026-10-19']![0]!.reps).toBe(10)
     expect(incoming.log['2026-10-19']!.pu![1]).toBeNull()
+    expect(incoming.details.pu!.fields!.equipment).toBe('Mat')
   })
 
   it('leaves the existing data untouched', () => {
     const existing: Tracked = {
       plans: {},
       log: { '2026-10-19': { pu: [null, null, null, null, null, null, null] } },
+      details: { sq: { notes: 'Mine.' } },
     }
-    mergeTracked(existing, {
+    const merged = mergeTracked(existing, {
       plans: {},
       log: {
         '2026-10-19': { pu: ['great', 'great', 'great', 'great', 'great', 'great', 'great'] },
       },
+      details: { pu: { notes: 'Theirs.' } },
     })
+    merged.details.sq!.notes = 'Changed.'
     expect(existing.log['2026-10-19']!.pu).toEqual([null, null, null, null, null, null, null])
+    expect(existing.details).toEqual({ sq: { notes: 'Mine.' } })
   })
 })
 
@@ -90,21 +97,51 @@ describe('buildExport', () => {
     const exercise: Tracked = {
       plans: { '2026-10-19': [{ id: 'pu', name: 'Push-ups', reps: 10, target: 4 }] },
       log: {},
+      details: { pu: { notes: 'Slow.' } },
     }
     const file = buildExport({
       exercise,
-      diet: { plans: {}, log: {} },
+      diet: { plans: {}, log: {}, details: {} },
       settings: { accent: '#0a84ff', dailyPick: 4, foodPick: 3 },
       now: new Date('2026-10-24T09:30:00.000Z'),
     })
     expect(file).toEqual({
       format: EXPORT_FORMAT,
-      version: EXPORT_VERSION,
+      version: 5,
       exportedAt: '2026-10-24T09:30:00.000Z',
       exercise,
-      diet: { plans: {}, log: {} },
+      diet: { plans: {}, log: {}, details: {} },
       settings: { accent: '#0a84ff', dailyPick: 4, foodPick: 3 },
     })
+  })
+
+  it('carries only plans, log and details from each section, never the revisions', () => {
+    const cache = { plans: {}, log: {}, details: {}, revs: { '2026-10-19': 3 }, detailRevs: {} }
+    const file = buildExport({
+      exercise: cache,
+      diet: cache,
+      settings: { accent: '#0a84ff', dailyPick: 4, foodPick: 3 },
+    })
+    expect(file.exercise).toEqual({ plans: {}, log: {}, details: {} })
+    expect(file.diet).toEqual({ plans: {}, log: {}, details: {} })
+  })
+
+  it('carries the item pages’ arrangement when there is one (K66)', () => {
+    const itemSections: ItemSections = {
+      exercise: { order: ['history', 'notes', 'details', 'plan'], hidden: ['details'] },
+    }
+    const base = {
+      exercise: { plans: {}, log: {}, details: {} },
+      diet: { plans: {}, log: {}, details: {} },
+    }
+    const settings = { accent: '#0a84ff', dailyPick: 4, foodPick: 3 }
+    expect(buildExport({ ...base, settings: { ...settings, itemSections } }).settings).toEqual({
+      ...settings,
+      itemSections,
+    })
+    expect(buildExport({ ...base, settings: { ...settings, itemSections: {} } }).settings).toEqual(
+      settings,
+    )
   })
 
   it('round-trips through parseExport', () => {
@@ -112,12 +149,19 @@ describe('buildExport', () => {
       exercise: {
         plans: { '2026-10-19': [{ id: 'sq', name: 'Squats', sets: 3, reps: 15, target: 4 }] },
         log: { '2026-10-19': { sq: ['great', null, null, null, null, null, 'partial'] } },
+        details: { sq: { notes: 'Knees out.', fields: { equipment: 'Kettlebell' } } },
       },
       diet: {
         plans: { '2026-10-19': [{ id: 'veg', name: 'Vegetables', target: 7 }] },
         log: {},
+        details: {},
       },
-      settings: { accent: '#bf5af2', dailyPick: 2, foodPick: 2 },
+      settings: {
+        accent: '#bf5af2',
+        dailyPick: 2,
+        foodPick: 2,
+        itemSections: { food: { order: ['plan', 'notes', 'details', 'history'], hidden: [] } },
+      },
     } satisfies ExportData
     expect(parseExport(JSON.stringify(buildExport(data)))).toEqual({ ok: true, data })
   })
@@ -148,8 +192,8 @@ describe('downloadExport', () => {
       expect(this.isConnected).toBe(true)
     })
     const file = buildExport({
-      exercise: { plans: {}, log: {} },
-      diet: { plans: {}, log: {} },
+      exercise: { plans: {}, log: {}, details: {} },
+      diet: { plans: {}, log: {}, details: {} },
       settings: { accent: '#30d158', dailyPick: 3, foodPick: 2 },
     })
     downloadExport(file, new Date(2026, 9, 24))

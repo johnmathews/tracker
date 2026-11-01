@@ -1,0 +1,413 @@
+<!-- @dsCard group="Screens" height=4100 subtitle="An exercise's or a food's own page, in rows like Settings: notes, details, this week's plan and recent weeks, shown and ordered per type" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ItemPage — preview</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: var(--space-6); background: var(--canvas); color: var(--ink); font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
+  .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .variant { margin: 0 0 var(--space-3); color: var(--ink-secondary); }
+  .gap { height: var(--space-8); }
+
+  /* The page, at u = 1 (a 1280×800 screen), at the Settings page's sizes (K51) with no bar (K52).
+     In the app every size follows the screen. */
+  .stage { border: 1px solid var(--line); border-radius: var(--radius-lg); }
+  .page { padding: 28px 48px 64px; display: flex; flex-direction: column; }
+  .back { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-size: 19px; line-height: 26px; text-decoration: underline; text-underline-offset: 4px; }
+  .back svg { width: 26px; height: 26px; }
+  .type.label { margin: 16px 0 0; color: var(--ink-secondary); font-size: 19px; line-height: 25px; }
+  .titleline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 4px 0 28px; }
+  h1.title-1 { margin: 0; font-size: 40px; line-height: 46px; }
+  /* Chip, as its card, at the page's label size. */
+  .chip.label { background: var(--tile); color: var(--ink-secondary); border-radius: var(--radius-sm); padding: 2px var(--space-2); font-size: 19px; line-height: 26px; white-space: nowrap; }
+
+  /* Layout A (K65): rows like Settings (K51). Each section is a row: a line rule above it, its
+     heading in the week's 320px name column, its content to the right, 20px between its parts. */
+  .sec { display: grid; grid-template-columns: 320px minmax(0, 1fr); align-items: start; padding: 32px 0; border-top: 1px solid var(--line); }
+  .sec > .content { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+  h2.title-2 { margin: 0; font-size: 27px; line-height: 34px; }
+  .lede { margin: 0; max-width: 60ch; color: var(--ink-secondary); font-size: 19px; line-height: 28px; }
+  .lede strong { color: var(--ink); font-weight: 600; }
+
+  /* Fields in columns at least 300px wide: two to a row on a laptop. Link takes a row of its own. */
+  .fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 24px 28px; align-items: start; }
+  .fields > .wide { grid-column: 1 / -1; }
+  .field { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .field > .label { font-size: 19px; line-height: 25px; }
+  .hint { margin: 0; color: var(--ink-secondary); }
+
+  /* TextField at the page's size: its card's skin, 60px tall. */
+  input { height: 60px; width: 100%; padding: 0 15px; border: 1px solid var(--control-border); border-radius: var(--radius-sm); background: var(--panel); color: var(--ink); font: inherit; font-size: 19px; font-variant-numeric: tabular-nums; }
+  input:hover { border-color: var(--ink); }
+  input.num { max-width: 96px; }
+  input.weight { max-width: 170px; }
+  .link { align-self: flex-start; color: var(--ink); font-size: 19px; line-height: 26px; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+  .link:hover { text-decoration-thickness: 2px; }
+
+  /* SegmentedControl, drawn as its own card at the page's size. */
+  .seg { display: inline-flex; flex-wrap: wrap; align-self: flex-start; max-width: 100%; border: 1px solid var(--control-border); border-radius: var(--radius-md); }
+  .seg button { height: 58px; padding: 0 22px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); font: 600 19px/25px var(--font-sans); cursor: pointer; text-wrap: nowrap; }
+  .seg button:hover { background: var(--tile); }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
+  .seg button:focus-visible { z-index: 1; }
+
+  /* Stepper, drawn as its own card at the page's size. */
+  .stepper { display: inline-flex; align-self: flex-start; align-items: stretch; height: 60px; border: 1px solid var(--control-border); border-radius: var(--radius-md); }
+  .stepper button { display: inline-flex; align-items: center; justify-content: center; width: 60px; padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); cursor: pointer; }
+  .stepper button svg { width: 26px; height: 26px; }
+  .stepper button:hover { background: var(--tile); }
+  .value { display: flex; align-items: center; justify-content: center; min-width: 66px; padding: 0 var(--space-1); font: 600 24px/30px var(--font-sans); }
+
+  /* Button (secondary) at the page's size. */
+  .btn { align-self: flex-start; height: 60px; padding: 0 22px; display: inline-flex; align-items: center; gap: 10px; border: 1px solid var(--control-border); border-radius: var(--radius-md); background: transparent; color: var(--ink); font: 600 19px/25px var(--font-sans); cursor: pointer; }
+  .btn:hover { background: var(--tile); }
+  .btn svg { width: 26px; height: 26px; }
+
+  /* Notes: the person's words in the note style, at the page's text size (K65). */
+  .notes { display: flex; flex-direction: column; gap: 20px; }
+  .note-body { max-width: 66ch; font-family: var(--font-serif); font-style: italic; font-size: 19px; line-height: 29px; color: var(--ink); }
+  .note-body p, .note-body ul { margin: 0 0 12px; }
+  .note-body > :last-child { margin-bottom: 0; }
+  .note-body ul { padding-left: 1.2em; }
+  .note-body strong { font-weight: 600; }
+  .note-body a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+  /* The notes being edited: NoteEditor's skin (tile, the note style) at the notes' size. */
+  .area { display: block; width: 100%; min-height: 240px; padding: 14px; border: 1px solid var(--control-border); border-radius: var(--radius-sm); background: var(--tile); color: var(--ink); font-family: var(--font-serif); font-style: italic; font-size: 19px; line-height: 29px; resize: vertical; }
+  .area:hover { border-color: var(--ink); }
+  .notes .edit { display: none; }
+  .notes[data-editing="true"] .read { display: none; }
+  .notes[data-editing="true"] .edit { display: flex; flex-direction: column; gap: var(--space-2); }
+
+  /* The read-only plan: each label over its value, in the controls' columns. */
+  dl.plan { margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 20px 28px; }
+  dl.plan div { display: flex; flex-direction: column; gap: 4px; }
+  dl.plan dt { font-size: 19px; line-height: 25px; }
+  dl.plan dd { margin: 0; font-size: 19px; line-height: 28px; }
+
+  /* RecentWeeks, as its card. */
+  .weeks { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: max-content max-content minmax(0, 1fr); column-gap: 14px; }
+  .wk { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); font-size: 19px; line-height: 28px; }
+  .wk:last-child { border-bottom: 1px solid var(--line); }
+  .wk-when { white-space: nowrap; }
+  .wk[aria-current] .wk-when { font-weight: 600; }
+  .wk-marks { display: flex; gap: 6px; }
+  .wk-count { color: var(--ink-secondary); }
+  .wk-count[data-met] { color: var(--pen); font-weight: 600; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 0.22em; }
+  .mk { width: 24px; height: 24px; display: grid; place-items: center; flex: none; }
+  .mk svg { width: 100%; height: 100%; overflow: visible; }
+  .mk .bx { stroke: var(--control-border); }
+  .mk .ink { fill: currentColor; }
+  .mk .sym { stroke: var(--canvas); }
+  .mk[data-mark="great"] { color: var(--pen); }
+  .mk[data-mark="partial"] { color: var(--pen-partial); }
+  .mk[data-mark="missed"] { color: var(--pen-missed); }
+
+  /* The head's first line: Back at the left, Arrange sections (a quiet Button) at the right. */
+  .topline { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .btn.quiet { border-color: transparent; }
+  .btn.quiet[data-arranging="true"] { border-color: var(--control-border); }
+
+  /* Arranging (K66): every section as its heading with Show, Move up and Move down under it, and
+     one word beside it. Switch and IconButton as their cards, at Edit plan's 52px. */
+  .ar-lede { margin: 0 0 16px; }
+  .sec.ar { padding: 14px 0; align-items: center; }
+  .ar-head { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+  .ar-ctl { display: flex; align-items: center; gap: 8px; }
+  .sw { display: inline-flex; align-items: center; gap: 12px; height: 52px; padding: 0 var(--space-2); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); font: 600 19px/25px var(--font-sans); cursor: pointer; white-space: nowrap; }
+  .sw:hover { background: var(--tile); }
+  .track { position: relative; box-sizing: border-box; flex: none; width: 40px; height: 24px; border: 1px solid var(--control-border); border-radius: var(--radius-full); }
+  .thumb { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: var(--radius-full); background: var(--ink-secondary); }
+  .sw[aria-checked="true"] .track { background: var(--ink); border-color: var(--ink); }
+  .sw[aria-checked="true"] .thumb { left: 19px; background: var(--on-ink); }
+  .ib { display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px; padding: 0; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); cursor: pointer; }
+  .ib svg { width: 26px; height: 26px; }
+  .ib:not([aria-disabled="true"]):hover { background: var(--tile); }
+  .ib[aria-disabled="true"] { cursor: default; }
+  .ib[aria-disabled="true"] svg { opacity: 0.4; }
+  .summary { margin: 0; font-size: 19px; line-height: 28px; color: var(--ink-secondary); }
+  .sec[data-shown="true"] .summary { color: var(--ink); }
+
+  a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-sm); }
+  h1:focus { outline: none; }
+  @media (prefers-reduced-motion: no-preference) { button, input, textarea { transition: background-color 120ms, border-color 120ms, color 120ms; } }
+
+  /* Folded: one column in the same order, each heading over its content, at the system's sizes on
+     n (1 on a phone). */
+  @media (max-width: 639px) {
+    body { padding: var(--space-4); }
+    .page { padding: 20px 16px 48px; }
+    .back, .lede, .link, dl.plan dd, .wk { font-size: 18px; line-height: 26px; }
+    .back svg, .btn svg { width: 22px; height: 22px; }
+    .type.label, .field > .label, dl.plan dt { font-size: 16px; line-height: 22px; }
+    .chip.label { font-size: 16px; line-height: 22px; }
+    h1.title-1 { font-size: 30px; line-height: 36px; }
+    .titleline { margin-bottom: 20px; }
+    h2.title-2 { font-size: 22px; line-height: 28px; }
+    .sec { display: flex; flex-direction: column; gap: 16px; padding: 24px 0; }
+    .sec > .content { gap: 16px; }
+    .note-body, .area { font-size: 18px; line-height: 28px; }
+    .fields, dl.plan { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+    input, .stepper, .btn { height: 48px; }
+    input { font-size: 18px; }
+    .seg button { height: 46px; padding: 0 16px; font-size: 16px; }
+    .stepper button { width: 48px; }
+    .value { min-width: 52px; font-size: 20px; }
+    .btn { font-size: 16px; }
+    .weeks { column-gap: 10px; }
+    .wk-marks { gap: 3px; }
+    .mk { width: min(24px, 5.4vw); height: min(24px, 5.4vw); }
+    /* Arranging, folded: the controls on the heading's line, and the word goes. */
+    .ar-head { flex-direction: row; justify-content: space-between; align-items: center; width: 100%; gap: 8px; }
+    .ar-head h2 { flex: 1; min-width: 0; }
+    .ar-ctl { gap: 0; }
+    .sec.ar > .content { display: none; }
+    .sw { height: 44px; padding: 0 6px; font-size: 16px; }
+    .ib { width: 44px; height: 44px; }
+    .ib svg { width: 22px; height: 22px; }
+  }
+</style>
+</head>
+<body>
+<p class="variant label">Kettlebell swings, opened from this week</p>
+<div class="stage">
+  <main class="page">
+    <div class="topline"><a class="back" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span>Back to the week</span></a><button type="button" class="btn quiet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/></svg><span>Arrange sections</span></button></div>
+    <p class="type label">Exercise</p>
+    <div class="titleline"><h1 class="title-1" tabindex="-1">Kettlebell swings</h1><span class="chip label">3 × 15</span><span class="chip label">16 kg</span></div>
+
+    <section class="sec" aria-labelledby="s-notes">
+      <h2 class="title-2" id="s-notes">Notes</h2>
+      <div class="content notes" data-editing="false">
+        <div class="read note-body">
+          <p><strong>Hinge, don’t squat.</strong> The hips drive the bell. The arms only guide it.</p>
+          <ul><li>Brace before each swing</li><li>The bell stops at chest height, no higher</li><li>Breathe out hard at the top</li></ul>
+          <p>Move to 20 kg once all three sets feel easy. <a href="#" target="_blank">Form video</a></p>
+        </div>
+        <div class="edit">
+          <textarea class="area" id="notes-ta" aria-labelledby="s-notes" aria-describedby="notes-hint" rows="8">**Hinge, don’t squat.** The hips drive the bell. The arms only guide it.
+
+- Brace before each swing
+- The bell stops at chest height, no higher
+- Breathe out hard at the top
+
+Move to 20 kg once all three sets feel easy. [Form video](https://youtube.com/watch?v=swing-form)</textarea>
+          <p class="caption hint" id="notes-hint">Markdown works: **bold**, *italic*, lists, links.</p>
+        </div>
+        <button type="button" class="btn" data-notes><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span>Edit notes</span></button>
+      </div>
+    </section>
+
+    <section class="sec" aria-labelledby="s-details">
+      <h2 class="title-2" id="s-details">Details</h2>
+      <div class="content">
+        <div class="fields">
+          <div class="field"><label class="label" for="d-equipment">Equipment</label><input id="d-equipment" value="16 kg kettlebell"></div>
+          <div class="field"><label class="label" for="d-works">Works</label><input id="d-works" value="Glutes, hamstrings, grip"></div>
+          <div class="field wide"><label class="label" for="d-link">Link</label><input id="d-link" value="https://youtube.com/watch?v=swing-form"><a class="link" href="#" target="_blank">Open youtube.com in a new tab</a></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec" aria-labelledby="s-plan">
+      <h2 class="title-2" id="s-plan">This week’s plan</h2>
+      <div class="content">
+        <p class="lede">Changes this week’s plan, and the weeks after it that have no plan of their own.</p>
+        <div class="fields">
+        <div class="field"><label class="label" for="p-sets">Sets</label><input id="p-sets" class="num" inputmode="numeric" maxlength="2" value="3"></div>
+        <div class="field"><span class="label" id="p-measure">Measure</span><div class="seg" role="group" aria-labelledby="p-measure"><button type="button" aria-pressed="true">Reps</button><button type="button" tabindex="-1" aria-pressed="false">Time</button></div></div>
+        <div class="field"><label class="label" for="p-reps">Reps</label><input id="p-reps" class="num" inputmode="numeric" maxlength="4" value="15"></div>
+        <div class="field"><label class="label" for="p-kg">Weight in kg</label><input id="p-kg" class="weight" inputmode="decimal" placeholder="Bodyweight" value="16"></div>
+        <div class="field"><span class="label" id="p-count">Reps count</span><div class="seg" role="group" aria-labelledby="p-count"><button type="button" aria-pressed="true">Per set</button><button type="button" tabindex="-1" aria-pressed="false">Each side</button></div></div>
+        <div class="field"><span class="label" id="p-goal">Times a week</span><div class="stepper" role="group" aria-labelledby="p-goal"><button type="button" aria-label="Fewer times a week" data-step="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></button><output class="value" aria-live="polite">3</output><button type="button" aria-label="More times a week" data-step="1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec" aria-labelledby="s-weeks">
+      <h2 class="title-2" id="s-weeks">Recent weeks</h2>
+      <div class="content" id="weeks"></div>
+    </section>
+  </main>
+</div>
+
+<div class="gap"></div>
+<p class="variant label">Notes, being edited: they save as you type, and Done turns them back</p>
+<div class="stage">
+  <div class="page">
+    <section class="sec" aria-labelledby="e-notes">
+      <h2 class="title-2" id="e-notes">Notes</h2>
+      <div class="content notes" data-editing="true">
+        <div class="edit">
+          <textarea class="area" aria-labelledby="e-notes" aria-describedby="e-hint" rows="6">A handful, not the bag. Unsalted where there’s a choice.
+
+Good with yoghurt in the morning, or on their own after training.</textarea>
+          <p class="caption hint" id="e-hint">Markdown works: **bold**, *italic*, lists, links.</p>
+        </div>
+        <button type="button" class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>Done</span></button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="gap"></div>
+<p class="variant label">Opened for an item that isn’t in this week’s plan: the plan section is read-only</p>
+<div class="stage">
+  <div class="page">
+    <section class="sec" aria-labelledby="r-plan">
+      <h2 class="title-2" id="r-plan">Latest plan</h2>
+      <div class="content">
+        <p class="lede">Kettlebell swings isn’t in this week’s plan. This is its plan from the week of 12 October.</p>
+        <dl class="plan">
+          <div><dt class="label">Sets</dt><dd>3</dd></div>
+          <div><dt class="label">Measure</dt><dd>Reps</dd></div>
+          <div><dt class="label">Reps</dt><dd>15</dd></div>
+          <div><dt class="label">Weight in kg</dt><dd>16</dd></div>
+          <div><dt class="label">Reps count</dt><dd>Per set</dd></div>
+          <div><dt class="label">Times a week</dt><dd>3</dd></div>
+        </dl>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="gap"></div>
+<p class="variant label">Arranging, after Arrange sections (K66): Details hidden, Recent weeks moved to the top. Changes apply at once to every exercise page</p>
+<div class="stage">
+  <div class="page">
+    <div class="topline"><a class="back" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span>Back to the week</span></a><button type="button" class="btn quiet" data-arranging="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>Done</span></button></div>
+    <p class="type label">Exercise</p>
+    <div class="titleline"><h1 class="title-1" tabindex="-1">Kettlebell swings</h1><span class="chip label">3 × 15</span><span class="chip label">16 kg</span></div>
+    <p class="lede ar-lede">Choose which sections every exercise page shows, and their order. Changes apply at once.</p>
+    <div id="arrange"></div>
+  </div>
+</div>
+
+<div class="gap"></div>
+<p class="variant label">Every section hidden</p>
+<div class="stage">
+  <div class="page">
+    <p class="type label">Food</p>
+    <div class="titleline"><h1 class="title-1" tabindex="-1">Fish</h1></div>
+    <p class="lede">Every section is hidden. Arrange sections to show one.</p>
+  </div>
+</div>
+
+<script>
+(() => {
+  // Arranging: Show, Move up and Move down work; focus stays on the control, or moves to the
+  // other move button when a section reaches an end.
+  const TITLES = { notes: 'Notes', details: 'Details', plan: 'This week’s plan', history: 'Recent weeks' }
+  const UP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>'
+  const DOWN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>'
+  const st = { order: ['history', 'notes', 'details', 'plan'], hidden: new Set(['details']) }
+  const box = document.getElementById('arrange')
+  function draw(focus) {
+    box.innerHTML = st.order.map((k, i) => {
+      const on = !st.hidden.has(k)
+      const end = (d) => ((d < 0 ? i === 0 : i === st.order.length - 1) ? ' aria-disabled="true"' : '')
+      return `<section class="sec ar" data-shown="${on}" aria-labelledby="a-${k}"><div class="ar-head"><h2 class="title-2" id="a-${k}">${TITLES[k]}</h2><div class="ar-ctl">` +
+        `<button type="button" class="sw" role="switch" aria-checked="${on}" data-toggle="${k}">Show<span class="vh"> ${TITLES[k]}</span><span class="track" aria-hidden="true"><span class="thumb"></span></span></button>` +
+        `<button type="button" class="ib" aria-label="Move ${TITLES[k]} up" data-move="-1" data-key="${k}"${end(-1)}>${UP}</button>` +
+        `<button type="button" class="ib" aria-label="Move ${TITLES[k]} down" data-move="1" data-key="${k}"${end(1)}>${DOWN}</button>` +
+        `</div></div><div class="content"><p class="summary">${on ? 'Shown' : 'Hidden'}</p></div></section>`
+    }).join('')
+    if (focus) {
+      const el = box.querySelector(focus[0])
+      ;(el.getAttribute('aria-disabled') === 'true' ? box.querySelector(focus[1]) : el).focus()
+    }
+  }
+  box.addEventListener('click', (e) => {
+    const tg = e.target.closest('[data-toggle]')
+    if (tg) {
+      const k = tg.dataset.toggle
+      if (st.hidden.has(k)) st.hidden.delete(k)
+      else st.hidden.add(k)
+      return draw([`[data-toggle="${k}"]`])
+    }
+    const mv = e.target.closest('[data-move]')
+    if (!mv || mv.getAttribute('aria-disabled') === 'true') return
+    const k = mv.dataset.key, d = Number(mv.dataset.move), i = st.order.indexOf(k)
+    ;[st.order[i], st.order[i + d]] = [st.order[i + d], st.order[i]]
+    draw([`[data-key="${k}"][data-move="${d}"]`, `[data-key="${k}"][data-move="${-d}"]`])
+  })
+  draw()
+})()
+</script>
+<script>
+(() => {
+  // Recent weeks, drawn as the RecentWeeks card draws them (Stamped ticks).
+  const BOX = 'M6.5 4.8C12.5 4.3 23.5 4.6 30.2 4.9C31.4 5 31.6 6.1 31.5 7.2C31.2 13.5 31.4 22.5 31.2 29.4C31.2 30.6 30.3 31.3 29.1 31.3C22.5 31.6 13 31.2 6.6 31.4C5.4 31.4 4.7 30.6 4.7 29.4C4.6 22.8 4.9 13 4.6 6.8C4.6 5.6 5.4 4.9 6.5 4.8Z'
+  const STAMP = 'M5.8 33.2C5.2 33 4.9 32.7 4.9 32.4C4.9 31.9 4.6 31.8 3.3 31.7C2 31.6 1.9 31.6 1.6 31.1C1.4 30.8 1.3 30.2 1.3 29.7C1.2 29.4 1.6 29.1 2.2 29C2.5 29 2.7 29 2.8 28.9C2.9 28.8 3.1 28.7 3.2 28.7C3.6 28.7 3.7 28.5 3.5 27.6C3.4 26.8 3.5 23.7 3.6 23.3C3.6 23.3 3.7 23 3.7 22.7C3.8 22.2 3.8 22 3.9 21.3C4 20.8 4.1 20.7 4.3 20.6C4.4 20.5 4.5 20.4 4.5 20.1C4.5 19.8 4.5 19.7 4.8 19.6C5.2 19.4 5.2 17.9 4.8 17.3C4.7 17.1 4.6 16.2 4.6 16C4.7 15.9 4.7 15.8 4.6 15.7C4.6 15.5 4.6 15.2 4.6 14C4.6 12.5 4.5 12.3 4.3 12.3C4 12.3 3.4 9.5 3.5 8.4C3.5 8.2 3.5 7.9 3.4 7.2C3.3 6.3 3.3 6 3.5 5.6C3.7 5 4.1 4.8 4.5 5C4.8 5.3 6 5.3 6.2 5C6.4 4.9 6.4 4.9 6.7 4.8C6.9 4.8 7 4.8 7.2 4.7C7.4 4.6 7.4 4.6 7.9 4.6C8.2 4.6 9 4.7 9.7 4.7C10.3 4.7 11 4.7 11.2 4.7C11.4 4.7 11.9 4.8 12.3 4.8C12.7 4.8 13.3 4.8 13.6 4.8C14 4.9 14.4 4.9 14.9 4.9C15.6 4.8 16.1 4.9 16.3 5.1C16.4 5.1 16.6 5.2 16.7 5.2C16.9 5.2 17 5.3 17.1 5.3C17.4 5.5 18.1 5.5 18.3 5.3C18.6 5.1 18.8 5.1 19.1 5.3C19.4 5.5 21.7 5.5 23.8 5.2C25.2 5.1 25.5 5.1 26.9 5.1C27.8 5.1 28.9 5.1 29.5 5.1C30.5 5.1 30.5 5.1 30.8 5.2C30.9 5.3 31.1 5.4 31.2 5.4C31.2 5.3 31.4 5.4 31.5 5.5C31.6 5.6 31.7 5.8 31.8 5.8C32.1 6 32.2 6.9 32.1 7.6C31.9 8.1 31.9 8.3 32 8.6C32.1 8.6 32.2 8.9 32.3 9.1C32.7 9.9 33.2 12.2 33.1 13.3C33.1 13.8 33 14.8 33 15.4C32.9 16.1 32.9 16.7 32.9 16.9C32.8 17 32.8 17.6 32.7 18.1C32.6 18.7 32.6 19.2 32.5 19.3C32.5 19.4 32.4 20.2 32.3 21C32.2 21.9 32.1 22.6 32.1 22.7C32.1 22.8 32 23.3 32 23.8C32 24.2 31.9 24.7 31.9 24.8C31.8 25 31.7 25.5 31.7 26.1C31.6 26.5 31.6 26.8 31.5 27C31.2 27.7 31.2 27.7 31 27.8C30.6 27.9 30.5 28.6 30.7 29.1C31.1 29.8 31 31.1 30.5 31.1C30.4 31.1 30.3 31.3 30.2 31.5C30.2 31.6 30 32.1 29.9 32.2C29.4 32.5 27.6 32.4 26.2 32.1C25.9 32 25.6 32 25.4 31.9C24.5 31.8 24.3 31.8 23.8 31.8C23.4 31.7 23 31.7 22.9 31.7C22.7 31.6 22.3 31.6 22 31.6C21.6 31.6 21.2 31.5 21.1 31.5C20.9 31.4 20.8 31.4 20.3 31.5C19.9 31.5 19.7 31.5 19.4 31.5C18.9 31.3 18.7 31.3 18.1 31.4C17.3 31.5 17.2 31.5 16.8 31.3C16.5 31.2 16.5 31.2 15.6 31.2C14.4 31.3 14.4 31.3 14.2 31.1C14 31 12.6 30.9 11.6 31.1C11.3 31.1 10.7 31.1 10.3 31.2C9.3 31.2 8.9 31.2 8.6 31.4C8.5 31.4 8.3 31.5 8.2 31.5C8 31.5 8 31.5 7.7 31.8C7.7 31.9 7.6 31.9 7.6 32C7.6 32 7.5 32.1 7.5 32.2C7.4 32.6 7.1 33 6.7 33.2C6.3 33.4 6.3 33.4 5.8 33.2Z'
+  const TICKS = {
+    great: 'M8.6 18.2C10.6 19.9 12.6 22.4 14.6 25.9C15 26.6 15.6 26.6 16 25.9C19.4 19.2 24.6 11.6 31.6 5.2',
+    partial: 'M18.6 9.8C23.4 9.6 26.6 13.4 26.4 18.2C26.2 23.2 22.4 26.6 17.8 26.4C13 26.2 9.6 22.6 9.8 17.8C10 13.4 13.2 10.2 17.4 9.6',
+    missed: 'M9.2 9.4C15 14.8 21.4 21.6 27.4 27.6M27 9C21.6 14 15.4 20.6 9.2 27.4',
+  }
+  const mark = (kind) => `<span class="mk"${kind ? ` data-mark="${kind}"` : ''}><svg viewBox="0 0 36 36" fill="none" stroke-linecap="round" stroke-linejoin="round">${kind ? `<path class="ink" d="${STAMP}" fill-rule="evenodd"/><path class="sym" d="${TICKS[kind]}" stroke-width="3.25"/>` : ''}<path class="bx" d="${BOX}" stroke-width="1.75"/></svg></span>`
+  const WORDS = ['none', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight']
+  const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+  const KIND = { great: '', partial: ' (partly done)', missed: " (couldn't do it)" }
+  const list = (xs) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`)
+  const g = 'great', p = 'partial', x = 'missed', _ = null
+  const weeks = [
+    ['26 Oct', '26 October', 3, [g, _, g, _, _, _, _]],
+    ['19 Oct', '19 October', 3, [g, _, p, _, g, _, _]],
+    ['12 Oct', '12 October', 3, [_, g, _, _, g, _, g]],
+    ['5 Oct', '5 October', 3, [g, _, _, x, _, _, _]],
+    ['28 Sep', '28 September', 3, [_, g, _, g, _, g, _]],
+    ['21 Sep', '21 September', null, [_, _, _, _, _, _, _]],
+    ['14 Sep', '14 September', 3, [g, _, g, _, _, g, _]],
+    ['7 Sep', '7 September', 3, [_, p, _, _, g, _, _]],
+  ]
+  const done = (w) => w[3].filter(Boolean).length
+  const isMet = (w) => w[2] > 0 && done(w) >= w[2]
+  const met = weeks.filter(isMet).length
+  const rows = weeks.map((w, i) => {
+    const n = done(w)
+    const ok = isMet(w)
+    const count = w[2] === null ? 'Not planned' : `${n} of ${w[2]}`
+    const marked = w[3].map((k, d) => (k ? DAYS[d] + KIND[k] : null)).filter(Boolean)
+    const said = marked.length ? `Marked ${list(marked)}.` : 'Nothing marked.'
+    const when = i === 0
+      ? `<span class="wk-when">This week<span class="vh">.</span></span>`
+      : `<span class="wk-when"><span aria-hidden="true">${w[0]}</span><span class="vh">Week of ${w[1]}.</span></span>`
+    return `<li class="wk"${i === 0 ? ' aria-current="date"' : ''}>${when}<span class="wk-marks" aria-hidden="true">${w[3].map(mark).join('')}</span><span class="vh"> ${said} </span><span class="wk-count"${ok ? ' data-met' : ''}>${count}${ok ? '<span class="vh">, goal met</span>' : ''}</span></li>`
+  }).join('')
+  document.getElementById('weeks').innerHTML =
+    `<p class="lede">The goal was met in <strong>${WORDS[met]} of the last ${WORDS[weeks.length]} weeks</strong>.</p><ol class="weeks" aria-labelledby="s-weeks">${rows}</ol>`
+
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('a')) e.preventDefault()
+    // SegmentedControl: one choice, one tab stop.
+    const seg = e.target.closest('.seg button')
+    if (seg) seg.parentElement.querySelectorAll('button').forEach((b) => { b.setAttribute('aria-pressed', String(b === seg)); b.tabIndex = b === seg ? 0 : -1 })
+    // Stepper: 0 to 7.
+    const step = e.target.closest('[data-step]')
+    if (step) {
+      const out = step.parentElement.querySelector('.value')
+      out.textContent = Math.min(7, Math.max(0, Number(out.textContent) + Number(step.dataset.step)))
+    }
+    // Edit notes and Done: the notes turn into the field and back; focus follows.
+    const nb = e.target.closest('[data-notes]')
+    if (nb) toggleNotes(nb)
+  })
+  function toggleNotes(nb, editing) {
+    const box = nb.closest('.notes')
+    const on = editing ?? box.dataset.editing !== 'true'
+    box.dataset.editing = String(on)
+    nb.innerHTML = on
+      ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>Done</span>'
+      : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span>Edit notes</span>'
+    if (on) { const ta = box.querySelector('textarea'); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length) }
+    else nb.focus()
+  }
+  // Escape in the field does what Done does.
+  document.getElementById('notes-ta').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); toggleNotes(document.querySelector('[data-notes]'), false) }
+  })
+})()
+</script>
+</body>
+</html>

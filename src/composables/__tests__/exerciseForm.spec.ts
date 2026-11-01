@@ -16,18 +16,14 @@ describe('input cleaning', () => {
 })
 
 describe('useExerciseForm', () => {
-  it('loads an exercise, reports its value, and resets', () => {
+  it('loads an exercise and its notes, reports its plan value without them, and resets', () => {
     const form = useExerciseForm()
-    form.load({
-      id: 'kh',
-      name: 'Kettlebell halos',
-      sets: 3,
-      reps: 8,
-      perSide: true,
-      weight: 8,
-      target: 3,
-      notes: '**Ribs down.**',
-    })
+    form.load(
+      { id: 'kh', name: 'Kettlebell halos', sets: 3, reps: 8, perSide: true, weight: 8, target: 3 },
+      '**Ribs down.**',
+    )
+    // The notes are the item's details, for every week; the dialog saves them apart.
+    expect(form.notes.value).toBe('**Ribs down.**')
     expect(form.value()).toEqual({
       name: 'Kettlebell halos',
       sets: 3,
@@ -35,10 +31,10 @@ describe('useExerciseForm', () => {
       perSide: true,
       weight: 8,
       target: 3,
-      notes: '**Ribs down.**',
     })
     expect(form.sets.value).toBe('3')
     form.load()
+    expect(form.notes.value).toBe('')
     expect(form.value()).toStrictEqual({
       name: '',
       sets: undefined,
@@ -46,7 +42,6 @@ describe('useExerciseForm', () => {
       perSide: false,
       weight: undefined,
       target: 3,
-      notes: '',
     })
   })
 
@@ -64,7 +59,6 @@ describe('useExerciseForm', () => {
       perSide: false,
       weight: undefined,
       target: 2,
-      notes: '',
     })
     form.measureChoice.value = 'reps'
     expect(form.amountLabel.value).toBe('Reps')

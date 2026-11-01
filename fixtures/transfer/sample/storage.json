@@ -1,131 +1,139 @@
 {
-  "tracker-v2": {
-    "plans": {
-      "2026-09-21": [
-        {
-          "id": "pu",
-          "name": "Push-ups",
-          "reps": 10,
-          "target": 4,
-          "notes": "Slow on the way down. [Form video](https://example.com/push-ups)"
+  "tracker-cache-v4:alice": {
+    "exercise": {
+      "plans": {
+        "2026-09-21": [
+          { "id": "pu", "name": "Push-ups", "reps": 10, "target": 4 },
+          { "id": "pl", "name": "Pull-ups", "reps": 3, "target": 4 },
+          { "id": "sq", "name": "Squats", "reps": 15, "target": 4 },
+          { "id": "be", "name": "Back extensions", "reps": 12, "target": 3 },
+          { "id": "kh", "name": "Kettlebell halos", "reps": 8, "perSide": true, "target": 3 }
+        ],
+        "2026-10-05": [
+          { "id": "pu", "name": "Push-ups", "sets": 3, "reps": 12, "target": 4 },
+          { "id": "pl", "name": "Pull-ups", "sets": 3, "reps": 4, "target": 4 },
+          { "id": "sq", "name": "Squats", "sets": 3, "reps": 15, "weight": 12, "target": 4 },
+          { "id": "be", "name": "Back extensions", "reps": 12, "target": 3 },
+          { "id": "kh", "name": "Kettlebell halos", "reps": 8, "perSide": true, "target": 3 }
+        ],
+        "2026-10-12": [
+          { "id": "pu", "name": "Push-ups", "sets": 3, "reps": 12, "target": 4 },
+          { "id": "pl", "name": "Pull-ups", "sets": 3, "reps": 5, "target": 5 },
+          { "id": "sq", "name": "Squats", "sets": 3, "reps": 15, "weight": 16, "target": 4 },
+          {
+            "id": "kh",
+            "name": "Kettlebell halos",
+            "reps": 8,
+            "perSide": true,
+            "weight": 8,
+            "target": 3
+          },
+          { "id": "xmgk3p1a", "name": "Plank", "sets": 3, "reps": 0, "target": 2 }
+        ],
+        "2026-10-19": [
+          { "id": "pu", "name": "Push-ups", "sets": 3, "reps": 15, "target": 4 },
+          { "id": "pl", "name": "Pull-ups", "sets": 3, "reps": 5, "target": 5 },
+          { "id": "sq", "name": "Squats", "sets": 3, "reps": 15, "weight": 16, "target": 4 },
+          {
+            "id": "kh",
+            "name": "Kettlebell halos",
+            "reps": 8,
+            "perSide": true,
+            "weight": 8,
+            "target": 3
+          },
+          { "id": "xmgk3p1a", "name": "Plank", "sets": 3, "reps": 0, "target": 2 }
+        ]
+      },
+      "log": {
+        "2026-09-21": {
+          "pu": ["great", null, "great", null, null, "great", null],
+          "pl": [null, "great", null, "great", null, null, "great"],
+          "sq": [null, null, "great", null, "great", null, null],
+          "be": ["great", null, null, "great", null, "great", null],
+          "kh": [null, "great", null, null, "great", null, "great"]
         },
-        { "id": "pl", "name": "Pull-ups", "reps": 3, "target": 4 },
-        { "id": "sq", "name": "Squats", "reps": 15, "target": 4 },
-        { "id": "be", "name": "Back extensions", "reps": 12, "target": 3 },
-        { "id": "kh", "name": "Kettlebell halos", "reps": 8, "perSide": true, "target": 3 }
-      ],
-      "2026-10-05": [
-        { "id": "pu", "name": "Push-ups", "sets": 3, "reps": 12, "target": 4 },
-        { "id": "pl", "name": "Pull-ups", "sets": 3, "reps": 4, "target": 4 },
-        { "id": "sq", "name": "Squats", "sets": 3, "reps": 15, "weight": 12, "target": 4 },
-        { "id": "be", "name": "Back extensions", "reps": 12, "target": 3 },
-        { "id": "kh", "name": "Kettlebell halos", "reps": 8, "perSide": true, "target": 3 }
-      ],
-      "2026-10-12": [
-        { "id": "pu", "name": "Push-ups", "sets": 3, "reps": 12, "target": 4 },
-        { "id": "pl", "name": "Pull-ups", "sets": 3, "reps": 5, "target": 5 },
-        { "id": "sq", "name": "Squats", "sets": 3, "reps": 15, "weight": 16, "target": 4 },
-        {
-          "id": "kh",
-          "name": "Kettlebell halos",
-          "reps": 8,
-          "perSide": true,
-          "weight": 8,
-          "target": 3
+        "2026-10-05": {
+          "pu": [null, null, "great", null, "great", null, null],
+          "pl": ["great", null, null, "partial", null, "great", null],
+          "sq": [null, "great", null, null, "great", null, "missed"],
+          "be": ["great", null, "great", null, null, "great", null],
+          "kh": [null, "great", null, "great", null, null, "great"]
         },
-        { "id": "xmgk3p1a", "name": "Plank", "sets": 3, "reps": 0, "target": 2 }
-      ],
-      "2026-10-19": [
-        { "id": "pu", "name": "Push-ups", "sets": 3, "reps": 15, "target": 4 },
-        { "id": "pl", "name": "Pull-ups", "sets": 3, "reps": 5, "target": 5 },
-        { "id": "sq", "name": "Squats", "sets": 3, "reps": 15, "weight": 16, "target": 4 },
-        {
-          "id": "kh",
-          "name": "Kettlebell halos",
-          "reps": 8,
-          "perSide": true,
-          "weight": 8,
-          "target": 3
+        "2026-10-12": {
+          "pu": ["great", null, null, "great", null, "missed", null],
+          "pl": [null, "great", null, null, "great", null, "great"],
+          "sq": ["great", null, "partial", null, null, "great", null],
+          "kh": [null, "great", null, "great", null, null, "great"],
+          "xmgk3p1a": [null, null, "great", null, "partial", null, null]
         },
-        { "id": "xmgk3p1a", "name": "Plank", "sets": 3, "reps": 0, "target": 2 }
-      ]
+        "2026-10-19": {
+          "pu": [null, "great", null, null, "great", null, null],
+          "pl": ["great", null, "partial", null, null, null, null],
+          "sq": [null, "great", null, "missed", null, null, null],
+          "kh": [null, null, "great", null, "great", null, null],
+          "xmgk3p1a": ["great", null, null, "great", null, null, null]
+        }
+      },
+      "details": {
+        "pu": {
+          "notes": "Slow on the way down. [Form video](https://example.com/push-ups)",
+          "fields": { "equipment": "None", "works": "Chest, triceps" }
+        }
+      },
+      "revs": {},
+      "detailRevs": {}
     },
-    "log": {
-      "2026-09-21": {
-        "pu": ["great", null, "great", null, null, "great", null],
-        "pl": [null, "great", null, "great", null, null, "great"],
-        "sq": [null, null, "great", null, "great", null, null],
-        "be": ["great", null, null, "great", null, "great", null],
-        "kh": [null, "great", null, null, "great", null, "great"]
+    "diet": {
+      "plans": {
+        "2026-09-21": [
+          { "id": "veg", "name": "Vegetables", "target": 7 },
+          { "id": "fruit", "name": "Fruit", "target": 5 },
+          { "id": "fish", "name": "Fish", "target": 2 },
+          { "id": "nuts", "name": "Nuts", "target": 3 }
+        ],
+        "2026-10-05": [
+          { "id": "veg", "name": "Vegetables", "target": 7 },
+          { "id": "fruit", "name": "Fruit", "target": 6 },
+          { "id": "fish", "name": "Fish", "target": 2 },
+          { "id": "nuts", "name": "Nuts", "target": 3 },
+          { "id": "xmgk40qd", "name": "Eggs", "target": 3 }
+        ]
       },
-      "2026-10-05": {
-        "pu": [null, null, "great", null, "great", null, null],
-        "pl": ["great", null, null, "partial", null, "great", null],
-        "sq": [null, "great", null, null, "great", null, "missed"],
-        "be": ["great", null, "great", null, null, "great", null],
-        "kh": [null, "great", null, "great", null, null, "great"]
+      "log": {
+        "2026-09-21": {
+          "veg": ["great", null, null, "great", null, "great", null],
+          "fruit": [null, "great", null, null, "great", null, "great"],
+          "fish": ["great", null, "great", null, null, "great", null],
+          "nuts": [null, "great", null, "great", null, null, "great"]
+        },
+        "2026-10-05": {
+          "veg": [null, "great", null, null, "great", null, "great"],
+          "fruit": ["great", null, "great", null, null, "great", null],
+          "fish": [null, "great", null, "great", null, null, "great"],
+          "nuts": [null, null, "great", null, "great", null, null],
+          "xmgk40qd": ["great", null, null, "great", null, "great", null]
+        },
+        "2026-10-12": {
+          "veg": [null, null, "great", null, "great", null, null],
+          "fruit": ["great", null, null, "great", null, "great", null],
+          "fish": [null, "great", null, null, "great", null, "great"],
+          "nuts": ["great", null, "great", null, null, "great", null],
+          "xmgk40qd": [null, "great", null, "great", null, null, "great"]
+        },
+        "2026-10-19": {
+          "veg": ["great", null, "great", null, null, null, null],
+          "fruit": [null, "great", null, "great", null, null, null],
+          "fish": [null, null, "great", null, "great", null, null],
+          "nuts": ["great", null, null, "great", null, null, null],
+          "xmgk40qd": [null, "great", null, null, "great", null, null]
+        }
       },
-      "2026-10-12": {
-        "pu": ["great", null, null, "great", null, "missed", null],
-        "pl": [null, "great", null, null, "great", null, "great"],
-        "sq": ["great", null, "partial", null, null, "great", null],
-        "kh": [null, "great", null, "great", null, null, "great"],
-        "xmgk3p1a": [null, null, "great", null, "partial", null, null]
-      },
-      "2026-10-19": {
-        "pu": [null, "great", null, null, "great", null, null],
-        "pl": ["great", null, "partial", null, null, null, null],
-        "sq": [null, "great", null, "missed", null, null, null],
-        "kh": [null, null, "great", null, "great", null, null],
-        "xmgk3p1a": ["great", null, null, "great", null, null, null]
-      }
-    }
-  },
-  "tracker-diet-v2": {
-    "plans": {
-      "2026-09-21": [
-        { "id": "veg", "name": "Vegetables", "target": 7 },
-        { "id": "fruit", "name": "Fruit", "target": 5 },
-        { "id": "fish", "name": "Fish", "target": 2 },
-        { "id": "nuts", "name": "Nuts", "target": 3 }
-      ],
-      "2026-10-05": [
-        { "id": "veg", "name": "Vegetables", "target": 7 },
-        { "id": "fruit", "name": "Fruit", "target": 6 },
-        { "id": "fish", "name": "Fish", "target": 2 },
-        { "id": "nuts", "name": "Nuts", "target": 3 },
-        { "id": "xmgk40qd", "name": "Eggs", "target": 3 }
-      ]
+      "details": { "fish": { "fields": { "serving": "A palm-sized fillet" } } },
+      "revs": {},
+      "detailRevs": {}
     },
-    "log": {
-      "2026-09-21": {
-        "veg": ["great", null, null, "great", null, "great", null],
-        "fruit": [null, "great", null, null, "great", null, "great"],
-        "fish": ["great", null, "great", null, null, "great", null],
-        "nuts": [null, "great", null, "great", null, null, "great"]
-      },
-      "2026-10-05": {
-        "veg": [null, "great", null, null, "great", null, "great"],
-        "fruit": ["great", null, "great", null, null, "great", null],
-        "fish": [null, "great", null, "great", null, null, "great"],
-        "nuts": [null, null, "great", null, "great", null, null],
-        "xmgk40qd": ["great", null, null, "great", null, "great", null]
-      },
-      "2026-10-12": {
-        "veg": [null, null, "great", null, "great", null, null],
-        "fruit": ["great", null, null, "great", null, "great", null],
-        "fish": [null, "great", null, null, "great", null, "great"],
-        "nuts": ["great", null, "great", null, null, "great", null],
-        "xmgk40qd": [null, "great", null, "great", null, null, "great"]
-      },
-      "2026-10-19": {
-        "veg": ["great", null, "great", null, null, null, null],
-        "fruit": [null, "great", null, "great", null, null, null],
-        "fish": [null, null, "great", null, "great", null, null],
-        "nuts": ["great", null, null, "great", null, null, null],
-        "xmgk40qd": [null, "great", null, null, "great", null, null]
-      }
-    }
+    "settings": { "accent": "#0a84ff", "dailyPick": 4, "foodPick": 3 }
   },
-  "tracker-settings-v1": { "accent": "#0a84ff", "dailyPick": 4, "foodPick": 3, "theme": "dark" }
+  "tracker-settings-v1": { "theme": "dark" }
 }

@@ -5,7 +5,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import App from '@/App.vue'
 import { usePlannerStore } from '@/stores/planner'
 import { useDietStore } from '@/stores/diet'
-import { SESSION_KEY } from '@/stores/session'
+import { useDetailsStore } from '@/stores/details'
+import { SESSION_KEY, useSessionStore } from '@/stores/session'
 import { CACHE_PREFIX, type SyncState } from '@/stores/sync'
 import { DRAWINGS, MARKS, markDrawing, markKind, type PortableSettings } from '@/lib/storage'
 import { readFixture } from '@/lib/__tests__/fixtures'
@@ -54,6 +55,9 @@ async function mountConfig(): Promise<VueWrapper> {
 /** The exercise grid only; the diet grid below reuses the same markup. */
 function ex() {
   return wrapper.get('[data-testid="exercise-grid"]')
+}
+function diet() {
+  return wrapper.get('[data-testid="diet-grid"]')
 }
 
 function rowCells(name: string) {
@@ -435,6 +439,205 @@ describe('the Add exercise dialog (K54)', () => {
   })
 })
 
+describe('an item’s page (#/item/<section>/<id>, F7)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(NOW)
+    localStorage.clear()
+  })
+  afterEach(() => {
+    wrapper?.unmount()
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  const PAGE = '[data-testid="item-page"]'
+  /** A row's name link, in the exercise or food grid. */
+  function nameLink(name: string, grid = ex()) {
+    return grid.findAll('[data-testid="item-name"]').find((n) => n.text() === name)!
+  }
+  /** Press a name, as a person does: the browser follows its link. */
+  async function openItem(name: string, grid = ex()): Promise<void> {
+    const a = nameLink(name, grid).element as HTMLAnchorElement
+    a.focus()
+    location.hash = a.getAttribute('href')!
+    await settle()
+  }
+  /** Press "Back to the week". */
+  async function back(): Promise<void> {
+    await wrapper.get('[data-testid="back-to-week"]').trigger('click')
+    await settle()
+  }
+
+  it('makes each name a link to its item’s page, in both grids and in Edit plan', async () => {
+    mountApp()
+    const link = nameLink('Squats')
+    expect(link.element.tagName).toBe('A')
+    expect(link.attributes('href')).toBe('#/item/exercise/sq')
+    expect(nameLink('Fish', diet()).attributes('href')).toBe('#/item/diet/fish')
+    await wrapper.get('[data-testid="edit-plan-button"]').trigger('click')
+    // Edit plan keeps both the link and the pencil.
+    expect(nameLink('Squats').attributes('href')).toBe('#/item/exercise/sq')
+    expect(ex().find('button[aria-label="Edit Squats"]').exists()).toBe(true)
+  })
+
+  it('opens as a page with no bar and no planner screens, focus on its name', async () => {
+    mountApp()
+    expect(document.documentElement.classList.contains('planner-screens')).toBe(true)
+    await openItem('Squats')
+    expect(location.hash).toBe('#/item/exercise/sq')
+    const page = wrapper.get(PAGE)
+    expect(page.get('h1').text()).toBe('Squats')
+    expect(document.activeElement).toBe(page.get('h1').element)
+    expect(wrapper.find('[data-testid="exercise-grid"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="edit-plan-button"]').exists()).toBe(false)
+    expect(document.documentElement.classList.contains('planner-screens')).toBe(false)
+    expect(wrapper.get('main').classes()).toContain('px-(--screen-pad-x)')
+  })
+
+  it('goes back through history to the week, with focus on the item’s name', async () => {
+    mountApp()
+    const before = history.length
+    await openItem('Squats')
+    expect(history.length).toBe(before + 1)
+    await back()
+    expect(wrapper.find(PAGE).exists()).toBe(false)
+    expect(history.length).toBe(before + 1)
+    expect(location.hash).toBe('')
+    expect(document.activeElement).toBe(nameLink('Squats').element)
+    // The browser's own Back from a food's page does the same.
+    await openItem('Fish', diet())
+    history.back()
+    await settle()
+    expect(document.activeElement).toBe(nameLink('Fish', diet()).element)
+  })
+
+  it('opens straight from its address, and Back replaces it with the week', async () => {
+    history.replaceState(null, '', '/#/item/exercise/pl')
+    mountApp()
+    await settle()
+    expect(wrapper.get(PAGE).get('h1').text()).toBe('Pull-ups')
+    const back = vi.spyOn(history, 'back')
+    await wrapper.get('[data-testid="back-to-week"]').trigger('click')
+    await settle()
+    expect(back).not.toHaveBeenCalled()
+    expect(location.hash).toBe('#/')
+    expect(document.activeElement).toBe(nameLink('Pull-ups').element)
+  })
+
+  it('opens the week for an address that names no item, dropping it', async () => {
+    for (const hash of ['#/item/exercise/nope', '#/item/food/sq', '#/item/exercise/%E0%A4%A']) {
+      history.replaceState(null, '', `/${hash}`)
+      mountApp()
+      await settle()
+      expect(wrapper.find(PAGE).exists()).toBe(false)
+      expect(wrapper.find('[data-testid="exercise-grid"]').exists()).toBe(true)
+      expect(location.hash).toBe('')
+      wrapper.unmount()
+    }
+    // Typed into a running tab, too.
+    mountApp()
+    location.hash = '#/item/diet/nope'
+    await settle()
+    expect(location.hash).toBe('')
+    location.hash = '#/item/nope'
+    await settle()
+    expect(location.hash).toBe('')
+    expect(wrapper.find('[data-testid="exercise-grid"]').exists()).toBe(true)
+  })
+
+  it('opens an old address for an item no longer in the week, with its latest plan', async () => {
+    const state = emptyState()
+    state.exercise.plans = {
+      '2026-10-12': [{ id: 'ks', name: 'Kettlebell swings', reps: 15, target: 3, perSide: false }],
+      '2026-10-19': [],
+    }
+    history.replaceState(null, '', '/#/item/exercise/ks')
+    mountApp(state)
+    // The server holds the same plans, so its reply keeps them.
+    for (const [week, items] of Object.entries(state.exercise.plans))
+      api.accounts.get(USER)!.plans.exercise[week] = { items, rev: 1 }
+    await settle()
+    expect(wrapper.get(PAGE).get('h1').text()).toBe('Kettlebell swings')
+    expect(wrapper.get(PAGE).text()).toContain('Latest plan')
+  })
+
+  it('waits for the data before saying an item isn’t there', async () => {
+    api = signedIn()
+    localStorage.removeItem(CACHE_PREFIX + USER)
+    history.replaceState(null, '', '/#/item/exercise/sq')
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    wrapper = mount(App, { global: { plugins: [pinia] }, attachTo: document.body })
+    expect(wrapper.find(PAGE).exists()).toBe(false)
+    expect(location.hash).toBe('#/item/exercise/sq')
+    await flushPromises()
+    await settle()
+    expect(wrapper.get(PAGE).get('h1').text()).toBe('Squats')
+  })
+
+  it('drops the address when signing out on the page', async () => {
+    mountApp()
+    await openItem('Squats')
+    await useSessionStore().logout()
+    await flushPromises()
+    expect(location.hash).toBe('')
+    expect(wrapper.find(PAGE).exists()).toBe(false)
+  })
+
+  it('goes back to the week when another tab removes the item from every plan', async () => {
+    mountApp()
+    await openItem('Squats')
+    usePlannerStore().plans = { '2026-10-19': [] }
+    await settle()
+    expect(location.hash).toBe('')
+    expect(wrapper.find(PAGE).exists()).toBe(false)
+  })
+
+  it('shows a note typed on the page on every week', async () => {
+    mountApp()
+    await openItem('Squats')
+    await wrapper.get('[data-testid="item-notes-button"]').trigger('click')
+    await wrapper.get('textarea').setValue('Knees **out**')
+    await back()
+    const note = () =>
+      ex()
+        .findAll('[role="rowheader"]')
+        .find((r) => r.text().startsWith('Squats'))!
+        .get('[data-testid="item-note"]')
+    expect(note().html()).toContain('<strong>out</strong>')
+    await wrapper.get('button[aria-label="Next week"]').trigger('click')
+    expect(note().text()).toBe('Knees out')
+    await wrapper.get('button[aria-label="Previous week"]').trigger('click')
+    await wrapper.get('button[aria-label="Previous week"]').trigger('click')
+    expect(note().text()).toBe('Knees out')
+  })
+
+  it('shows a field typed on the page from every week’s page', async () => {
+    mountApp()
+    await openItem('Squats')
+    await wrapper.get('input[data-field="equipment"]').setValue('Barbell')
+    await back()
+    await wrapper.get('button[aria-label="Next week"]').trigger('click')
+    await openItem('Squats')
+    expect(wrapper.get<HTMLInputElement>('input[data-field="equipment"]').element.value).toBe(
+      'Barbell',
+    )
+    expect(wrapper.get(PAGE).text()).toContain('Plan for the week of 26 October')
+  })
+
+  it('shows a plan change in this week’s row', async () => {
+    mountApp()
+    await openItem('Squats')
+    await wrapper.get('input[data-field="sets"]').setValue('4')
+    await back()
+    const row = ex()
+      .findAll('[role="rowheader"]')
+      .find((r) => r.text().startsWith('Squats'))!
+    expect(row.findAll('[data-testid="item-detail"]').map((c) => c.text())).toEqual(['4 × 15'])
+  })
+})
+
 describe('the Settings page', () => {
   beforeEach(() => {
     localStorage.clear()
@@ -573,7 +776,7 @@ describe('export and import', () => {
     const file = JSON.parse(await blob!.text())
     expect(file).toMatchObject({
       format: 'tracker-export',
-      version: 4,
+      version: 5,
       settings: { accent: '#30d158', dailyPick: 3, foodPick: 2 },
     })
     expect(file.settings).not.toHaveProperty('theme')
@@ -586,7 +789,32 @@ describe('export and import', () => {
       null,
       null,
     ])
-    expect(file.diet).toEqual({ plans: {}, log: {} })
+    expect(file.diet).toEqual({ plans: {}, log: {}, details: {} })
+  })
+
+  it('exports the item pages’ arrangement with the settings (K66)', async () => {
+    let blob: Blob | undefined
+    URL.createObjectURL = vi.fn<(b: Blob) => string>((b) => {
+      blob = b
+      return 'blob:x'
+    })
+    URL.revokeObjectURL = vi.fn<(url: string) => void>()
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    mountApp()
+    const arranged = { order: ['history', 'notes', 'details', 'plan'], hidden: ['details'] }
+    usePlannerStore().setArrangement('exercise', {
+      order: ['history', 'notes', 'details', 'plan'],
+      hidden: ['details'],
+    })
+    await openSettings()
+    await button('Export').trigger('click')
+    const file = JSON.parse(await blob!.text())
+    expect(file.settings).toEqual({
+      accent: '#30d158',
+      dailyPick: 3,
+      foodPick: 2,
+      itemSections: { exercise: arranged },
+    })
   })
 
   it('opens the file picker from Import…', async () => {
@@ -732,7 +960,7 @@ describe('export and import', () => {
     ['another format', jsonFile({ plans: {} }), 'That file isn’t a Tracker export.'],
     [
       'a newer version',
-      jsonFile({ format: 'fitness-planner-export', version: 5 }),
+      jsonFile({ format: 'fitness-planner-export', version: 6 }),
       'That export comes from a newer version of the app.',
     ],
   ])('rejects %s with an inline error and changes nothing', async (_, file, message) => {
@@ -771,24 +999,28 @@ describe('export and import', () => {
 })
 
 describe('export and import with the sample data', () => {
-  // Four weeks of edited plans, ticks and diet over a five-week span, plus non-default settings
-  // (fixtures/transfer/sample/).
+  // Four weeks of edited plans, ticks and diet over a five-week span, two items' details, plus
+  // non-default settings (fixtures/transfer/sample/). The storage is alice's cache as the sync
+  // store keeps it, under the current key: a new cache format needs a new sample.
   const storage = readFixture<Record<string, unknown>>('sample/storage.json')
   const sample = readFixture<Record<string, unknown>>('sample/export.json')
 
-  type Tracked = { plans: object; log: object }
-  const exercise = storage['tracker-v2'] as Tracked
-  const diet = storage['tracker-diet-v2'] as Tracked
-  const { accent, dailyPick, foodPick } = storage['tracker-settings-v1'] as PortableSettings
+  const cache = storage[CACHE_PREFIX + USER] as SyncState
+  const { revs: _er, detailRevs: _ed, ...exercise } = cache.exercise
+  const { revs: _dr, detailRevs: _dd, ...diet } = cache.diet
+  const { accent, dailyPick, foodPick } = cache.settings as PortableSettings
 
-  /** The sample as alice's cache: the same data, as the sync store keeps it. */
+  /** The sample as alice's cache, a fresh copy each time. */
   function sampleCache(): SyncState {
-    return {
-      exercise: { ...exercise, revs: {} },
-      diet: { ...diet, revs: {} },
-      settings: { accent, dailyPick, foodPick },
-    } as SyncState
+    return JSON.parse(JSON.stringify(cache)) as SyncState
   }
+
+  it('holds the cache under the current key', () => {
+    expect(
+      cache,
+      `fixtures/transfer/sample/storage.json needs ${CACHE_PREFIX}${USER}`,
+    ).toBeDefined()
+  })
 
   function button(name: string) {
     return wrapper.findAll('button').find((b) => b.text() === name)!
@@ -839,19 +1071,24 @@ describe('export and import with the sample data', () => {
     await input.trigger('change')
     await flushPromises()
     expect(wrapper.get('[data-testid="import-summary"]').text()).toBe(
-      'Adds six weekly plans and 102 marked days, plus the exercises and foods a day. Existing plans and marks stay as they are.',
+      'Adds six weekly plans and 102 marked days, plus the notes and details of two items and the exercises and foods a day. Existing plans and marks stay as they are.',
     )
     await button('Import').trigger('click')
     await flushPromises()
-    const { revs: _e, ...cachedExercise } = cached().exercise
-    const { revs: _d, ...cachedDiet } = cached().diet
+    const { revs: _e, detailRevs: _ed, ...cachedExercise } = cached().exercise
+    const { revs: _d, detailRevs: _dd, ...cachedDiet } = cached().diet
     expect(cachedExercise).toEqual(exercise)
     expect(cachedDiet).toEqual(diet)
     expect(cached().settings).toEqual({ accent, dailyPick, foodPick })
-    // Every plan and tick reached the server too.
+    // Every plan, tick and item's details reached the server too.
     const server = api.state(USER) as SyncState
-    expect({ plans: server.exercise.plans, log: server.exercise.log }).toEqual(exercise)
-    expect({ plans: server.diet.plans, log: server.diet.log }).toMatchObject(diet)
+    const { plans, log, details } = server.exercise
+    expect({ plans, log, details }).toEqual(exercise)
+    expect({
+      plans: server.diet.plans,
+      log: server.diet.log,
+      details: server.diet.details,
+    }).toEqual(diet)
     expect(server.settings).toEqual({ accent, dailyPick, foodPick })
     // The theme is per device, so it never left this browser.
     expect(localStorage.getItem('tracker-settings-v1')).toBeNull()
@@ -1045,7 +1282,60 @@ describe('exercise weight', () => {
     await flushPromises()
     expect(detail('Halos')).toBe('10 reps a set')
     expect(exTotal(-1)).toBe('0 of 3')
-    expect(usePlannerStore().exercises.at(-1)!.notes).toBe('**Ribs down.**')
+    // The note is the exercise's details, for every week (D2); the week's plan keeps none.
+    expect(useDetailsStore().notesOf('exercise', 'kh')).toBe('**Ribs down.**')
+    expect(usePlannerStore().exercises.at(-1)).not.toHaveProperty('notes')
+  })
+
+  it('saves the note for every week, one with its own plan included (F1)', async () => {
+    await mountConfig()
+    const planner = usePlannerStore()
+    planner.nextWeek()
+    planner.toggle('sq', 0) // 26 October now has a plan of its own
+    planner.prevWeek()
+    await nextTick()
+    const edit = await openEdit('Squats')
+    await edit.get('#edit-exercise-notes').setValue('Knees out')
+    await edit.get('form').trigger('submit')
+    await flushPromises()
+    planner.nextWeek()
+    await nextTick()
+    expect(planner.plans['2026-10-26']).toBeDefined()
+    const note = ex()
+      .findAll('tr[role="row"]')
+      .find((r) => r.text().includes('Squats'))!
+      .get('[data-testid="item-note"]')
+    expect(note.text()).toBe('Knees out')
+  })
+
+  it('opens with the exercise’s notes, and counts them only near the limit', async () => {
+    await mountConfig()
+    useDetailsStore().setNotes('exercise', 'sq', 'Knees out')
+    const edit = await openEdit('Squats')
+    const notes = edit.get<HTMLTextAreaElement>('#edit-exercise-notes')
+    expect(notes.element.value).toBe('Knees out')
+    expect(notes.attributes('maxlength')).toBe('20000')
+    expect(edit.find('#edit-exercise-notes-count').exists()).toBe(false)
+    await notes.setValue('a'.repeat(19_000))
+    expect(edit.get('#edit-exercise-notes-count').text()).toBe('19,000 of 20,000 characters')
+  })
+
+  it('keeps everything as it was when the notes are too big to save', async () => {
+    await mountConfig()
+    const edit = await openEdit('Squats')
+    await edit.get('#edit-exercise-name').setValue('Goblet squats')
+    // Three bytes each: 12,000 characters are over the 32 KB an item’s details can take.
+    await edit.get('#edit-exercise-notes').setValue('語'.repeat(12_000))
+    await edit.get('form').trigger('submit')
+    await flushPromises()
+    expect(dialog()).not.toBeNull()
+    expect(edit.get('#edit-exercise-notes-error').text()).toBe(
+      'These notes are too long to save. Shorten them, then save again.',
+    )
+    expect(usePlannerStore().exercises.some((e) => e.name === 'Goblet squats')).toBe(false)
+    expect(useDetailsStore().notesOf('exercise', 'sq')).toBe('')
+    await edit.get('#edit-exercise-notes').setValue('Shorter')
+    expect(edit.find('#edit-exercise-notes-error').exists()).toBe(false)
   })
 
   it('closes on Escape and on Close without saving, returning focus to its Edit button', async () => {
@@ -1138,7 +1428,25 @@ describe('the Edit food dialog', () => {
     await flushPromises()
     expect(dialog()).toBeNull()
     expect(rowCells('Salmon')[0]!.attributes('aria-pressed')).toBe('true')
-    expect(useDietStore().foods[2]).toMatchObject({ name: 'Salmon', target: 3, notes: 'Oily fish' })
+    expect(useDietStore().foods[2]).toEqual({ id: 'fish', name: 'Salmon', target: 3 })
+    expect(useDetailsStore().notesOf('diet', 'fish')).toBe('Oily fish')
+  })
+
+  it('opens with the food’s notes, and keeps everything when they are too big to save', async () => {
+    await mountConfig()
+    useDetailsStore().setNotes('diet', 'fish', 'Oily fish')
+    const edit = await openEdit('Fish')
+    const notes = edit.get<HTMLTextAreaElement>('#edit-food-notes')
+    expect(notes.element.value).toBe('Oily fish')
+    await edit.get('#edit-food-name').setValue('Salmon')
+    await notes.setValue('語'.repeat(12_000))
+    // Under 19,000 characters: no count, though too many bytes.
+    expect(edit.find('#edit-food-notes-count').exists()).toBe(false)
+    await edit.get('form').trigger('submit')
+    await flushPromises()
+    expect(edit.find('#edit-food-notes-error').exists()).toBe(true)
+    expect(useDietStore().foods[2]!.name).toBe('Fish')
+    expect(useDetailsStore().notesOf('diet', 'fish')).toBe('Oily fish')
   })
 
   it('keeps the dialog open on an empty name, and discards changes on Cancel', async () => {

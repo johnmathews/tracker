@@ -31,9 +31,10 @@ describe('readLegacyData', () => {
       SETTINGS_KEY,
       JSON.stringify({ accent: '#0a84ff', dailyPick: 5, theme: 'dark' }),
     )
+    // No details: these keys predate accounts (P9), and notes came after them (K43).
     expect(readLegacyData(WEEK)).toEqual({
-      exercise,
-      diet,
+      exercise: { ...exercise, details: {} },
+      diet: { ...diet, details: {} },
       settings: { accent: '#0a84ff', dailyPick: 5, foodPick: 2 },
     })
   })
@@ -52,7 +53,7 @@ describe('readLegacyData', () => {
     // locally, would replace the account's carried-forward plan for this week and later ones.
     expect(Object.keys(data.exercise.plans)).toEqual(['2026-10-12'])
     // An empty list is no plan at all, so it cannot empty a week in the account.
-    expect(data.diet).toEqual({ plans: {}, log: {} })
+    expect(data.diet).toEqual({ plans: {}, log: {}, details: {} })
     expect(data.settings).toBeNull()
   })
 
@@ -74,8 +75,8 @@ describe('readLegacyData', () => {
   it('counts settings alone as data worth offering', () => {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify({ accent: '#bf5af2', dailyPick: 2 }))
     expect(readLegacyData(WEEK)).toEqual({
-      exercise: { plans: {}, log: {} },
-      diet: { plans: {}, log: {} },
+      exercise: { plans: {}, log: {}, details: {} },
+      diet: { plans: {}, log: {}, details: {} },
       settings: { accent: '#bf5af2', dailyPick: 2, foodPick: 2 },
     })
   })
