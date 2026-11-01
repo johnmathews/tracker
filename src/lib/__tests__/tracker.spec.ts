@@ -14,6 +14,7 @@ import {
   FOOD_CYCLE,
   FOOD_KIND_CYCLE,
   markOf,
+  metDays,
   nextMark,
   totalFor,
   type WeekLog,
@@ -62,6 +63,20 @@ describe('tracker helpers', () => {
     expect(goalMet(1, 2)).toBe(false)
     expect(goalMet(1, 0)).toBe(false)
     expect(goalsMet(items, week)).toBe(1)
+  })
+
+  it('meets a day when its count reaches the day’s target (K30, K57)', () => {
+    expect(metDays([0, 1, 2, 3, 4, 0, 2], 2)).toEqual([false, false, true, true, true, false, true])
+    expect(metDays(dayCounts(items, week), 1)).toEqual([
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+    ])
+    expect(metDays([], 3)).toEqual([])
   })
 
   it('steps a day through its marks, creating the week and the days on first use', () => {

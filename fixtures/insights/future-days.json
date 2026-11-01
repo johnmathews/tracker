@@ -1,0 +1,33 @@
+{
+  "description": "In today's week the days after today are still to come; a mark on one still counts",
+  "section": "diet",
+  "week": "2026-10-26",
+  "today": "2026-10-28",
+  "dailyTarget": 1,
+  "plans": {
+    "2026-10-26": [{ "id": "fish", "name": "Fish", "target": 2 }]
+  },
+  "log": {
+    "2026-10-26": { "fish": ["great", null, null, null, "great", null, null] }
+  },
+  "expected": {
+    "planWeek": "2026-10-26",
+    "dayCounts": [1, 0, 0, 0, 1, 0, 0],
+    "metDays": [true, false, false, false, true, false, false],
+    "future": [false, false, false, true, true, true, true],
+    "daysMet": 2,
+    "goalsMet": 1,
+    "items": [
+      {
+        "id": "fish",
+        "name": "Fish",
+        "target": 2,
+        "done": 2,
+        "great": 2,
+        "partial": 0,
+        "missed": 0,
+        "goalMet": true
+      }
+    ]
+  }
+}

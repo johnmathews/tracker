@@ -1,0 +1,73 @@
+{
+  "description": "A day is met when the items marked on it reach the day's target, exactly or more",
+  "section": "exercise",
+  "week": "2026-10-19",
+  "today": "2026-11-04",
+  "dailyTarget": 3,
+  "plans": {
+    "2026-10-19": [
+      { "id": "a", "name": "A", "reps": 1, "target": 7 },
+      { "id": "b", "name": "B", "reps": 1, "target": 7 },
+      { "id": "c", "name": "C", "reps": 1, "target": 7 },
+      { "id": "d", "name": "D", "reps": 1, "target": 7 }
+    ]
+  },
+  "log": {
+    "2026-10-19": {
+      "a": ["great", "great", "great", "great", null, "great", "great"],
+      "b": ["great", "great", "great", null, null, "missed", "great"],
+      "c": ["great", "great", null, null, null, "partial", null],
+      "d": ["great", null, null, null, null, null, null]
+    }
+  },
+  "expected": {
+    "planWeek": "2026-10-19",
+    "dayCounts": [4, 3, 2, 1, 0, 3, 2],
+    "metDays": [true, true, false, false, false, true, false],
+    "future": [false, false, false, false, false, false, false],
+    "daysMet": 3,
+    "goalsMet": 0,
+    "items": [
+      {
+        "id": "a",
+        "name": "A",
+        "target": 7,
+        "done": 6,
+        "great": 6,
+        "partial": 0,
+        "missed": 0,
+        "goalMet": false
+      },
+      {
+        "id": "b",
+        "name": "B",
+        "target": 7,
+        "done": 5,
+        "great": 4,
+        "partial": 0,
+        "missed": 1,
+        "goalMet": false
+      },
+      {
+        "id": "c",
+        "name": "C",
+        "target": 7,
+        "done": 3,
+        "great": 2,
+        "partial": 1,
+        "missed": 0,
+        "goalMet": false
+      },
+      {
+        "id": "d",
+        "name": "D",
+        "target": 7,
+        "done": 1,
+        "great": 1,
+        "partial": 0,
+        "missed": 0,
+        "goalMet": false
+      }
+    ]
+  }
+}

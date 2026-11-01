@@ -1,0 +1,49 @@
+{
+  "description": "Every mark counts towards the goal: a partial day and a missed one, in any drawing",
+  "section": "exercise",
+  "week": "2026-10-19",
+  "today": "2026-11-04",
+  "dailyTarget": 2,
+  "plans": {
+    "2026-10-19": [
+      { "id": "sq", "name": "Squats", "reps": 15, "target": 4 },
+      { "id": "pu", "name": "Push-ups", "reps": 10, "target": 2 }
+    ]
+  },
+  "log": {
+    "2026-10-19": {
+      "sq": ["great", "partial-solid", "missed", "missed-hatch", null, null, null],
+      "pu": ["missed", null, null, "partial", null, null, null]
+    }
+  },
+  "expected": {
+    "planWeek": "2026-10-19",
+    "dayCounts": [2, 1, 1, 2, 0, 0, 0],
+    "metDays": [true, false, false, true, false, false, false],
+    "future": [false, false, false, false, false, false, false],
+    "daysMet": 2,
+    "goalsMet": 2,
+    "items": [
+      {
+        "id": "sq",
+        "name": "Squats",
+        "target": 4,
+        "done": 4,
+        "great": 1,
+        "partial": 1,
+        "missed": 2,
+        "goalMet": true
+      },
+      {
+        "id": "pu",
+        "name": "Push-ups",
+        "target": 2,
+        "done": 2,
+        "great": 0,
+        "partial": 1,
+        "missed": 1,
+        "goalMet": true
+      }
+    ]
+  }
+}
