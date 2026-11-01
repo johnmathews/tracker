@@ -116,6 +116,35 @@ commit must never publish. Every checkout sets `persist-credentials: false`. Bef
 `fitness-planner-api` (K44). Those images still exist but no longer update, so a host's compose
 file must pull `tracker` and `tracker-api`, or it silently stops getting deploys.
 
+### 3.1 Item details: the API first (2026-11-01)
+
+The release that adds item details (P26 in [decisions.md](decisions.md)) needs `tracker-api`
+updated before `tracker`. Both images publish from the same CI run, so pull and restart the API
+first, then the web.
+
+- **Why the API first.** The new app saves notes and fields with `PUT /api/details/…`, which an
+  older API answers 404. The app keeps that write and every write queued behind it, retrying with
+  the backoff (`sync.ts`, P28), so nothing is lost. Syncing stalls until the API is updated, and the
+  app shows itself as offline with the changes waiting.
+- **Migrations 7 and 8 run when the API starts.** `db.migrate` runs in the app's startup, and in
+  every `tracker-admin` command, before anything is served. Each step commits with its schema
+  version under the write lock, so the API and a `tracker-admin` command starting together can't
+  both apply it. A database not yet at step 6 (`api_tokens`, the MCP release) takes it first.
+  Step 7 creates `item_details` and copies each item's latest note into it ([api.md](api.md) §2).
+  Step 8 adds the nullable `settings.item_sections` (each type's item-page arrangement, K66);
+  existing rows read as NULL, every page as it was.
+- **Settings from the new app reach an older API safely.** An API from before step 8 ignores the
+  `itemSections` key, so an arrangement made before the API updates is not saved there and the
+  next read puts the pages back to the default. Updating the API first avoids it. Once it is
+  updated, a tab on the old app sends settings without `itemSections`, and the API keeps the saved
+  arrangement.
+- **Treat it as one-way.** Rolling the API back leaves `item_details` unused. Plans keep their
+  notes in `items_json` only until each plan is next written through the new API, so after a few
+  days of use an older API would show most notes as gone.
+- **Tabs on the old app.** Until a browser loads the new app (nginx sends `index.html` with
+  `no-cache`, so the next load does), a tab still open on the old code shows no notes, and a note
+  edited there is dropped, because the new API keeps no notes on plan items.
+
 ## 4. Data and hosting
 
 Each user's data lives in the API's SQLite database (`api.md` §2), backed up daily with

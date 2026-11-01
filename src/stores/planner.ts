@@ -14,7 +14,6 @@ import {
   clamp,
   defaultExercises,
   isRecord,
-  normaliseNotes,
   normaliseWeight,
   parseJson,
   parseSettings,
@@ -28,9 +27,17 @@ import {
   type PortableSettings,
 } from '@/lib/storage'
 import * as tracker from '@/lib/tracker'
-import { durationText } from '@/lib/words'
 import type { Theme } from '@/lib/theme'
 import { copyPlan, planSource, type Plans } from '@/lib/plans'
+import {
+  arrangementOf,
+  normaliseItemSections,
+  withArrangement,
+  type Arrangement,
+  type ItemSections,
+} from '@/lib/itemSections'
+import type { TrackerTypeId } from '@/lib/trackerTypes'
+import { useDetailsStore } from '@/stores/details'
 
 /**
  * One column of the week: `name` "Thu" and `date` "22" for the header, `full` "Thursday 22
@@ -56,33 +63,16 @@ export type NewExercise = {
   weight?: number
   /** The weekly goal; left out, an added exercise gets NEW_EXERCISE_TARGET. */
   target?: number
-  /** The note in markdown; empty clears it. An update without it keeps the exercise's note. */
-  notes?: string
 }
 
-/**
- * The chips under an exercise name, in the Chip card's words: "3 × 12" or "3 × 8 each side" with
- * sets, "10 reps a set" or "8 each side" without, "3 sets" without reps, then "16 kg" when
- * weighted. None at all when it has none of these (no dash).
- */
-export function exerciseDetails(e: Exercise): string[] {
-  const chips: string[] = []
-  const side = e.perSide ? ' each side' : ''
-  if (e.duration) {
-    const time = durationText(e.duration)
-    chips.push(e.sets ? `${e.sets} × ${time}${side}` : `${time}${side}`)
-  } else if (e.reps && e.sets) chips.push(`${e.sets} × ${e.reps}${side}`)
-  else if (e.reps) chips.push(e.perSide ? `${e.reps} each side` : `${e.reps} reps a set`)
-  else if (e.sets) chips.push(`${e.sets} sets`)
-  if (e.weight) chips.push(`${e.weight} kg`)
-  return chips
-}
+/** The chips under an exercise name: the exercise type's (src/lib/trackerTypes.ts). */
+export { exerciseDetails } from '@/lib/trackerTypes'
 
 /**
  * Cleans form input into the stored fields; null when the trimmed name is empty. An exercise
  * counts reps or time, never both: a duration keeps reps at 0.
  */
-function exerciseFields(input: NewExercise): Omit<Exercise, 'id' | 'target' | 'notes'> | null {
+function exerciseFields(input: NewExercise): Omit<Exercise, 'id' | 'target'> | null {
   const name = input.name.trim()
   if (!name) return null
   const duration =
@@ -121,6 +111,8 @@ export const usePlannerStore = defineStore('planner', () => {
   const dailyPick = ref(DEFAULT_SETTINGS.dailyPick)
   /** Foods a day (K57). It lives here with the other settings, though the diet store's days use it. */
   const foodPick = ref(DEFAULT_SETTINGS.foodPick)
+  /** Each type's item-page arrangement (K66); a type left out shows every section in order. */
+  const itemSections = ref<ItemSections>({})
   const theme = ref<Theme>(parseSettings(readKey(SETTINGS_KEY)).theme)
   const markSet = ref<MarkSet>(parseSettings(readKey(SETTINGS_KEY)).markSet)
   /** Whether the user has settings of their own (from the server, a change, or an import). */
@@ -190,19 +182,22 @@ export const usePlannerStore = defineStore('planner', () => {
     if (e) e.target = clamp(e.target + delta, MIN_TARGET, MAX_TARGET)
   }
 
-  /** Returns false (and adds nothing) when the trimmed name is empty. */
-  function addExercise(input: NewExercise): boolean {
+  /**
+   * Adds an exercise to this week; returns its id, or null (and adds nothing) when the trimmed name
+   * is empty. Its notes are its details (the details store), not the week's.
+   */
+  function addExercise(input: NewExercise): string | null {
     const fields = exerciseFields(input)
-    if (!fields) return false
+    if (!fields) return null
     const target = clamp(input.target ?? NEW_EXERCISE_TARGET, MIN_TARGET, MAX_TARGET)
-    const notes = normaliseNotes(input.notes)
-    own().push({ id: tracker.newId(), ...fields, target, ...(notes ? { notes } : {}) })
-    return true
+    const id = tracker.newId()
+    own().push({ id, ...fields, target })
+    return id
   }
 
   /**
-   * Replaces name, sets, reps, per-side, weight and the note this week, keeping the id and history;
-   * the goal and the note stay as they are when the input leaves them out.
+   * Replaces name, sets, reps, per-side and weight this week, keeping the id and history; the goal
+   * stays as it is when the input leaves it out.
    */
   function updateExercise(id: string, input: NewExercise): boolean {
     const fields = exerciseFields(input)
@@ -210,8 +205,7 @@ export const usePlannerStore = defineStore('planner', () => {
     const list = own()
     const i = list.findIndex((e) => e.id === id)
     const target = clamp(input.target ?? list[i]!.target, MIN_TARGET, MAX_TARGET)
-    const notes = input.notes === undefined ? list[i]!.notes : normaliseNotes(input.notes)
-    list[i] = { id, ...fields, target, ...(notes ? { notes } : {}) }
+    list[i] = { id, ...fields, target }
     return true
   }
 
@@ -246,6 +240,7 @@ export const usePlannerStore = defineStore('planner', () => {
     accent.value = settings?.accent ?? DEFAULT_SETTINGS.accent
     dailyPick.value = settings?.dailyPick ?? DEFAULT_SETTINGS.dailyPick
     foodPick.value = settings?.foodPick ?? DEFAULT_SETTINGS.foodPick
+    itemSections.value = normaliseItemSections(settings?.itemSections)
     settingsSaved.value = settings !== null
   }
 
@@ -254,9 +249,13 @@ export const usePlannerStore = defineStore('planner', () => {
     plans.value[week] = items
   }
 
-  /** Forget the user's data on sign-out; the theme stays with the device. */
+  /**
+   * Forget the user's data on sign-out, their items' details included (the session clears the
+   * planner whenever it clears the user's data); the theme stays with the device.
+   */
   function clear(): void {
     adopt({ plans: {}, log: {} }, null)
+    useDetailsStore().clear()
     configMode.value = false
     weekOffset.value = 0
   }
@@ -273,11 +272,30 @@ export const usePlannerStore = defineStore('planner', () => {
     theme.value = next
   }
 
-  /** The accent and daily picks, or null while no settings have been stored, changed or imported. */
+  /** A type's item-page arrangement, as a copy: the default while it has none. */
+  function arrangementFor(type: TrackerTypeId): Arrangement {
+    return arrangementOf(itemSections.value, type)
+  }
+  /** Every page of `type` takes this arrangement at once, and it syncs like the other settings. */
+  function setArrangement(type: TrackerTypeId, arrangement: Arrangement): void {
+    itemSections.value = withArrangement(itemSections.value, type, arrangement)
+    settingsSaved.value = true
+  }
+
+  /**
+   * The accent, daily picks and item pages' arrangement (left out while every page has the
+   * default), or null while no settings have been stored, changed or imported.
+   */
   function savedSettings(): PortableSettings | null {
-    return settingsSaved.value
-      ? { accent: accent.value, dailyPick: dailyPick.value, foodPick: foodPick.value }
-      : null
+    if (!settingsSaved.value) return null
+    return {
+      accent: accent.value,
+      dailyPick: dailyPick.value,
+      foodPick: foodPick.value,
+      ...(Object.keys(itemSections.value).length
+        ? { itemSections: normaliseItemSections(itemSections.value) }
+        : {}),
+    }
   }
 
   // Only the theme is written to the device's settings key, merged into what is there: it is
@@ -301,6 +319,7 @@ export const usePlannerStore = defineStore('planner', () => {
     accent,
     dailyPick,
     foodPick,
+    itemSections,
     theme,
     now,
     monday,
@@ -330,6 +349,8 @@ export const usePlannerStore = defineStore('planner', () => {
     changeDailyPick,
     changeFoodPick,
     setTheme,
+    arrangementFor,
+    setArrangement,
     savedSettings,
   }
 })

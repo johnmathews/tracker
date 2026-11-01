@@ -2,7 +2,7 @@
   "description": "A file from a newer version of the format is rejected rather than half-read.",
   "input": {
     "format": "fitness-planner-export",
-    "version": 5,
+    "version": 6,
     "exercise": { "plans": {}, "log": {} }
   },
   "expected": { "ok": false, "error": "version" }

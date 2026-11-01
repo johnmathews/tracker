@@ -1,0 +1,136 @@
+/*
+  An item's own page, as a prototype. One frame (.ip) is one screen; every size comes from the
+  frame's own box (container units), like the planner and the Settings page (K51): u is 1 on a
+  1280×800 screen, held between 0.75 and 1.6; n is 1 on a phone. Colours, fonts and type come from
+  the system's tokens; the sizes are the Settings page's (main.css --set-*), named --candidate-*
+  here only because this page is new.
+*/
+.ip { position: relative; overflow: hidden; box-sizing: border-box; container: ip / size;
+  background: var(--canvas); color: var(--ink); font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
+.ip *, .ip *::before, .ip *::after { box-sizing: border-box; }
+.ip button, .ip input, .ip textarea { font: inherit; color: inherit; }
+.ip :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ip-scroll { position: absolute; inset: 0; overflow-y: auto;
+  --u: clamp(0.75px, min(calc(100cqw / 1280), calc(100cqh / 800)), 1.6px);
+  --n: clamp(1px, calc(100cqw / 600), 1.4px);
+  --candidate-pad-x: calc(var(--u) * 48);
+  --candidate-title: max(30px, calc(var(--u) * 40));
+  --candidate-h2: max(22px, calc(var(--u) * 27));
+  --candidate-label: max(16px, calc(var(--u) * 19));
+  --candidate-body: max(18px, calc(var(--u) * 19));
+  --candidate-control: max(44px, calc(var(--u) * 60));
+  --candidate-icon: max(20px, calc(var(--u) * 26));
+  --candidate-mark: max(22px, calc(var(--u) * 30));
+  --candidate-name-col: calc(var(--u) * 320);
+  --candidate-gap: calc(var(--u) * 16);
+  --candidate-sec-y: calc(var(--u) * 32);
+}
+
+/* The head: Back, the type, the name in the serif like "Settings", and the plan's chips. */
+.ip-page { padding: calc(var(--u) * 28) var(--candidate-pad-x) calc(var(--u) * 64); }
+.ip-back { display: inline-flex; align-items: center; gap: calc(var(--u) * 6); color: var(--ink); font-size: var(--candidate-body); line-height: 1.4;
+  text-decoration: underline; text-underline-offset: 4px; }
+.ip-back svg { width: var(--candidate-icon); height: var(--candidate-icon); }
+.ip-type { margin: calc(var(--u) * 16) 0 0; font: 600 var(--candidate-label) / 1.3 var(--font-sans); color: var(--ink-secondary); }
+.ip-titleline { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--u) * 8) calc(var(--u) * 14); margin: calc(var(--u) * 4) 0 calc(var(--u) * 28); }
+.ip-title { margin: 0; font: 600 var(--candidate-title) / 1.15 var(--font-serif); }
+.ip .chip { display: inline-flex; align-items: center; height: max(28px, calc(var(--u) * 34)); padding: 0 calc(var(--u) * 12);
+  border-radius: var(--radius-full); background: var(--tile); color: var(--ink); font: 600 var(--candidate-label) / 1 var(--font-sans); }
+
+/* Sections. */
+.ip-sec h2 { margin: 0; font: 600 var(--candidate-h2) / 1.25 var(--font-sans); }
+.ip-body { display: flex; flex-direction: column; gap: calc(var(--u) * 20); min-width: 0; }
+.ip-lede { margin: 0; font-size: var(--candidate-body); line-height: 1.45; color: var(--ink-secondary); max-width: 60ch; }
+.ip-lede strong { color: var(--ink); }
+.ip-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--u) * 300)), 1fr)); gap: calc(var(--u) * 24) calc(var(--u) * 28); align-items: end; }
+.ip-field { display: flex; flex-direction: column; gap: calc(var(--u) * 10); min-width: 0; }
+.ip-inline { flex-direction: column; }
+.ip-label { font: 600 var(--candidate-label) / 1.3 var(--font-sans); }
+
+/* TextField, TextArea, Stepper, SegmentedControl and Button at the page's size: their cards' shapes and tokens. */
+.ip .tf { width: 100%; height: var(--candidate-control); padding: 0 calc(var(--u) * 14); border: 1px solid var(--control-border); border-radius: var(--radius-sm);
+  background: var(--panel); font-size: var(--candidate-body); }
+.ip .tf-num { max-width: calc(var(--candidate-control) * 2.6); }
+.ip .tf-link { text-decoration: underline; text-underline-offset: 3px; }
+.ip .ta { width: 100%; min-height: calc(var(--u) * 240); padding: calc(var(--u) * 14); border: 1px solid var(--control-border); border-radius: var(--radius-sm);
+  background: var(--tile); resize: vertical; font: italic var(--candidate-body) / 1.55 var(--font-serif); }
+.ip .seg { display: inline-flex; align-self: flex-start; border: 1px solid var(--control-border); border-radius: var(--radius-md); }
+.ip .seg button { height: calc(var(--candidate-control) - 2px); padding: 0 calc(var(--u) * 20); border: 0; border-radius: var(--radius-sm);
+  background: transparent; font-weight: 600; font-size: var(--candidate-label); cursor: pointer; white-space: nowrap; }
+.ip .seg button:hover { background: var(--tile); }
+.ip .seg button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
+.ip .stepper { display: inline-flex; align-self: flex-start; align-items: stretch; height: var(--candidate-control); border: 1px solid var(--control-border); border-radius: var(--radius-md); }
+.ip .stepper button { display: grid; place-items: center; width: var(--candidate-control); padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; cursor: pointer; }
+.ip .stepper button:hover { background: var(--tile); }
+.ip .stepper button[aria-disabled] { color: var(--ink-secondary); cursor: default; }
+.ip .stepper svg { width: var(--candidate-icon); height: var(--candidate-icon); }
+.ip .stepper .value { display: grid; place-items: center; min-width: calc(var(--candidate-control) * 1.1); font-weight: 600; font-size: calc(var(--candidate-label) * 1.25); }
+.ip .btns { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 12); }
+.ip .btn { display: inline-flex; align-items: center; gap: calc(var(--u) * 10); height: var(--candidate-control); padding: 0 calc(var(--u) * 22);
+  border: 1px solid var(--control-border); border-radius: var(--radius-md); background: transparent; font-weight: 600; font-size: var(--candidate-label); cursor: pointer; }
+.ip .btn:hover { background: var(--tile); }
+.ip .btn svg { width: var(--candidate-icon); height: var(--candidate-icon); }
+
+/* Notes: the person's own words, in the note style (serif italic), read by default; Edit notes turns them into a TextArea. */
+.ip-notes { display: flex; flex-direction: column; gap: calc(var(--u) * 16); }
+.note-body { font: italic var(--candidate-body) / 1.55 var(--font-serif); max-width: 66ch; }
+.note-body p, .note-body ul { margin: 0 0 calc(var(--u) * 12); }
+.note-body p:last-child { margin-bottom: 0; }
+.note-body ul { padding-left: 1.2em; }
+.note-body a { color: var(--ink); text-underline-offset: 3px; }
+.ip-notes .note-edit { display: none; }
+.ip-notes[data-editing="true"] .note-view { display: none; }
+.ip-notes[data-editing="true"] .note-edit { display: block; }
+
+/* Recent weeks: one line a week, newest first: when, the seven marks, and the count against the goal.
+   A week that met its goal draws its count in pen, underlined, like a met day's name (K60). */
+.ip-weeks { list-style: none; margin: 0; padding: 0; display: grid; }
+.ip .wk { display: grid; grid-template-columns: calc(var(--u) * 130) auto 1fr; align-items: center; gap: calc(var(--u) * 20);
+  padding: calc(var(--u) * 8) 0; border-top: 1px solid var(--line); font-size: var(--candidate-body); }
+.ip .wk:last-child { border-bottom: 1px solid var(--line); }
+.ip .wk[aria-current] .wk-when { font-weight: 600; }
+.ip .wk-when { color: var(--ink); white-space: nowrap; }
+.ip .wk-marks { display: flex; gap: calc(var(--u) * 6); }
+.ip .wk-count { color: var(--ink-secondary); white-space: nowrap; }
+.ip .wk-count[data-met] { color: var(--pen); font-weight: 600; text-decoration: underline; text-underline-offset: 4px; }
+.ip .mk { width: var(--candidate-mark); height: var(--candidate-mark); display: grid; place-items: center; flex: none; }
+.ip .mk svg { width: 100%; height: 100%; overflow: visible; }
+.ip .mk .bx { stroke: var(--control-border); }
+.ip .mk[data-mark] .bx { stroke: var(--ink-secondary); }
+.ip .mk .ink { fill: currentColor; }
+.ip .mk .sym { stroke: var(--canvas); }
+.ip .mk[data-mark="great"] { color: var(--pen); }
+.ip .mk[data-mark="partial"] { color: var(--pen-partial); }
+.ip .mk[data-mark="missed"] { color: var(--pen-missed); }
+
+/* A: rows like Settings (K51). Each section a row: the heading in the 320u name column, the
+   content to the right, hairlines between rows. */
+.ip[data-layout="a"] .ip-sec { display: grid; grid-template-columns: var(--candidate-name-col) minmax(0, 1fr); align-items: start;
+  padding: var(--candidate-sec-y) 0; border-top: 1px solid var(--line); }
+.ip[data-layout="a"] .ip-sec h2 { padding-top: calc(var(--u) * 4); }
+
+/* B: the notes are the page, the rest a side column. */
+.ip[data-layout="b"] .ip-cols { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: calc(var(--u) * 56); border-top: 1px solid var(--line); }
+.ip[data-layout="b"] .ip-sec { display: flex; flex-direction: column; gap: calc(var(--u) * 18); padding: var(--candidate-sec-y) 0; }
+.ip[data-layout="b"] .ip-side .ip-sec + .ip-sec { border-top: 1px solid var(--line); }
+.ip[data-layout="b"] .ip-side .ip-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.ip[data-layout="b"] .ip-side .ip-grid > .ip-field:has(.seg) { grid-column: 1 / -1; }
+.ip[data-layout="b"] .ip-side .wk { grid-template-columns: calc(var(--u) * 100) auto 1fr; gap: calc(var(--u) * 14); }
+.ip[data-layout="b"] .ip-side { --candidate-mark: max(20px, calc(var(--u) * 24)); }
+.ip[data-layout="b"] .note-body { font-size: max(19px, calc(var(--u) * 22)); }
+
+/* C: one column, recent weeks first, centred at 880u like Settings' option B. */
+.ip[data-layout="c"] .ip-page { max-width: calc(var(--u) * 880 + 2 * var(--candidate-pad-x)); margin: 0 auto; }
+.ip[data-layout="c"] .ip-sec { display: flex; flex-direction: column; gap: calc(var(--u) * 18); padding: var(--candidate-sec-y) 0; border-top: 1px solid var(--line); }
+
+/* Folded (a phone, an iPad held upright): one column for every option, sizes on n. */
+@container ip ((orientation: portrait) and (width < 1000px)) or (width < 760px) {
+  .ip-scroll { --candidate-pad-x: calc(var(--n) * 16); --candidate-title: calc(var(--n) * 30); --candidate-h2: calc(var(--n) * 22);
+    --candidate-label: calc(var(--n) * 16); --candidate-body: calc(var(--n) * 18); --candidate-control: 48px; --candidate-icon: 22px;
+    --candidate-mark: calc(var(--n) * 24); --u: 1px; }
+  .ip[data-layout] .ip-cols { display: block; }
+  .ip[data-layout] .ip-sec { display: flex; flex-direction: column; gap: 16px; padding: 24px 0; border-top: 1px solid var(--line); }
+  .ip[data-layout] .ip-grid { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .ip[data-layout] .wk { grid-template-columns: 76px auto 1fr; gap: 10px; }
+  .ip[data-layout] .wk-marks { gap: 3px; }
+}

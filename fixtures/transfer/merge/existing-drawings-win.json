@@ -3,10 +3,9 @@
   "existing": {
     "plans": {},
     "log": {
-      "2026-10-19": {
-        "pu": ["great", "partial-solid", null, null, "missed-hatch", null, null]
-      }
-    }
+      "2026-10-19": { "pu": ["great", "partial-solid", null, null, "missed-hatch", null, null] }
+    },
+    "details": {}
   },
   "incoming": {
     "plans": {},
@@ -14,7 +13,8 @@
       "2026-10-19": {
         "pu": ["great-hatch", "partial", "missed-solid", "great-solid", "missed", null, null]
       }
-    }
+    },
+    "details": {}
   },
   "expected": {
     "plans": {},
@@ -22,10 +22,8 @@
       "2026-10-19": {
         "pu": ["great", "partial-solid", "missed-solid", "great-solid", "missed-hatch", null, null]
       }
-    }
+    },
+    "details": {}
   },
-  "summary": {
-    "weeks": 0,
-    "ticks": 2
-  }
+  "summary": { "weeks": 0, "ticks": 2, "details": 0 }
 }

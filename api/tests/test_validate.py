@@ -93,10 +93,11 @@ def test_strict_item_returns_a_normalised_exercise() -> None:
     assert result.item == {"id": "pu", "name": "Push-ups", "sets": 3, "reps": 10, "target": 4}
 
 
-def test_strict_item_returns_a_food_with_a_target_and_a_note() -> None:
+def test_strict_item_returns_a_food_with_a_target_and_no_note() -> None:
+    """An item keeps no notes: they are its details, one copy for every week (D3)."""
     result = strict_item("diet", {"id": "v", "name": "Veg", "target": 9, "notes": " raw "})
     assert result.problems == []
-    assert result.item == {"id": "v", "name": "Veg", "target": 7, "notes": "raw"}
+    assert result.item == {"id": "v", "name": "Veg", "target": 7}
 
 
 def test_strict_item_accepts_a_duration_alone() -> None:

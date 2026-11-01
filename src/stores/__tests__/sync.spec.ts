@@ -18,12 +18,14 @@ import {
   type SyncState,
 } from '@/stores/sync'
 import { DATA_KEY, DIET_KEY, LEGACY_DATA_KEY } from '@/lib/storage'
+import type { Arrangement, ItemSections } from '@/lib/itemSections'
 import type { ExportData } from '@/lib/transfer'
 import { FakeApi } from '@/lib/__tests__/fakeApi'
 import { USER, cached, emptyState } from '@/lib/__tests__/signedIn'
 
-const [V2_CACHE, V1_CACHE] = OLD_CACHE_PREFIXES
-const [V2_OUTBOX, V1_OUTBOX] = OLD_OUTBOX_PREFIXES
+// The -v3 names (before item details) are moved and lifted in syncDetails.spec.ts.
+const [, V2_CACHE, V1_CACHE] = OLD_CACHE_PREFIXES
+const [, V2_OUTBOX, V1_OUTBOX] = OLD_OUTBOX_PREFIXES
 
 const NOW = new Date(2026, 9, 23, 18, 0)
 const WEEK = '2026-10-19'
@@ -89,7 +91,13 @@ describe('sync', () => {
     expect(planner.exercises).toEqual([PUSHUPS])
     await flushPromises()
     expect(planner.exercises).toEqual([SQUATS])
-    expect(cached().exercise).toEqual({ plans: { [WEEK]: [SQUATS] }, log: {}, revs: { [WEEK]: 3 } })
+    expect(cached().exercise).toEqual({
+      plans: { [WEEK]: [SQUATS] },
+      log: {},
+      details: {},
+      revs: { [WEEK]: 3 },
+      detailRevs: {},
+    })
   })
 
   it('loads from the server when the device has no cache', async () => {
@@ -161,6 +169,52 @@ describe('sync', () => {
       foodPick: 4,
     })
     expect(cached().settings).toEqual({ accent: '#30d158', dailyPick: 3, foodPick: 4 })
+  })
+
+  it('sends an item-page arrangement with the settings, and caches it (K66)', async () => {
+    const { planner } = await start(emptyState())
+    const arranged = {
+      order: ['history', 'notes', 'details', 'plan'],
+      hidden: ['details'],
+    } as const
+    planner.setArrangement('exercise', { order: [...arranged.order], hidden: [...arranged.hidden] })
+    await settle()
+    const settings = { accent: '#30d158', dailyPick: 3, foodPick: 2 }
+    expect(api.calls.at(-1)).toMatchObject({
+      method: 'PUT',
+      path: '/settings',
+      body: { ...settings, itemSections: { exercise: arranged } },
+    })
+    expect(api.accounts.get(USER)!.settings).toEqual({
+      ...settings,
+      itemSections: { exercise: arranged },
+    })
+    expect(cached().settings).toEqual({ ...settings, itemSections: { exercise: arranged } })
+    // Back to the default: sent as {}, so the server forgets the old one rather than keep it.
+    planner.setArrangement('exercise', {
+      order: ['notes', 'details', 'plan', 'history'],
+      hidden: [],
+    })
+    await settle()
+    expect(api.calls.at(-1)).toMatchObject({ body: { ...settings, itemSections: {} } })
+    expect(api.accounts.get(USER)!.settings).toEqual(settings)
+    expect(cached().settings).toEqual(settings)
+  })
+
+  it('takes the server’s arrangement on a read', async () => {
+    const arranged: Arrangement = {
+      order: ['plan', 'notes', 'details', 'history'],
+      hidden: ['history'],
+    }
+    api.accounts.get(USER)!.settings = {
+      accent: '#30d158',
+      dailyPick: 3,
+      foodPick: 2,
+      itemSections: { food: arranged },
+    }
+    const { planner } = await start(emptyState())
+    expect(planner.arrangementFor('food')).toEqual(arranged)
+    expect(api.paths('PUT')).toEqual([])
   })
 
   it('ends on the latest value when a cell is toggled while its write is in flight', async () => {
@@ -748,8 +802,9 @@ describe('importFile', () => {
     exercise: {
       plans: { [WEEK]: [SQUATS], '2026-10-12': [SQUATS] },
       log: { [WEEK]: { sq: ['great', 'great', null, null, null, null, null] } },
+      details: {},
     },
-    diet: { plans: {}, log: {} },
+    diet: { plans: {}, log: {}, details: {} },
     settings: { accent: '#0a84ff', dailyPick: 5, foodPick: 4 },
   }
 
@@ -760,7 +815,7 @@ describe('importFile', () => {
     await settle()
     api.offline = false
     const outcome = await sync.importFile(data)
-    expect(outcome).toEqual({ ok: true, added: { weeks: 1, ticks: 2, settings: true } })
+    expect(outcome).toEqual({ ok: true, added: { weeks: 1, ticks: 2, details: 0, settings: true } })
     const order = api.paths().filter((p) => !p.startsWith('GET'))
     expect(order.at(-1)).toBe('POST /import')
     expect(api.calls.find((c) => c.path === '/import')!.expectedUser).toBe(USER)
@@ -856,8 +911,8 @@ describe('importFile', () => {
 describe('diff', () => {
   const settings = { accent: '#30d158', dailyPick: 3, foodPick: 2 }
   const empty = () => ({
-    exercise: { plans: {}, log: {} },
-    diet: { plans: {}, log: {} },
+    exercise: { plans: {}, log: {}, details: {} },
+    diet: { plans: {}, log: {}, details: {} },
     settings: { ...settings },
   })
 
@@ -869,6 +924,18 @@ describe('diff', () => {
     const local = empty()
     local.settings.foodPick = 5
     expect(diff(empty(), local)).toEqual([{ kind: 'settings' }])
+  })
+
+  it('finds a changed item-page arrangement, and none when it is the same', () => {
+    const arranged: ItemSections = {
+      exercise: { order: ['plan', 'notes', 'details', 'history'], hidden: [] },
+    }
+    const local = { ...empty(), settings: { ...settings, itemSections: arranged } }
+    expect(diff(empty(), local)).toEqual([{ kind: 'settings' }])
+    expect(diff(local, structuredClone(local))).toEqual([])
+    // No key and an empty one are the same: every page as it comes.
+    const none = { ...empty(), settings: { ...settings, itemSections: {} } }
+    expect(diff(empty(), none)).toEqual([])
   })
 
   it('finds changed plans, set and cleared days, and settings', () => {
@@ -905,9 +972,11 @@ describe('normaliseState', () => {
       exercise: {
         plans: { [WEEK]: [{ id: 'a', name: 'A', reps: 3, target: 7 }] },
         log: {},
+        details: {},
         revs: { [WEEK]: 2 },
+        detailRevs: {},
       },
-      diet: { plans: {}, log: {}, revs: {} },
+      diet: { plans: {}, log: {}, details: {}, revs: {}, detailRevs: {} },
       settings: null,
     })
   })

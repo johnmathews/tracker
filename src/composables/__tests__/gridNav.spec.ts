@@ -205,6 +205,51 @@ describe('createGridNav', () => {
     })
   })
 
+  describe('a name that is a link (WeekGrid card, F9)', () => {
+    /** The name as a link, the cell's widget, with a note's button beside it. */
+    function linked(): void {
+      setup()
+      for (const name of ['a', 'b']) {
+        const th = el(name)
+        th.innerHTML = `<a href="#/item/${name}" data-w data-c="${name}-link">${name}</a><button data-c="${name}-note">note</button>`
+      }
+      nav!.sync()
+    }
+
+    it('takes the name cell’s focus, and Enter on it is the link’s own, in one press', () => {
+      linked()
+      el('a-0').focus()
+      expect(press('Home')).toBe(true)
+      expect(document.activeElement).toBe(el('a-link'))
+      expect(stops()).toEqual([el('a-link')])
+      // The note's button stays out of the Tab order, and Enter doesn't enter the cell.
+      expect(el('a-note').getAttribute('tabindex')).toBe('-1')
+      expect(press('Enter')).toBe(false)
+      expect(document.activeElement).toBe(el('a-link'))
+      expect(el('a-note').getAttribute('tabindex')).toBe('-1')
+    })
+
+    it('does nothing on Space, as on any link', () => {
+      linked()
+      el('a-link').focus()
+      expect(press(' ')).toBe(true)
+      expect(document.activeElement).toBe(el('a-link'))
+    })
+
+    it('lets F2 into the cell’s other controls, and Escape back to the link', () => {
+      linked()
+      el('b-link').focus()
+      expect(press('F2')).toBe(true)
+      expect(document.activeElement).toBe(el('b-note'))
+      expect(el('b-note').hasAttribute('tabindex')).toBe(false)
+      expect(press('Escape')).toBe(true)
+      expect(document.activeElement).toBe(el('b-link'))
+      expect(el('b-note').getAttribute('tabindex')).toBe('-1')
+      expect(press('ArrowRight')).toBe(true)
+      expect(document.activeElement).toBe(el('b-0'))
+    })
+  })
+
   describe('controls inside a cell (Edit plan)', () => {
     it('keeps them out of the Tab order until the cell is entered', () => {
       setup({ edit: true })

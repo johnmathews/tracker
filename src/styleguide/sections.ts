@@ -21,6 +21,8 @@ import DayMarkSection from './sections/DayMarkSection.vue'
 import ChipSection from './sections/ChipSection.vue'
 import SectionHeaderSection from './sections/SectionHeaderSection.vue'
 import WeekGridSection from './sections/WeekGridSection.vue'
+import RecentWeeksSection from './sections/RecentWeeksSection.vue'
+import ItemPageSection from './sections/ItemPageSection.vue'
 
 /**
  * One section of the style guide. StyleGuide.vue renders each as
@@ -195,5 +197,19 @@ export const SECTIONS: readonly StyleGuideSection[] = [
     summary:
       'One week, Monday to Sunday, as a grid: a row per exercise or food, a DayMark per day, and the week’s total at the end of each row.',
     component: WeekGridSection,
+  },
+  {
+    id: 'sg-recent-weeks',
+    title: 'RecentWeeks',
+    summary:
+      'An item’s last eight weeks, newest first, one line a week: when, its seven marks, and the count against that week’s goal.',
+    component: RecentWeeksSection,
+  },
+  {
+    id: 'sg-item-page',
+    title: 'ItemPage',
+    summary:
+      'An exercise’s or a food’s own page: its notes fill the page, with this week’s plan, its recent weeks and its details in a column beside them.',
+    component: ItemPageSection,
   },
 ]

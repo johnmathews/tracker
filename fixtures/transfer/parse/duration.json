@@ -45,9 +45,10 @@
             { "id": "d", "name": "D", "reps": 10, "target": 3 }
           ]
         },
-        "log": {}
+        "log": {},
+        "details": {}
       },
-      "diet": { "plans": {}, "log": {} },
+      "diet": { "plans": {}, "log": {}, "details": {} },
       "settings": null
     }
   }

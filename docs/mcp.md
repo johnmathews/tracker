@@ -18,20 +18,26 @@ change it. Each token belongs to one account and acts only as that account.
 | `whoami`       | Which account and scope the token has. Use it to test the link. |
 | `week_summary` | How one week went, item by item, against its goals.             |
 | `weeks`        | Several weeks side by side, for a trend.                        |
-| `item_history` | One exercise or food over the last weeks.                       |
+| `item_history` | One exercise or food over the last weeks, and its whole note.   |
 | `goals`        | This week's goals, the daily targets and the "My goals" note.   |
 | `consistency`  | The share of days and goals met, and the current streaks.       |
 
-**Write tools** change plans, marks and daily targets as the app does. Only a `write` token may
+**Write tools** change plans, items' notes, marks and daily targets as the app does. Only a `write` token may
 call them.
 
 | Tool                | Does                                                |
 | ------------------- | --------------------------------------------------- |
 | `add_item`          | Adds an exercise or a food to a week's plan.        |
-| `update_item`       | Changes the fields given on one item.               |
+| `update_item`       | Changes the fields given on one item, or its note.  |
 | `remove_item`       | Takes one item out of a week's plan.                |
 | `mark_day`          | Marks one item on one date, or clears the day.      |
 | `set_daily_targets` | Sets how many exercises and foods make a day count. |
+
+An item's note belongs to the item, not to a week. It is the note the item's row and its page show
+in the app, the same in every week. Changing it changes no week's plan. A note runs to 20,000
+characters. `week_summary`, `weeks` and `goals` give the first 500, and a longer note ends in "…"
+there. `item_history` gives the whole note. A `note` sent to `add_item` or `update_item` replaces
+the whole note, so read it with `item_history` before writing it back.
 
 [api.md](api.md) §3.1 lists the arguments and results of every tool.
 
@@ -166,9 +172,10 @@ With a write token, ask for a change:
 - "Add 3×10 lunges, twice a week."
 - "Mark squats as done today."
 - "Set my daily target to 3 exercises."
+- "Add a note to squats: knees out."
 
 Every write tool returns what it changed as it was (`before`) and as it is now (`after`): a week's
-items, a day's mark, or the two daily targets. To undo a change, ask the agent to restore the
+items with their notes, a day's mark, or the two daily targets. To undo a change, ask the agent to restore the
 `before` values, or edit the plan in the app.
 
 ## 6. Troubleshooting

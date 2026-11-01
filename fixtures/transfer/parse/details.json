@@ -1,0 +1,68 @@
+{
+  "description": "A version 5 file carries each item's details once per section, beside its plans and log. Notes are trimmed and cut to 20,000 code points; a field is kept under any key of a lower-case letter then up to 31 letters, digits or underscores (so a field the app does not list yet survives), trimmed and cut to 500 code points, and a blank one drops out. A document left empty, one that is not an object, and one under an id the API cannot name (empty, over 128 characters, or __proto__) drop out. A plan item's notes are not read from a version 5 file.",
+  "input": {
+    "format": "tracker-export",
+    "version": 5,
+    "exercise": {
+      "plans": {
+        "2026-10-19": [
+          { "id": "pu", "name": "Push-ups", "reps": 10, "target": 4, "notes": "not read" }
+        ]
+      },
+      "log": {},
+      "details": {
+        "pu": {
+          "notes": "  **Slow** on the way down.\n[Form video](https://example.com/push-ups) \n\t",
+          "fields": {
+            "equipment": "  None ",
+            "works": " \n ",
+            "link": 42,
+            "tempo": "3-1-1",
+            "Bad Key": "dropped",
+            "2nd": "dropped",
+            "a_b_9": "kept"
+          },
+          "other": "dropped"
+        },
+        "sq": {
+          "fields": {
+            "works": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxyz"
+          }
+        },
+        "pl": { "notes": " \t ", "fields": { "works": "" } },
+        "be": "not an object",
+        "kh": null,
+        "": { "notes": "empty id" },
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": {
+          "notes": "an id of 129 characters"
+        },
+        "__proto__": { "notes": "proto" },
+        "ht": { "notes": "<script>alert(1)</script>" }
+      }
+    },
+    "diet": { "plans": {}, "log": {}, "details": ["not", "an", "object"] }
+  },
+  "expected": {
+    "ok": true,
+    "data": {
+      "exercise": {
+        "plans": { "2026-10-19": [{ "id": "pu", "name": "Push-ups", "reps": 10, "target": 4 }] },
+        "log": {},
+        "details": {
+          "pu": {
+            "notes": "**Slow** on the way down.\n[Form video](https://example.com/push-ups)",
+            "fields": { "equipment": "None", "tempo": "3-1-1", "a_b_9": "kept" }
+          },
+          "sq": {
+            "fields": {
+              "works": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxy"
+            }
+          },
+          "ht": { "notes": "<script>alert(1)</script>" }
+        }
+      },
+      "diet": { "plans": {}, "log": {}, "details": {} },
+      "settings": null
+    }
+  }
+}

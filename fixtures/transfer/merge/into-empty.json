@@ -1,13 +1,15 @@
 {
   "description": "Into empty data, the file's plans and log, marks included, arrive as they are.",
-  "existing": { "plans": {}, "log": {} },
+  "existing": { "plans": {}, "log": {}, "details": {} },
   "incoming": {
     "plans": { "2026-10-19": [{ "id": "pu", "name": "Push-ups", "reps": 10, "target": 4 }] },
-    "log": { "2026-10-19": { "pu": ["great", null, "partial", null, null, null, null] } }
+    "log": { "2026-10-19": { "pu": ["great", null, "partial", null, null, null, null] } },
+    "details": {}
   },
   "expected": {
     "plans": { "2026-10-19": [{ "id": "pu", "name": "Push-ups", "reps": 10, "target": 4 }] },
-    "log": { "2026-10-19": { "pu": ["great", null, "partial", null, null, null, null] } }
+    "log": { "2026-10-19": { "pu": ["great", null, "partial", null, null, null, null] } },
+    "details": {}
   },
-  "summary": { "weeks": 1, "ticks": 2 }
+  "summary": { "weeks": 1, "ticks": 2, "details": 0 }
 }

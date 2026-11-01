@@ -11,6 +11,7 @@ import {
   parseDietData,
   parsePlannerData,
   parseSettings,
+  normalisePortableSettings,
   readKey,
   writeKey,
 } from '@/lib/storage'
@@ -232,6 +233,26 @@ describe('parseDietData', () => {
     expect(parseDietData(null, JSON.stringify({ log: {} }), WEEK).plans[WEEK]).toEqual(
       defaultFoods(),
     )
+  })
+})
+
+describe('normalisePortableSettings', () => {
+  it('keeps an item-page arrangement, normalised, and leaves out none or the default (K66)', () => {
+    const base = { accent: '#bf5af2', dailyPick: 4, foodPick: 5 }
+    expect(
+      normalisePortableSettings({
+        ...base,
+        itemSections: {
+          food: { order: ['history', 'history'], hidden: ['plan', 'x'] },
+          cardio: {},
+        },
+      }),
+    ).toEqual({
+      ...base,
+      itemSections: { food: { order: ['history', 'notes', 'details', 'plan'], hidden: ['plan'] } },
+    })
+    expect(normalisePortableSettings({ ...base, itemSections: 'none' })).toEqual(base)
+    expect(normalisePortableSettings({ ...base, itemSections: {} })).toEqual(base)
   })
 })
 

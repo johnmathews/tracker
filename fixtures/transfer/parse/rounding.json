@@ -24,9 +24,10 @@
             { "id": "b", "name": "B", "reps": 0, "weight": 1, "target": 1 }
           ]
         },
-        "log": {}
+        "log": {},
+        "details": {}
       },
-      "diet": { "plans": {}, "log": {} },
+      "diet": { "plans": {}, "log": {}, "details": {} },
       "settings": { "accent": "#0A84FF", "dailyPick": 5, "foodPick": 2 }
     }
   }

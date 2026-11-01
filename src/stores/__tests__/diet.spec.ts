@@ -100,21 +100,17 @@ describe('diet store', () => {
     expect(d.foods[2]!.name).toBe('Salmon')
   })
 
-  it("saves a food's note, keeps it when an update leaves it out, and clears it when empty (K43)", () => {
+  it('keeps no note in the week: a food’s notes are its details, for every week (D3)', () => {
     const d = useDietStore()
-    d.updateFood('fish', { name: 'Fish', target: 2, notes: ' Oily fish ' })
-    expect(d.foods[2]).toEqual({ id: 'fish', name: 'Fish', target: 2, notes: 'Oily fish' })
-    d.updateFood('fish', { name: 'Fish', target: 3 })
-    expect(d.foods[2]!.notes).toBe('Oily fish')
-    d.updateFood('fish', { name: 'Fish', target: 3, notes: '' })
-    expect(d.foods[2]).not.toHaveProperty('notes')
+    d.updateFood('fish', { name: 'Fish', target: 2, notes: 'Oily fish' } as never)
+    expect(d.foods[2]).toEqual({ id: 'fish', name: 'Fish', target: 2 })
   })
 
   it('adds a food with goal 3, ignores an empty name, and removes', () => {
     const d = useDietStore()
-    expect(d.addFood('  ')).toBe(false)
-    expect(d.addFood(' Beans ')).toBe(true)
-    expect(d.foods.at(-1)).toMatchObject({ name: 'Beans', target: 3 })
+    expect(d.addFood('  ')).toBeNull()
+    const id = d.addFood(' Beans ')
+    expect(d.foods.at(-1)).toEqual({ id, name: 'Beans', target: 3 })
     d.toggle('nuts', 0)
     d.removeFood('nuts')
     expect(d.foods.map((f) => f.id)).not.toContain('nuts')
@@ -122,14 +118,13 @@ describe('diet store', () => {
     expect(d.log['2026-10-19']?.nuts?.[0]).toBe('great')
   })
 
-  it('adds a food with its goal and note from the Add food dialog (K54)', () => {
+  it('adds a food with its goal from the Add food dialog (K54)', () => {
     const d = useDietStore()
-    expect(d.addFood({ name: ' ', target: 2 })).toBe(false)
-    expect(d.addFood({ name: ' Beans ', target: 9, notes: ' Any kind ' })).toBe(true)
-    // The goal is held to the Stepper's range, and the note trimmed as on edit.
-    expect(d.foods.at(-1)).toMatchObject({ name: 'Beans', target: 7, notes: 'Any kind' })
-    expect(d.addFood({ name: 'Lentils', notes: '' })).toBe(true)
-    expect(d.foods.at(-1)).toEqual({ id: expect.any(String), name: 'Lentils', target: 3 })
+    expect(d.addFood({ name: ' ', target: 2 })).toBeNull()
+    const id = d.addFood({ name: ' Beans ', target: 9 })
+    // The goal is held to the Stepper's range.
+    expect(d.foods.at(-1)).toEqual({ id, name: 'Beans', target: 7 })
+    expect(id).toMatch(/^x/)
   })
 
   it('adopts food data wholesale or a week at a time, and clears', () => {

@@ -32,9 +32,18 @@
     note; a food a name, a goal and a note;
   - the pencil beside a name opens that item's dialog, where everything about it changes: for an
     exercise its sets, reps or seconds, weight, note and goal ("Times a week"), for a food its
-    name, note and goal. A note is markdown; it shows under the item's name, and pressing it opens
-    the whole note with its links; the bin at the end of a row removes the item after a confirmation (its marks stay
-    stored). New items start with a goal of 3.
+    name, note and goal. A note is markdown and is the same on every week; it shows under the
+    item's name, and pressing it opens the whole note with its links; the bin at the end of a row
+    removes the item after a confirmation (its marks stay stored). New items start with a goal of 3.
+- **An item's own page.** Pressing an exercise's or a food's name, in either mode, opens its page.
+  It reads in rows like Settings, each heading on the left and its content beside it. First come
+  the notes, up to 20,000 characters of markdown, which save as you type. Then the details:
+  equipment, what it works and a link for an exercise, and a serving and examples for a food. Then
+  the week's plan for the item. Last come its last eight weeks, with how many days were marked
+  against the goal; every mark counts, missed included. Notes and details are one copy for every
+  week. **Arrange sections** chooses which of these every exercise page shows, and in what order,
+  and the same for every food page; the choice is saved with your account. **Back to the
+  week** returns to the name you pressed.
 - **Weekly plans.** Each week has its own plan, so reps, sets, weights and goals can change from week
   to week. A week you haven't changed carries over the latest earlier week's plan; it gets its own
   copy the first time you change it or mark a cell. So a change to this week also reaches the weeks
@@ -53,12 +62,13 @@
   a password, or be invited by a link that names their email. Every account signs in with its email. Sign-up
   closes once `MAX_USERS` accounts exist (`docs/api.md` §4), and each account may store 5 MiB
   (§3). Where the API has a Resend key, a new account gets an email to **confirm** its address,
-  and **Forgot your password?** emails a reset link (§4.1). Plans, marks and the daily targets are stored on the
-  server and sync across devices; the theme and the marks stay with each device. The app opens from a cached
+  and **Forgot your password?** emails a reset link (§4.1). Plans, marks, notes, details and the daily targets are
+  stored on the server and sync across devices; the theme and the marks stay with each device. The app opens from a cached
   copy and keeps working offline, sending changes once the connection is back.
-- **Export and import.** Settings → **Export** downloads your plans, marks and daily targets as
-  a JSON file; **Import…** merges such a file into your account. An import only adds: weeks you
-  already have keep their plan, and no mark is ever cleared or changed. The export is your own copy of your
+- **Export and import.** Settings → **Export** downloads your plans, marks, notes, details and
+  daily targets as a JSON file; **Import…** merges such a file into your account. An import only
+  adds: weeks you already have keep their plan, an item's notes and details stay as they are, and
+  no mark is ever cleared or changed. The export is your own copy of your
   data.
 - **Moving a log from before accounts.** A browser that kept a log before accounts existed offers
   it once you sign in: **Add to my account** merges it in, **Not mine** stops the question for you
@@ -100,7 +110,7 @@ adds nothing):
 uv run tracker-admin seed-demo                       # demo@example.com, password demo-password
 ```
 
-It runs only against a local stack, and never overwrites a mark. The database lives in
+It runs only against a local stack, and never overwrites a mark or a note. The database lives in
 `api/.data` (git-ignored), so accounts and data survive restarts, rebuilds and branch switches;
 deleting that folder, or `git clean -x`, starts over.
 

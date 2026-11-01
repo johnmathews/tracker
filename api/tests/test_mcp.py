@@ -419,7 +419,7 @@ def test_week_summary_for_food_with_marks(
         "plans": {THIS_WEEK: [{"id": "veg", "name": "Vegetables", "target": 2}]},
         "log": {THIS_WEEK: {"veg": ["great", "partial-x", None, None, None, None, None]}},
     }
-    load_tracked(conn, uid, diet=diet)  # type: ignore[arg-type]
+    load_tracked(conn, uid, diet=diet)
     out = tool(agent, token, "week_summary", section="diet", week=THIS_WEEK)
     [veg] = out["items"]
     assert (veg["done"], veg["great"], veg["partial"], veg["goal_met"]) == (2, 1, 1, True)
@@ -429,7 +429,7 @@ def test_week_summary_for_food_with_marks(
 def test_a_carried_week_reports_the_source_weeks_items(
     agent: TestClient, conn: sqlite3.Connection, uid: int, token: str
 ) -> None:
-    load_tracked(conn, uid, exercise=plans(("sq", "Squats", 3)))  # type: ignore[arg-type]
+    load_tracked(conn, uid, exercise=plans(("sq", "Squats", 3)))
     out = tool(agent, token, "week_summary", week="2026-11-02")
     assert (out["plan_week"], out["carried"]) == (THIS_WEEK, True)
     assert [it["id"] for it in out["items"]] == ["sq"]
@@ -458,7 +458,7 @@ def test_weeks_with_a_range(agent: TestClient, uid: int, token: str) -> None:
 def test_item_history_defaults_to_eight_weeks(
     agent: TestClient, conn: sqlite3.Connection, uid: int, token: str
 ) -> None:
-    load_tracked(conn, uid, exercise=plans(("sq", "Squats", 3)))  # type: ignore[arg-type]
+    load_tracked(conn, uid, exercise=plans(("sq", "Squats", 3)))
     out = tool(agent, token, "item_history", item_id="sq")
     assert out["name"] == "Squats"
     assert len(out["weeks"]) == 8
@@ -466,6 +466,27 @@ def test_item_history_defaults_to_eight_weeks(
     assert (out["this_week"], out["today"]) == (THIS_WEEK, TODAY)
     assert tool(agent, token, "item_history", item_id="sq", weeks=2)["start"] == "2026-10-12"
     assert tool(agent, token, "item_history", item_id="nope")["name"] is None
+
+
+def test_item_history_gives_the_whole_note_the_other_reads_cut(
+    agent: TestClient, conn: sqlite3.Connection, uid: int, token: str
+) -> None:
+    """A note runs to 20,000 characters; the reads of many items cut it at 500, ending in "…".
+    `item_history` gives it whole, so an agent can read it there before writing one back."""
+    whole = ("Knees out. " * 100).strip()
+    details = {"details": {"sq": {"notes": whole}}}
+    load_tracked(conn, uid, exercise=plans(("sq", "Squats", 3)) | details)
+    assert tool(agent, token, "item_history", item_id="sq")["notes"] == whole
+    cut = whole[:499] + "…"
+    assert tool(agent, token, "week_summary")["items"][0]["notes"] == cut
+    assert tool(agent, token, "goals")["exercise"][0]["notes"] == cut
+    tools = {t["name"]: t for t in result(call(agent, "tools/list", token=token))["tools"]}
+    for name in ("week_summary", "weeks", "goals"):
+        assert "cut at 500" in tools[name]["description"], name
+    assert "whole note" in tools["item_history"]["description"]
+    for name in ("add_item", "update_item"):
+        assert "item_history" in tools[name]["description"], name
+        assert "item_history" in tools[name]["inputSchema"]["properties"]["note"]["description"]
 
 
 def test_goals_reports_the_defaults_for_an_account_with_no_plans(
@@ -538,11 +559,10 @@ def test_week_summary_matches_the_shared_fixtures(
     """The tool passes insights' answer through: the goal-met items and met days are the ones
     the app's screen shows for the fixture's week."""
     expected = case["expected"]
-    tracked = {"plans": case["plans"], "log": case["log"]}
     if case["section"] == "exercise":
-        load_tracked(conn, uid, exercise=tracked, settings={"dailyPick": case["dailyTarget"]})  # type: ignore[arg-type]
+        load_tracked(conn, uid, exercise=case, settings={"dailyPick": case["dailyTarget"]})
     else:
-        load_tracked(conn, uid, diet=tracked, settings={"foodPick": case["dailyTarget"]})  # type: ignore[arg-type]
+        load_tracked(conn, uid, diet=case, settings={"foodPick": case["dailyTarget"]})
     day = datetime.fromisoformat(case["today"]).replace(hour=12, tzinfo=UTC)
     clock.now = int(day.timestamp())
     out = tool(agent, token, "week_summary", section=case["section"], week=case["week"])
@@ -552,8 +572,8 @@ def test_week_summary_matches_the_shared_fixtures(
     assert [d["count"] for d in out["days"]] == expected["dayCounts"]
     assert out["days_met"] == expected["daysMet"]
     assert out["goals_met"] == expected["goalsMet"]
-    assert [(it["id"], it["done"], it["goal_met"]) for it in out["items"]] == [
-        (it["id"], it["done"], it["goalMet"]) for it in expected["items"]
+    assert [(it["id"], it["done"], it["goal_met"], it["notes"]) for it in out["items"]] == [
+        (it["id"], it["done"], it["goalMet"], it.get("notes", "")) for it in expected["items"]
     ]
 
 
@@ -658,7 +678,7 @@ def test_add_item_shows_in_the_apps_state(
 def test_update_and_remove_item_on_a_given_week(
     agent: TestClient, conn: sqlite3.Connection, uid: int, writer: str
 ) -> None:
-    load_tracked(conn, uid, diet=plans(("veg", "Vegetables", 7), ("nuts", "Nuts", 3)))  # type: ignore[arg-type]
+    load_tracked(conn, uid, diet=plans(("veg", "Vegetables", 7), ("nuts", "Nuts", 3)))
     out = tool(
         agent, writer, "update_item", section="diet", week=THIS_WEEK, item_id="veg", note="greens"
     )
@@ -668,6 +688,25 @@ def test_update_and_remove_item_on_a_given_week(
     assert out["item"] == {"id": "nuts", "name": "Nuts", "times_a_week": 3}
     assert out["item"] in out["before"]
     assert [it["id"] for it in out["after"]] == ["veg"]
+
+
+def test_a_note_through_the_tool_shows_in_the_apps_state(
+    agent: TestClient, client: TestClient, uid: int, writer: str
+) -> None:
+    """The app reads an item's note from its details, one copy for every week (D3), so an
+    agent's note lands there, and a note alone copies no week."""
+    out = tool(agent, writer, "update_item", item_id="sq", note="Knees out.")
+    assert out["item"]["note"] == "Knees out."
+    assert (out["copied_from"], out["rev"]) == (None, 0)
+    login = client.post("/api/auth/login", json={"username": EMAIL, "password": PASSWORD})
+    assert login.status_code == 200
+    state = client.get("/api/state").json()["exercise"]
+    assert state["details"] == {"sq": {"notes": "Knees out."}}
+    assert state["detailRevs"] == {"sq": 1}
+    assert state["plans"] == {}
+    assert tool(agent, writer, "week_summary", week="2026-11-02")["items"][2]["notes"] == (
+        "Knees out."
+    )
 
 
 def test_mark_day_defaults_to_today(agent: TestClient, uid: int, writer: str) -> None:

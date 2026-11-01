@@ -2,6 +2,7 @@
 at a time, as the app changes them (docs/api.md §3.1)."""
 
 import itertools
+import json
 import re
 import sqlite3
 import time
@@ -55,6 +56,30 @@ def stored(conn: sqlite3.Connection, uid: int, week: str, section: str = "exerci
 
 def plans(conn: sqlite3.Connection, uid: int, section: Section = "exercise") -> dict[str, Any]:
     return load_tracked(conn, uid, section)["plans"]
+
+
+def set_notes(
+    conn: sqlite3.Connection, uid: int, item_id: str, notes: str, section: Section = "exercise"
+) -> int:
+    """Give an item notes as the app's item page does, keeping its other details; the new rev."""
+    current = details_row(conn, uid, item_id, section)
+    rev = 0 if current is None else current[1]
+    doc = {} if current is None else current[0]
+    saved = data.put_details(conn, uid, section, item_id, {**doc, "notes": notes}, rev, quota=10**9)
+    assert isinstance(saved, data.DetailsSaved)
+    return saved.rev
+
+
+def details_row(
+    conn: sqlite3.Connection, uid: int, item_id: str, section: str = "exercise"
+) -> tuple[dict[str, Any], int] | None:
+    """An item's details document and rev as stored, or None."""
+    row = conn.execute(
+        "SELECT details_json, rev FROM item_details"
+        " WHERE user_id = ? AND section = ? AND item_id = ?",
+        (uid, section, item_id),
+    ).fetchone()
+    return None if row is None else (json.loads(row["details_json"]), row["rev"])
 
 
 def add(conn: sqlite3.Connection, config: Config, uid: int, **fields: object) -> edits.PlanEdit:
@@ -158,14 +183,14 @@ def test_own_week_adopts_a_copy_another_device_made_meanwhile(
 ) -> None:
     """The phone creates the week between the read and the write: its plan is the week's now."""
     plan(conn, uid, SOURCE, [SQUATS])
-    real = data.put_plan
+    real = data.put_plan_locked
 
     def phone_first(*args: Any, **kw: Any) -> PlanSaved | PlanConflict:
         if not stored(conn, uid, WEEK):
             real(conn, uid, "exercise", WEEK, [SQUATS, PLANKS], 0, quota=10**9)
         return real(*args, **kw)
 
-    monkeypatch.setattr(data, "put_plan", phone_first)
+    monkeypatch.setattr(data, "put_plan_locked", phone_first)
     owned = edits.own_week(conn, config, uid, "exercise", WEEK)
     assert owned == {"items": [SQUATS, PLANKS], "rev": 1, "copied_from": None}
 
@@ -230,7 +255,8 @@ def test_add_never_reuses_an_id_the_section_has_used(
 def test_update_changes_only_the_fields_given(
     conn: sqlite3.Connection, config: Config, uid: int
 ) -> None:
-    plan(conn, uid, WEEK, [{**SQUATS, "weight": 20, "notes": "deep"}, PLANKS])
+    plan(conn, uid, WEEK, [{**SQUATS, "weight": 20}, PLANKS])
+    set_notes(conn, uid, "sq", "deep")
     out = edits.update_item(conn, config, uid, "exercise", WEEK, "sq", {"times_a_week": 5})
     assert out["item"] == {**SQUATS_WORDS, "weight_kg": 20, "note": "deep", "times_a_week": 5}
     assert out["before"][0]["times_a_week"] == 3
@@ -241,7 +267,8 @@ def test_update_changes_only_the_fields_given(
 def test_update_switches_between_reps_and_seconds_and_clears_fields(
     conn: sqlite3.Connection, config: Config, uid: int
 ) -> None:
-    plan(conn, uid, WEEK, [{**SQUATS, "sets": 3, "weight": 20, "notes": "deep", "perSide": True}])
+    plan(conn, uid, WEEK, [{**SQUATS, "sets": 3, "weight": 20, "perSide": True}])
+    set_notes(conn, uid, "sq", "deep")
 
     def update(**fields: object) -> dict[str, Any]:
         return edits.update_item(conn, config, uid, "exercise", WEEK, "sq", fields)["item"]
@@ -332,7 +359,7 @@ def test_a_conflict_is_replayed_on_the_newer_plan(
     """The phone saves the week between the tool's read and its write: the tool re-reads and
     applies its change to the phone's plan, keeping both."""
     plan(conn, uid, WEEK, [SQUATS])
-    real = data.put_plan
+    real = data.put_plan_locked
     calls: list[int] = []
 
     def phone_between(*args: Any, **kw: Any) -> PlanSaved | PlanConflict:
@@ -343,7 +370,7 @@ def test_a_conflict_is_replayed_on_the_newer_plan(
             )
         return real(*args, **kw)
 
-    monkeypatch.setattr(data, "put_plan", phone_between)
+    monkeypatch.setattr(data, "put_plan_locked", phone_between)
     out = add(conn, config, uid, name="Dips")
     assert calls == [1, 2]
     assert out["before"] == [SQUATS_WORDS, PLANKS_WORDS]
@@ -362,7 +389,7 @@ def test_three_conflicts_in_a_row_fail_with_a_clear_error(
         calls.append(1)
         return PlanConflict([SQUATS], 99)
 
-    monkeypatch.setattr(data, "put_plan", always_newer)
+    monkeypatch.setattr(data, "put_plan_locked", always_newer)
     with pytest.raises(edits.EditError) as e:
         add(conn, config, uid, name="Dips")
     assert len(calls) == edits.MAX_TRIES == 3
@@ -401,14 +428,14 @@ def test_a_refused_edit_to_a_carried_week_leaves_it_following_its_source(
     plan(conn, uid, SOURCE, [SQUATS])
     room = data.usage(conn, uid) + len(b'{"id": "sq", "name": "Squats", "reps": 15, "target": 3}')
     if cause == "conflicts":
-        real = data.put_plan
+        real = data.put_plan_locked
 
         def lose_the_edit(*args: Any, **kw: Any) -> PlanSaved | PlanConflict:
             if len(args[4]) == 2:  # the copy with Dips added
                 return PlanConflict([SQUATS], 99)
             return real(*args, **kw)
 
-        monkeypatch.setattr(data, "put_plan", lose_the_edit)
+        monkeypatch.setattr(data, "put_plan_locked", lose_the_edit)
     # Room for the copy, but not for the copy with a long note.
     tight = replace(config, user_quota_bytes=room + 100)
     with pytest.raises(edits.EditError):
@@ -453,6 +480,118 @@ def test_a_new_tick_row_over_the_quota_is_refused(
     assert e.value.field == "quota"
 
 
+# --- notes: the item's details, one copy for every week ------------------------------------------
+
+
+def test_a_note_lands_in_the_items_details_for_every_week(
+    conn: sqlite3.Connection, config: Config, uid: int
+) -> None:
+    """The app reads an item's note from its details (D3), so that is where an agent's goes:
+    never into a week's plan, and the same in every week that shows the item."""
+    plan(conn, uid, SOURCE, [SQUATS])
+    plan(conn, uid, WEEK, [SQUATS, PLANKS])
+    out = edits.update_item(conn, config, uid, "exercise", WEEK, "sq", {"note": " Knees out. "})
+    assert out["item"] == {**SQUATS_WORDS, "note": "Knees out."}
+    assert out["before"] == [SQUATS_WORDS, PLANKS_WORDS]
+    assert out["after"] == [out["item"], PLANKS_WORDS]
+    assert details_row(conn, uid, "sq") == ({"notes": "Knees out."}, 1)
+    assert "notes" not in stored(conn, uid, WEEK)[0]
+    for week in (SOURCE, WEEK, LATER):
+        items = insights.week_summary(conn, uid, "exercise", week, FRIDAY)["items"]
+        assert items[0]["notes"] == "Knees out."
+    # A note alone changes no plan: the week keeps its rev, and the details theirs.
+    assert out["rev"] == 1
+    assert stored(conn, uid, WEEK)[1] == 1
+
+
+def test_a_note_alone_on_a_carried_week_copies_nothing(
+    conn: sqlite3.Connection, config: Config, uid: int
+) -> None:
+    plan(conn, uid, SOURCE, [SQUATS])
+    out = edits.update_item(conn, config, uid, "exercise", WEEK, "sq", {"note": "Slow."})
+    assert (out["rev"], out["copied_from"]) == (0, None)
+    assert set(plans(conn, uid)) == {SOURCE}
+    assert details_row(conn, uid, "sq") == ({"notes": "Slow."}, 1)
+
+
+def test_a_note_keeps_the_items_fields_and_clears_alone(
+    conn: sqlite3.Connection, config: Config, uid: int
+) -> None:
+    plan(conn, uid, WEEK, [SQUATS])
+    data.put_details(
+        conn,
+        uid,
+        "exercise",
+        "sq",
+        {"notes": "old", "fields": {"equipment": "Rack"}},
+        0,
+        quota=10**9,
+    )
+    edits.update_item(conn, config, uid, "exercise", WEEK, "sq", {"note": "new"})
+    assert details_row(conn, uid, "sq") == ({"notes": "new", "fields": {"equipment": "Rack"}}, 2)
+    out = edits.update_item(conn, config, uid, "exercise", WEEK, "sq", {"note": ""})
+    assert "note" not in out["item"]
+    assert out["before"] == [{**SQUATS_WORDS, "note": "new"}]
+    assert details_row(conn, uid, "sq") == ({"fields": {"equipment": "Rack"}}, 3)
+    # The same note again writes nothing, so the revision holds.
+    edits.update_item(conn, config, uid, "exercise", WEEK, "sq", {"note": ""})
+    assert details_row(conn, uid, "sq") == ({"fields": {"equipment": "Rack"}}, 3)
+
+
+def test_a_device_holding_the_old_notes_conflicts(
+    conn: sqlite3.Connection, config: Config, uid: int
+) -> None:
+    """An agent's note moves the revision on, so the app's next write from the old copy gets a
+    409 with the agent's version, as two devices do."""
+    plan(conn, uid, WEEK, [SQUATS])
+    seen = set_notes(conn, uid, "sq", "from the phone")
+    edits.update_item(conn, config, uid, "exercise", WEEK, "sq", {"note": "from the agent"})
+    result = data.put_details(
+        conn, uid, "exercise", "sq", {"notes": "edited offline"}, seen, quota=10**9
+    )
+    assert result == data.DetailsConflict({"notes": "from the agent"}, seen + 1)
+
+
+def test_add_with_a_note_gives_the_new_item_details(
+    conn: sqlite3.Connection, config: Config, uid: int
+) -> None:
+    out = add(conn, config, uid, section="diet", name="Beans", note="Any kind.")
+    new = out["item"]["id"]
+    assert details_row(conn, uid, new, "diet") == ({"notes": "Any kind."}, 1)
+    assert "notes" not in plans(conn, uid, "diet")[WEEK][-1]
+
+
+def test_a_note_over_the_quota_changes_nothing(
+    conn: sqlite3.Connection, config: Config, uid: int
+) -> None:
+    """The plan and the note are written in one transaction: a refused note leaves no item."""
+    plan(conn, uid, WEEK, [SQUATS])
+    row = stored(conn, uid, WEEK)
+    room = data.usage(conn, uid) + 200
+    tight = replace(config, user_quota_bytes=room)
+    with pytest.raises(edits.EditError) as e:
+        add(conn, tight, uid, name="Dips", note="x" * 400)
+    assert error(e)[0] == "quota"
+    assert stored(conn, uid, WEEK) == row
+    with pytest.raises(edits.EditError) as e:
+        edits.update_item(conn, tight, uid, "exercise", WEEK, "sq", {"note": "x" * 400})
+    assert error(e)[0] == "quota"
+    assert details_row(conn, uid, "sq") is None
+
+
+def test_a_note_too_large_to_store_is_refused(
+    conn: sqlite3.Connection, config: Config, uid: int
+) -> None:
+    """20,000 code points can be over the 32 KB a document may take as stored (D2)."""
+    plan(conn, uid, WEEK, [SQUATS])
+    with pytest.raises(edits.EditError) as e:
+        edits.update_item(conn, config, uid, "exercise", WEEK, "sq", {"note": "🥕" * 20_000})
+    field, text = error(e)
+    assert field == "note"
+    assert "too long" in text
+    assert details_row(conn, uid, "sq") is None
+
+
 # --- refusals -----------------------------------------------------------------------------------
 
 
@@ -478,7 +617,8 @@ def test_a_new_tick_row_over_the_quota_is_refused(
         ({"name": "Dips", "weight_kg": False}, "weight_kg", "number"),
         ({"name": "Dips", "per_side": "yes"}, "per_side", "true or false"),
         ({"name": "Dips", "note": 5}, "note", "text"),
-        ({"name": "Dips", "note": "x" * 501}, "note", "500"),
+        # An item's notes are its details, which take 20,000 code points (D2), as its page does.
+        ({"name": "Dips", "note": "🥕" * 20_001}, "note", "20,000"),
     ],
 )
 def test_add_refuses_a_bad_field_by_name(

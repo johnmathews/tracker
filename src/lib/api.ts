@@ -5,6 +5,13 @@ import { isRecord } from '@/lib/storage'
  * callers branch on what happened rather than on status codes.
  */
 
+/**
+ * A 409 `conflict`'s body: the server's revision, and its copy. A plan write's carries `items`
+ * (null when the server has no plan for the week); a details write's carries `details` (`{}` once
+ * cleared, null when the item never had any). Neither copy is validated here.
+ */
+export type ConflictBody = { rev: number; items?: unknown; details?: unknown }
+
 export type ApiError =
   /** No network, or the proxy could not reach the API (502, 503 or 504 without an API body). */
   | { kind: 'offline' }
@@ -12,8 +19,8 @@ export type ApiError =
   | { kind: 'auth' }
   /** The server failed (a 5xx with no API error code): worth retrying later. */
   | { kind: 'server'; status: number }
-  /** A stale plan write; the body carries the server's `items` and `rev`. */
-  | { kind: 'conflict'; body: { items: unknown; rev: number } }
+  /** A stale plan or details write; the body carries the server's copy and `rev`. */
+  | { kind: 'conflict'; body: ConflictBody }
   /** Any other refusal, with the API's error code (`error` when the reply was not the API's). */
   | { kind: 'refused'; status: number; code: string; retryAfter?: number }
 
@@ -72,9 +79,10 @@ export async function request<T = unknown>(
   if (res.status === 401 && (code === null || code === 'auth')) {
     return { ok: false, error: { kind: 'auth' } }
   }
-  // Only a plan write conflicts; any other 409 (a sign-up's `exists`) is a refusal like the rest.
+  // Only a plan or details write conflicts; any other 409 (a sign-up's `exists`) is a refusal
+  // like the rest.
   if (res.status === 409 && json !== null && code === 'conflict') {
-    return { ok: false, error: { kind: 'conflict', body: json as { items: unknown; rev: number } } }
+    return { ok: false, error: { kind: 'conflict', body: json as ConflictBody } }
   }
   if (res.status >= 500 && code === null)
     return { ok: false, error: { kind: 'server', status: res.status } }

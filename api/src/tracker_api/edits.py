@@ -8,14 +8,18 @@ Each operation mirrors a store action in src/stores/planner.ts and src/stores/di
   carried from. The copy is a create at `rev` 0, which P7 makes safe to repeat.
 - **Items are checked strictly** (`validate.strict_item`, plus the ranges the app's forms allow),
   and refused by name rather than clamped or dropped. A refusal changes nothing.
-- **Plan writes go through `data.put_plan`.** A newer `rev` on the server means another device
-  saved the week since it was read: the operation re-reads the week and runs again, up to
-  `MAX_TRIES` times in all.
+- **Plan writes go through `data.put_plan`'s rules** (`put_plan_locked`). A newer `rev` on the
+  server means another device saved the week since it was read: the operation re-reads the week
+  and runs again, up to `MAX_TRIES` times in all.
+- **A note is the item's, not the week's** (D3): its details, one copy for every week, as its row
+  and its page in the app read it. `note` goes to `data.set_notes_locked`, in the same
+  transaction as the plan write, so a refused note leaves the plan as it was. A note alone
+  changes no plan, so it copies no week.
 
 Tools speak the app's words (`times_a_week`, `seconds`, `note` …); `WORDS` maps them to the stored
-keys, and results come back in the same words, so an agent can undo a change by hand from what
-the call returned. Every operation raises `EditError`, a `ValueError` whose `field` names what to
-fix.
+keys, and results come back in the same words, the items with their notes, so an agent can undo a
+change by hand from what the call returned. Every operation raises `EditError`, a `ValueError`
+whose `field` names what to fix.
 """
 
 import copy
@@ -30,19 +34,29 @@ from typing import Any, TypedDict
 
 from . import data
 from .config import Config
-from .data import PlanSaved, QuotaExceeded, load_settings, load_tracked
+from .data import (
+    DetailsTooLarge,
+    PlanSaved,
+    QuotaExceeded,
+    load_settings,
+    load_tracked,
+    notes_of,
+)
 from .db import transaction
 from .insights import default_items, is_monday, monday_of, plan_source, week_items
+from .types import EXERCISE, FOOD, SECTION_TYPES
 from .validate import (
+    BLANK,
     MAX_DAILY_PICK,
+    MAX_DETAILS_NOTES,
     MAX_DURATION,
     MAX_ITEM_ID,
-    MAX_NOTES,
     MAX_SETS,
     MAX_TARGET,
     MAX_WEIGHT,
     MIN_DAILY_PICK,
     MIN_TARGET,
+    SECTIONS,
     Days,
     Item,
     Mark,
@@ -55,7 +69,8 @@ from .validate import (
     strict_item,
 )
 
-#: The tools' words for an item's fields, and the key each is stored under.
+#: The tools' words for an item's fields, and the key each is stored under: in the week's plan,
+#: but `notes` in the item's details.
 WORDS: dict[str, str] = {
     "name": "name",
     "sets": "sets",
@@ -142,9 +157,13 @@ class TargetsEdit(TypedDict):
     after: Targets
 
 
-def in_words(item: Item) -> Words:
-    """A stored item in the tools' words, keeping its key order."""
-    return {KEYS.get(key, key): value for key, value in item.items()}
+def in_words(item: Item, notes: str = "") -> Words:
+    """A stored item in the tools' words, keeping its key order, with its notes (from its
+    details) last as `note` when it has any."""
+    words = {KEYS.get(key, key): value for key, value in item.items()}
+    if notes:
+        words["note"] = notes
+    return words
 
 
 def _base36(n: int) -> str:
@@ -174,9 +193,9 @@ def new_id(taken: Container[str]) -> str:
 
 
 def _section(section: object) -> Section:
-    if section == "exercise" or section == "diet":
+    if section in SECTIONS:
         return section
-    raise EditError("section", "must be exercise or diet")
+    raise EditError("section", f"must be {' or '.join(SECTIONS)}")
 
 
 def _week(week: object) -> str:
@@ -206,8 +225,9 @@ def _field(word: str, value: object) -> object:
     if word in ("name", "note"):
         if not isinstance(value, str):
             raise EditError(word, "must be text")
-        if word == "note" and len(value.strip(" \t\n\r")) > MAX_NOTES:
-            raise EditError(word, f"is over {MAX_NOTES} characters")
+        # An item's notes, as its details take them (D2) and its page in the app allows.
+        if word == "note" and len(value.strip(BLANK)) > MAX_DETAILS_NOTES:
+            raise EditError(word, f"is over {MAX_DETAILS_NOTES:,} characters")
         return value
     if word == "per_side":
         if not isinstance(value, bool):
@@ -235,11 +255,11 @@ def _changes(section: Section, fields: Mapping[str, object]) -> Item:
             continue
         if word not in WORDS:
             raise EditError(word, f"is not a field; use {', '.join(WORDS)}")
-        if section == "diet" and word not in FOOD_WORDS:
+        if SECTION_TYPES[section] is FOOD and word not in FOOD_WORDS:
             raise EditError(word, f"is for exercises only; a food has {', '.join(FOOD_WORDS)}")
         out[WORDS[word]] = _field(word, value)
     # An exercise counts reps or seconds: giving one sets the other aside, as the app's form does.
-    if section == "exercise":
+    if SECTION_TYPES[section] is EXERCISE:
         if out.get("duration", 0) > 0 and "reps" not in out:
             out["reps"] = 0
         if out.get("reps", 0) > 0 and "duration" not in out:
@@ -272,8 +292,9 @@ def _put(
     items: list[Item],
     rev: int,
 ) -> data.PlanSaved | data.PlanConflict:
+    """A plan write, inside the caller's `transaction`."""
     try:
-        return data.put_plan(
+        return data.put_plan_locked(
             conn, user_id, section, week, items, rev, quota=config.user_quota_bytes
         )
     except QuotaExceeded:
@@ -315,7 +336,8 @@ def own_week(
     shown, _ = _shown(conn, user_id, section, week)
     if shown["copied_from"] is None:
         return shown
-    result = _put(conn, config, user_id, section, week, shown["items"], 0)
+    with transaction(conn):
+        result = _put(conn, config, user_id, section, week, shown["items"], 0)
     if isinstance(result, PlanSaved):
         return {**shown, "rev": result.rev}
     # Another device created the week since it was read: its copy is the week's own plan now.
@@ -326,6 +348,11 @@ def own_week(
 type Change = Callable[[list[Item], Tracked], tuple[list[Item], Item]]
 
 
+def _notes(tracked: Tracked) -> dict[str, str]:
+    """Each item's notes in the section, by id."""
+    return {item_id: notes_of(tracked["details"], item_id) for item_id in tracked["details"]}
+
+
 def _edit_plan(
     conn: sqlite3.Connection,
     config: Config,
@@ -333,6 +360,9 @@ def _edit_plan(
     section: Section,
     week: str,
     change: Change,
+    *,
+    note: str | None = None,
+    plan_changes: bool = True,
 ) -> PlanEdit:
     """Run `change` on the week's items and store the result in one write, replaying it on a
     conflict. `change` takes the items and the section's tracking, and returns the new items and
@@ -340,24 +370,48 @@ def _edit_plan(
 
     A week without its own plan is created with the change already applied to the copy, as the
     app's sync sends `own()` and the edit as one create at rev 0. A refusal therefore writes
-    nothing, and the week goes on following its source."""
+    nothing, and the week goes on following its source.
+
+    `note`, when given, becomes the acted-on item's notes in its details, in the same
+    transaction. With `plan_changes` false (a note alone) the plan is not written at all: the
+    week keeps its rev and, without a plan of its own, follows its source still."""
     section, week = _section(section), _week(week)
     for _ in range(MAX_TRIES):
         owned, tracked = _shown(conn, user_id, section, week)
         before = owned["items"]
         after, item = change(copy.deepcopy(before), tracked)
         after = normalise_items(section, after)
-        result = _put(conn, config, user_id, section, week, after, owned["rev"])
-        if isinstance(result, PlanSaved):
-            return {
-                "section": section,
-                "week": week,
-                "item": in_words(item),
-                "before": [in_words(it) for it in before],
-                "after": [in_words(it) for it in after],
-                "rev": result.rev,
-                "copied_from": owned["copied_from"],
-            }
+        notes_before = _notes(tracked)
+        notes_after = dict(notes_before)
+        rev, copied_from = owned["rev"], owned["copied_from"]
+        try:
+            with transaction(conn):
+                if plan_changes:
+                    result = _put(conn, config, user_id, section, week, after, owned["rev"])
+                    if not isinstance(result, PlanSaved):
+                        continue  # nothing written: read the newer week and run again
+                    rev = result.rev
+                else:
+                    copied_from = None
+                if note is not None:
+                    notes_after[item["id"]] = data.set_notes_locked(
+                        conn, user_id, section, item["id"], note, quota=config.user_quota_bytes
+                    ).after
+        except QuotaExceeded:
+            raise EditError("quota", "the account is full, so nothing was changed") from None
+        except DetailsTooLarge:
+            raise EditError(
+                "note", "is too long to save, over 32 KB as stored; shorten it"
+            ) from None
+        return {
+            "section": section,
+            "week": week,
+            "item": in_words(item, notes_after.get(item["id"], "")),
+            "before": [in_words(it, notes_before.get(it["id"], "")) for it in before],
+            "after": [in_words(it, notes_after.get(it["id"], "")) for it in after],
+            "rev": rev,
+            "copied_from": copied_from,
+        }
     raise EditError(
         "week",
         f"another device changed the week of {week} {MAX_TRIES} times while this edit ran; "
@@ -380,15 +434,17 @@ def add_item(
     week: str,
     fields: Mapping[str, object],
 ) -> PlanEdit:
-    """Add an item to the end of the week, with a new id: the stores' `addExercise`, `addFood`."""
+    """Add an item to the end of the week, with a new id: the stores' `addExercise`, `addFood`.
+    A `note` becomes the new item's notes, in its details."""
     changes = _changes(_section(section), fields)
+    note = changes.pop("notes", None)
 
     def add(items: list[Item], tracked: Tracked) -> tuple[list[Item], Item]:
         taken = _ids(tracked) | {it["id"] for it in default_items(section)}
         item = _strict(section, {**changes, "id": new_id(taken)})
         return [*items, item], item
 
-    return _edit_plan(conn, config, user_id, section, week, add)
+    return _edit_plan(conn, config, user_id, section, week, add, note=note)
 
 
 def update_item(
@@ -401,9 +457,11 @@ def update_item(
     fields: Mapping[str, object],
 ) -> PlanEdit:
     """Change the fields given of one item in the week, keeping its id, its place and the rest:
-    the stores' `updateExercise`, `updateFood`."""
+    the stores' `updateExercise`, `updateFood`. A `note` is the item's notes in its details,
+    the same in every week; given alone, it writes no plan."""
     changes = _changes(_section(section), fields)
-    if not changes:
+    note = changes.pop("notes", None)
+    if not changes and note is None:
         raise EditError("item", f"nothing to change; give one of {', '.join(WORDS)}")
     item_id = _item_id(item_id)
 
@@ -412,7 +470,9 @@ def update_item(
         items[i] = _strict(section, {**items[i], **changes})
         return items, items[i]
 
-    return _edit_plan(conn, config, user_id, section, week, update)
+    return _edit_plan(
+        conn, config, user_id, section, week, update, note=note, plan_changes=bool(changes)
+    )
 
 
 def remove_item(
@@ -452,7 +512,7 @@ def mark_day(
             "must be one of great, partial, missed, each alone or with "
             "-solid or -hatch, or null to clear the day",
         )
-    if section == "diet" and mark is not None and mark not in FOOD_MARKS:
+    if SECTION_TYPES[section] is FOOD and mark is not None and mark not in FOOD_MARKS:
         raise EditError("mark", f"a food is marked {', '.join(FOOD_MARKS)}, or null")
     week, weekday = monday_of(day).isoformat(), day.weekday()
     tracked = load_tracked(conn, user_id, section)

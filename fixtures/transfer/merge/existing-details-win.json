@@ -1,0 +1,29 @@
+{
+  "description": "An item that has details keeps them whole, even where the file's differ; an item without any takes the file's. Details are per item, not per week, so plans and marks merge as before beside them.",
+  "existing": {
+    "plans": {},
+    "log": {},
+    "details": {
+      "pu": { "notes": "Mine.", "fields": { "equipment": "Mat" } },
+      "veg": { "fields": { "serving": "80 g" } }
+    }
+  },
+  "incoming": {
+    "plans": {},
+    "log": {},
+    "details": {
+      "pu": { "notes": "Theirs.", "fields": { "works": "Chest" } },
+      "sq": { "notes": "Squats." }
+    }
+  },
+  "expected": {
+    "plans": {},
+    "log": {},
+    "details": {
+      "pu": { "notes": "Mine.", "fields": { "equipment": "Mat" } },
+      "veg": { "fields": { "serving": "80 g" } },
+      "sq": { "notes": "Squats." }
+    }
+  },
+  "summary": { "weeks": 0, "ticks": 0, "details": 1 }
+}

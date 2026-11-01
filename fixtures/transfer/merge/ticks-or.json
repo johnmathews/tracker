@@ -8,7 +8,8 @@
         "sq": [null, null, "great", null, null, null, null]
       },
       "2026-10-05": { "pl": [null, null, null, null, null, "great", null] }
-    }
+    },
+    "details": {}
   },
   "incoming": {
     "plans": {},
@@ -18,7 +19,8 @@
         "be": [null, null, null, "great", null, null, null]
       },
       "2026-10-12": { "pu": ["great", "great", null, null, null, null, null] }
-    }
+    },
+    "details": {}
   },
   "expected": {
     "plans": {},
@@ -30,7 +32,8 @@
       },
       "2026-10-12": { "pu": ["great", "great", null, null, null, null, null] },
       "2026-10-05": { "pl": [null, null, null, null, null, "great", null] }
-    }
+    },
+    "details": {}
   },
-  "summary": { "weeks": 0, "ticks": 4 }
+  "summary": { "weeks": 0, "ticks": 4, "details": 0 }
 }

@@ -30,6 +30,23 @@ describe('IconButton', () => {
     warn.mockRestore()
   })
 
+  it('fades its icon and takes no hover fill when aria-disabled at an end (K66)', () => {
+    const button = mount(IconButton, {
+      props: { label: 'Move Notes up' },
+      attrs: { 'aria-disabled': 'true' },
+    }).get('button')
+    expect(button.attributes('aria-disabled')).toBe('true')
+    expect(button.attributes('disabled')).toBeUndefined()
+    expect(button.classes()).toEqual(
+      expect.arrayContaining([
+        'hover:not-disabled:not-aria-disabled:bg-tile',
+        'aria-disabled:cursor-default',
+        'aria-disabled:[&_svg]:opacity-40',
+      ]),
+    )
+    expect(button.classes()).not.toContain('hover:not-disabled:bg-tile')
+  })
+
   it('is a 44px square, quiet by default, with a tile on hover and while open', () => {
     const button = mount(IconButton, { props: { label: 'Settings' } }).get('button')
     expect(button.attributes('data-variant')).toBe('quiet')
@@ -38,7 +55,7 @@ describe('IconButton', () => {
         'size-11',
         'rounded-md',
         'text-ink',
-        'hover:not-disabled:bg-tile',
+        'hover:not-disabled:not-aria-disabled:bg-tile',
         'aria-expanded:bg-tile',
       ]),
     )

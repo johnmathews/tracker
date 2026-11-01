@@ -1,4 +1,4 @@
-<!-- @dsCard group="Planner" height=980 subtitle="One week Mon–Sun: today's band, days that meet the daily pick, folded when narrow, and print" -->
+<!-- @dsCard group="Planner" height=1100 subtitle="One week Mon–Sun: days that meet the daily pick, each name a link to its item's page, folded when narrow, and print" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -30,6 +30,17 @@
   /* K43: the name and its chips share a line; the note takes the next, cut to one line. */
   .nl { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); }
   .nl .name { display: inline; }
+  /* The name is a link to the item's page (K64): it looks as before, underlines under the
+     pointer (TextLink's hover underline) and takes the focus ring around its words. */
+  a.name { color: var(--ink); text-decoration: none; border-radius: var(--radius-sm); }
+  a.name:hover, a.name.is-hover { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+  a.name:focus-visible, a.name.is-focus { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .print a.name { text-decoration: none; }
+  /* Room at the grid's left edge, so a name's ring is never clipped by the scroller. */
+  #screen { padding-left: 4px; margin-left: -4px; }
+  .states { display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-8); margin: 0; padding: 0; list-style: none; }
+  .states li { display: flex; flex-direction: column; gap: var(--space-1); padding-left: 4px; }
+  .states .name { font-size: 20px; line-height: 28px; font-weight: 600; }
   .note-line { display: block; max-width: 100%; margin-top: 2px; padding: 0; border: 0; background: none; text-align: left; cursor: pointer;
     font-family: var(--font-serif); font-style: italic; font-size: 18px; line-height: 26px; color: var(--ink-secondary);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -100,7 +111,7 @@
 </style>
 </head>
 <body>
-<p class="variant label">On screen. Today is Thursday. Press a day to step its mark.</p>
+<p class="variant label">On screen. Today is Thursday. Press a day to step its mark, or a name to open its page.</p>
 <div class="scroller" id="screen">
   <table class="grid" role="grid" aria-label="Exercises, week of 19 October">
     <colgroup><col class="c-name"><col span="7"></colgroup>
@@ -112,7 +123,7 @@
     </thead>
     <tbody>
       <tr role="row" data-goal="4">
-        <th scope="row" role="rowheader" tabindex="-1"><span class="nl"><span class="name">Push-ups</span><span class="chip label">3 × 12</span></span><button type="button" class="note-line" tabindex="-1" aria-haspopup="dialog">Slow on the way down. <span class="note-link">Form video</span></button></th>
+        <th scope="row" role="rowheader" tabindex="-1"><span class="nl"><a class="name" href="#/item/exercise/push-ups" tabindex="-1">Push-ups</a><span class="chip label">3 × 12</span></span><button type="button" class="note-line" tabindex="-1" aria-haspopup="dialog">Slow on the way down. <span class="note-link">Form video</span></button></th>
         <td role="gridcell" class="d"><div class="day"><button type="button" data-mark="great" data-drawing="solid" class="mark" tabindex="-1" aria-pressed="true" aria-label="Push-ups, Monday 19 October"></button></div></td>
         <td role="gridcell" class="d"><div class="day"><button type="button" data-drawing="zigzag" class="mark" tabindex="-1" aria-pressed="false" aria-label="Push-ups, Tuesday 20 October"></button></div></td>
         <td role="gridcell" class="d"><div class="day"><button type="button" data-mark="partial" data-drawing="hatch" class="mark" tabindex="-1" aria-pressed="true" aria-label="Push-ups, Wednesday 21 October, partly done"></button></div></td>
@@ -122,7 +133,7 @@
         <td role="gridcell" class="d"><div class="day"><button type="button" data-drawing="hatch" class="mark" tabindex="-1" aria-pressed="false" aria-label="Push-ups, Sunday 25 October"></button></div></td>
       </tr>
       <tr role="row" data-goal="3">
-        <th scope="row" role="rowheader" tabindex="-1"><span class="nl"><span class="name">Pull-ups</span><span class="chip label">3 × 5</span></span></th>
+        <th scope="row" role="rowheader" tabindex="-1"><span class="nl"><a class="name" href="#/item/exercise/pull-ups" tabindex="-1">Pull-ups</a><span class="chip label">3 × 5</span></span></th>
         <td role="gridcell" class="d"><div class="day"><button type="button" data-mark="great" data-drawing="solid" class="mark" tabindex="-1" aria-pressed="true" aria-label="Pull-ups, Monday 19 October"></button></div></td>
         <td role="gridcell" class="d"><div class="day"><button type="button" data-drawing="zigzag" class="mark" tabindex="-1" aria-pressed="false" aria-label="Pull-ups, Tuesday 20 October"></button></div></td>
         <td role="gridcell" class="d"><div class="day"><button type="button" data-drawing="hatch" class="mark" tabindex="-1" aria-pressed="false" aria-label="Pull-ups, Wednesday 21 October"></button></div></td>
@@ -132,7 +143,7 @@
         <td role="gridcell" class="d"><div class="day"><button type="button" data-drawing="hatch" class="mark" tabindex="-1" aria-pressed="false" aria-label="Pull-ups, Sunday 25 October"></button></div></td>
       </tr>
       <tr role="row" data-goal="3">
-        <th scope="row" role="rowheader" tabindex="-1"><span class="nl"><span class="name">Squats</span><span class="chip label">3 × 15</span><span class="chip label">16 kg</span></span></th>
+        <th scope="row" role="rowheader" tabindex="-1"><span class="nl"><a class="name" href="#/item/exercise/squats" tabindex="-1">Squats</a><span class="chip label">3 × 15</span><span class="chip label">16 kg</span></span></th>
         <td role="gridcell" class="d"><div class="day"><button type="button" data-drawing="solid" class="mark" tabindex="-1" aria-pressed="false" aria-label="Squats, Monday 19 October"></button></div></td>
         <td role="gridcell" class="d"><div class="day"><button type="button" data-mark="great" data-drawing="zigzag" class="mark" tabindex="-1" aria-pressed="true" aria-label="Squats, Tuesday 20 October"></button></div></td>
         <td role="gridcell" class="d"><div class="day"><button type="button" data-mark="great" data-drawing="hatch" class="mark" tabindex="-1" aria-pressed="true" aria-label="Squats, Wednesday 21 October"></button></div></td>
@@ -142,7 +153,7 @@
         <td role="gridcell" class="d"><div class="day"><button type="button" data-drawing="hatch" class="mark" tabindex="-1" aria-pressed="false" aria-label="Squats, Sunday 25 October"></button></div></td>
       </tr>
       <tr role="row" data-goal="2">
-        <th scope="row" role="rowheader" tabindex="-1"><span class="nl"><span class="name">Kettlebell halos</span><span class="chip label">8 each side</span></span><button type="button" class="note-line" tabindex="-1" aria-haspopup="dialog"><strong>Ribs down.</strong> Change direction each set, and keep the bell close to the head.</button></th>
+        <th scope="row" role="rowheader" tabindex="-1"><span class="nl"><a class="name" href="#/item/exercise/kettlebell-halos" tabindex="-1">Kettlebell halos</a><span class="chip label">8 each side</span></span><button type="button" class="note-line" tabindex="-1" aria-haspopup="dialog"><strong>Ribs down.</strong> Change direction each set, and keep the bell close to the head.</button></th>
         <td role="gridcell" class="d"><div class="day"><button type="button" data-drawing="solid" class="mark" tabindex="-1" aria-pressed="false" aria-label="Kettlebell halos, Monday 19 October"></button></div></td>
         <td role="gridcell" class="d"><div class="day"><button type="button" data-mark="great" data-drawing="zigzag" class="mark" tabindex="-1" aria-pressed="true" aria-label="Kettlebell halos, Tuesday 20 October, has a note"></button><span class="note-mark" aria-hidden="true"></span></div></td>
         <td role="gridcell" class="d"><div class="day"><button type="button" data-drawing="hatch" class="mark" tabindex="-1" aria-pressed="false" aria-label="Kettlebell halos, Wednesday 21 October"></button></div></td>
@@ -154,6 +165,16 @@
     </tbody>
   </table>
 </div>
+
+<p class="sheet-note caption" id="followed" aria-live="polite"></p>
+
+<div class="gap"></div>
+<p class="variant label">A row's name, a link to the item's page</p>
+<ul class="states" inert>
+  <li><a class="name" href="#/item/exercise/squats">Squats</a><span class="caption variant">At rest</span></li>
+  <li><a class="name is-hover" href="#/item/exercise/squats">Squats</a><span class="caption variant">Under the pointer</span></li>
+  <li><a class="name is-focus" href="#/item/exercise/squats">Squats</a><span class="caption variant">Keyboard focus</span></li>
+</ul>
 
 <div class="gap"></div>
 <p class="variant label">Printed, from either theme</p>
@@ -192,7 +213,8 @@
     mark.setAttribute('aria-label', name + (next ? MARK_WORDS[next[0]] : ''));
   }
   const marksIn = (tr) => [...tr.querySelectorAll('.mark')];
-  const target = (cell) => cell.querySelector('.mark') || cell;
+  // A cell's main widget takes its focus: the DayMark in a day cell, the name's link in a name cell.
+  const target = (cell) => cell.querySelector('.mark, a.name') || cell;
   const stops = () => navRows.map((tr) => [...tr.cells].filter((c) => c.getAttribute('aria-hidden') !== 'true').map(target));
 
   function focusCell(el) {
@@ -214,8 +236,11 @@
     else if (e.ctrlKey && e.key === 'End') to = [end, grid[end].length - 1];
     else to = { ArrowRight: [r, c + 1], ArrowLeft: [r, c - 1], ArrowDown: [r + 1, c], ArrowUp: [r - 1, c], Home: [r, 0], End: [r, last] }[e.key];
     if (!to) {
-      // Space and Enter belong to the day buttons; on any other cell they do nothing.
-      if ((e.key === ' ' || e.key === 'Enter') && !e.target.classList.contains('mark')) e.preventDefault();
+      // Space and Enter belong to the day buttons, and Enter to a name's link (one press opens the
+      // item's page, F9). On any other cell they do nothing.
+      const isMark = e.target.classList.contains('mark');
+      const isName = e.target.matches('a.name');
+      if ((e.key === ' ' && !isMark) || (e.key === 'Enter' && !isMark && !isName)) e.preventDefault();
       return;
     }
     e.preventDefault();
@@ -224,6 +249,14 @@
   });
 
   table.addEventListener('click', (e) => {
+    // A name opens the item's page. The preview stays put and says where the link goes.
+    const name = e.target.closest('a.name');
+    if (name) {
+      e.preventDefault();
+      focusCell(name);
+      document.getElementById('followed').textContent = `Opens the page for ${name.textContent}, at ${name.getAttribute('href')}`;
+      return;
+    }
     const mark = e.target.closest('.mark');
     if (!mark) return;
     step(mark);

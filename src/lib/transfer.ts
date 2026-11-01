@@ -2,17 +2,21 @@ import { dateKey } from '@/lib/dates'
 import { copyPlan } from '@/lib/plans'
 import {
   isRecord,
+  liftNotes,
+  normaliseDetailsMap,
   normaliseExercise,
   normaliseFood,
   normaliseLog,
   normalisePlans,
   normalisePortableSettings,
   parseJson,
-  type DietData,
   type Days,
+  type DetailsMap,
+  type Exercise,
+  type ItemDetails,
+  type Food,
   type Log,
   type Mark,
-  type PlannerData,
   type PortableSettings,
   type TrackedData,
 } from '@/lib/storage'
@@ -31,17 +35,24 @@ export const OLD_EXPORT_FORMATS: readonly unknown[] = [
   'exercise-planner-export',
 ]
 /**
- * Version 4 files may carry a note on an exercise or a food (K43). Version 3 files carry a mark
+ * Version 5 files carry each item's details (notes and fields) once per section, beside its plans
+ * and log. Version 4 files may carry a note on an exercise or a food in a week's plan (K43); it
+ * lifts into the item's details on import, the latest week's winning. Version 3 files carry a mark
  * per day with its drawing (`great`, `partial-solid`, `missed-hatch` … or null). Version 2 files
  * carry the kinds alone, which read as the zigzag; version 1 files a `true` per done day, which
- * reads as `great`. All four import.
+ * reads as `great`. All five import.
  */
-export const EXPORT_VERSION = 4
-const READ_VERSIONS: readonly unknown[] = [1, 2, 3, EXPORT_VERSION]
+export const EXPORT_VERSION = 5
+/** The last version whose notes live in plan items. */
+const LAST_ITEM_NOTES_VERSION = 4
+const READ_VERSIONS: readonly unknown[] = [1, 2, 3, LAST_ITEM_NOTES_VERSION, EXPORT_VERSION]
+
+/** One section of an export: its plans and log, and its items' details. */
+export type SectionData<T> = TrackedData<T> & { details: DetailsMap }
 
 export type ExportData = {
-  exercise: PlannerData
-  diet: DietData
+  exercise: SectionData<Exercise>
+  diet: SectionData<Food>
   /** Null when the file carries no settings. */
   settings: PortableSettings | null
 }
@@ -50,8 +61,8 @@ export type ExportFile = {
   format: typeof EXPORT_FORMAT
   version: typeof EXPORT_VERSION
   exportedAt: string
-  exercise: PlannerData
-  diet: DietData
+  exercise: SectionData<Exercise>
+  diet: SectionData<Food>
   settings: PortableSettings
 }
 
@@ -61,28 +72,39 @@ export type ParseResult = { ok: true; data: ExportData } | { ok: false; error: P
 
 /** The theme is left out on purpose: it belongs to the device, not the person. */
 export function buildExport(input: {
-  exercise: PlannerData
-  diet: DietData
+  exercise: SectionData<Exercise>
+  diet: SectionData<Food>
   settings: PortableSettings
   now?: Date
 }): ExportFile {
+  const section = <T>({ plans, log, details }: SectionData<T>) => ({ plans, log, details })
   return {
     format: EXPORT_FORMAT,
     version: EXPORT_VERSION,
     exportedAt: (input.now ?? new Date()).toISOString(),
-    exercise: { plans: input.exercise.plans, log: input.exercise.log },
-    diet: { plans: input.diet.plans, log: input.diet.log },
-    settings: {
-      accent: input.settings.accent,
-      dailyPick: input.settings.dailyPick,
-      foodPick: input.settings.foodPick,
-    },
+    exercise: section(input.exercise),
+    diet: section(input.diet),
+    // Normalised as the API's export writes them: the item pages' arrangement only when a type
+    // has one (K66).
+    settings: normalisePortableSettings(input.settings),
   }
 }
 
-function section<T>(v: unknown, normalise: (item: unknown) => T | null): TrackedData<T> {
-  if (!isRecord(v)) return { plans: {}, log: {} }
-  return { plans: normalisePlans(v.plans, normalise), log: normaliseLog(v.log) }
+/**
+ * One section of a file. With `itemNotes` (a file of version 4 or older) the details come from the
+ * plans' notes, and any `details` key is not read.
+ */
+function section<T extends object>(
+  v: unknown,
+  normalise: (item: unknown) => T | null,
+  itemNotes: boolean,
+): SectionData<T> {
+  if (!isRecord(v)) return { plans: {}, log: {}, details: {} }
+  return {
+    plans: normalisePlans(v.plans, normalise),
+    log: normaliseLog(v.log),
+    details: itemNotes ? liftNotes(v.plans, normalise) : normaliseDetailsMap(v.details),
+  }
 }
 
 /**
@@ -102,11 +124,12 @@ export function parseExport(text: string): ParseResult {
   if (!READ_VERSIONS.includes(parsed.version)) {
     return { ok: false, error: 'version' }
   }
+  const itemNotes = (parsed.version as number) <= LAST_ITEM_NOTES_VERSION
   return {
     ok: true,
     data: {
-      exercise: section(parsed.exercise, normaliseExercise),
-      diet: section(parsed.diet, normaliseFood),
+      exercise: section(parsed.exercise, normaliseExercise, itemNotes),
+      diet: section(parsed.diet, normaliseFood, itemNotes),
       settings: isRecord(parsed.settings) ? normalisePortableSettings(parsed.settings) : null,
     },
   }
@@ -116,16 +139,21 @@ const NO_DAYS: readonly (Mark | null)[] = Array<Mark | null>(7).fill(null)
 
 /**
  * Merge without deleting: a week that has a plan keeps it (an empty plan included), a week without
- * one takes the incoming plan, and per week, item and day a marked day keeps its mark while an
- * empty one takes the file's. Returns new objects; neither argument changes.
+ * one takes the incoming plan, per week, item and day a marked day keeps its mark while an empty
+ * one takes the file's, and an item with details keeps them whole while one without takes the
+ * file's. Returns new objects; neither argument changes.
  */
 export function mergeTracked<T extends object>(
-  existing: TrackedData<T>,
-  incoming: TrackedData<T>,
-): TrackedData<T> {
+  existing: SectionData<T>,
+  incoming: SectionData<T>,
+): SectionData<T> {
   const plans = { ...existing.plans }
   for (const [week, items] of Object.entries(incoming.plans)) {
     if (!(week in plans)) plans[week] = copyPlan(items)
+  }
+  const details: DetailsMap = JSON.parse(JSON.stringify(existing.details)) as DetailsMap
+  for (const [id, doc] of Object.entries(incoming.details)) {
+    if (!Object.hasOwn(details, id)) details[id] = JSON.parse(JSON.stringify(doc)) as ItemDetails
   }
   const log: Log = {}
   for (const week of new Set([...Object.keys(existing.log), ...Object.keys(incoming.log)])) {
@@ -139,14 +167,15 @@ export function mergeTracked<T extends object>(
     }
     log[week] = out
   }
-  return { plans, log }
+  return { plans, log, details }
 }
 
-/** What a merge would add: weeks that gain a plan, and empty days that gain a mark. */
+/** What a merge would add: weeks that gain a plan, empty days that gain a mark, and items that
+ * gain details. */
 export function mergeSummary<T>(
-  existing: TrackedData<T>,
-  incoming: TrackedData<T>,
-): { weeks: number; ticks: number } {
+  existing: SectionData<T>,
+  incoming: SectionData<T>,
+): { weeks: number; ticks: number; details: number } {
   const weeks = Object.keys(incoming.plans).filter((w) => !(w in existing.plans)).length
   let ticks = 0
   for (const [week, entries] of Object.entries(incoming.log)) {
@@ -155,7 +184,10 @@ export function mergeSummary<T>(
       ticks += days.filter((m, i) => m !== null && mine[i] === null).length
     }
   }
-  return { weeks, ticks }
+  const details = Object.keys(incoming.details).filter(
+    (id) => !Object.hasOwn(existing.details, id),
+  ).length
+  return { weeks, ticks, details }
 }
 
 /** Saved settings win; the file's apply only where none are saved (`existing` null). */

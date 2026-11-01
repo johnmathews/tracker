@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { describeProblem } from '@/lib/problems'
+import { describeProblem, detailsIdProblem } from '@/lib/problems'
+
+describe('detailsIdProblem', () => {
+  it('says why an item’s notes or details can’t be saved under its id, or nothing', () => {
+    expect(detailsIdProblem('sq', 'notes')).toBeNull()
+    expect(detailsIdProblem('a/b', 'notes')).toBe(
+      'This item’s notes can’t be saved: its id has a slash in it.',
+    )
+    expect(detailsIdProblem('..', 'details')).toBe(
+      'This item’s details can’t be saved: its id isn’t one the server takes.',
+    )
+  })
+})
 
 describe('describeProblem', () => {
   it.each([

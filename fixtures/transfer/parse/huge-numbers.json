@@ -17,9 +17,10 @@
             }
           ]
         },
-        "log": {}
+        "log": {},
+        "details": {}
       },
-      "diet": { "plans": {}, "log": {} },
+      "diet": { "plans": {}, "log": {}, "details": {} },
       "settings": { "accent": "#30d158", "dailyPick": 3, "foodPick": 2 }
     }
   }

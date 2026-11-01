@@ -1,0 +1,34 @@
+{
+  "description": "Settings carry each type's item-page arrangement (K66), normalised like stored settings: a type the registry doesn't have and a default arrangement drop out, and a malformed one reads as the default rather than refusing the file.",
+  "input": {
+    "format": "tracker-export",
+    "version": 5,
+    "exercise": { "plans": {}, "log": {}, "details": {} },
+    "diet": { "plans": {}, "log": {}, "details": {} },
+    "settings": {
+      "accent": "#30d158",
+      "dailyPick": 3,
+      "foodPick": 2,
+      "itemSections": {
+        "exercise": { "order": ["history", "plan", "history"], "hidden": ["details", "map"] },
+        "food": { "order": "history", "hidden": [] },
+        "cardio": { "order": ["history"], "hidden": [] }
+      }
+    }
+  },
+  "expected": {
+    "ok": true,
+    "data": {
+      "exercise": { "plans": {}, "log": {}, "details": {} },
+      "diet": { "plans": {}, "log": {}, "details": {} },
+      "settings": {
+        "accent": "#30d158",
+        "dailyPick": 3,
+        "foodPick": 2,
+        "itemSections": {
+          "exercise": { "order": ["history", "plan", "notes", "details"], "hidden": ["details"] }
+        }
+      }
+    }
+  }
+}

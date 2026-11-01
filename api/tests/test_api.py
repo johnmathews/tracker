@@ -23,6 +23,15 @@ DAY = 86_400
 WEEK = "2026-10-19"
 PUSHUPS = {"id": "pu", "name": "Push-ups", "reps": 10, "target": 4}
 QUOTA = 5 * 1024 * 1024
+#: A section of `GET /api/state` with nothing in it.
+EMPTY: dict[str, dict[str, Any]] = {
+    "plans": {},
+    "log": {},
+    "details": {},
+    "revs": {},
+    "detailRevs": {},
+}
+EMPTY_STATE = {"exercise": EMPTY, "diet": EMPTY, "settings": None}
 
 
 def invite(config: Config, name: str) -> str:
@@ -169,6 +178,7 @@ def test_unknown_routes_and_methods(client: TestClient) -> None:
         ("GET", "/api/export"),
         ("PUT", f"/api/plans/exercise/{WEEK}"),
         ("PUT", f"/api/ticks/exercise/{WEEK}/pu/0"),
+        ("PUT", "/api/details/exercise/pu"),
         ("PUT", "/api/settings"),
         ("POST", "/api/import"),
     ],
@@ -349,8 +359,7 @@ def test_plain_http_config_uses_an_unprefixed_cookie(config: Config, tmp_path: A
 
 def test_empty_state(client: TestClient, config: Config) -> None:
     sign_up(client, config)
-    empty: dict[str, dict[str, Any]] = {"plans": {}, "log": {}, "revs": {}}
-    assert client.get("/api/state").json() == {"exercise": empty, "diet": empty, "settings": None}
+    assert client.get("/api/state").json() == EMPTY_STATE
 
 
 def test_plan_revisions_and_conflicts(client: TestClient, config: Config) -> None:
@@ -603,6 +612,110 @@ def test_settings_without_a_food_pick_keep_the_saved_one(
     }
 
 
+#: An exercise page with Details hidden and Recent weeks first (K66).
+ARRANGED = {"order": ["history", "notes", "details", "plan"], "hidden": ["details"]}
+SETTINGS = {"accent": "#bf5af2", "dailyPick": 4, "foodPick": 3}
+
+
+def test_settings_carry_each_types_item_page_arrangement(
+    client: TestClient, config: Config
+) -> None:
+    sign_up(client, config)
+    sent = {
+        **SETTINGS,
+        "itemSections": {
+            "exercise": {"order": ["history", "map", "notes", "notes"], "hidden": ["details"]},
+            "food": {"order": ["notes", "details", "plan", "history"], "hidden": []},
+        },
+    }
+    saved = {**SETTINGS, "itemSections": {"exercise": ARRANGED}}
+    assert client.put("/api/settings", json=sent).json() == saved
+    assert client.get("/api/state").json()["settings"] == saved
+    # Back to the default: the key goes, as for an account that never arranged a page.
+    assert client.put("/api/settings", json={**SETTINGS, "itemSections": {}}).json() == SETTINGS
+    assert client.get("/api/state").json()["settings"] == SETTINGS
+
+
+def test_settings_without_item_sections_keep_the_saved_arrangement(
+    client: TestClient, config: Config
+) -> None:
+    """A tab still running the app from before arranging (K66) sends no itemSections."""
+    sign_up(client, config)
+    assert client.put("/api/settings", json=SETTINGS).json() == SETTINGS
+    client.put("/api/settings", json={**SETTINGS, "itemSections": {"exercise": ARRANGED}})
+    old_tab = {**SETTINGS, "dailyPick": 6}
+    saved = {**old_tab, "itemSections": {"exercise": ARRANGED}}
+    assert client.put("/api/settings", json=old_tab).json() == saved
+    assert client.get("/api/state").json()["settings"] == saved
+
+
+@pytest.mark.parametrize(
+    "item_sections",
+    [
+        None,
+        [],
+        "history",
+        {"cardio": ARRANGED},
+        {"diet": ARRANGED},
+        {"exercise": ["history"]},
+        {"exercise": {"order": ["history"]}},
+        {"exercise": {"order": "history", "hidden": []}},
+        {"exercise": {"order": ["history", 2], "hidden": []}},
+    ],
+)
+def test_a_malformed_arrangement_is_refused(
+    client: TestClient, config: Config, item_sections: object
+) -> None:
+    sign_up(client, config)
+    client.put("/api/settings", json={**SETTINGS, "itemSections": {"food": ARRANGED}})
+    r = client.put(
+        "/api/settings", json={**SETTINGS, "dailyPick": 7, "itemSections": item_sections}
+    )
+    assert (r.status_code, r.json()) == (400, {"error": "invalid"})
+    # Nothing changed, the other settings included.
+    assert client.get("/api/state").json()["settings"] == {
+        **SETTINGS,
+        "itemSections": {"food": ARRANGED},
+    }
+
+
+def test_a_stored_arrangement_reads_without_types_it_does_not_know(
+    client: TestClient, config: Config
+) -> None:
+    """A row written by a newer version, with a type this one lacks, still reads."""
+    sign_up(client, config)
+    client.put("/api/settings", json=SETTINGS)
+    conn = connect(config.db_path)
+    try:
+        conn.execute(
+            "UPDATE settings SET item_sections = ?",
+            (json.dumps({"cardio": ARRANGED, "exercise": ARRANGED}),),
+        )
+    finally:
+        conn.close()
+    assert client.get("/api/state").json()["settings"] == {
+        **SETTINGS,
+        "itemSections": {"exercise": ARRANGED},
+    }
+
+
+def test_the_arrangement_exports_and_imports_into_an_empty_account(
+    client: TestClient, config: Config
+) -> None:
+    sign_up(client, config)
+    client.put("/api/settings", json={**SETTINGS, "itemSections": {"exercise": ARRANGED}})
+    exported = client.get("/api/export").json()
+    assert exported["settings"] == {**SETTINGS, "itemSections": {"exercise": ARRANGED}}
+    with other_client(config) as bob:
+        sign_up(bob, config, "bob@example.com")
+        assert post_import(bob, exported).json()["settings"] is True
+        assert bob.get("/api/state").json()["settings"] == exported["settings"]
+        # Saved settings win: a second file's arrangement doesn't apply.
+        other = {**exported, "settings": {**SETTINGS, "itemSections": {"food": ARRANGED}}}
+        assert post_import(bob, other).json()["settings"] is False
+        assert bob.get("/api/state").json()["settings"] == exported["settings"]
+
+
 def test_users_cannot_see_or_change_each_others_data(client: TestClient, config: Config) -> None:
     sign_up(client, config, "alice@example.com")
     client.put(f"/api/plans/exercise/{WEEK}", json={"items": [PUSHUPS], "rev": 0})
@@ -610,9 +723,8 @@ def test_users_cannot_see_or_change_each_others_data(client: TestClient, config:
     client.put("/api/settings", json={"accent": "#0a84ff", "dailyPick": 5, "foodPick": 4})
     with other_client(config) as bob:
         sign_up(bob, config, "bob@example.com")
-        empty: dict[str, dict[str, Any]] = {"plans": {}, "log": {}, "revs": {}}
-        assert bob.get("/api/state").json() == {"exercise": empty, "diet": empty, "settings": None}
-        assert bob.get("/api/export").json()["exercise"] == {"plans": {}, "log": {}}
+        assert bob.get("/api/state").json() == EMPTY_STATE
+        assert bob.get("/api/export").json()["exercise"] == {"plans": {}, "log": {}, "details": {}}
         # Bob's writes to the same week create his own rows, not edits of Alice's.
         assert bob.put(f"/api/plans/exercise/{WEEK}", json={"items": [], "rev": 0}).json() == {
             "rev": 1
@@ -630,7 +742,7 @@ def test_users_cannot_see_or_change_each_others_data(client: TestClient, config:
     alice = client.get("/api/state").json()
     assert alice["exercise"]["plans"] == {WEEK: [PUSHUPS]}
     assert alice["exercise"]["log"] == {WEEK: {"pu": ["partial"] + [None] * 6}}
-    assert alice["diet"] == {"plans": {}, "log": {}, "revs": {}}
+    assert alice["diet"] == EMPTY
     assert alice["settings"] == {"accent": "#0a84ff", "dailyPick": 5, "foodPick": 4}
 
 
@@ -647,14 +759,19 @@ def test_sample_import_then_export_round_trips(client: TestClient, config: Confi
     sample = read_fixture("sample/export.json")
     r = post_import(client, sample)
     # The same counts the browser's confirm step shows for this file (App.spec.ts).
-    assert r.json() == {"weeks": 6, "ticks": 102, "settings": True}
+    assert r.json() == {"weeks": 6, "ticks": 102, "details": 2, "settings": True}
     exported = client.get("/api/export")
-    assert sample["version"] == exported.json()["version"] == 4
+    assert sample["version"] == exported.json()["version"] == 5
     assert (
         exported.headers["content-disposition"] == 'attachment; filename="tracker-2026-10-23.json"'
     )
     assert exported.json() == {**sample, "exportedAt": "2026-10-23T08:00:00.000Z"}
-    assert post_import(client, sample).json() == {"weeks": 0, "ticks": 0, "settings": False}
+    assert post_import(client, sample).json() == {
+        "weeks": 0,
+        "ticks": 0,
+        "details": 0,
+        "settings": False,
+    }
     assert client.get("/api/export").json() == {**sample, "exportedAt": "2026-10-23T08:00:00.000Z"}
 
 
@@ -676,7 +793,7 @@ def test_import_merges_without_deleting(client: TestClient, config: Config) -> N
             "settings": {"accent": "#0a84ff", "dailyPick": 4},
         },
     )
-    assert r.json() == {"weeks": 1, "ticks": 1, "settings": False}
+    assert r.json() == {"weeks": 1, "ticks": 1, "details": 0, "settings": False}
     state = client.get("/api/state").json()
     assert state["exercise"]["plans"] == {"2026-10-12": [squats], WEEK: [PUSHUPS]}
     assert state["exercise"]["revs"] == {"2026-10-12": 1, WEEK: 1}
@@ -692,7 +809,7 @@ def test_import_merges_without_deleting(client: TestClient, config: Config) -> N
         ("null", "json"),
         ('{"format": "fitness-planner-export", "version": 1, "x": NaN}', "json"),
         ({"plans": {}}, "format"),
-        ({"format": "fitness-planner-export", "version": 5}, "version"),
+        ({"format": "fitness-planner-export", "version": 6}, "version"),
         ({"format": "fitness-planner-export", "version": 0}, "version"),
     ],
 )
@@ -702,8 +819,7 @@ def test_import_rejects_bad_files_and_changes_nothing(
     sign_up(client, config)
     r = post_import(client, payload)
     assert (r.status_code, r.json()) == (400, {"error": code})
-    empty: dict[str, dict[str, Any]] = {"plans": {}, "log": {}, "revs": {}}
-    assert client.get("/api/state").json() == {"exercise": empty, "diet": empty, "settings": None}
+    assert client.get("/api/state").json() == EMPTY_STATE
 
 
 def test_import_keeps_existing_marks_and_fills_empty_days(
@@ -725,7 +841,7 @@ def test_import_keeps_existing_marks_and_fills_empty_days(
             "exercise": {"log": {WEEK: {"pu": incoming, "sq": ["missed", _, _, _, _, _, _]}}},
         },
     )
-    assert r.json() == {"weeks": 0, "ticks": 4, "settings": False}
+    assert r.json() == {"weeks": 0, "ticks": 4, "details": 0, "settings": False}
     log = client.get("/api/state").json()["exercise"]["log"]
     assert log == {
         WEEK: {
@@ -738,10 +854,10 @@ def test_import_keeps_existing_marks_and_fills_empty_days(
     # The same file again adds nothing.
     assert post_import(
         client, {"format": "fitness-planner-export", "version": 2, "exercise": {"log": log}}
-    ).json() == {"weeks": 0, "ticks": 0, "settings": False}
+    ).json() == {"weeks": 0, "ticks": 0, "details": 0, "settings": False}
 
 
-def test_a_version_1_import_exports_as_version_4(client: TestClient, config: Config) -> None:
+def test_a_version_1_import_exports_as_version_5(client: TestClient, config: Config) -> None:
     sign_up(client, config)
     old = {
         "format": "fitness-planner-export",
@@ -749,9 +865,14 @@ def test_a_version_1_import_exports_as_version_4(client: TestClient, config: Con
         "exercise": {"log": {WEEK: {"pu": [True, False, True, False, False, False, False]}}},
         "diet": {"log": {WEEK: {"veg": [False] * 7}}},
     }
-    assert post_import(client, old).json() == {"weeks": 0, "ticks": 2, "settings": False}
+    assert post_import(client, old).json() == {
+        "weeks": 0,
+        "ticks": 2,
+        "details": 0,
+        "settings": False,
+    }
     exported = client.get("/api/export").json()
-    assert exported["version"] == 4
+    assert exported["version"] == 5
     assert exported["exercise"]["log"] == {
         WEEK: {"pu": ["great", None, "great", None, None, None, None]}
     }
@@ -765,7 +886,7 @@ def test_import_accepts_a_byte_order_mark(client: TestClient, config: Config) ->
     r = client.post(
         "/api/import", content=body.encode(), headers={"Content-Type": "application/json"}
     )
-    assert r.json() == {"weeks": 0, "ticks": 0, "settings": False}
+    assert r.json() == {"weeks": 0, "ticks": 0, "details": 0, "settings": False}
 
 
 def test_ticks_on_different_days_from_many_connections_all_land(

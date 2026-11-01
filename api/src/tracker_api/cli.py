@@ -33,6 +33,18 @@ def _plural(n: int, word: str) -> str:
     return f"{n} {word}{'' if n == 1 else 's'}"
 
 
+def _count(n: int, word: str) -> str:
+    """A count with its noun, as in 6 week plans or 1 mark; empty for none, which `_listed`
+    leaves out."""
+    return _plural(n, word) if n else ""
+
+
+def _listed(parts: list[str]) -> str:
+    """The non-empty parts as a sentence lists them: "a, b and c"."""
+    kept = [p for p in parts if p]
+    return ", ".join(kept[:-1]) + " and " + kept[-1] if len(kept) > 1 else "".join(kept)
+
+
 def _shown(prefix: str) -> str:
     """A prefix as the CLI shows it: with `trk_`, so it never starts with `-`."""
     return auth.TOKEN_PREFIX + prefix
@@ -138,8 +150,15 @@ def _run(args: argparse.Namespace, config: Config, conn: sqlite3.Connection) -> 
                 print(f"Created {args.username} with the password {password!r}.")
             else:
                 print(f"{args.username} already exists; its password is unchanged.")
-            if result["weeks"] or result["ticks"]:
-                print(f"Added {result['weeks']} week plans and {result['ticks']} marks.")
+            added = _listed(
+                [
+                    _count(result["weeks"], "week plan"),
+                    _count(result["ticks"], "mark"),
+                    f"details for {_count(result['details'], 'item')}" if result["details"] else "",
+                ]
+            )
+            if added:
+                print(f"Added {added}.")
             else:
                 print("Nothing to add: the demo weeks are already there.")
             print(f"Sign in at {config.public_origin}/")

@@ -1,10 +1,11 @@
 {
   "description": "A week whose own plan is empty still has a plan, so the file's plan for that week does not replace it.",
-  "existing": { "plans": { "2026-10-19": [] }, "log": {} },
+  "existing": { "plans": { "2026-10-19": [] }, "log": {}, "details": {} },
   "incoming": {
     "plans": { "2026-10-19": [{ "id": "pu", "name": "Push-ups", "reps": 10, "target": 4 }] },
-    "log": {}
+    "log": {},
+    "details": {}
   },
-  "expected": { "plans": { "2026-10-19": [] }, "log": {} },
-  "summary": { "weeks": 0, "ticks": 0 }
+  "expected": { "plans": { "2026-10-19": [] }, "log": {}, "details": {} },
+  "summary": { "weeks": 0, "ticks": 0, "details": 0 }
 }

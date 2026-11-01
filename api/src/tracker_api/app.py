@@ -15,6 +15,7 @@ from . import auth, data, outbox
 from .backup import BackupThread
 from .config import Config
 from .db import connect, migrate
+from .item_sections import item_sections_valid
 from .mail import Mailer, Message, ResendMailer, send_quietly
 from .mcp_server import MCP_PATH, build_mcp
 from .validate import (
@@ -23,6 +24,8 @@ from .validate import (
     Invalid,
     Section,
     check_day,
+    check_details_body,
+    check_details_id,
     check_item_id,
     check_plan_body,
     parse_export,
@@ -151,6 +154,10 @@ def create_app(config: Config, run_backups: bool = True, mailer: Mailer | None =
     @app.exception_handler(data.QuotaExceeded)
     async def on_quota(_: Request, __: data.QuotaExceeded) -> JSONResponse:
         return error_response(413, "quota")
+
+    @app.exception_handler(data.DetailsTooLarge)
+    async def on_details_too_large(_: Request, __: data.DetailsTooLarge) -> JSONResponse:
+        return error_response(413, "too-large")
 
     @app.exception_handler(RequestValidationError)
     async def on_invalid(_: Request, __: RequestValidationError) -> JSONResponse:
@@ -377,6 +384,19 @@ def create_app(config: Config, run_backups: bool = True, mailer: Mailer | None =
             raise ApiError(409, "conflict", items=result.items, rev=result.rev)
         return {"rev": result.rev}
 
+    @app.put("/api/details/{section}/{item_id}")
+    def put_details(
+        section: Section, item_id: str, body: Body, user: User, conn: Conn
+    ) -> dict[str, int]:
+        details, rev = check_details_body(body)
+        item_id = check_details_id(item_id)
+        result = data.put_details(
+            conn, user.id, section, item_id, details, rev, quota=config.user_quota_bytes
+        )
+        if isinstance(result, data.DetailsConflict):
+            raise ApiError(409, "conflict", details=result.details, rev=result.rev)
+        return {"rev": result.rev}
+
     @app.put("/api/ticks/{section}/{week}/{item_id}/{day}")
     def put_tick(
         section: Section,
@@ -401,6 +421,10 @@ def create_app(config: Config, run_backups: bool = True, mailer: Mailer | None =
 
     @app.put("/api/settings")
     def put_settings(body: Body, user: User, conn: Conn) -> dict[str, Any]:
+        # Left out, the saved arrangement stays (an older tab); sent, its shape must be one the
+        # app writes (P29). Within that shape it normalises, as the other settings do.
+        if "itemSections" in body and not item_sections_valid(body["itemSections"]):
+            raise ApiError(400, "invalid")
         return dict(data.put_settings(conn, user.id, body))
 
     @app.get("/api/export")

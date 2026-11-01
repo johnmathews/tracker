@@ -7,7 +7,6 @@ import {
   NEW_FOOD_TARGET,
   clamp,
   defaultFoods,
-  normaliseNotes,
   type DietData,
   type Food,
   type Log,
@@ -65,47 +64,29 @@ export const useDietStore = defineStore('diet', () => {
   }
 
   /**
-   * Adds a food this week: a name alone, or with its goal and note (the Add food dialog, K54).
-   * Returns false (and adds nothing) when the trimmed name is empty.
+   * Adds a food this week: a name alone, or with its goal (the Add food dialog, K54). Returns its
+   * id, or null (and adds nothing) when the trimmed name is empty. Its notes are its details (the
+   * details store), not the week's.
    */
-  function addFood(input: string | { name: string; target?: number; notes?: string }): boolean {
-    const {
-      name: rawName,
-      target,
-      notes: rawNotes,
-    } = typeof input === 'string' ? { name: input } : input
+  function addFood(input: string | { name: string; target?: number }): string | null {
+    const { name: rawName, target } = typeof input === 'string' ? { name: input } : input
     const name = rawName.trim()
-    if (!name) return false
-    const notes = normaliseNotes(rawNotes)
-    own().push({
-      id: tracker.newId(),
-      name,
-      target: clamp(target ?? NEW_FOOD_TARGET, MIN_TARGET, MAX_TARGET),
-      ...(notes ? { notes } : {}),
-    })
-    return true
+    if (!name) return null
+    const id = tracker.newId()
+    own().push({ id, name, target: clamp(target ?? NEW_FOOD_TARGET, MIN_TARGET, MAX_TARGET) })
+    return id
   }
 
   /**
-   * Renames the food and sets its goal and note this week (the Edit food dialog), keeping its id
-   * and history; a note left out stays as it is, and an empty one clears it. False for an empty
-   * name or a food not in the week.
+   * Renames the food and sets its goal this week (the Edit food dialog), keeping its id and
+   * history. False for an empty name or a food not in the week.
    */
-  function updateFood(
-    id: string,
-    input: { name: string; target: number; notes?: string },
-  ): boolean {
+  function updateFood(id: string, input: { name: string; target: number }): boolean {
     const name = input.name.trim()
     if (!name || !foods.value.some((f) => f.id === id)) return false
     const list = own()
     const i = list.findIndex((f) => f.id === id)
-    const notes = input.notes === undefined ? list[i]!.notes : normaliseNotes(input.notes)
-    list[i] = {
-      id,
-      name,
-      target: clamp(input.target, MIN_TARGET, MAX_TARGET),
-      ...(notes ? { notes } : {}),
-    }
+    list[i] = { id, name, target: clamp(input.target, MIN_TARGET, MAX_TARGET) }
     return true
   }
 
