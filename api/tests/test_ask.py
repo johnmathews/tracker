@@ -8,10 +8,10 @@ message_stop); none was recorded from the live API, which these tests never call
 import asyncio
 import json
 import logging
-from collections.abc import AsyncIterator, Callable, Iterator
+from collections.abc import AsyncGenerator, AsyncIterator, Callable, Iterator
 from dataclasses import replace
 from datetime import date
-from typing import Any
+from typing import Any, cast
 
 import anthropic
 import httpx2
@@ -1036,6 +1036,37 @@ def test_a_quiet_upstream_gets_keep_alives(
     assert ":" in names
     assert (":", "keep-alive") in events
     assert text_of(events) == "Late."
+
+
+def test_an_abandoned_answer_still_logs_the_input_it_cost(
+    upstream: Upstream, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A client that leaves mid-answer has still cost the round's input: the log counts it from
+    message_start, not only from a final message that never comes (W5 finding 5)."""
+
+    async def stalled() -> AsyncIterator[bytes]:
+        yield sse(message_start(), *text(0, "First part. "))
+        await asyncio.sleep(60)
+
+    upstream.replies = [
+        httpx2.Response(200, headers={"content-type": "text/event-stream"}, content=stalled())
+    ]
+
+    async def no_tools(name: str, args: object) -> tuple[str, bool]:  # pragma: no cover
+        raise AssertionError("no tool runs")
+
+    async def run() -> None:
+        events = cast(
+            AsyncGenerator[ask.Event],
+            ask.answer(upstream.client, "claude-sonnet-5-5", [], no_tools),
+        )
+        while (await anext(events))[0] != "text":
+            pass
+        await events.aclose()
+
+    with caplog.at_level(logging.INFO, logger="tracker_api.ask"):
+        asyncio.run(run())
+    assert "ask ended stop=cancelled rounds=1 input=1200 output=0 cache_read=1000" in caplog.text
 
 
 def test_closing_the_stream_cancels_the_answer() -> None:

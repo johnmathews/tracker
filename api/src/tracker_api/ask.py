@@ -454,7 +454,14 @@ async def answer(
                 tool_choice={"type": "none"} if last else anthropic.omit,
             ) as stream:
                 async for event in stream:
-                    if event.type == "content_block_start" and event.content_block.type == "text":
+                    if event.type == "message_start":
+                        # The round's input is spent once it starts: count it now, so an answer
+                        # the client leaves still logs what it cost (W5).
+                        started = event.message.usage
+                        totals["input"] += started.input_tokens
+                        totals["cache_read"] += started.cache_read_input_tokens or 0
+                        totals["cache_write"] += started.cache_creation_input_tokens or 0
+                    elif event.type == "content_block_start" and event.content_block.type == "text":
                         if wrote:
                             # Text after a tool round or a thinking note is a new paragraph.
                             yield ("text", {"delta": "\n\n"})
@@ -470,8 +477,8 @@ async def answer(
                 "cache_read": usage.cache_read_input_tokens or 0,
                 "cache_write": usage.cache_creation_input_tokens or 0,
             }
-            for key, value in counts.items():
-                totals[key] += value
+            # Input and cache were counted at message_start; the output is known only now.
+            totals["output"] += counts["output"]
             log.info(
                 "ask round=%d request_id=%s stop=%s %s",
                 rounds,
