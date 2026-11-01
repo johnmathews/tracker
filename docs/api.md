@@ -2,8 +2,9 @@
 
 > Purpose
 >
-> The API service in `api/`: accounts, sessions, invites, email, the synced data, the admin CLI
-> and backups. It is the reference for the endpoints the client calls and for running the service.
+> The API service in `api/`: accounts, sessions, invites, email, the synced data, the read-only
+> insights over it, the admin CLI and backups. It is the reference for the endpoints the client
+> calls and for running the service.
 
 ## 1. Overview
 
@@ -22,10 +23,46 @@ scoped by `user_id`, and no endpoint reads another user's data.
 | `emails.py`   | the two emails, built to the EmailLayout card, and that card's preview                           |
 | `mail.py`     | the Resend client, and sending after the response                                                |
 | `data.py`     | reading and writing plans, ticks and settings; import, export; the quota (`usage`)               |
+| `insights.py` | read-only views of a user's weeks, counted as the screen counts them (§1.1)                      |
 | `app.py`      | the HTTP layer: routes, the write checks, error mapping                                          |
 | `backup.py`   | the daily `VACUUM INTO` copy                                                                     |
 | `cli.py`      | `tracker-admin`                                                                                  |
 | `seed.py`     | `tracker-admin seed-demo`: a demo account and three weeks of marks, on a local stack only        |
+
+### 1.1 Insights
+
+`insights.py` is a read-only view of one user's weeks. The /ask page and the MCP server both read
+through it. It counts the way the screen counts, so an answer never contradicts the week (§9).
+
+The rules are ports of the web app's:
+
+- `plan_source` is `planSource` (architecture.md §2): a week's own plan, else the latest earlier
+  one, else the earliest. `week_items` gives the items a week shows, and `default_items` the
+  defaults when nothing is planned.
+- `total_for`, `day_counts`, `goal_met`, `goals_met` and `met_days` are `src/lib/tracker.ts`'s.
+  Every mark counts towards a goal, a missed day included. A goal of 0 is never met. Only the
+  items the week shows count. A day is met when its count reaches exercises or foods a day.
+
+The readers each return a dict:
+
+| Reader                                                        | Returns                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `week_summary(conn, user_id, section, week, today)`           | `week`, `plan_week` (None for the defaults), `carried`, `daily_target`; seven `days` (`date`, `count`, `met`, `future`); the `items` (`id`, `name`, `target`, `notes`, seven mark kinds, `done`, `great`, `partial`, `missed`, `goal_met`); `goals_met`, `days_met` |
+| `weeks(conn, user_id, section, start, end, today)`            | `week_summary` for each week from `start` to `end`, oldest first, at most 26                                                                                                                                                                                        |
+| `item_history(conn, user_id, section, item_id, weeks, today)` | one item over the last `weeks` weeks: per week `in_plan`, `target`, the marks and their counts. A week that doesn't show the item reads as empty, as on screen                                                                                                      |
+| `goals(conn, user_id, today)`                                 | today's week's items with their goals, `exercises_a_day`, `foods_a_day`, and `note`, the "My goals" text (`""` until Settings has it)                                                                                                                               |
+| `consistency(conn, user_id, section, weeks, today)`           | over the last `weeks` weeks: the days up to today, how many met the daily target and the rate; the goals of the finished weeks, how many were met and the rate; the current runs of met days and of weeks with every goal met                                       |
+
+Every reader keeps these rules:
+
+- `today` is the asker's date, passed in. The server can't know the browser's date, so the
+  module never reads the clock.
+- Weeks are Monday `YYYY-MM-DD` keys. Another key, an unknown section, or a week count outside
+  1–26 raises `InsightsError`, a `ValueError` whose `field` names the argument.
+- Keys are snake_case, and no user or session field appears. The return types are `TypedDict`s.
+- Names are cut to 100 characters and notes to 500, because they reach a model as text.
+- A reader reads only `user_id`'s rows and writes nothing.
+- A `missed` day counts in `done` and shows in `missed`. Read `goal_met` beside the kind counts.
 
 ## 2. Data model
 
@@ -324,6 +361,15 @@ differs by default:
 `tests/test_parity.py` runs every case in `fixtures/transfer/`, the same files the Vitest suite
 runs. A rule changed on one side without the other fails one of the two suites.
 
+`fixtures/insights/` holds the same contract for what a week shows (§1.1). Each case gives a
+section's plans and log, a week, today and the daily target, and expects the plan week, the
+day counts, the met days, the days still to come and each item's counts. The cases cover carry
+forward, a week before the first plan, the defaults of each section, an empty plan, marks of a
+removed item, a goal of 0, missed and partial days, met days, and future days and weeks.
+`tests/test_insights.py` runs each case through the pure rules and through `week_summary` over a
+real database. `src/lib/__tests__/insights-parity.spec.ts` runs each through `planSource`, the
+defaults and `src/lib/tracker.ts`, and again through the planner and diet stores.
+
 Two inputs that JavaScript parses are refused on purpose as `json`. One is nesting deep enough to
 exhaust Python's recursion limit. The other is a string holding a lone surrogate, which SQLite
 cannot store as UTF-8. Neither can come from the app. The API also accepts a body that starts with
@@ -346,6 +392,9 @@ Tests sit in `api/tests/`:
 
 - `test_parity.py`: every case in `fixtures/transfer/`, the same files Vitest runs, plus the
   deliberate divergences from JavaScript (§9).
+- `test_insights.py`: every case in `fixtures/insights/` (§9), then each reader over a real
+  database: the defaults, missed days, the output's shape and cuts, user isolation, no writes,
+  the 26-week bound, Monday keys, item history, goals and consistency.
 - `test_api.py`: the HTTP layer: the write guard, error shapes, body limits (chunked too), every
   data endpoint, user isolation, `X-Expected-User`, sign-up and its refusals (closed included),
   the quota on plans, ticks and imports, every mark and the old `done` body, import and export

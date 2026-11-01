@@ -86,7 +86,9 @@ foods (with goals). Ticks live in a separate **log**, keyed by week and item id.
 
 - **Carry forward.** A week without a plan of its own shows the plan of the latest earlier week that
   has one (`planSource` in `src/lib/plans.ts`); weeks before the first plan show the earliest one,
-  and with no plans at all the stores show the defaults.
+  and with no plans at all the stores show the defaults. The API's `insights.py` ports this rule,
+  the defaults and the goal and met-day rules, and the shared cases in `fixtures/insights/` keep
+  the two in step ([api.md](api.md) §1.1, §9).
 - **A week gets its own plan when it first changes**, ticks included: the store copies what the week
   shows into `plans[week]` and edits that copy (`own()`). Until then, an unplanned week follows its
   source, so changing this week's plan also changes the weeks ahead that haven't been touched.
@@ -342,7 +344,8 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
 - **No Picked row, no dates in the header** (K28, K29): the grids show each day by its name alone,
   and nothing counts a day against the daily pick. A day that reaches it turns green instead
   (K30): `ExerciseGrid` passes `metDays` to the grid, which draws the day's name in `pen`,
-  underlined (K60). The day names are max(20px, 27u), the rows' name size. `DietSection` does
+  underlined (K60). The rule is `metDays` in `src/lib/tracker.ts`: a day is met when the items
+  marked on it reach the day's target. The day names are max(20px, 27u), the rows' name size. `DietSection` does
   the same against foods a day (K57). Both picks are stored, synced and exported (`dailyPick`,
   `foodPick`). The sections have no weekly figure (K31), Settings no totals switch (K32), and the grids no Week
   column (K33). The Header has a Full screen button where the browser supports one (K34).

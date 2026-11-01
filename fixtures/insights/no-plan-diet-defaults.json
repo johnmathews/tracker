@@ -1,0 +1,64 @@
+{
+  "description": "With no plans at all, the foods are the defaults",
+  "section": "diet",
+  "week": "2026-10-26",
+  "today": "2026-11-04",
+  "dailyTarget": 2,
+  "plans": {},
+  "log": {
+    "2026-10-26": {
+      "veg": ["great", "great", "great", "great", "great", "great", "great"],
+      "fish": [null, "great", null, null, "great", null, null]
+    }
+  },
+  "expected": {
+    "planWeek": null,
+    "dayCounts": [1, 2, 1, 1, 2, 1, 1],
+    "metDays": [false, true, false, false, true, false, false],
+    "future": [false, false, false, false, false, false, false],
+    "daysMet": 2,
+    "goalsMet": 2,
+    "items": [
+      {
+        "id": "veg",
+        "name": "Vegetables",
+        "target": 7,
+        "done": 7,
+        "great": 7,
+        "partial": 0,
+        "missed": 0,
+        "goalMet": true
+      },
+      {
+        "id": "fruit",
+        "name": "Fruit",
+        "target": 5,
+        "done": 0,
+        "great": 0,
+        "partial": 0,
+        "missed": 0,
+        "goalMet": false
+      },
+      {
+        "id": "fish",
+        "name": "Fish",
+        "target": 2,
+        "done": 2,
+        "great": 2,
+        "partial": 0,
+        "missed": 0,
+        "goalMet": true
+      },
+      {
+        "id": "nuts",
+        "name": "Nuts",
+        "target": 3,
+        "done": 0,
+        "great": 0,
+        "partial": 0,
+        "missed": 0,
+        "goalMet": false
+      }
+    ]
+  }
+}

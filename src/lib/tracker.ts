@@ -46,6 +46,14 @@ export function goalsMet(items: Tracked[], week: WeekLog): number {
 }
 
 /**
+ * The days whose marked items reach the day's target: exercises a day (K30) or foods a day (K57).
+ * A met day's name turns green, underlined (K60). The API's insights module counts the same way.
+ */
+export function metDays(counts: number[], target: number): boolean[] {
+  return counts.map((n) => n >= target)
+}
+
+/**
  * The marks a press steps through, after an empty day and back to it (DayMark card, K17), drawing
  * first: an exercise goes great, partial and missed in the zigzag, then in the solid, then in the
  * hatch; a food is eaten or not, so it goes great in each drawing.

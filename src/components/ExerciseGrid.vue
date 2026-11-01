@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { exerciseDetails, usePlannerStore } from '@/stores/planner'
 import type { Exercise, Mark } from '@/lib/storage'
-import type { Tracked } from '@/lib/tracker'
+import { metDays as daysMet, type Tracked } from '@/lib/tracker'
 import { dayMonth } from '@/lib/dates'
 import { ChevronDown, Plus } from '@lucide/vue'
 import { SCREEN, SCREEN_GRID } from '@/lib/screens'
@@ -18,7 +18,7 @@ import EditExerciseDialog from '@/components/EditExerciseDialog.vue'
 const store = usePlannerStore()
 
 /** The days whose marked exercises reach the daily pick (K30): their names turn green, underlined (K60). */
-const metDays = computed(() => store.dayCounts.map((n) => n >= store.dailyPick))
+const metDays = computed(() => daysMet(store.dayCounts, store.dailyPick))
 /** Exercises a day, set on the title line in Edit plan (K56). */
 const dailyPick = computed({
   get: () => store.dailyPick,

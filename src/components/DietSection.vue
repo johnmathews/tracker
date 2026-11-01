@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { usePlannerStore } from '@/stores/planner'
 import { useDietStore } from '@/stores/diet'
 import { dayMonth } from '@/lib/dates'
+import { metDays as daysMet } from '@/lib/tracker'
 import { MAX_DAILY_PICK, MIN_DAILY_PICK, type Food, type Mark } from '@/lib/storage'
 import { SCREEN, SCREEN_GRID } from '@/lib/screens'
 import { ChevronUp, Plus } from '@lucide/vue'
@@ -18,7 +19,7 @@ const planner = usePlannerStore()
 const diet = useDietStore()
 
 /** The days whose marked foods reach foods a day (K57): their names turn green, underlined, as exercises'. */
-const metDays = computed(() => diet.dayCounts.map((n) => n >= planner.foodPick))
+const metDays = computed(() => daysMet(diet.dayCounts, planner.foodPick))
 /** Foods a day, set on the title line in Edit plan (K56). */
 const foodPick = computed({
   get: () => planner.foodPick,
