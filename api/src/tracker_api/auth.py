@@ -1,4 +1,5 @@
-"""Passwords, lockout, sessions, invite and reset links, and email confirmation (docs/api.md §4)."""
+"""Passwords, lockout, sessions, invite and reset links, email confirmation and personal API tokens
+(docs/api.md §4)."""
 
 import hashlib
 import re
@@ -35,6 +36,14 @@ MAX_EMAIL = 254
 HOUR = 3600
 
 LinkKind = Literal["invite", "reset"]
+TokenScope = Literal["read", "write"]
+
+TOKEN_PREFIX = "trk_"  # noqa: S105 (a marker that says what the string is, not a secret)
+#: How many characters after `trk_` the database keeps, to name a token without revealing it.
+PREFIX_CHARS = 8
+MAX_TOKEN_NAME = 64
+# `trk_` and `secrets.token_urlsafe(32)`: 43 characters of the URL-safe alphabet.
+_TOKEN_RE = re.compile(r"trk_[A-Za-z0-9_-]{43}")
 
 
 class AuthError(Exception):
@@ -52,6 +61,27 @@ class SessionUser:
     username: str
     #: True when this request moved the expiry forward, so the cookie should be sent again.
     refreshed: bool
+
+
+@dataclass(frozen=True)
+class TokenUser:
+    """Who a personal API token acts as, and what it may do."""
+
+    user_id: int
+    username: str
+    scope: TokenScope
+
+
+@dataclass(frozen=True)
+class TokenInfo:
+    """A token as `tracker-admin token list` shows it: never its hash."""
+
+    name: str
+    #: The 8 characters after `trk_`.
+    prefix: str
+    scope: TokenScope
+    created_at: int
+    last_used_at: int | None
 
 
 @contextmanager
@@ -239,10 +269,13 @@ def _user_id(conn: sqlite3.Connection, username: str) -> int:
     return int(row["id"])
 
 
-def revoke_sessions(conn: sqlite3.Connection, username: str) -> int:
-    """End every session of the user; returns how many there were."""
-    cur = conn.execute("DELETE FROM sessions WHERE user_id = ?", (_user_id(conn, username),))
-    return cur.rowcount
+def revoke_sessions(conn: sqlite3.Connection, username: str) -> tuple[int, int]:
+    """End every session of the user and revoke their API tokens; returns how many of each."""
+    uid = _user_id(conn, username)
+    with transaction(conn):
+        sessions = conn.execute("DELETE FROM sessions WHERE user_id = ?", (uid,)).rowcount
+        tokens = conn.execute("DELETE FROM api_tokens WHERE user_id = ?", (uid,)).rowcount
+    return sessions, tokens
 
 
 def set_disabled(conn: sqlite3.Connection, username: str, disabled: bool) -> None:
@@ -251,6 +284,105 @@ def set_disabled(conn: sqlite3.Connection, username: str, disabled: bool) -> Non
         conn.execute("UPDATE users SET disabled = ? WHERE id = ?", (int(disabled), uid))
         if disabled:
             conn.execute("DELETE FROM sessions WHERE user_id = ?", (uid,))
+            conn.execute("DELETE FROM api_tokens WHERE user_id = ?", (uid,))
+
+
+def create_token(
+    conn: sqlite3.Connection, config: Config, username: str, name: str, scope: TokenScope
+) -> str:
+    """A new personal API token for the user, returned this once: only its hash is kept.
+
+    AuthError `token-name` for a name that is not 1 to 64 printable characters once trimmed,
+    `no-user`, or `disabled`, since a disabled account's tokens would not work."""
+    name = name.strip()
+    if not 1 <= len(name) <= MAX_TOKEN_NAME or not name.isprintable():
+        raise AuthError("token-name")
+    with transaction(conn):
+        user = conn.execute(
+            "SELECT id, disabled FROM users WHERE username = ?", (username,)
+        ).fetchone()
+        if user is None:
+            raise AuthError("no-user")
+        if user["disabled"]:
+            raise AuthError("disabled")
+        # Drawn again on the rare prefix the account already has, so a prefix names one token.
+        while True:
+            token = TOKEN_PREFIX + secrets.token_urlsafe(32)
+            prefix = token[len(TOKEN_PREFIX) :][:PREFIX_CHARS]
+            taken = conn.execute(
+                "SELECT 1 FROM api_tokens WHERE user_id = ? AND prefix = ?", (user["id"], prefix)
+            ).fetchone()
+            if taken is None:
+                break
+        conn.execute(
+            "INSERT INTO api_tokens (token_hash, user_id, name, prefix, scope, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (token_hash(token), user["id"], name, prefix, scope, config.clock()),
+        )
+    return token
+
+
+def token_user(conn: sqlite3.Connection, config: Config, token: str) -> TokenUser | None:
+    """The user a personal API token acts as, or None for an unknown, malformed or disabled one.
+
+    It never raises on what a client sends. `last_used_at` moves on the first use, then at most
+    once a day, as a session's refresh does."""
+    if not isinstance(token, str) or not _TOKEN_RE.fullmatch(token):
+        return None
+    now = config.clock()
+    th = token_hash(token)
+    row = conn.execute(
+        "SELECT t.user_id, t.scope, t.last_used_at, u.username, u.disabled"
+        " FROM api_tokens t JOIN users u ON u.id = t.user_id WHERE t.token_hash = ?",
+        (th,),
+    ).fetchone()
+    if row is None or row["disabled"]:
+        return None
+    if row["last_used_at"] is None or now - row["last_used_at"] > DAY:
+        conn.execute("UPDATE api_tokens SET last_used_at = ? WHERE token_hash = ?", (now, th))
+    return TokenUser(int(row["user_id"]), row["username"], row["scope"])
+
+
+_LISTING = "SELECT name, prefix, scope, created_at, last_used_at FROM api_tokens"
+
+
+def _token_info(row: sqlite3.Row) -> TokenInfo:
+    return TokenInfo(
+        row["name"], row["prefix"], row["scope"], row["created_at"], row["last_used_at"]
+    )
+
+
+def list_tokens(conn: sqlite3.Connection, username: str) -> list[TokenInfo]:
+    """The user's tokens, oldest first."""
+    rows = conn.execute(
+        f"{_LISTING} WHERE user_id = ? ORDER BY created_at, rowid",
+        (_user_id(conn, username),),
+    ).fetchall()
+    return [_token_info(r) for r in rows]
+
+
+def revoke_token(conn: sqlite3.Connection, username: str, prefix: str) -> TokenInfo:
+    """Revoke the user's token with this prefix, given bare or after `trk_`, and return it.
+
+    A prefix is unique per user, so it names one token at most; AuthError `no-token` if none."""
+    uid = _user_id(conn, username)
+    if len(prefix) == len(TOKEN_PREFIX) + PREFIX_CHARS:
+        prefix = prefix.removeprefix(TOKEN_PREFIX)
+    with transaction(conn):
+        row = conn.execute(
+            f"{_LISTING} WHERE user_id = ? AND prefix = ?",
+            (uid, prefix),
+        ).fetchone()
+        if row is None:
+            raise AuthError("no-token")
+        conn.execute("DELETE FROM api_tokens WHERE user_id = ? AND prefix = ?", (uid, prefix))
+    return _token_info(row)
+
+
+def revoke_tokens(conn: sqlite3.Connection, username: str) -> int:
+    """Revoke every token of the user; returns how many there were."""
+    cur = conn.execute("DELETE FROM api_tokens WHERE user_id = ?", (_user_id(conn, username),))
+    return cur.rowcount
 
 
 def mint_link(
@@ -352,7 +484,9 @@ def redeem(conn: sqlite3.Connection, config: Config, token: str, password: str) 
                 " WHERE id = ?",
                 (now, uid),
             )
+        # A reset is how an owner takes a stolen account back, so it ends every credential.
         conn.execute("DELETE FROM sessions WHERE user_id = ?", (uid,))
+        conn.execute("DELETE FROM api_tokens WHERE user_id = ?", (uid,))
         return uid
 
 

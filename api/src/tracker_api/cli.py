@@ -1,5 +1,5 @@
-"""`tracker-admin`: invites, resets and account switches, run in the API container, and demo data
-for a local stack (docs/api.md §5)."""
+"""`tracker-admin`: invites, resets, account switches and API tokens, run in the API container, and
+demo data for a local stack (docs/api.md §5)."""
 
 import argparse
 import os
@@ -19,11 +19,23 @@ MESSAGES = {
     "password": "a password is 10 to 256 characters",
     "closed": "sign-up is closed: MAX_USERS accounts exist",
     "too-many": "too many sign-ups in the last hour; try again later",
+    "token-name": "a token name is 1 to 64 printable characters",
+    "disabled": "is disabled; enable it before minting a token",
+    "no-token": "no token with that prefix; `tracker-admin token list <email>` shows them",
 }
 
 
 def _when(ts: int) -> str:
     return datetime.fromtimestamp(ts, UTC).strftime("%Y-%m-%d %H:%M UTC")
+
+
+def _plural(n: int, word: str) -> str:
+    return f"{n} {word}{'' if n == 1 else 's'}"
+
+
+def _shown(prefix: str) -> str:
+    """A prefix as the CLI shows it: with `trk_`, so it never starts with `-`."""
+    return auth.TOKEN_PREFIX + prefix
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -32,14 +44,30 @@ def _parser() -> argparse.ArgumentParser:
     for name, text in [
         ("invite", "print a single-use sign-up link for a new account's email (valid 7 days)"),
         ("reset", "print a password-reset link for an account (valid 24 hours)"),
-        ("disable", "block an account's logins and end its sessions"),
+        ("disable", "block an account's logins and end its sessions and API tokens"),
         ("enable", "allow a disabled account to log in again"),
-        ("revoke-sessions", "sign an account out everywhere"),
+        ("revoke-sessions", "sign an account out everywhere and revoke its API tokens"),
     ]:
         # `username`: the account's name, its email (or, for an account from before invites
         # took an email, the username it was invited with).
         commands.add_parser(name, help=text).add_argument("username", metavar="email")
     commands.add_parser("users", help="list users")
+    token = commands.add_parser("token", help="personal API tokens, for the MCP endpoint")
+    tokens = token.add_subparsers(dest="token_command", required=True)
+    create = tokens.add_parser("create", help="mint a token and print it, this once only")
+    create.add_argument("username", metavar="email")
+    create.add_argument("--name", required=True, help="what the token is for, e.g. the client")
+    create.add_argument(
+        "--write", action="store_true", help="let it edit plans and marks too (default: read)"
+    )
+    tokens.add_parser("list", help="an account's tokens, never the tokens themselves").add_argument(
+        "username", metavar="email"
+    )
+    revoke = tokens.add_parser("revoke", help="revoke one token by its prefix, or --all")
+    revoke.add_argument("username", metavar="email")
+    which = revoke.add_mutually_exclusive_group(required=True)
+    which.add_argument("prefix", nargs="?", help="as `token list` shows it, e.g. trk_AbCd1234")
+    which.add_argument("--all", action="store_true", help="every token of the account")
     demo = commands.add_parser(
         "seed-demo",
         help="local stacks only: create a demo account (or fill an existing one) with three"
@@ -116,24 +144,59 @@ def _run(args: argparse.Namespace, config: Config, conn: sqlite3.Connection) -> 
                 print("Nothing to add: the demo weeks are already there.")
             print(f"Sign in at {config.public_origin}/")
         case "revoke-sessions":
-            n = auth.revoke_sessions(conn, args.username)
-            print(f"Ended {n} session{'' if n == 1 else 's'} for {args.username}.")
+            sessions, tokens = auth.revoke_sessions(conn, args.username)
+            print(
+                f"Ended {_plural(sessions, 'session')} and revoked {_plural(tokens, 'token')}"
+                f" for {args.username}."
+            )
+        case "token":
+            _token(args, config, conn)
         case _:  # users
             rows = conn.execute(
                 "SELECT u.username, u.created_at, u.disabled,"
-                " (SELECT count(*) FROM sessions s WHERE s.user_id = u.id) AS sessions"
+                " (SELECT count(*) FROM sessions s WHERE s.user_id = u.id) AS sessions,"
+                " (SELECT count(*) FROM api_tokens t WHERE t.user_id = u.id) AS tokens"
                 " FROM users u ORDER BY u.username"
             ).fetchall()
             if not rows:
                 print("No users yet.")
             for r in rows:
                 state = "disabled" if r["disabled"] else "active"
-                n = r["sessions"]
                 print(
                     f"{r['username']:<32} {state:<8} since {_when(r['created_at'])},"
-                    f" {n} session{'' if n == 1 else 's'}"
+                    f" {_plural(r['sessions'], 'session')}, {_plural(r['tokens'], 'token')}"
                 )
     return 0
+
+
+def _token(args: argparse.Namespace, config: Config, conn: sqlite3.Connection) -> None:
+    # The token itself is printed once, by `create`, to this process's output and nowhere else:
+    # never to a log (docs/api.md §4).
+    match args.token_command:
+        case "create":
+            scope: auth.TokenScope = "write" if args.write else "read"
+            token = auth.create_token(conn, config, args.username, args.name, scope)
+            prefix = _shown(token[len(auth.TOKEN_PREFIX) :][: auth.PREFIX_CHARS])
+            print(f"A {scope} token for {args.username}, prefix {prefix}:")
+            print(token)
+            print("It is shown only this once. Send it as Authorization: Bearer <token>.")
+        case "list":
+            infos = auth.list_tokens(conn, args.username)
+            if not infos:
+                print(f"No tokens for {args.username}.")
+            for t in infos:
+                used = "never" if t.last_used_at is None else _when(t.last_used_at)
+                print(
+                    f"{_shown(t.prefix)}  {t.scope:<5}  {t.name}"
+                    f"  (created {_when(t.created_at)}, last used {used})"
+                )
+        case _:  # revoke
+            if args.all:
+                n = auth.revoke_tokens(conn, args.username)
+                print(f"Revoked {_plural(n, 'token')} for {args.username}.")
+            else:
+                info = auth.revoke_token(conn, args.username, args.prefix)
+                print(f"Revoked the token {_shown(info.prefix)} ({info.name}) for {args.username}.")
 
 
 if __name__ == "__main__":

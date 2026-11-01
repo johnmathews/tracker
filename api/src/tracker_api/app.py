@@ -5,29 +5,36 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from contextlib import asynccontextmanager, suppress
 from typing import Annotated, Any
 
-from fastapi import BackgroundTasks, Depends, FastAPI, Path, Request, Response
+from fastapi import BackgroundTasks, Depends, FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.routing import Route
 
 from . import auth, data, outbox
 from .backup import BackupThread
 from .config import Config
 from .db import connect, migrate
 from .mail import Mailer, Message, ResendMailer, send_quietly
+from .mcp_server import MCP_PATH, build_mcp
 from .validate import (
     Days,
     ExportError,
-    Mark,
+    Invalid,
     Section,
-    is_mark,
-    is_week,
+    check_day,
+    check_item_id,
+    check_plan_body,
     parse_export,
     parse_json,
+    tick_mark,
+    week_key,
 )
 
 MAX_BODY = 1 << 20
 WRITES = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+# Query parameters a client might put a token in. nginx and uvicorn log query strings.
+TOKEN_PARAMS = frozenset({"token", "access_token"})
 # The HTTP status for each refusal code an auth step can raise.
 AUTH_STATUS = {
     "invalid": 401,
@@ -76,6 +83,8 @@ def create_app(config: Config, run_backups: bool = True, mailer: Mailer | None =
     elif mailer is None:
         mailer = ResendMailer(config.resend_api_key or "", config.mail_from)
 
+    mcp = build_mcp(config, MAX_BODY)
+
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         conn = connect(config.db_path)
@@ -84,26 +93,53 @@ def create_app(config: Config, run_backups: bool = True, mailer: Mailer | None =
         backups = BackupThread(config) if run_backups else None
         if backups:
             backups.start()
-        yield
+        # The MCP app is routed, not mounted, so its own lifespan never runs: start it here.
+        async with mcp.server.session_manager.run():
+            yield
         if backups:
             backups.stop()
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.mailer = mailer
 
+    def too_large(request: Request) -> bool:
+        length = request.headers.get("content-length", "0")
+        return not length.isdigit() or int(length) > MAX_BODY
+
+    def rest_refusal(request: Request) -> Response | None:
+        """Origin plus SameSite=Lax is REST's CSRF defence, so every write must carry both."""
+        if request.method not in WRITES:
+            return None
+        if request.headers.get("origin") != config.public_origin:
+            return error_response(403, "origin")
+        content_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
+        if content_type != "application/json":
+            return error_response(415, "content-type")
+        if too_large(request):
+            return error_response(413, "too-large")
+        return None
+
+    def mcp_refusal(request: Request) -> Response | None:
+        """An agent sends no Origin and no cookie, only a bearer token, which no browser attaches
+        on its own, so a missing Origin passes. A wrong one is refused, the MCP spec's rule
+        against DNS rebinding. The SDK checks Content-Type and Host (docs/api.md §3.1)."""
+        if TOKEN_PARAMS & {name.lower() for name in request.query_params}:
+            return error_response(400, "token-in-url")
+        origin = request.headers.get("origin")
+        if origin is not None and origin != config.public_origin:
+            return error_response(403, "origin")
+        if request.method in WRITES and too_large(request):
+            return error_response(413, "too-large")
+        return None
+
     @app.middleware("http")
     async def guard(
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
-        if request.method in WRITES:
-            if request.headers.get("origin") != config.public_origin:
-                return error_response(403, "origin")
-            content_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
-            if content_type != "application/json":
-                return error_response(415, "content-type")
-            length = request.headers.get("content-length", "0")
-            if not length.isdigit() or int(length) > MAX_BODY:
-                return error_response(413, "too-large")
+        is_mcp = request.scope["path"] == MCP_PATH
+        refusal = mcp_refusal(request) if is_mcp else rest_refusal(request)
+        if refusal is not None:
+            return refusal
         response = await call_next(request)
         response.headers["Cache-Control"] = "no-store"
         return response
@@ -118,6 +154,10 @@ def create_app(config: Config, run_backups: bool = True, mailer: Mailer | None =
 
     @app.exception_handler(RequestValidationError)
     async def on_invalid(_: Request, __: RequestValidationError) -> JSONResponse:
+        return error_response(400, "invalid")
+
+    @app.exception_handler(Invalid)
+    async def on_bad_request(_: Request, __: Invalid) -> JSONResponse:
         return error_response(400, "invalid")
 
     @app.exception_handler(StarletteHTTPException)
@@ -224,24 +264,6 @@ def create_app(config: Config, run_backups: bool = True, mailer: Mailer | None =
             raise ApiError(503, "mail-off")
         return mailer
 
-    def tick_mark(body: dict[str, Any]) -> Mark | None:
-        """`{"mark": ...}`, or `{"done": bool}` from a client (or a queued tick) from before marks
-        had kinds: true is `great`, false clears the day."""
-        if "mark" in body:
-            mark = body["mark"]
-            if mark is not None and not is_mark(mark):
-                raise ApiError(400, "invalid")
-            return mark
-        done = body.get("done")
-        if not isinstance(done, bool):
-            raise ApiError(400, "invalid")
-        return "great" if done else None
-
-    def week_key(week: str) -> str:
-        if not is_week(week):
-            raise ApiError(400, "invalid")
-        return week
-
     @app.get("/api/healthz")
     def healthz(conn: Conn) -> dict[str, bool]:
         conn.execute("SELECT 1").fetchone()
@@ -347,9 +369,7 @@ def create_app(config: Config, run_backups: bool = True, mailer: Mailer | None =
 
     @app.put("/api/plans/{section}/{week}")
     def put_plan(section: Section, week: str, body: Body, user: User, conn: Conn) -> dict[str, int]:
-        items, rev = body.get("items"), body.get("rev")
-        if not isinstance(items, list) or type(rev) is not int or rev < 0:
-            raise ApiError(400, "invalid")
+        items, rev = check_plan_body(body)
         result = data.put_plan(
             conn, user.id, section, week_key(week), items, rev, quota=config.user_quota_bytes
         )
@@ -361,8 +381,8 @@ def create_app(config: Config, run_backups: bool = True, mailer: Mailer | None =
     def put_tick(
         section: Section,
         week: str,
-        item_id: Annotated[str, Path(min_length=1, max_length=128)],
-        day: Annotated[int, Path(ge=0, le=6)],
+        item_id: str,
+        day: int,
         body: Body,
         user: User,
         conn: Conn,
@@ -372,8 +392,8 @@ def create_app(config: Config, run_backups: bool = True, mailer: Mailer | None =
             user.id,
             section,
             week_key(week),
-            item_id,
-            day,
+            check_item_id(item_id),
+            check_day(day),
             tick_mark(body),
             quota=config.user_quota_bytes,
         )
@@ -397,6 +417,13 @@ def create_app(config: Config, run_backups: bool = True, mailer: Mailer | None =
         except ExportError as e:
             raise ApiError(400, e.code) from None
         return dict(data.import_data(conn, user.id, parsed, quota=config.user_quota_bytes))
+
+    # The exact path: a Mount would answer `/api/mcp` with a 307 to `/api/mcp/`, whose Location
+    # says http:// behind nginx. The SDK app routes the same path, so it gets the request as it
+    # came and reads only the Authorization header, never the session cookie. POST only: in
+    # stateless mode the SDK would still hold a GET open as an SSE stream that never carries
+    # anything, and the spec lets a server without one answer 405.
+    app.router.routes.append(Route(MCP_PATH, mcp.app, methods=["POST"]))
 
     return app
 

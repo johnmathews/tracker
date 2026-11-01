@@ -12,7 +12,7 @@ def test_migrates_a_fresh_database_once(tmp_path: Path) -> None:
     migrate(c)  # a second run is a no-op
     assert c.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
     tables = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
-    assert {"users", "sessions", "invites", "settings", "plans", "ticks"} <= tables
+    assert {"users", "sessions", "invites", "settings", "plans", "ticks", "api_tokens"} <= tables
     c.close()
 
 
@@ -31,7 +31,7 @@ def test_marks_migration_reads_existing_ticks_as_great(
     c.execute("INSERT INTO ticks VALUES (1, 'exercise', '2026-10-19', 'sq', 0)")
     monkeypatch.undo()
     db.migrate(c)
-    assert c.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION == 5
+    assert c.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
     rows = [
         tuple(r)
         for r in c.execute("SELECT item_id, days, partial, missed, solid, hatch FROM ticks")
@@ -43,6 +43,67 @@ def test_marks_migration_reads_existing_ticks_as_great(
             "sq": [None] * 7,
         }
     }
+    c.close()
+
+
+def _api_tokens_step() -> int:
+    """The index of the step that adds `api_tokens`, wherever a rebase has put it."""
+    from tracker_api import db
+
+    return next(i for i, sql in enumerate(db.MIGRATIONS) if "api_tokens" in sql)
+
+
+def _snapshot(c: sqlite3.Connection) -> dict[str, list[tuple[object, ...]]]:
+    tables = [
+        r[0]
+        for r in c.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name != 'api_tokens'"
+        )
+    ]
+    return {
+        t: sorted(tuple(r) for r in c.execute(f"SELECT * FROM {t}"))  # noqa: S608
+        for t in tables
+    }
+
+
+def test_api_tokens_step_keeps_every_row(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A populated database at the step before `api_tokens` keeps every row through it, and the
+    step can run a second time."""
+    from tracker_api import db
+
+    step = _api_tokens_step()
+    c = connect(tmp_path / "f.db")
+    monkeypatch.setattr(db, "MIGRATIONS", db.MIGRATIONS[:step])
+    db.migrate(c)
+    c.executescript(
+        """
+        INSERT INTO users (id, username, password_hash, created_at, email_confirmed_at)
+            VALUES (1, 'a@example.com', 'h', 0, 5), (2, 'john', 'h2', 1, NULL);
+        INSERT INTO sessions (token_hash, user_id, created_at, last_seen, expires_at)
+            VALUES ('s1', 1, 0, 0, 99), ('s2', 2, 0, 0, 99);
+        INSERT INTO invites (token_hash, kind, username, user_id, created_at, expires_at, mailed)
+            VALUES ('i1', 'reset', 'john', 2, 0, 9, 1),
+                   ('i2', 'invite', 'b@example.com', NULL, 0, 9, 0);
+        INSERT INTO confirmations (token_hash, user_id, created_at, expires_at)
+            VALUES ('c1', 1, 0, 9);
+        INSERT INTO mail_log (user_id, kind, sent_at) VALUES (1, 'confirm', 3);
+        INSERT INTO settings (user_id, accent, daily_pick, food_pick) VALUES (1, '#30d158', 3, 4);
+        INSERT INTO plans (user_id, section, week, items_json, rev)
+            VALUES (1, 'exercise', '2026-10-19', '[{"id":"pu","name":"Push-ups"}]', 3);
+        INSERT INTO ticks (user_id, section, week, item_id, days, partial, missed, solid, hatch)
+            VALUES (1, 'exercise', '2026-10-19', 'pu', 7, 2, 4, 1, 2);
+        """
+    )
+    before = _snapshot(c)
+    assert sum(len(rows) for rows in before.values()) == 11
+    assert "api_tokens" not in {r[0] for r in c.execute("SELECT name FROM sqlite_master")}
+    monkeypatch.undo()
+    db.migrate(c)
+    assert c.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
+    assert _snapshot(c) == before
+    assert c.execute("SELECT count(*) FROM api_tokens").fetchone()[0] == 0
+    c.executescript(db.MIGRATIONS[step])  # re-runnable: IF NOT EXISTS throughout
+    assert _snapshot(c) == before
     c.close()
 
 
@@ -64,8 +125,10 @@ def test_deleting_a_user_cascades_to_their_rows(conn: sqlite3.Connection) -> Non
     conn.execute("INSERT INTO sessions VALUES ('t', 1, 0, 0, 0)")
     conn.execute("INSERT INTO confirmations VALUES ('c', 1, 0, 0, NULL)")
     conn.execute("INSERT INTO mail_log (user_id, kind, sent_at) VALUES (1, 'confirm', 0)")
+    conn.execute("INSERT INTO api_tokens VALUES ('t', 1, 'laptop', 'abcdefgh', 'read', 0, NULL)")
     conn.execute("DELETE FROM users WHERE id = 1")
-    for table in ("settings", "plans", "ticks", "sessions", "confirmations", "mail_log"):
+    tables = ("settings", "plans", "ticks", "sessions", "confirmations", "mail_log", "api_tokens")
+    for table in tables:
         assert conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0  # noqa: S608
 
 
@@ -93,7 +156,14 @@ def test_constraints_reject_bad_rows(conn: sqlite3.Connection) -> None:
         "INSERT INTO mail_log (user_id, kind, sent_at) VALUES (1, 'report', 0)",
         "INSERT INTO mail_log (user_id, kind, sent_at) VALUES (2, 'reset', 0)",
         "INSERT INTO confirmations VALUES ('c', 2, 0, 0, NULL)",
+        # A token has one of two scopes and a name, belongs to a user, and its prefix is unique
+        # per user.
+        "INSERT INTO api_tokens VALUES ('t2', 1, 'n', 'p2', 'admin', 0, NULL)",
+        "INSERT INTO api_tokens VALUES ('t2', 2, 'n', 'p2', 'read', 0, NULL)",
+        "INSERT INTO api_tokens VALUES ('t2', 1, 'n', 'p1', 'write', 0, NULL)",
+        "INSERT INTO api_tokens VALUES ('t2', 1, NULL, 'p2', 'read', 0, NULL)",
     ]
+    conn.execute("INSERT INTO api_tokens VALUES ('t1', 1, 'n', 'p1', 'read', 0, NULL)")
     for sql in bad:
         with pytest.raises(sqlite3.IntegrityError):
             conn.execute(sql)

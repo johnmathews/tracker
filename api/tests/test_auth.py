@@ -1,7 +1,8 @@
+import re
 import sqlite3
 import threading
 import time
-from dataclasses import replace
+from dataclasses import fields, replace
 from typing import Any
 
 import pytest
@@ -175,7 +176,7 @@ def test_ending_sessions(conn: sqlite3.Connection, config: Config) -> None:
     auth.end_session(conn, a)
     assert auth.session_user(conn, config, a) is None
     assert auth.session_user(conn, config, b) is not None
-    assert auth.revoke_sessions(conn, "alice@example.com") == 1
+    assert auth.revoke_sessions(conn, "alice@example.com") == (1, 0)  # (sessions, tokens)
     assert auth.session_user(conn, config, b) is None
 
 
@@ -510,3 +511,234 @@ def test_a_signed_up_account_can_be_reset_but_not_invited(
     with pytest.raises(AuthError) as e:
         auth.mint_link(conn, config, "invite", "BOB@example.com")
     assert e.value.code == "exists"
+
+
+# --- API tokens ---------------------------------------------------------------------------------
+
+TOKEN_RE = re.compile(r"trk_[A-Za-z0-9_-]{43}")
+
+
+def _token_rows(conn: sqlite3.Connection, uid: int) -> int:
+    return int(
+        conn.execute("SELECT count(*) FROM api_tokens WHERE user_id = ?", (uid,)).fetchone()[0]
+    )
+
+
+def test_a_token_names_its_user_and_scope(conn: sqlite3.Connection, config: Config) -> None:
+    uid = make_user(conn, config)
+    read = auth.create_token(conn, config, "Alice@example.com", "laptop", "read")
+    write = auth.create_token(conn, config, "alice@example.com", "agent", "write")
+    assert TOKEN_RE.fullmatch(read) and TOKEN_RE.fullmatch(write) and read != write
+    assert auth.token_user(conn, config, read) == auth.TokenUser(uid, "alice@example.com", "read")
+    assert auth.token_user(conn, config, write) == auth.TokenUser(uid, "alice@example.com", "write")
+
+
+def test_a_session_token_is_not_an_api_token(conn: sqlite3.Connection, config: Config) -> None:
+    uid = make_user(conn, config)
+    token = auth.create_token(conn, config, "alice@example.com", "laptop", "read")
+    session = auth.create_session(conn, config, uid)
+    assert auth.token_user(conn, config, session) is None
+    assert auth.session_user(conn, config, token) is None
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "",
+        "trk_",
+        "not-a-token",
+        "trk_" + "a" * 43,  # well formed, but nobody's
+        "trk_" + "é" * 43,
+        "trk_" + "\ud800" * 43,  # a lone surrogate cannot even be encoded
+        "Bearer trk_" + "a" * 43,
+        "x" * 100_000,
+        None,
+        43,
+    ],
+)
+def test_a_bad_token_finds_nobody_and_never_raises(
+    conn: sqlite3.Connection, config: Config, bad: Any
+) -> None:
+    make_user(conn, config)
+    auth.create_token(conn, config, "alice@example.com", "laptop", "read")
+    assert auth.token_user(conn, config, bad) is None
+
+
+def test_a_changed_token_finds_nobody(conn: sqlite3.Connection, config: Config) -> None:
+    make_user(conn, config)
+    token = auth.create_token(conn, config, "alice@example.com", "laptop", "read")
+    flipped = token[:-1] + ("A" if token[-1] != "A" else "B")
+    assert auth.token_user(conn, config, flipped) is None
+    assert auth.token_user(conn, config, token + "x") is None
+    assert auth.token_user(conn, config, token[:-1]) is None
+
+
+def test_the_database_holds_no_plaintext_token(conn: sqlite3.Connection, config: Config) -> None:
+    make_user(conn, config)
+    token = auth.create_token(conn, config, "alice@example.com", "laptop", "write")
+    auth.token_user(conn, config, token)
+    secret = token.removeprefix("trk_")[8:]  # all but the stored prefix
+    dump = "\n".join(conn.iterdump())
+    assert token not in dump and secret not in dump
+    row = conn.execute("SELECT token_hash, prefix FROM api_tokens").fetchone()
+    assert (row["token_hash"], row["prefix"]) == (auth.token_hash(token), token[4:12])
+
+
+def test_a_disabled_account_s_tokens_stop_working(conn: sqlite3.Connection, config: Config) -> None:
+    uid = make_user(conn, config)
+    token = auth.create_token(conn, config, "alice@example.com", "laptop", "read")
+    # Set the flag alone, as a row edited by hand would: the lookup itself must refuse.
+    conn.execute("UPDATE users SET disabled = 1 WHERE id = ?", (uid,))
+    assert auth.token_user(conn, config, token) is None
+    with pytest.raises(AuthError, match="disabled"):
+        auth.create_token(conn, config, "alice@example.com", "another", "read")
+    conn.execute("UPDATE users SET disabled = 0 WHERE id = ?", (uid,))
+    assert auth.token_user(conn, config, token) is not None
+
+
+def _reset(conn: sqlite3.Connection, config: Config) -> None:
+    link = auth.mint_link(conn, config, "reset", "alice@example.com")
+    auth.redeem(conn, config, link, "a brand new password")
+
+
+def _mailed_reset(conn: sqlite3.Connection, config: Config) -> None:
+    link = auth.mint_link(conn, config, "reset", "alice@example.com", mailed=True)
+    auth.redeem(conn, config, link, "a brand new password")
+
+
+def _disable(conn: sqlite3.Connection, config: Config) -> None:
+    auth.set_disabled(conn, "alice@example.com", True)
+    auth.set_disabled(conn, "alice@example.com", False)  # enabling again brings nothing back
+
+
+def _revoke_sessions(conn: sqlite3.Connection, config: Config) -> None:
+    assert auth.revoke_sessions(conn, "alice@example.com") == (1, 2)
+
+
+@pytest.mark.parametrize("action", [_reset, _mailed_reset, _disable, _revoke_sessions])
+def test_a_reset_disable_or_revoke_sessions_kills_tokens_minted_before(
+    conn: sqlite3.Connection, config: Config, action: Any
+) -> None:
+    uid = make_user(conn, config)
+    other = make_user(conn, config, "bob@example.com")
+    auth.create_session(conn, config, uid)
+    tokens = [
+        auth.create_token(conn, config, "alice@example.com", "laptop", "read"),
+        auth.create_token(conn, config, "alice@example.com", "agent", "write"),
+    ]
+    bobs = auth.create_token(conn, config, "bob@example.com", "laptop", "write")
+    assert all(auth.token_user(conn, config, t) is not None for t in tokens)
+    action(conn, config)
+    assert [auth.token_user(conn, config, t) for t in tokens] == [None, None]
+    assert _token_rows(conn, uid) == 0
+    # Someone else's tokens are not touched.
+    assert auth.token_user(conn, config, bobs) == auth.TokenUser(other, "bob@example.com", "write")
+
+
+def test_last_used_moves_at_most_once_a_day(
+    conn: sqlite3.Connection, config: Config, clock: Clock
+) -> None:
+    make_user(conn, config)
+    token = auth.create_token(conn, config, "alice@example.com", "laptop", "read")
+    created = clock()
+
+    def last_used() -> int | None:
+        return auth.list_tokens(conn, "alice@example.com")[0].last_used_at
+
+    assert last_used() is None
+    clock.advance(60)
+    auth.token_user(conn, config, token)
+    assert last_used() == created + 60  # the first use is always written
+    clock.advance(DAY)
+    auth.token_user(conn, config, token)
+    assert last_used() == created + 60  # exactly a day later: not yet
+    clock.advance(1)
+    auth.token_user(conn, config, token)
+    assert last_used() == created + 60 + DAY + 1
+
+
+def test_listing_tokens_shows_no_hash(
+    conn: sqlite3.Connection, config: Config, clock: Clock
+) -> None:
+    make_user(conn, config)
+    make_user(conn, config, "bob@example.com")
+    assert auth.list_tokens(conn, "alice@example.com") == []
+    first = auth.create_token(conn, config, "alice@example.com", "laptop", "read")
+    clock.advance(1)
+    second = auth.create_token(conn, config, "alice@example.com", "agent", "write")
+    auth.create_token(conn, config, "bob@example.com", "bob's", "read")
+    listed = auth.list_tokens(conn, "Alice@example.com")
+    assert listed == [
+        auth.TokenInfo("laptop", first[4:12], "read", clock() - 1, None),
+        auth.TokenInfo("agent", second[4:12], "write", clock(), None),
+    ]
+    assert "token_hash" not in {f.name for f in fields(auth.TokenInfo)}
+    with pytest.raises(AuthError, match="no-user"):
+        auth.list_tokens(conn, "nobody")
+
+
+def test_revoking_one_token_by_its_prefix(conn: sqlite3.Connection, config: Config) -> None:
+    make_user(conn, config)
+    make_user(conn, config, "bob@example.com")
+    keep = auth.create_token(conn, config, "alice@example.com", "laptop", "read")
+    drop = auth.create_token(conn, config, "alice@example.com", "agent", "write")
+    bobs = auth.create_token(conn, config, "bob@example.com", "laptop", "read")
+    # Another account's prefix, a part of one, the whole token and nothing name none of hers.
+    for wrong in (bobs[4:12], drop[4:10], drop, ""):
+        with pytest.raises(AuthError, match="no-token"):
+            auth.revoke_token(conn, "alice@example.com", wrong)
+    revoked = auth.revoke_token(conn, "alice@example.com", drop[4:12])
+    assert (revoked.name, revoked.prefix, revoked.scope) == ("agent", drop[4:12], "write")
+    assert auth.token_user(conn, config, drop) is None
+    assert auth.token_user(conn, config, keep) is not None
+    assert auth.token_user(conn, config, bobs) is not None
+    # The prefix with `trk_` in front works too.
+    auth.revoke_token(conn, "alice@example.com", keep[:12])
+    assert auth.token_user(conn, config, keep) is None
+    with pytest.raises(AuthError, match="no-user"):
+        auth.revoke_token(conn, "nobody", "abcdefgh")
+
+
+def test_revoking_every_token(conn: sqlite3.Connection, config: Config) -> None:
+    uid = make_user(conn, config)
+    session = auth.create_session(conn, config, uid)
+    for name in ("a", "b", "c"):
+        auth.create_token(conn, config, "alice@example.com", name, "read")
+    assert auth.revoke_tokens(conn, "alice@example.com") == 3
+    assert auth.revoke_tokens(conn, "alice@example.com") == 0
+    assert _token_rows(conn, uid) == 0
+    assert auth.session_user(conn, config, session) is not None  # sessions are left alone
+    with pytest.raises(AuthError, match="no-user"):
+        auth.revoke_tokens(conn, "nobody")
+
+
+def test_a_prefix_the_account_already_has_is_drawn_again(
+    conn: sqlite3.Connection, config: Config, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    make_user(conn, config)
+    draws = iter(["a" * 8 + "x" * 35, "a" * 8 + "y" * 35, "b" * 8 + "z" * 35])
+    monkeypatch.setattr("tracker_api.auth.secrets.token_urlsafe", lambda n: next(draws))
+    first = auth.create_token(conn, config, "alice@example.com", "one", "read")
+    second = auth.create_token(conn, config, "alice@example.com", "two", "read")
+    # The second draw had the first's prefix, so it was drawn again: a prefix names one token.
+    assert (first, second) == ("trk_" + "a" * 8 + "x" * 35, "trk_" + "b" * 8 + "z" * 35)
+    assert [t.prefix for t in auth.list_tokens(conn, "alice@example.com")] == ["a" * 8, "b" * 8]
+
+
+@pytest.mark.parametrize("name", ["", "   ", "x" * 65, "two\nlines", "bell\a"])
+def test_a_token_name_is_1_to_64_printable_characters(
+    conn: sqlite3.Connection, config: Config, name: str
+) -> None:
+    make_user(conn, config)
+    with pytest.raises(AuthError, match="token-name"):
+        auth.create_token(conn, config, "alice@example.com", name, "read")
+
+
+def test_a_token_name_is_trimmed_and_needs_an_account(
+    conn: sqlite3.Connection, config: Config
+) -> None:
+    make_user(conn, config)
+    auth.create_token(conn, config, "alice@example.com", "  " + "x" * 64 + " ", "read")
+    assert auth.list_tokens(conn, "alice@example.com")[0].name == "x" * 64
+    with pytest.raises(AuthError, match="no-user"):
+        auth.create_token(conn, config, "nobody", "laptop", "read")
