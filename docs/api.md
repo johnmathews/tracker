@@ -50,7 +50,7 @@ The readers each return a dict:
 | `week_summary(conn, user_id, section, week, today)`           | `week`, `plan_week` (None for the defaults), `carried`, `daily_target`; seven `days` (`date`, `count`, `met`, `future`); the `items` (`id`, `name`, `target`, `notes`, seven mark kinds, `done`, `great`, `partial`, `missed`, `goal_met`); `goals_met`, `days_met` |
 | `weeks(conn, user_id, section, start, end, today)`            | `week_summary` for each week from `start` to `end`, oldest first, at most 26                                                                                                                                                                                        |
 | `item_history(conn, user_id, section, item_id, weeks, today)` | one item over the last `weeks` weeks: per week `in_plan`, `target`, the marks and their counts. A week that doesn't show the item reads as empty, as on screen                                                                                                      |
-| `goals(conn, user_id, today)`                                 | today's week's items with their goals, `exercises_a_day`, `foods_a_day`, and `note`, the "My goals" text (`""` until Settings has it)                                                                                                                               |
+| `goals(conn, user_id, today)`                                 | today's week's items with their goals, `exercises_a_day`, `foods_a_day`, and `note`, the My goals text from settings (`""` when there is none)                                                                                                                      |
 | `consistency(conn, user_id, section, weeks, today)`           | over the last `weeks` weeks: the days up to today, how many met the daily target and the rate; the goals of the finished weeks, how many were met and the rate; the current runs of met days and of weeks with every goal met                                       |
 
 Every reader keeps these rules:
@@ -73,7 +73,7 @@ Every reader keeps these rules:
 | `invites`       | `token_hash`                        | `kind` (`invite` or `reset`), `username`, `user_id` (resets), `expires_at`, `used_at`, `mailed` (a reset sent by email)                                                 |
 | `confirmations` | `token_hash`                        | `user_id`, `created_at`, `expires_at`, `used_at`: confirm-your-email links                                                                                              |
 | `mail_log`      | `id`                                | `user_id`, `kind` (`confirm` or `reset`), `sent_at`: one row per email attempted (a failed send still counts), for the limits                                           |
-| `settings`      | `user_id`                           | `accent`, `daily_pick`, `food_pick` (K57)                                                                                                                               |
+| `settings`      | `user_id`                           | `accent`, `daily_pick`, `food_pick` (K57), `goals` (My goals, `''` for none)                                                                                            |
 | `plans`         | `(user_id, section, week)`          | `items_json`, `rev`                                                                                                                                                     |
 | `ticks`         | `(user_id, section, week, item_id)` | `days`, `partial`, `missed`, `solid`, `hatch`: 7-bit masks (bit 0 is Monday); see below                                                                                 |
 
@@ -92,7 +92,13 @@ startup inside a transaction. Version 1 is the first six tables; version 2 adds 
 `missed` (default 0), so every tick stored before marks had kinds reads as `great`; version 3 adds
 email: `email_confirmed_at`, `mailed`, `confirmations` and `mail_log`. Every account from before
 it starts unconfirmed. Version 4 adds `solid` and `hatch` (default 0), so every older mark reads as
-the zigzag. Version 5 adds `food_pick` to `settings` (default 2), foods a day (K57).
+the zigzag. Version 5 adds `food_pick` to `settings` (default 2), foods a day (K57). Version 6
+adds `goals` to `settings` (default `''`), so every saved row reads as having no goals.
+
+Migrations are a list in `db.py`, and the version is its length. A step is appended, never
+inserted, and no code or test names its index: `test_db.py` finds the goals step by its text.
+When two branches each append one, the one that merges second puts its step after the other's
+and renumbers it in the paragraph above; nothing else changes.
 
 ## 3. Endpoints
 
@@ -109,25 +115,25 @@ would not stop a request from another `*.itsa-pizza.com` host, because the brows
 same-site. Bodies over 1 MiB get 413 `too-large`, counted as they stream in, so a chunked body is
 cut off at the limit rather than read whole. A body with nothing to send, such as logout's, is `{}`.
 
-| Method and path                            | Auth    | Does                                                                                           |
-| ------------------------------------------ | ------- | ---------------------------------------------------------------------------------------------- |
-| `GET /healthz`                             | no      | `SELECT 1`; `{"ok": true}`                                                                     |
-| `POST /auth/login`                         | no      | `{username, password}` → the account and the session cookie                                    |
-| `POST /auth/signup`                        | no      | `{email, password}` creates an account → the account and the cookie                            |
-| `POST /auth/logout`                        | session | ends this session and clears the cookie; 204                                                   |
-| `GET /auth/me`                             | session | the account: `{username}`, plus `confirmed` (below)                                            |
-| `GET /auth/options`                        | no      | `{mail}`: whether this API sends email (§4.1)                                                  |
-| `POST /auth/forgot`                        | no      | `{email}` → 202 `{}` for any well-formed email; a reset link goes to a matching account (§4.1) |
-| `POST /auth/confirm`                       | no      | `{token}` confirms the email → the account; 410 `gone` otherwise                               |
-| `POST /auth/confirm/resend`                | session | a new confirm link → 202 `{}`; refusals in §4.1                                                |
-| `POST /invites/lookup`                     | no      | `{token}` → `{kind, username}` for a live link; 410 `gone` otherwise                           |
-| `POST /invites/redeem`                     | no      | `{token, password}` sets the password, consumes the link, signs in                             |
-| `GET /state`                               | session | everything the client renders (below)                                                          |
-| `PUT /plans/{section}/{week}`              | session | `{items, rev}` → `{rev}`; 409 `conflict` with the server copy                                  |
-| `PUT /ticks/{section}/{week}/{item}/{day}` | session | `{mark}` → `{days}`, the week's seven marks for that item                                      |
-| `PUT /settings`                            | session | `{accent, dailyPick, foodPick}` → the stored settings; no `foodPick` keeps the saved one       |
-| `GET /export`                              | session | the export file (`architecture.md` §4)                                                         |
-| `POST /import`                             | session | an export file, merged in; → `{weeks, ticks, settings}` added                                  |
+| Method and path                            | Auth    | Does                                                                                             |
+| ------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------ |
+| `GET /healthz`                             | no      | `SELECT 1`; `{"ok": true}`                                                                       |
+| `POST /auth/login`                         | no      | `{username, password}` → the account and the session cookie                                      |
+| `POST /auth/signup`                        | no      | `{email, password}` creates an account → the account and the cookie                              |
+| `POST /auth/logout`                        | session | ends this session and clears the cookie; 204                                                     |
+| `GET /auth/me`                             | session | the account: `{username}`, plus `confirmed` (below)                                              |
+| `GET /auth/options`                        | no      | `{mail}`: whether this API sends email (§4.1)                                                    |
+| `POST /auth/forgot`                        | no      | `{email}` → 202 `{}` for any well-formed email; a reset link goes to a matching account (§4.1)   |
+| `POST /auth/confirm`                       | no      | `{token}` confirms the email → the account; 410 `gone` otherwise                                 |
+| `POST /auth/confirm/resend`                | session | a new confirm link → 202 `{}`; refusals in §4.1                                                  |
+| `POST /invites/lookup`                     | no      | `{token}` → `{kind, username}` for a live link; 410 `gone` otherwise                             |
+| `POST /invites/redeem`                     | no      | `{token, password}` sets the password, consumes the link, signs in                               |
+| `GET /state`                               | session | everything the client renders (below)                                                            |
+| `PUT /plans/{section}/{week}`              | session | `{items, rev}` → `{rev}`; 409 `conflict` with the server copy                                    |
+| `PUT /ticks/{section}/{week}/{item}/{day}` | session | `{mark}` → `{days}`, the week's seven marks for that item                                        |
+| `PUT /settings`                            | session | `{accent, dailyPick, foodPick, goals}` → the stored settings; a key left out keeps the saved one |
+| `GET /export`                              | session | the export file (`architecture.md` §4)                                                           |
+| `POST /import`                             | session | an export file, merged in; → `{weeks, ticks, settings}` added                                    |
 
 **The account** is `{username}`: the account's email (the field keeps its old name, so older
 tabs and clients work unchanged). While mail is on it also carries `confirmed`, true once the
@@ -136,7 +142,17 @@ mail is off, has no such key.
 
 `GET /state` returns `{exercise, diet, settings}`. Each section is `{plans, log, revs}`: `plans`
 and `log` have the same shape as in `localStorage` (a log row is seven marks or nulls), and `revs`
-maps each planned week to its revision. `settings` is `{accent, dailyPick, foodPick}`, or null before any are saved.
+maps each planned week to its revision. `settings` is `{accent, dailyPick, foodPick, goals}`, or
+null before any are saved.
+
+**Settings.** `accent` is any `#rrggbb`, and `dailyPick` and `foodPick` are clamped to 1–8, each
+falling back to its default. `goals` is My goals: the person's own words about what they are
+aiming for, which only Ask reads (`insights.goals`). It is trimmed of spaces, tabs and line
+breaks at its ends and cut to 1,000 characters, counted as code points (`normalise_goals`);
+blank goals are `""`. A tab still running older code sends no `foodPick` or no `goals`, and
+the saved value stays rather than resetting. Goals that aren't a string count as not sent, so
+only a string, `""` included, replaces them. The web app never sends goals it hasn't read
+(`architecture.md` §7).
 
 **Plans.** `rev` is the revision the client last saw, 0 for a week it has never seen planned.
 A matching `rev` stores the items and returns `rev + 1`. A stale `rev` gets 409 with `{items, rev}`
@@ -163,9 +179,11 @@ indexes. The client drops a refused write with a notice that the account is full
 §7), and an import says the same.
 
 **Export** writes version 4 of the file: an exercise or a food may carry `notes`, and each log
-row is seven marks, drawings included, or nulls. Import reads version 4, version 3 (no notes),
-version 2 (kinds only, which read as the zigzag) and version 1, whose `true` days read as `great`
-and `false` days as empty; any other version gets `version`.
+row is seven marks, drawings included, or nulls. Its settings carry `goals`, which took no new
+version, as `foodPick` didn't: a reader from before them drops the key, and a file without
+them reads as no goals. Import reads version 4, version 3 (no notes), version 2 (kinds only,
+which read as the zigzag) and version 1, whose `true` days read as `great` and `false` days as
+empty; any other version gets `version`.
 
 **Notes** (K43) live in a plan's items, inside `items_json`, so they took no migration. An item's
 `notes` is markdown, trimmed of spaces, tabs and line breaks at its ends and cut to 500 characters
@@ -174,9 +192,11 @@ text as written and never renders it.
 
 **Import** applies the merge rule from `architecture.md` §4: existing weeks keep their plan; per
 week, item and day a marked day keeps its mark and an empty one takes the file's; and settings
-apply only when the account has none. It returns what it added (`ticks` counts the empty days
-that gained a mark), in one transaction. A file that fails to parse gets 400 with `json`,
-`format` or `version`, the same codes the client shows.
+apply only when the account has none. My goals are the exception: the file's fill the
+account's goals when those are empty, and never replace goals already saved. It returns what
+it added (`ticks` counts the empty days that gained a mark; `settings` is true when the file
+changed the account's settings, its goals alone included), in one transaction. A file that
+fails to parse gets 400 with `json`, `format` or `version`, the same codes the client shows.
 
 ## 4. Accounts and sessions
 
@@ -357,9 +377,13 @@ differs by default:
 - A log entry keyed `__proto__` is dropped.
 - A day's mark is `great`, `partial` or `missed` exactly; a literal `true` reads as `great`, and
   anything else (`1`, `"true"`, `"GREAT"`) is empty.
+- Notes and My goals are cut in code points, as Python counts a string, so an emoji is one
+  character on both sides (`Array.from` in TypeScript).
 
 `tests/test_parity.py` runs every case in `fixtures/transfer/`, the same files the Vitest suite
-runs. A rule changed on one side without the other fails one of the two suites.
+runs. A rule changed on one side without the other fails one of the two suites. The
+`parse/goals*.json` cases hold My goals to one normaliser, and `merge-settings.json` holds the
+import's settings rule, goals filling only empty ones included.
 
 `fixtures/insights/` holds the same contract for what a week shows (§1.1). Each case gives a
 section's plans and log, a week, today and the daily target, and expects the plan week, the

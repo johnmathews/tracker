@@ -3,10 +3,12 @@ import {
   DATA_KEY,
   DEFAULT_SETTINGS,
   MARK_SETS,
+  MAX_GOALS,
   SETTINGS_KEY,
   defaultExercises,
   defaultFoods,
   migrateKeyPrefix,
+  normaliseGoals,
   normaliseWeight,
   parseDietData,
   parsePlannerData,
@@ -241,6 +243,7 @@ describe('parseSettings', () => {
       accent: '#30d158',
       dailyPick: 3,
       foodPick: 2,
+      goals: '',
       theme: 'system',
       markSet: 'squiggles',
     })
@@ -256,6 +259,7 @@ describe('parseSettings', () => {
       accent: '#bf5af2',
       dailyPick: 8,
       foodPick: 5,
+      goals: '',
       theme: 'dark',
       markSet: 'squiggles',
     })
@@ -281,6 +285,22 @@ describe('parseSettings', () => {
     }
     expect(parseSettings(JSON.stringify({ markSet: 'stars' })).markSet).toBe('squiggles')
     expect(parseSettings(JSON.stringify({ markSet: 3 })).markSet).toBe('squiggles')
+  })
+})
+
+describe('normaliseGoals', () => {
+  // The cases both languages share are in fixtures/transfer/parse/goals*.json.
+  it('trims the ends, keeps the line breaks inside, and cuts at MAX_GOALS code points', () => {
+    expect(normaliseGoals(' \n\tRun 5 km.\nFish twice a week.\n ')).toBe(
+      'Run 5 km.\nFish twice a week.',
+    )
+    const cut = normaliseGoals('🏃'.repeat(MAX_GOALS + 5))
+    expect(Array.from(cut)).toHaveLength(MAX_GOALS)
+    expect(MAX_GOALS).toBe(1000)
+  })
+
+  it('reads blank text and anything that is not a string as no goals', () => {
+    for (const v of [' \n\t ', '', null, undefined, 42, ['Run']]) expect(normaliseGoals(v)).toBe('')
   })
 })
 

@@ -14,6 +14,7 @@ import {
   clamp,
   defaultExercises,
   isRecord,
+  normaliseGoals,
   normaliseNotes,
   normaliseWeight,
   parseJson,
@@ -25,7 +26,7 @@ import {
   type Mark,
   type MarkSet,
   type PlannerData,
-  type PortableSettings,
+  type KnownSettings,
 } from '@/lib/storage'
 import * as tracker from '@/lib/tracker'
 import { durationText } from '@/lib/words'
@@ -109,8 +110,8 @@ export const usePlannerStore = defineStore('planner', () => {
   /** Monday of the real current week, whichever week is on screen. */
   const currentWeekKey = computed(() => dateKey(mondayOf(now.value, 0)))
 
-  // Plans, the log, accent and daily picks are the signed-in user's: the sync store fills them
-  // through `adopt` and saves them. Only the theme and the mark set belong to the device, and are
+  // Plans, the log, accent, daily picks and goals are the signed-in user's: the sync store fills
+  // them through `adopt` and saves them. Only the theme and the mark set belong to the device, and are
   // stored here. The accent no longer draws anything, since the marks' pens
   // are fixed (DayMark card); it is kept as it was saved, so the server and exports still agree.
   // Nothing in the app changes it now.
@@ -121,6 +122,14 @@ export const usePlannerStore = defineStore('planner', () => {
   const dailyPick = ref(DEFAULT_SETTINGS.dailyPick)
   /** Foods a day (K57). It lives here with the other settings, though the diet store's days use it. */
   const foodPick = ref(DEFAULT_SETTINGS.foodPick)
+  /** My goals, in the person's words; only Ask reads them. */
+  const goals = ref(DEFAULT_SETTINGS.goals)
+  /**
+   * Whether `goals` came from the server, a cache that carried them, or the person. Until then
+   * they are a stand-in, and are never sent or cached: a tab that hasn't read them would erase the
+   * saved ones (F1).
+   */
+  const goalsKnown = ref(false)
   const theme = ref<Theme>(parseSettings(readKey(SETTINGS_KEY)).theme)
   const markSet = ref<MarkSet>(parseSettings(readKey(SETTINGS_KEY)).markSet)
   /** Whether the user has settings of their own (from the server, a change, or an import). */
@@ -239,13 +248,20 @@ export const usePlannerStore = defineStore('planner', () => {
     if (dateKey(next) !== dateKey(now.value)) now.value = next
   }
 
-  /** Replace the user's data wholesale: from the cache, the server, or another tab. */
-  function adopt(data: PlannerData, settings: PortableSettings | null): void {
+  /**
+   * Replace the user's data wholesale: from the cache, the server, or another tab. Settings
+   * without goals (a tab from before My goals wrote them) keep the goals this tab has.
+   */
+  function adopt(data: PlannerData, settings: KnownSettings | null): void {
     plans.value = data.plans
     log.value = data.log
     accent.value = settings?.accent ?? DEFAULT_SETTINGS.accent
     dailyPick.value = settings?.dailyPick ?? DEFAULT_SETTINGS.dailyPick
     foodPick.value = settings?.foodPick ?? DEFAULT_SETTINGS.foodPick
+    if (settings?.goals !== undefined) {
+      goals.value = settings.goals
+      goalsKnown.value = true
+    }
     settingsSaved.value = settings !== null
   }
 
@@ -257,6 +273,8 @@ export const usePlannerStore = defineStore('planner', () => {
   /** Forget the user's data on sign-out; the theme stays with the device. */
   function clear(): void {
     adopt({ plans: {}, log: {} }, null)
+    goals.value = DEFAULT_SETTINGS.goals
+    goalsKnown.value = false
     configMode.value = false
     weekOffset.value = 0
   }
@@ -269,15 +287,34 @@ export const usePlannerStore = defineStore('planner', () => {
     foodPick.value = clamp(foodPick.value + delta, MIN_DAILY_PICK, MAX_DAILY_PICK)
     settingsSaved.value = true
   }
+  /**
+   * The person's goals, normalised as the API stores them. The same text again is no change, so it
+   * sends nothing. The Settings row calls it when the person stops typing, not on each key (F18).
+   */
+  function setGoals(text: string): void {
+    const next = normaliseGoals(text)
+    if (next === goals.value) return
+    goals.value = next
+    goalsKnown.value = true
+    settingsSaved.value = true
+  }
   function setTheme(next: Theme): void {
     theme.value = next
   }
 
-  /** The accent and daily picks, or null while no settings have been stored, changed or imported. */
-  function savedSettings(): PortableSettings | null {
-    return settingsSaved.value
-      ? { accent: accent.value, dailyPick: dailyPick.value, foodPick: foodPick.value }
-      : null
+  /** The settings to send and cache: the goals only once they are known. */
+  function portableSettings(): KnownSettings {
+    return {
+      accent: accent.value,
+      dailyPick: dailyPick.value,
+      foodPick: foodPick.value,
+      ...(goalsKnown.value ? { goals: goals.value } : {}),
+    }
+  }
+
+  /** `portableSettings()`, or null while no settings have been stored, changed or imported. */
+  function savedSettings(): KnownSettings | null {
+    return settingsSaved.value ? portableSettings() : null
   }
 
   // Only the theme is written to the device's settings key, merged into what is there: it is
@@ -301,6 +338,8 @@ export const usePlannerStore = defineStore('planner', () => {
     accent,
     dailyPick,
     foodPick,
+    goals,
+    goalsKnown,
     theme,
     now,
     monday,
@@ -329,7 +368,9 @@ export const usePlannerStore = defineStore('planner', () => {
     clear,
     changeDailyPick,
     changeFoodPick,
+    setGoals,
     setTheme,
+    portableSettings,
     savedSettings,
   }
 })

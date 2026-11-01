@@ -107,6 +107,7 @@ foods (with goals). Ticks live in a separate **log**, keyed by week and item id.
 | `plans`                           | the sync store: server and per-user cache | week → `{ id, name, sets?, reps, duration?, perSide?, weight?, target, notes? }[]` |
 | `log`                             | the sync store: server and per-user cache | week Monday `YYYY-MM-DD` → exercise id → seven marks (`Days`, below)               |
 | `accent`, `dailyPick`, `foodPick` | the sync store: server and per-user cache | defaults `#30d158`, `3` and `2`. The accent is kept but draws nothing (K13)        |
+| `goals`, `goalsKnown`             | the sync store: server and per-user cache | My goals, `''` by default; only Ask reads them. `goalsKnown` is below              |
 | `theme`                           | `tracker-settings-v1` (the device)        | `system` (default), `light` or `dark`                                              |
 | `markSet`                         | `tracker-settings-v1` (the device)        | `squiggles` (default), `ticks`, `stamped-ticks`, `faces`, `stamped-faces`          |
 | `configMode`                      | no                                        | `false` (normal mode) on every load                                                |
@@ -128,10 +129,19 @@ names one), `updateExercise` (replaces name, sets, reps or duration, per-side, w
 given, the goal, keeping the id and history; `false` for an empty name or an id not in the week).
 An exercise counts reps or time, never both: a duration stores reps as 0. Then `removeExercise`, `setConfigMode`,
 `prevWeek`, `nextWeek`, `thisWeek`, `refreshNow`, `changeDailyPick` and `changeFoodPick` (each
-clamps 1–8), `setTheme`, `savedSettings` (the accent and both daily picks, or null while the user
-has none of their own), `adopt`
+clamps 1–8), `setGoals` (normalised as the API stores them; the same text again changes
+nothing), `setTheme`, `portableSettings` (the accent, both daily picks and, once known, the
+goals), `savedSettings` (the same, or null while the user has none of their own), `adopt`
 (replace the data and settings wholesale), `adoptWeek` (replace one week's plan) and `clear` (forget
-the user on sign-out, keeping the theme). The module also exports `exerciseDetails`, which gives the chips after a name, on its line (K43):
+the user on sign-out, keeping the theme).
+
+**My goals** are the person's own words about what they are aiming for, set in Settings and read
+only by Ask. `goalsKnown` turns true once the goals came from the server, from a cache that
+carried them, or from `setGoals`. Until then `portableSettings` leaves them out, so a tab that
+hasn't read them never sends or caches a stand-in `''` that would erase the saved ones (§7).
+Settings that `adopt` receives without `goals` keep the ones the store has. `setGoals` doesn't
+debounce: the Settings row commits its draft when the person stops typing, so one change is one
+write. The module also exports `exerciseDetails`, which gives the chips after a name, on its line (K43):
 "3 × 12" or "3 × 8 each side" (or "10 reps a set" and "8 each side" without sets, "3 sets" without
 reps), "3 × 45 s" or "1 min 30 s each side" for a timed exercise (`durationText` in
 `src/lib/words.ts`), then "16 kg" when weighted, and no chip at all for none of these (the Chip
@@ -231,8 +241,9 @@ v2; now the conversion only feeds the import.
 Fish 2, Nuts 3).
 
 `parseSettings` accepts any `#rrggbb` accent (K3a, K13), clamps the daily pick to
-1–8, accepts only `system`, `light` or `dark` as the theme and only one of `MARK_SETS` as the
-mark set, falling back to the defaults otherwise. Settings saved before the theme option existed
+1–8, reads My goals with `normaliseGoals` (trimmed, cut to 1,000 code points, `''` when blank or
+not a string), accepts only `system`, `light` or `dark` as the theme and only one of `MARK_SETS`
+as the mark set, falling back to the defaults otherwise. Settings saved before the theme option existed
 load as `system`, and before the mark set existed as `squiggles`.
 
 **Export and import.** Settings → Export downloads `tracker-YYYY-MM-DD.json`:
@@ -244,14 +255,15 @@ load as `system`, and before the mark set existed as `squiggles`.
   "exportedAt": "2026-10-24T09:30:00.000Z",
   "exercise": { "plans": {}, "log": {} },
   "diet": { "plans": {}, "log": {} },
-  "settings": { "accent": "#30d158", "dailyPick": 3, "foodPick": 2 }
+  "settings": { "accent": "#30d158", "dailyPick": 3, "foodPick": 2, "goals": "" }
 }
 ```
 
 The theme is not exported, because it belongs to the device rather than the person. Import… reads a
 file through `parseExport` (`src/lib/transfer.ts`), which rejects anything that is not JSON, has
 another `format`, or has a `version` other than 1 to 4 (a version 1 file's `true` days read as
-`"great"`, K12; version 4 added notes, K43). Files exported under the earlier names carry
+`"great"`, K12; version 4 added notes, K43). My goals came later without a new version, as
+`foodPick` did: an older reader drops the key, and a file without it reads as no goals. Files exported under the earlier names carry
 `"format": "fitness-planner-export"` or `"exercise-planner-export"` and import the same way
 (`OLD_EXPORT_FORMATS`, in both languages). It validates the rest with the same normalisers
 as storage, so a hand-edited file loads the way a hand-edited `localStorage` value would. Missing
@@ -264,6 +276,8 @@ applies the same rules):
 - Per week, item and day, a marked day keeps its mark and an empty one takes the file's, so an
   import can add marks but never clears or changes one.
 - The file's accent and daily pick apply only when the account has no settings of their own yet.
+- The file's My goals fill the account's when those are empty, and never replace goals already
+  saved (F17).
 
 Confirming sends the file to `POST /api/import` (`sync.importFile`): the server merges it against
 the account's real state in one transaction, and the app then reads the account afresh (after any
@@ -584,7 +598,8 @@ in the outbox:
 - `tick`: one day of one item and its mark (or `null`), `PUT /api/ticks/…` with `{ "mark": … }`,
   so devices marking different days never collide. An outbox saved before marks had kinds holds
   `done` instead; it is read as `"great"` or `null` on load;
-- `settings`: the accent and daily pick.
+- `settings`: the accent, both daily picks and My goals, sent as one `PUT /api/settings`. The
+  goals go only when `goalsKnown`; a body without them keeps the saved ones on the server.
 
 A newer operation for the same plan, cell or settings replaces a queued one. Each carries an id, so
 the reply to one already in flight removes only that one. Plan and settings operations read their
@@ -616,8 +631,15 @@ write to it arrives as a `storage` event, and this tab adopts it as both its sta
 that tab's own writes are already in the shared outbox. Adopting it also counts as a local change,
 so a read this tab already had in flight cannot overwrite it. Adopting never writes the cache back:
 a tab still open on older code words the cache differently (before K57 its settings had no
-`foodPick`), and a write-back would set the two tabs echoing it between them, each undoing the
-other's marks as they were made. The cache is validated with the
+`foodPick`, and before My goals no `goals`), and a write-back would set the two tabs echoing it
+between them, each undoing the other's marks as they were made.
+
+**My goals and older tabs (F1).** A tab from before My goals neither reads nor sends them. Three
+rules keep its writes from erasing them. The API keeps the saved goals when a settings write
+leaves them out. `normaliseState` keeps `goals` only when a cache or reply carries them as text,
+so adopting that tab's cache keeps the goals this tab has. And a tab that has never read them
+(it started from that tab's cache, offline) sends and caches settings without them until a
+read brings them. The diff compares the goals, so an edit to them is sent. The cache is validated with the
 storage normalisers when read, and outbox entries one by one, so a damaged key cannot break the app
 or stick the outbox. A plan write for a week the stores no longer hold is dropped rather than sent
 as an empty plan.

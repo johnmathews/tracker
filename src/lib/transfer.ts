@@ -34,7 +34,8 @@ export const OLD_EXPORT_FORMATS: readonly unknown[] = [
  * Version 4 files may carry a note on an exercise or a food (K43). Version 3 files carry a mark
  * per day with its drawing (`great`, `partial-solid`, `missed-hatch` … or null). Version 2 files
  * carry the kinds alone, which read as the zigzag; version 1 files a `true` per done day, which
- * reads as `great`. All four import.
+ * reads as `great`. All four import. Settings may carry My goals (`goals`) with no new version, as
+ * `foodPick` came: a reader from before them drops the key, and a file without them reads as none.
  */
 export const EXPORT_VERSION = 4
 const READ_VERSIONS: readonly unknown[] = [1, 2, 3, EXPORT_VERSION]
@@ -76,6 +77,7 @@ export function buildExport(input: {
       accent: input.settings.accent,
       dailyPick: input.settings.dailyPick,
       foodPick: input.settings.foodPick,
+      goals: input.settings.goals,
     },
   }
 }
@@ -158,12 +160,18 @@ export function mergeSummary<T>(
   return { weeks, ticks }
 }
 
-/** Saved settings win; the file's apply only where none are saved (`existing` null). */
+/**
+ * Saved settings win; the file's apply only where none are saved (`existing` null). The one
+ * exception is My goals: the file's fill saved goals that are empty, and never replace ones that
+ * aren't (F17). The API's `merge_settings` does the same.
+ */
 export function mergeSettings(
   existing: PortableSettings | null,
   incoming: PortableSettings | null,
 ): PortableSettings | null {
-  return existing ?? incoming
+  if (!existing) return incoming
+  if (!existing.goals && incoming?.goals) return { ...existing, goals: incoming.goals }
+  return existing
 }
 
 export function exportFilename(now: Date): string {

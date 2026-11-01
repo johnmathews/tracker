@@ -86,7 +86,12 @@ def test_fills_three_weeks_ending_today_with_every_kind_and_drawing(
     }
     assert {"great", "partial", "missed", "great-solid", "great-hatch"} <= marks
     assert result["ticks"] > 40
-    assert exported["settings"] == {"accent": "#30d158", "dailyPick": 3, "foodPick": 2}
+    assert exported["settings"] == {
+        "accent": "#30d158",
+        "dailyPick": 3,
+        "foodPick": 2,
+        "goals": "",
+    }
 
 
 def test_leaves_the_days_after_today_empty(local: Config, conn: sqlite3.Connection) -> None:

@@ -94,7 +94,7 @@ describe('buildExport', () => {
     const file = buildExport({
       exercise,
       diet: { plans: {}, log: {} },
-      settings: { accent: '#0a84ff', dailyPick: 4, foodPick: 3 },
+      settings: { accent: '#0a84ff', dailyPick: 4, foodPick: 3, goals: 'Run 5 km.' },
       now: new Date('2026-10-24T09:30:00.000Z'),
     })
     expect(file).toEqual({
@@ -103,11 +103,11 @@ describe('buildExport', () => {
       exportedAt: '2026-10-24T09:30:00.000Z',
       exercise,
       diet: { plans: {}, log: {} },
-      settings: { accent: '#0a84ff', dailyPick: 4, foodPick: 3 },
+      settings: { accent: '#0a84ff', dailyPick: 4, foodPick: 3, goals: 'Run 5 km.' },
     })
   })
 
-  it('round-trips through parseExport', () => {
+  it('round-trips through parseExport, My goals included', () => {
     const data = {
       exercise: {
         plans: { '2026-10-19': [{ id: 'sq', name: 'Squats', sets: 3, reps: 15, target: 4 }] },
@@ -117,7 +117,7 @@ describe('buildExport', () => {
         plans: { '2026-10-19': [{ id: 'veg', name: 'Vegetables', target: 7 }] },
         log: {},
       },
-      settings: { accent: '#bf5af2', dailyPick: 2, foodPick: 2 },
+      settings: { accent: '#bf5af2', dailyPick: 2, foodPick: 2, goals: 'Fish twice a week.' },
     } satisfies ExportData
     expect(parseExport(JSON.stringify(buildExport(data)))).toEqual({ ok: true, data })
   })
@@ -150,7 +150,7 @@ describe('downloadExport', () => {
     const file = buildExport({
       exercise: { plans: {}, log: {} },
       diet: { plans: {}, log: {} },
-      settings: { accent: '#30d158', dailyPick: 3, foodPick: 2 },
+      settings: { accent: '#30d158', dailyPick: 3, foodPick: 2, goals: '' },
     })
     downloadExport(file, new Date(2026, 9, 24))
     expect(click).toHaveBeenCalledOnce()

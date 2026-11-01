@@ -5,12 +5,12 @@
  * reset requests. Controls let a test go offline, fail
  * a request, or hold replies back to provoke races.
  */
-import type { Days } from '@/lib/storage'
-import { mergeSummary, parseExport } from '@/lib/transfer'
+import { normaliseGoals, type Days } from '@/lib/storage'
+import { mergeSettings, mergeSummary, parseExport } from '@/lib/transfer'
 
 type Section = 'exercise' | 'diet'
 type Plan = { items: unknown[]; rev: number }
-type Settings = { accent: string; dailyPick: number; foodPick: number }
+type Settings = { accent: string; dailyPick: number; foodPick: number; goals: string }
 
 export type Account = {
   password: string
@@ -249,6 +249,9 @@ export class FakeApi {
         dailyPick: Number(body.dailyPick),
         // As the API: a client that sends none keeps the saved one (K57).
         foodPick: Number(body.foodPick ?? a.settings?.foodPick ?? 2),
+        // As the API: goals that aren't a string are not sent, so the saved ones stay (F1).
+        goals:
+          typeof body.goals === 'string' ? normaliseGoals(body.goals) : (a.settings?.goals ?? ''),
       }
       return Response.json(a.settings)
     }
@@ -281,7 +284,7 @@ export class FakeApi {
     return error(404, 'not-found')
   }
 
-  /** The API's merge: existing weeks keep their plan and marks, settings only if none. */
+  /** The API's merge: existing weeks keep their plan and marks, settings only if none (goals aside). */
   private import(a: Account, body: unknown): Response {
     const parsed = parseExport(JSON.stringify(body))
     if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 })
@@ -310,8 +313,10 @@ export class FakeApi {
         }
       }
     }
-    const settings = parsed.data.settings !== null && a.settings === null
-    if (settings) a.settings = parsed.data.settings
+    // As the API: saved settings stay, but the file's goals fill empty ones (F17).
+    const merged = mergeSettings(a.settings, parsed.data.settings)
+    const settings = JSON.stringify(merged) !== JSON.stringify(a.settings)
+    a.settings = merged
     return Response.json({ weeks, ticks, settings })
   }
 }

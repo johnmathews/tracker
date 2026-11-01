@@ -53,7 +53,7 @@
         "plans": { "2026-10-19": [{ "id": "f", "name": "F", "target": 0 }] },
         "log": {}
       },
-      "settings": { "accent": "#30d158", "dailyPick": 8, "foodPick": 8 }
+      "settings": { "accent": "#30d158", "dailyPick": 8, "foodPick": 8, "goals": "" }
     }
   }
 }

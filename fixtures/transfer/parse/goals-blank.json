@@ -1,0 +1,32 @@
+{
+  "description": "Goals of nothing but spaces, tabs and line breaks are no goals.",
+  "input": {
+    "format": "tracker-export",
+    "version": 4,
+    "settings": {
+      "accent": "#0a84ff",
+      "dailyPick": 4,
+      "foodPick": 3,
+      "goals": " \n\t "
+    }
+  },
+  "expected": {
+    "ok": true,
+    "data": {
+      "exercise": {
+        "plans": {},
+        "log": {}
+      },
+      "diet": {
+        "plans": {},
+        "log": {}
+      },
+      "settings": {
+        "accent": "#0a84ff",
+        "dailyPick": 4,
+        "foodPick": 3,
+        "goals": ""
+      }
+    }
+  }
+}

@@ -15,6 +15,7 @@ import {
   writeKey,
   type Exercise,
   type Food,
+  type KnownSettings,
   type Log,
   type Mark,
   type PortableSettings,
@@ -67,7 +68,7 @@ type Revs = Record<Section, Record<string, number>>
 export type SyncState = {
   exercise: { plans: Plans<Exercise>; log: Log; revs: Record<string, number> }
   diet: { plans: Plans<Food>; log: Log; revs: Record<string, number> }
-  settings: PortableSettings | null
+  settings: KnownSettings | null
 }
 type Snapshot = { exercise: Tracked; diet: Tracked; settings: PortableSettings }
 /** What `POST /api/import` added. */
@@ -154,8 +155,17 @@ export function normaliseState(v: unknown): SyncState | null {
       log: normaliseLog(diet.log),
       revs: revsOf(diet.revs),
     },
-    settings: isRecord(v.settings) ? normalisePortableSettings(v.settings) : null,
+    settings: isRecord(v.settings) ? knownSettings(v.settings) : null,
   }
+}
+
+/**
+ * Settings as a cache or the API words them. Goals are kept only when they are there: a tab from
+ * before My goals writes none, and reading that as "no goals" would erase them (F1).
+ */
+function knownSettings(v: Record<string, unknown>): KnownSettings {
+  const { goals, ...rest } = normalisePortableSettings(v)
+  return typeof v.goals === 'string' ? { ...rest, goals } : rest
 }
 
 /** The operations that take the server from `base` to `local`. */
@@ -184,7 +194,12 @@ export function diff(base: Snapshot, local: Snapshot): Op[] {
   }
   const { settings: bs } = base
   const { settings: ls } = local
-  if (bs.accent !== ls.accent || bs.dailyPick !== ls.dailyPick || bs.foodPick !== ls.foodPick) {
+  if (
+    bs.accent !== ls.accent ||
+    bs.dailyPick !== ls.dailyPick ||
+    bs.foodPick !== ls.foodPick ||
+    bs.goals !== ls.goals
+  ) {
     ops.push({ kind: 'settings' })
   }
   return ops
@@ -231,6 +246,7 @@ export const useSyncStore = defineStore('sync', () => {
         accent: planner.accent,
         dailyPick: planner.dailyPick,
         foodPick: planner.foodPick,
+        goals: planner.goals,
       },
     })
   }
@@ -361,11 +377,9 @@ export const useSyncStore = defineStore('sync', () => {
       if (res.ok) return 'done'
       error = res.error
     } else {
-      const res = await call('PUT', '/settings', {
-        accent: planner.accent,
-        dailyPick: planner.dailyPick,
-        foodPick: planner.foodPick,
-      })
+      // Goals only once this tab has read them or the person set them: an absent key keeps the
+      // saved ones on the server (F1).
+      const res = await call('PUT', '/settings', planner.portableSettings())
       if (gen !== generation) return 'stop'
       if (res.ok) return 'done'
       error = res.error
@@ -526,6 +540,7 @@ export const useSyncStore = defineStore('sync', () => {
         planner.accent,
         planner.dailyPick,
         planner.foodPick,
+        planner.goals,
       ],
       capture,
       { deep: true },

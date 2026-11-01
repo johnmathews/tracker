@@ -34,7 +34,7 @@ describe('readLegacyData', () => {
     expect(readLegacyData(WEEK)).toEqual({
       exercise,
       diet,
-      settings: { accent: '#0a84ff', dailyPick: 5, foodPick: 2 },
+      settings: { accent: '#0a84ff', dailyPick: 5, foodPick: 2, goals: '' },
     })
   })
 
@@ -76,7 +76,7 @@ describe('readLegacyData', () => {
     expect(readLegacyData(WEEK)).toEqual({
       exercise: { plans: {}, log: {} },
       diet: { plans: {}, log: {} },
-      settings: { accent: '#bf5af2', dailyPick: 2, foodPick: 2 },
+      settings: { accent: '#bf5af2', dailyPick: 2, foodPick: 2, goals: '' },
     })
   })
 

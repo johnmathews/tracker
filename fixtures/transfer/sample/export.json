@@ -130,5 +130,10 @@
       }
     }
   },
-  "settings": { "accent": "#0a84ff", "dailyPick": 4, "foodPick": 3 }
+  "settings": {
+    "accent": "#0a84ff",
+    "dailyPick": 4,
+    "foodPick": 3,
+    "goals": "Run 5 km without stopping by March.\nFish twice a week."
+  }
 }

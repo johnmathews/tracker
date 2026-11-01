@@ -21,7 +21,8 @@ OLD_EXPORT_FORMATS = ("fitness-planner-export", "exercise-planner-export")
 #: Version 4 files may carry a note on an exercise or a food (K43). Version 3 files carry a mark
 #: per day with its drawing (`great`, `partial-solid`, `missed-hatch` … or null). Version 2 files
 #: carry the kinds alone, which read as the zigzag; version 1 files a `true` per done day, which
-#: reads as `great`. All four import.
+#: reads as `great`. All four import. Settings may carry My goals (`goals`) with no new version, as
+#: `foodPick` came: a reader from before them drops the key, and a file without them reads as none.
 EXPORT_VERSION = 4
 READ_VERSIONS = (1, 2, 3, EXPORT_VERSION)
 
@@ -34,6 +35,8 @@ MAX_SETS = 20
 MAX_DURATION = 3600
 #: A note's length, in characters.
 MAX_NOTES = 500
+#: My goals' length, in characters (code points).
+MAX_GOALS = 1000
 DEFAULT_ACCENT = "#30d158"
 DEFAULT_DAILY_PICK = 3
 #: Foods a day (K57), in the same bounds as the daily pick.
@@ -93,6 +96,8 @@ class Portable(TypedDict):
     accent: str
     dailyPick: int
     foodPick: int
+    #: My goals, in the person's words; "" when there are none.
+    goals: str
 
 
 class ExportData(TypedDict):
@@ -164,10 +169,21 @@ def normalise_notes(v: object) -> str | None:
     """A usable note: a string with spaces, tabs and line breaks trimmed from its ends, cut to
     MAX_NOTES characters; None for anything else or for nothing left. The web app's
     `normaliseNotes` does the same."""
+    return _cut_text(v, MAX_NOTES) or None
+
+
+def normalise_goals(v: object) -> str:
+    """My goals, trimmed and cut as a note is but to MAX_GOALS characters; "" for anything that
+    isn't a string or for nothing left. The web app's `normaliseGoals` does the same."""
+    return _cut_text(v, MAX_GOALS)
+
+
+def _cut_text(v: object, limit: int) -> str:
+    """A string trimmed of spaces, tabs and line breaks at its ends and cut to `limit` code
+    points; "" for anything that isn't a string."""
     if not isinstance(v, str):
-        return None
-    notes = v.strip(" \t\n\r")[:MAX_NOTES].strip(" \t\n\r")
-    return notes or None
+        return ""
+    return v.strip(" \t\n\r")[:limit].strip(" \t\n\r")
 
 
 def normalise_exercise(v: object) -> Item | None:
@@ -280,6 +296,7 @@ def normalise_portable(v: dict[str, Any]) -> Portable:
         "foodPick": clamp(
             to_int(v.get("foodPick"), DEFAULT_FOOD_PICK), MIN_DAILY_PICK, MAX_DAILY_PICK
         ),
+        "goals": normalise_goals(v.get("goals")),
     }
 
 
@@ -363,8 +380,13 @@ def merge_summary(existing: Tracked, incoming: Tracked) -> Summary:
 
 
 def merge_settings(existing: Portable | None, incoming: Portable | None) -> Portable | None:
-    """Saved settings win; the file's apply only where none are saved."""
-    return existing if existing is not None else incoming
+    """Saved settings win; the file's apply only where none are saved. The one exception is My
+    goals: the file's fill saved goals that are empty, and never replace ones that aren't."""
+    if existing is None:
+        return incoming
+    if not existing["goals"] and incoming is not None and incoming["goals"]:
+        return {**existing, "goals": incoming["goals"]}
+    return existing
 
 
 type Masks = tuple[int, int, int, int, int]

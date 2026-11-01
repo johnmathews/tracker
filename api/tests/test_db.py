@@ -31,7 +31,7 @@ def test_marks_migration_reads_existing_ticks_as_great(
     c.execute("INSERT INTO ticks VALUES (1, 'exercise', '2026-10-19', 'sq', 0)")
     monkeypatch.undo()
     db.migrate(c)
-    assert c.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION == 5
+    assert c.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
     rows = [
         tuple(r)
         for r in c.execute("SELECT item_id, days, partial, missed, solid, hatch FROM ticks")
@@ -43,6 +43,31 @@ def test_marks_migration_reads_existing_ticks_as_great(
             "sq": [None] * 7,
         }
     }
+    c.close()
+
+
+def test_goals_migration_gives_saved_settings_none(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Settings saved before My goals keep every value, and read as having no goals."""
+    from tracker_api import db
+    from tracker_api.data import load_settings
+
+    c = connect(tmp_path / "f.db")
+    # Found by its text, not its index, so a rebase that renumbers it needs no edit here.
+    before = next(i for i, m in enumerate(db.MIGRATIONS) if "ADD COLUMN goals" in m)
+    monkeypatch.setattr(db, "MIGRATIONS", db.MIGRATIONS[:before])
+    db.migrate(c)
+    c.execute("INSERT INTO users (id, username, password_hash, created_at) VALUES (1, 'a', 'h', 0)")
+    c.execute(
+        "INSERT INTO settings (user_id, accent, daily_pick, food_pick) VALUES (1, '#0a84ff', 5, 4)"
+    )
+    monkeypatch.undo()
+    db.migrate(c)
+    assert c.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
+    assert load_settings(c, 1) == {"accent": "#0a84ff", "dailyPick": 5, "foodPick": 4, "goals": ""}
+    with pytest.raises(sqlite3.IntegrityError):
+        c.execute("UPDATE settings SET goals = NULL")
     c.close()
 
 
@@ -58,7 +83,7 @@ def test_deleting_a_user_cascades_to_their_rows(conn: sqlite3.Connection) -> Non
     conn.execute(
         "INSERT INTO users (id, username, password_hash, created_at) VALUES (1, 'a', 'h', 0)"
     )
-    conn.execute("INSERT INTO settings VALUES (1, '#30d158', 3, 2)")
+    conn.execute("INSERT INTO settings (user_id, accent, daily_pick) VALUES (1, '#30d158', 3)")
     conn.execute("INSERT INTO plans VALUES (1, 'exercise', '2026-10-19', '[]', 1)")
     conn.execute("INSERT INTO ticks VALUES (1, 'diet', '2026-10-19', 'veg', 5, 0, 0, 0, 0)")
     conn.execute("INSERT INTO sessions VALUES ('t', 1, 0, 0, 0)")

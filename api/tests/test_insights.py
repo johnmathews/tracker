@@ -434,7 +434,7 @@ def test_goals(conn: sqlite3.Connection) -> None:
             "log": {},
         },
         diet={"plans": {"2026-10-26": [{"id": "fish", "name": "Fish", "target": 2}]}, "log": {}},
-        settings={"dailyPick": 4, "foodPick": 3},
+        settings={"dailyPick": 4, "foodPick": 3, "goals": " Run 5 km by March.\n"},
     )
     assert insights.goals(conn, uid, TODAY) == {
         "week": "2026-10-26",
@@ -442,8 +442,13 @@ def test_goals(conn: sqlite3.Connection) -> None:
         "diet": [{"id": "fish", "name": "Fish", "target": 2, "notes": ""}],
         "exercises_a_day": 4,
         "foods_a_day": 3,
-        "note": "",
+        "note": "Run 5 km by March.",
     }
+
+
+def test_goals_without_settings_have_an_empty_note(conn: sqlite3.Connection) -> None:
+    uid = add_user(conn)
+    assert insights.goals(conn, uid, TODAY)["note"] == ""
 
 
 def test_consistency(conn: sqlite3.Connection) -> None:

@@ -47,8 +47,9 @@
   and the top of Food leads to the other. Held upright, a phone or an iPad folds the week: each row's name
   above its seven boxes. A day that reaches its daily target turns green.
 - **Settings** is a page of its own. It sets how marks are drawn (Squiggles, Ticks, Stamped ticks,
-  Faces or Stamped faces) and the theme (System, Light or Dark), holds export and import, and
-  shows who is signed in, with **Sign out**.
+  Faces or Stamped faces) and the theme (System, Light or Dark), keeps **Your goals** (what you
+  are aiming for, in your own words, which only Ask reads), holds export and import, and shows who
+  is signed in, with **Sign out**.
 - **Accounts and sync.** Anyone can **Create an account** from the sign-in screen with an email and
   a password, or be invited by a link that names their email. Every account signs in with its email. Sign-up
   closes once `MAX_USERS` accounts exist (`docs/api.md` §4), and each account may store 5 MiB

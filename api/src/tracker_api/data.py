@@ -21,6 +21,7 @@ from .validate import (
     Tracked,
     days_to_masks,
     masks_to_days,
+    merge_settings,
     merge_summary,
     normalise_items,
     normalise_portable,
@@ -90,11 +91,16 @@ def load_tracked(conn: sqlite3.Connection, user_id: int, section: Section) -> Tr
 
 def load_settings(conn: sqlite3.Connection, user_id: int) -> Portable | None:
     row = conn.execute(
-        "SELECT accent, daily_pick, food_pick FROM settings WHERE user_id = ?", (user_id,)
+        "SELECT accent, daily_pick, food_pick, goals FROM settings WHERE user_id = ?", (user_id,)
     ).fetchone()
     if row is None:
         return None
-    return {"accent": row["accent"], "dailyPick": row["daily_pick"], "foodPick": row["food_pick"]}
+    return {
+        "accent": row["accent"],
+        "dailyPick": row["daily_pick"],
+        "foodPick": row["food_pick"],
+        "goals": row["goals"],
+    }
 
 
 def state(conn: sqlite3.Connection, user_id: int) -> dict[str, Any]:
@@ -213,16 +219,29 @@ def set_tick(
 
 
 def put_settings(conn: sqlite3.Connection, user_id: int, raw: dict[str, Any]) -> Portable:
-    # A tab still running the app from before foods a day (K57) sends no foodPick; keep the
-    # saved one rather than reset it to the default.
-    if "foodPick" not in raw and (saved := load_settings(conn, user_id)) is not None:
-        raw = {**raw, "foodPick": saved["foodPick"]}
+    # A tab still running the app from before foods a day (K57) sends no foodPick, and one from
+    # before My goals sends no goals; keep the saved ones rather than reset them. Goals that
+    # aren't a string count as not sent, and a tab never sends goals it hasn't read (F1).
+    saved = load_settings(conn, user_id)
+    if saved is not None:
+        if "foodPick" not in raw:
+            raw = {**raw, "foodPick": saved["foodPick"]}
+        if not isinstance(raw.get("goals"), str):
+            raw = {**raw, "goals": saved["goals"]}
     settings = normalise_portable(raw)
     conn.execute(
-        "INSERT INTO settings (user_id, accent, daily_pick, food_pick) VALUES (?, ?, ?, ?)"
+        "INSERT INTO settings (user_id, accent, daily_pick, food_pick, goals)"
+        " VALUES (?, ?, ?, ?, ?)"
         " ON CONFLICT (user_id) DO UPDATE SET accent = excluded.accent,"
-        " daily_pick = excluded.daily_pick, food_pick = excluded.food_pick",
-        (user_id, settings["accent"], settings["dailyPick"], settings["foodPick"]),
+        " daily_pick = excluded.daily_pick, food_pick = excluded.food_pick,"
+        " goals = excluded.goals",
+        (
+            user_id,
+            settings["accent"],
+            settings["dailyPick"],
+            settings["foodPick"],
+            settings["goals"],
+        ),
     )
     return settings
 
@@ -278,9 +297,12 @@ def import_data(
                         " hatch = hatch | (excluded.hatch & ~days)",
                         (user_id, section, week, item_id, *days_to_masks(days)),
                     )
+        # Saved settings stay, but the file's goals fill empty ones (merge_settings).
+        saved = load_settings(conn, user_id)
+        merged = merge_settings(saved, data["settings"])
         applied = False
-        if data["settings"] is not None and load_settings(conn, user_id) is None:
-            put_settings(conn, user_id, dict(data["settings"]))
+        if merged is not None and merged != saved:
+            put_settings(conn, user_id, dict(merged))
             applied = True
         # Raising inside the transaction rolls the whole merge back.
         _check_growth(before, usage(conn, user_id), quota)

@@ -449,8 +449,7 @@ def goals(conn: sqlite3.Connection, user_id: int, today: date) -> Goals:
         "diet": cast(list[GoalItem], shown["diet"]),
         "exercises_a_day": _daily_target(settings, "exercise"),
         "foods_a_day": _daily_target(settings, "diet"),
-        # The "My goals" field doesn't exist yet; W3 of the /ask plan adds it.
-        "note": "",
+        "note": "" if settings is None else settings["goals"],
     }
 
 

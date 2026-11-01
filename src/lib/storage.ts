@@ -85,6 +85,8 @@ export type Settings = {
   dailyPick: number
   /** Foods a day (K57): a day whose food marks reach it turns green. */
   foodPick: number
+  /** My goals: the person's own words about what they are aiming for; only Ask reads them. */
+  goals: string
   theme: Theme
   /** How marked days are drawn; the device's choice. */
   markSet: MarkSet
@@ -114,11 +116,14 @@ export const MAX_DURATION = 3600
 export const NEW_FOOD_TARGET = 3
 /** A note's length, in characters (code points, as Python counts them). */
 export const MAX_NOTES = 500
+/** My goals' length, in characters (code points, as Python counts them). */
+export const MAX_GOALS = 1000
 
 export const DEFAULT_SETTINGS: Settings = {
   accent: '#30d158',
   dailyPick: 3,
   foodPick: 2,
+  goals: '',
   theme: 'system',
   markSet: 'squiggles',
 }
@@ -177,10 +182,22 @@ export function normaliseWeight(v: unknown): number | undefined {
  * `normalise_notes` does the same (the shared fixtures hold both to it).
  */
 export function normaliseNotes(v: unknown): string | undefined {
-  if (typeof v !== 'string') return undefined
+  return cutText(v, MAX_NOTES) || undefined
+}
+
+/**
+ * My goals, trimmed and cut as a note is but to MAX_GOALS characters; '' for anything that isn't
+ * a string or for nothing left. The API's `normalise_goals` does the same.
+ */
+export function normaliseGoals(v: unknown): string {
+  return cutText(v, MAX_GOALS)
+}
+
+/** A string trimmed of spaces, tabs and line breaks at its ends and cut to `max` code points. */
+function cutText(v: unknown, max: number): string {
+  if (typeof v !== 'string') return ''
   const trim = (s: string) => s.replace(/^[ \t\n\r]+|[ \t\n\r]+$/g, '')
-  const notes = trim(Array.from(trim(v)).slice(0, MAX_NOTES).join(''))
-  return notes || undefined
+  return trim(Array.from(trim(v)).slice(0, max).join(''))
 }
 
 export function normaliseExercise(v: unknown): Exercise | null {
@@ -299,10 +316,19 @@ export function parseDietData(
 }
 
 /** The settings that belong to the person rather than the device: not the theme, totals or marks. */
-export type PortableSettings = Pick<Settings, 'accent' | 'dailyPick' | 'foodPick'>
+export type PortableSettings = Pick<Settings, 'accent' | 'dailyPick' | 'foodPick' | 'goals'>
 
-/** Any `#rrggbb` accent, and daily picks for exercises and foods clamped to 1–8, each falling back
- * to its default. */
+/**
+ * Portable settings as a tab or its cache knows them. `goals` is absent when the tab hasn't read
+ * them from the server or had them from the person: a cache written by a tab from before My goals
+ * has none, and sending a stand-in would erase the saved ones (F1).
+ */
+export type KnownSettings = Omit<PortableSettings, 'goals'> & { goals?: string }
+
+/**
+ * Any `#rrggbb` accent, daily picks for exercises and foods clamped to 1–8, each falling back to
+ * its default, and My goals as `normaliseGoals` reads them.
+ */
 export function normalisePortableSettings(v: Record<string, unknown>): PortableSettings {
   const accent =
     typeof v.accent === 'string' && /^#[0-9a-f]{6}$/i.test(v.accent)
@@ -318,7 +344,7 @@ export function normalisePortableSettings(v: Record<string, unknown>): PortableS
     MIN_DAILY_PICK,
     MAX_DAILY_PICK,
   )
-  return { accent, dailyPick, foodPick }
+  return { accent, dailyPick, foodPick, goals: normaliseGoals(v.goals) }
 }
 
 export function parseSettings(raw: string | null): Settings {

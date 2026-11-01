@@ -110,6 +110,11 @@ MIGRATIONS = [
     """
     ALTER TABLE settings ADD COLUMN food_pick INTEGER NOT NULL DEFAULT 2;
     """,
+    # My goals: the person's own words about what they are aiming for, which only Ask reads.
+    # Saved settings start with none.
+    """
+    ALTER TABLE settings ADD COLUMN goals TEXT NOT NULL DEFAULT '';
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

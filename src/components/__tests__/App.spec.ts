@@ -494,7 +494,7 @@ describe('the Settings page', () => {
   }
 
   it('keeps a saved accent as it is, though nothing shows it any more', async () => {
-    mountWithSettings({ accent: '#ff9f0a', dailyPick: 3, foodPick: 2 })
+    mountWithSettings({ accent: '#ff9f0a', dailyPick: 3, foodPick: 2, goals: '' })
     await wrapper.get('[data-testid="edit-plan-button"]').trigger('click')
     await wrapper.get('button[aria-label="More exercises a day"]').trigger('click')
     await settle()
@@ -503,6 +503,7 @@ describe('the Settings page', () => {
       accent: '#ff9f0a',
       dailyPick: 4,
       foodPick: 2,
+      goals: '',
     })
     expect(document.documentElement.style.getPropertyValue('--user-pen-light')).toBe('')
   })
@@ -780,13 +781,14 @@ describe('export and import with the sample data', () => {
   const exercise = storage['tracker-v2'] as Tracked
   const diet = storage['tracker-diet-v2'] as Tracked
   const { accent, dailyPick, foodPick } = storage['tracker-settings-v1'] as PortableSettings
+  const { goals } = sample.settings as PortableSettings
 
   /** The sample as alice's cache: the same data, as the sync store keeps it. */
   function sampleCache(): SyncState {
     return {
       exercise: { ...exercise, revs: {} },
       diet: { ...diet, revs: {} },
-      settings: { accent, dailyPick, foodPick },
+      settings: { accent, dailyPick, foodPick, goals },
     } as SyncState
   }
 
@@ -847,12 +849,12 @@ describe('export and import with the sample data', () => {
     const { revs: _d, ...cachedDiet } = cached().diet
     expect(cachedExercise).toEqual(exercise)
     expect(cachedDiet).toEqual(diet)
-    expect(cached().settings).toEqual({ accent, dailyPick, foodPick })
+    expect(cached().settings).toEqual({ accent, dailyPick, foodPick, goals })
     // Every plan and tick reached the server too.
     const server = api.state(USER) as SyncState
     expect({ plans: server.exercise.plans, log: server.exercise.log }).toEqual(exercise)
     expect({ plans: server.diet.plans, log: server.diet.log }).toMatchObject(diet)
-    expect(server.settings).toEqual({ accent, dailyPick, foodPick })
+    expect(server.settings).toEqual({ accent, dailyPick, foodPick, goals })
     // The theme is per device, so it never left this browser.
     expect(localStorage.getItem('tracker-settings-v1')).toBeNull()
   })
@@ -1278,6 +1280,7 @@ describe('config mode and weekly plans', () => {
       accent: '#30d158',
       dailyPick: 1,
       foodPick: 8,
+      goals: '',
     })
   })
 

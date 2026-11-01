@@ -92,7 +92,12 @@ describe('the first-login import prompt', () => {
     const account = api.accounts.get(USER)!
     expect(account.plans.exercise['2026-10-12']!.items).toEqual([SQUATS])
     expect(account.ticks.diet[WEEK]).toEqual({ veg: 1 })
-    expect(account.settings).toEqual({ accent: '#bf5af2', dailyPick: 2, foodPick: 2 })
+    expect(account.settings).toEqual({
+      accent: '#bf5af2',
+      dailyPick: 2,
+      foodPick: 2,
+      goals: '',
+    })
     expect(prompt().get('h2').text()).toBe('Added to your account')
     expect(prompt().get('[role="status"]').text()).toContain('now part of your account')
     // The earlier week and the settings show at once, from the server's merged state.
@@ -177,7 +182,7 @@ describe('the first-login import prompt', () => {
     account.plans.exercise['2026-10-12'] = { items: [SQUATS], rev: 1 }
     account.ticks.exercise['2026-10-12'] = { sq: 0b101 }
     account.ticks.diet[WEEK] = { veg: 1 }
-    account.settings = { accent: '#30d158', dailyPick: 3, foodPick: 2 }
+    account.settings = { accent: '#30d158', dailyPick: 3, foodPick: 2, goals: '' }
     localStorage.removeItem(CACHE_PREFIX + USER) // so the first state shown is the server's
     await mountApp()
     expect(prompt().exists()).toBe(false)

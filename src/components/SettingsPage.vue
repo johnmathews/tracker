@@ -87,7 +87,12 @@ function exportData(): void {
     buildExport({
       exercise: { plans: store.plans, log: store.log },
       diet: { plans: diet.plans, log: diet.log },
-      settings: { accent: store.accent, dailyPick: store.dailyPick, foodPick: store.foodPick },
+      settings: {
+        accent: store.accent,
+        dailyPick: store.dailyPick,
+        foodPick: store.foodPick,
+        goals: store.goals,
+      },
     }),
   )
 }
