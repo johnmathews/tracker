@@ -27,6 +27,15 @@ describe('Switch', () => {
     expect(button.attributes('aria-label')).toBeUndefined()
   })
 
+  it('adds context words to its name for screen readers only (K66)', () => {
+    const button = mountSwitch({ modelValue: true, label: 'Show', context: 'Notes' }).get('button')
+    expect(button.text()).toBe('Show Notes')
+    const hidden = button.get('[data-slot="switch-context"]')
+    expect(hidden.classes()).toContain('sr-only')
+    expect(hidden.text()).toBe('Notes')
+    expect(button.attributes('aria-label')).toBeUndefined()
+  })
+
   it('requires a label at the type level', () => {
     // @ts-expect-error label is required
     const props: Props = { modelValue: true }

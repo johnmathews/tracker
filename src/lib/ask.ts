@@ -11,7 +11,7 @@ export const ASK_COPY = {
   /** Under the box while asking is open. */
   note: 'Answers come from an AI and can be wrong. They aren’t medical advice.',
   offline: 'You’re offline. Asking needs a connection; your marks are saved on this device.',
-  /** `done.saved` false: the account is at its quota (docs/api.md §3.1). */
+  /** `done.saved` false: the account is at its quota (docs/api.md §3.2). */
   notSaved: 'Your account is full, so this answer wasn’t saved.',
   /** The conversation went (deleted in another tab or on another device) before it was used. */
   gone: 'That conversation was deleted, so this is a new one.',
@@ -58,7 +58,7 @@ export function unsyncedNote(n: number): string {
   return `${countOf(n, 'change', true)} on this device ${one ? 'isn’t' : 'aren’t'} synced yet, so the answer won’t include ${one ? 'it' : 'them'}.`
 }
 
-/** A kept turn from the history (docs/api.md §3.1), as the Transcript draws it. */
+/** A kept turn from the history (docs/api.md §3.2), as the Transcript draws it. */
 export function savedTurn(turn: AskTurn, id: number): TranscriptTurn {
   const base = { id, question: turn.question, answer: turn.answer }
   switch (turn.stop) {

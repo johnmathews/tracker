@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { exerciseDetails, usePlannerStore } from '@/stores/planner'
+import { usePlannerStore } from '@/stores/planner'
+import { useDetailsStore } from '@/stores/details'
 import type { Exercise, Mark } from '@/lib/storage'
-import { metDays as daysMet, type Tracked } from '@/lib/tracker'
+import { SECTIONS } from '@/lib/trackerTypes'
+import { metDays as daysMet } from '@/lib/tracker'
 import { dayMonth } from '@/lib/dates'
 import { ChevronDown, Plus } from '@lucide/vue'
 import { SCREEN, SCREEN_GRID } from '@/lib/screens'
@@ -16,6 +18,9 @@ import { MAX_DAILY_PICK, MIN_DAILY_PICK } from '@/lib/storage'
 import EditExerciseDialog from '@/components/EditExerciseDialog.vue'
 
 const store = usePlannerStore()
+const details = useDetailsStore()
+/** The section's type: its names and its chips (src/lib/trackerTypes.ts). */
+const type = SECTIONS.exercise
 
 /** The days whose marked exercises reach the daily pick (K30): their names turn green, underlined (K60). */
 const metDays = computed(() => daysMet(store.dayCounts, store.dailyPick))
@@ -29,9 +34,9 @@ function marksFor(id: string): (Mark | null)[] {
   return store.days.map((_, i) => store.markOf(id, i))
 }
 
-// The grid hands back the item it was given, which is always an Exercise here.
-function detailsFor(item: Tracked): string[] {
-  return exerciseDetails(item as Exercise)
+/** An exercise's notes, from its details: one copy for every week (D2). */
+function noteFor(item: { id: string }): string {
+  return details.notesOf('exercise', item.id)
 }
 
 const editing = ref<Exercise | null>(null)
@@ -75,7 +80,7 @@ watch(
   >
     <slot />
     <SectionHeader
-      title="Exercises"
+      :title="type.label"
       heading-id="exercises-heading"
       :week="store.configMode ? undefined : store.label"
     >
@@ -99,13 +104,15 @@ watch(
     </SectionHeader>
     <TrackerGrid
       :class="SCREEN_GRID"
-      label="Exercise"
+      :label="type.itemLabel"
       :mark-set="store.markSet"
-      :table-label="`Exercises, week of ${dayMonth(store.monday)}`"
+      section="exercise"
+      :table-label="`${type.label}, week of ${dayMonth(store.monday)}`"
       :items="store.exercises"
       :days="store.days"
       :marks-for="marksFor"
-      :details-for="detailsFor"
+      :details-for="type.details"
+      :note-for="noteFor"
       editable
       :config-mode="store.configMode"
       :met-days="metDays"
@@ -115,7 +122,7 @@ watch(
       @edit="edit"
     >
       <template #corner>
-        <span class="title-1 text-[24px] leading-7 text-ink">Exercises</span>
+        <span class="title-1 text-[24px] leading-7 text-ink">{{ type.label }}</span>
       </template>
     </TrackerGrid>
     <!-- The way on (PlannerScreen card, K42): an arrow, no words, sprinting to the Food screen. -->

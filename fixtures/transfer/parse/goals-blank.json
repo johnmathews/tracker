@@ -15,11 +15,13 @@
     "data": {
       "exercise": {
         "plans": {},
-        "log": {}
+        "log": {},
+        "details": {}
       },
       "diet": {
         "plans": {},
-        "log": {}
+        "log": {},
+        "details": {}
       },
       "settings": {
         "accent": "#0a84ff",

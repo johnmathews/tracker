@@ -77,7 +77,7 @@ export const useSessionStore = defineStore('session', () => {
   /** Whether this planner sends email, so the sign-in screen can offer a reset by email. */
   const mail = ref(false)
   /**
-   * Whether this planner answers questions (Ask, docs/api.md §3.1): null until the server has
+   * Whether this planner answers questions (Ask, docs/api.md §3.2): null until the server has
    * said, so the bar's Ask button neither flashes on nor off while it loads.
    */
   const ask = ref<boolean | null>(null)
@@ -151,7 +151,7 @@ export const useSessionStore = defineStore('session', () => {
 
   /**
    * Ask the server whether it sends email (docs/api.md §4.1), where unknown counts as no, and
-   * whether it answers questions (§3.1), which stays as it was when the server can't be read.
+   * whether it answers questions (§3.2), which stays as it was when the server can't be read.
    * Called after every sign-in and when the browser comes back online.
    */
   async function loadOptions(): Promise<void> {

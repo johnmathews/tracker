@@ -1,4 +1,5 @@
 import { useAskStore } from '@/stores/ask'
+import { useDetailsStore } from '@/stores/details'
 import { useDietStore } from '@/stores/diet'
 import { usePlannerStore } from '@/stores/planner'
 import { mergeSummary, type ExportData } from '@/lib/transfer'
@@ -7,6 +8,8 @@ import { countOf } from '@/lib/words'
 export type Additions = {
   plans: number
   ticks: number
+  /** Items gaining notes or details. */
+  details: number
   /** The file's settings apply: the account has none of its own. */
   settings: boolean
   /** The file's My goals fill goals that are empty (F17): a change on its own. */
@@ -32,15 +35,23 @@ export function useImportSummary() {
   const planner = usePlannerStore()
   const diet = useDietStore()
   const ask = useAskStore()
+  const details = useDetailsStore()
 
   function additions(data: ExportData): Additions {
-    const ex = mergeSummary({ plans: planner.plans, log: planner.log }, data.exercise)
-    const di = mergeSummary({ plans: diet.plans, log: diet.log }, data.diet)
+    const ex = mergeSummary(
+      { plans: planner.plans, log: planner.log, details: details.docs.exercise },
+      data.exercise,
+    )
+    const di = mergeSummary(
+      { plans: diet.plans, log: diet.log, details: details.docs.diet },
+      data.diet,
+    )
     const here = new Set(ask.conversations.map((c) => c.id))
     // Exercise and food plans count separately: a week can gain either or both.
     return {
       plans: ex.weeks + di.weeks,
       ticks: ex.ticks + di.ticks,
+      details: ex.details + di.details,
       settings: data.settings !== null && planner.savedSettings() === null,
       // As mergeSettings: the file's goals fill empty ones, and never replace any.
       goals: !!data.settings?.goals && !planner.goals,
@@ -50,14 +61,18 @@ export function useImportSummary() {
 
   function addsAnything(data: ExportData): boolean {
     const a = additions(data)
-    return a.plans > 0 || a.ticks > 0 || a.settings || a.goals || a.conversations > 0
+    return (
+      a.plans > 0 || a.ticks > 0 || a.details > 0 || a.settings || a.goals || a.conversations > 0
+    )
   }
 
   function describe(data: ExportData): string {
-    const { plans, ticks, settings, goals, conversations } = additions(data)
-    // The settings as Edit plan names them: Exercises a day and Foods a day (K56). The file's
-    // accent comes too, but nothing shows it any more, so the summary leaves it out.
+    const { plans, ticks, details: items, settings, goals, conversations } = additions(data)
+    // Notes and fields come once per item (D2), so they count by item. The settings as Edit plan
+    // names them: Exercises a day and Foods a day (K56). The file's accent comes too, but nothing
+    // shows it any more, so the summary leaves it out.
     const extras: string[] = []
+    if (items) extras.push(`the notes and details of ${countOf(items, 'item')}`)
     if (settings) extras.push('the exercises and foods a day')
     if (goals) extras.push('your goals')
     if (conversations) extras.push(`${countOf(conversations, 'conversation')} from Ask`)

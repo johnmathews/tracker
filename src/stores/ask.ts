@@ -12,7 +12,7 @@ import { useSyncStore } from '@/stores/sync'
 /**
  * The Ask page's state (docs/architecture.md §3): the open conversation's turns, whether an
  * answer is being written, the questions left today, and the account's past conversations. The
- * history lives on the server (docs/api.md §3.1); nothing of a conversation is kept in the
+ * history lives on the server (docs/api.md §3.2); nothing of a conversation is kept in the
  * browser's storage, and everything here goes on sign-out or when another user signs in.
  */
 export const useAskStore = defineStore('ask', () => {
@@ -203,7 +203,7 @@ export const useAskStore = defineStore('ask', () => {
         text_ += data.delta
         painting ||= frame(paint)
       } else if (event === 'done') {
-        // The text before a refusal is partial, and is discarded (docs/api.md §3.1).
+        // The text before a refusal is partial, and is discarded (docs/api.md §3.2).
         if (data.stop === 'refused') settle('', 'stopped', ASK_COPY.refused)
         else if (data.stop === 'max_tokens') settle(text_, 'stopped', ASK_COPY.long)
         else settle(text_, 'done')

@@ -22,10 +22,7 @@
         "not-a-week": [{ "id": "c", "name": "C", "reps": 1, "target": 1 }],
         "2026-10-26": "not an array"
       },
-      "log": {
-        "2026-10-19": { "a": [true, 1, "true", true], "b": "nope" },
-        "bad": { "a": [true] }
-      }
+      "log": { "2026-10-19": { "a": [true, 1, "true", true], "b": "nope" }, "bad": { "a": [true] } }
     },
     "diet": {
       "plans": {
@@ -47,11 +44,13 @@
             { "id": "b", "name": "B", "reps": 3, "target": 3 }
           ]
         },
-        "log": { "2026-10-19": { "a": ["great", null, null, "great", null, null, null] } }
+        "log": { "2026-10-19": { "a": ["great", null, null, "great", null, null, null] } },
+        "details": {}
       },
       "diet": {
         "plans": { "2026-10-19": [{ "id": "f", "name": "F", "target": 0 }] },
-        "log": {}
+        "log": {},
+        "details": {}
       },
       "settings": { "accent": "#30d158", "dailyPick": 8, "foodPick": 8, "goals": "" }
     }

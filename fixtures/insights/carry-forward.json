@@ -8,9 +8,12 @@
     "2026-10-12": [{ "id": "pu", "name": "Push-ups", "reps": 10, "target": 4 }],
     "2026-10-19": [
       { "id": "pu", "name": "Push-ups", "reps": 12, "target": 3 },
-      { "id": "sq", "name": "Squats", "reps": 15, "target": 2, "notes": "Slow on the way down." }
+      { "id": "sq", "name": "Squats", "reps": 15, "target": 2 }
     ],
     "2026-11-09": [{ "id": "run", "name": "Run", "reps": 1, "target": 2 }]
+  },
+  "details": {
+    "sq": { "notes": "Slow on the way down.", "fields": { "equipment": "Rack" } }
   },
   "log": {
     "2026-10-19": { "pu": ["great", "great", "great", "great", null, null, null] },
@@ -45,7 +48,8 @@
         "great": 1,
         "partial": 0,
         "missed": 0,
-        "goalMet": false
+        "goalMet": false,
+        "notes": "Slow on the way down."
       }
     ]
   }

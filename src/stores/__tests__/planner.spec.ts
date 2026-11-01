@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import { exerciseDetails, usePlannerStore } from '@/stores/planner'
+import { useDetailsStore } from '@/stores/details'
 import { DATA_KEY, LEGACY_DATA_KEY, MARKS, SETTINGS_KEY } from '@/lib/storage'
 
 // Friday 23 Oct 2026: the week is Mon 19 – Sun 25 and today is index 4.
@@ -146,10 +147,11 @@ describe('planner store', () => {
 
   it('adds an exercise with goal 3 and ignores an empty name', () => {
     const s = usePlannerStore()
-    expect(s.addExercise({ name: '   ', reps: 5, perSide: false })).toBe(false)
+    expect(s.addExercise({ name: '   ', reps: 5, perSide: false })).toBeNull()
     expect(s.exercises).toHaveLength(5)
-    expect(s.addExercise({ name: '  Lunges ', reps: 12, perSide: true })).toBe(true)
+    const id = s.addExercise({ name: '  Lunges ', reps: 12, perSide: true })
     const added = s.exercises[5]!
+    expect(added.id).toBe(id)
     expect(added).toMatchObject({ name: 'Lunges', reps: 12, perSide: true, target: 3 })
     expect(added.id).toMatch(/^x/)
     expect(s.plans['2026-10-19']).toHaveLength(6)
@@ -345,24 +347,21 @@ describe('updateExercise', () => {
     expect(s.exercises.find((e) => e.id === 'sq')!.name).toBe('Squats')
   })
 
-  it('saves a note, keeps it when an update leaves it out, and clears it when empty (K43)', () => {
+  it('keeps no note in the week: an exercise’s notes are its details, for every week (D3)', () => {
     const s = usePlannerStore()
-    const squats = () => s.exercises.find((e) => e.id === 'sq')
-    s.updateExercise('sq', {
-      name: 'Squats',
-      reps: 15,
-      perSide: false,
-      notes: '  **Slow** down \n',
-    })
-    expect(squats()!.notes).toBe('**Slow** down')
-    s.updateExercise('sq', { name: 'Squats', reps: 12, perSide: false })
-    expect(squats()).toMatchObject({ reps: 12, notes: '**Slow** down' })
-    s.updateExercise('sq', { name: 'Squats', reps: 12, perSide: false, notes: '   ' })
-    expect(squats()).not.toHaveProperty('notes')
-    s.addExercise({ name: 'Swings', reps: 20, perSide: false, notes: 'Hips, not arms' })
-    expect(s.exercises.at(-1)!.notes).toBe('Hips, not arms')
-    s.addExercise({ name: 'Rows', reps: 10, perSide: false, notes: '' })
+    const input = { name: 'Squats', reps: 15, perSide: false, notes: 'Knees out' }
+    s.updateExercise('sq', input as never)
+    expect(s.exercises.find((e) => e.id === 'sq')).not.toHaveProperty('notes')
+    s.addExercise({ ...input, name: 'Swings' } as never)
     expect(s.exercises.at(-1)).not.toHaveProperty('notes')
+  })
+
+  it('forgets the items’ details with the rest of the user’s data', () => {
+    const s = usePlannerStore()
+    const details = useDetailsStore()
+    details.setNotes('exercise', 'sq', 'Knees out')
+    s.clear()
+    expect(details.notesOf('exercise', 'sq')).toBe('')
   })
 
   it('stores a weight given when adding', () => {
@@ -492,6 +491,54 @@ describe('savedSettings', () => {
     expect(s.savedSettings()).toBeNull()
     s.changeDailyPick(1)
     expect(s.savedSettings()).toEqual({ accent: '#30d158', dailyPick: 4, foodPick: 2 })
+  })
+
+  it('holds each type’s item-page arrangement, saved with the other settings (K66)', () => {
+    const s = usePlannerStore()
+    expect(s.itemSections).toEqual({})
+    expect(s.arrangementFor('exercise')).toEqual({
+      order: ['notes', 'details', 'plan', 'history'],
+      hidden: [],
+    })
+    const arranged = { order: ['history', 'notes', 'details', 'plan'], hidden: ['details'] }
+    s.setArrangement('exercise', {
+      order: ['history', 'notes', 'details', 'plan'],
+      hidden: ['details'],
+    })
+    expect(s.itemSections).toEqual({ exercise: arranged })
+    expect(s.arrangementFor('exercise')).toEqual(arranged)
+    expect(s.arrangementFor('food').hidden).toEqual([])
+    expect(s.savedSettings()).toEqual({
+      accent: '#30d158',
+      dailyPick: 3,
+      foodPick: 2,
+      itemSections: { exercise: arranged },
+    })
+    // Back to the default: left out, as for an account that never arranged a page.
+    s.setArrangement('exercise', { order: ['notes', 'details', 'plan', 'history'], hidden: [] })
+    expect(s.itemSections).toEqual({})
+    expect(s.savedSettings()).toEqual({ accent: '#30d158', dailyPick: 3, foodPick: 2 })
+  })
+
+  it('adopts the arrangement with the settings, and the default with none', () => {
+    const s = usePlannerStore()
+    const food = { order: ['plan', 'notes', 'details', 'history'], hidden: [] } as const
+    s.adopt(
+      { plans: {}, log: {} },
+      {
+        accent: '#ff9f0a',
+        dailyPick: 2,
+        foodPick: 5,
+        itemSections: { food: { ...food, order: [...food.order], hidden: [] } },
+      },
+    )
+    expect(s.arrangementFor('food').order).toEqual(food.order)
+    expect(s.savedSettings()!.itemSections).toEqual({ food })
+    s.adopt({ plans: {}, log: {} }, { accent: '#ff9f0a', dailyPick: 2, foodPick: 5 })
+    expect(s.itemSections).toEqual({})
+    s.setArrangement('food', { ...food, order: [...food.order], hidden: [] })
+    s.adopt({ plans: {}, log: {} }, null)
+    expect(s.itemSections).toEqual({})
   })
 
   it('treats adopted settings as saved, and none adopted as unsaved', () => {

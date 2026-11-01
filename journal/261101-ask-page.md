@@ -2,19 +2,19 @@
 
 > Purpose: how the Ask page, its bar action and the Settings "Your goals" row were built (W7 of
 > the /ask plan), on the API from W4 and W8 and the components from W6, and what was decided on
-> the way. The decisions are K64–K69 in `docs/decisions.md`.
+> the way. The decisions are K67–K72 in `docs/decisions.md`.
 
 ## 1. What John picked
 
 On the mockup `brand/design-system/mockups/261101-ask-page` (three rounds, plan §1.1):
 
-- **Layout A**, rows like Settings (K64), with Ask before Settings in the bar.
-- **Voice V2, extended** (K65): "V2 - plain verdict, the app may qote a note back as advice. and
+- **Layout A**, rows like Settings (K67), with Ask before Settings in the bar.
+- **Voice V2, extended** (K68): "V2 - plain verdict, the app may qote a note back as advice. and
   also may include streaks scores or rankings." It is a carve-out for answers only, written into
   `voice.md` ("Ask"); `PLAIN_VERDICTS` is now on in `ask.py`, and `VERDICT_RULE` allows streaks,
   scores, rankings and quoting goals and notes back. `checks.json` still bans "streak" in previews.
-- **History on the server** (K66) as a **side panel, S1** (K67).
-- **The chip always shown** (K68), and **import fills only empty goals** (K69).
+- **History on the server** (K69) as a **side panel, S1** (K70).
+- **The chip always shown** (K71), and **import fills only empty goals** (K72).
 
 ## 2. What was built
 

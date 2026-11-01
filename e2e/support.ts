@@ -16,6 +16,14 @@ export type Theme = (typeof THEMES)[number]
 export const TODAY = new Date('2026-10-21T12:00:00')
 const MONDAY = '2026-10-19'
 
+/** The account's settings as PUT /api/settings sends them and GET /api/state returns them. */
+export type Settings = {
+  accent: string
+  dailyPick: number
+  foodPick: number
+  itemSections?: Record<string, { order: string[]; hidden: string[] }>
+}
+
 const G = 'great'
 const P = 'partial'
 const M = 'missed'
@@ -27,26 +35,19 @@ function state() {
     exercise: {
       plans: {
         [MONDAY]: [
-          {
-            id: 'pu',
-            name: 'Push-ups',
-            sets: 3,
-            reps: 12,
-            target: 4,
-            notes: 'Slow on the way down. [Form video](https://example.com/push-ups)',
-          },
+          { id: 'pu', name: 'Push-ups', sets: 3, reps: 12, target: 4 },
           { id: 'pl', name: 'Pull-ups', sets: 3, reps: 5, target: 3 },
           { id: 'sq', name: 'Squats', sets: 3, reps: 15, weight: 16, target: 3 },
           { id: 'be', name: 'Back extensions', reps: 12, target: 3 },
-          {
-            id: 'kh',
-            name: 'Kettlebell halos',
-            reps: 8,
-            perSide: true,
-            target: 2,
-            notes: '**Ribs down.** Change direction each set, and keep the bell close to the head.',
-          },
+          { id: 'kh', name: 'Kettlebell halos', reps: 8, perSide: true, target: 2 },
         ],
+      },
+      // Each item's notes, one copy for every week (D2).
+      details: {
+        pu: { notes: 'Slow on the way down. [Form video](https://example.com/push-ups)' },
+        kh: {
+          notes: '**Ribs down.** Change direction each set, and keep the bell close to the head.',
+        },
       },
       log: {
         [MONDAY]: {
@@ -58,20 +59,23 @@ function state() {
         },
       },
       revs: {},
+      detailRevs: { pu: 1, kh: 1 },
     },
     diet: {
       plans: {},
       log: { [MONDAY]: { veg: [G, G, _, _, _, _, _], fish: [G, _, _, _, _, _, _] } },
+      details: {},
       revs: {},
+      detailRevs: {},
     },
-    settings: null,
+    settings: null as Settings | null,
   }
 }
 
 const NOON = Math.floor(TODAY.getTime() / 1000)
 const DAY = 24 * 3600
 
-/** Ask's history as the API lists it (docs/api.md §3.1): Today, Last week and Earlier. */
+/** Ask's history as the API lists it (docs/api.md §3.2): Today, Last week and Earlier. */
 const CONVERSATIONS = [
   { id: 'diet', title: 'Is my diet good enough?', updatedAt: NOON - 600, turns: 1 },
   {
@@ -154,7 +158,7 @@ export async function openApp(
     /** Ask is on (an Anthropic key on the server). */
     ask?: boolean
   } = {},
-): Promise<void> {
+): Promise<{ settings: Settings | null }> {
   await page.clock.setFixedTime(TODAY)
   const s = state()
   for (let i = 1; i <= moreExercises; i++) {
@@ -177,6 +181,11 @@ export async function openApp(
         json: unconfirmed ? { username: 'alice', confirmed: false } : { username: 'alice' },
       })
     if (req.method() === 'GET' && path === '/state') return route.fulfill({ json: s })
+    // Settings are kept, as the API keeps them, so a reload reads them back.
+    if (req.method() === 'PUT' && path === '/settings') {
+      s.settings = req.postDataJSON() as Settings
+      return route.fulfill({ json: s.settings })
+    }
     if (req.method() === 'GET' && path === '/auth/options')
       return route.fulfill({ json: { mail: false, ask } })
     const reply = ask ? askReply(req.method(), path) : null
@@ -201,6 +210,7 @@ export async function openApp(
   await page.goto('/')
   await page.waitForSelector('[data-testid="exercise-grid"]')
   await settle(page)
+  return s
 }
 
 /**

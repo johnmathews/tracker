@@ -1,5 +1,5 @@
 """Ask: questions about a person's tracking, answered by Claude over the insights readers
-(docs/api.md §3.1).
+(docs/api.md §3.2).
 
 A question is checked (`parse`), claimed against the daily caps (`claim`), then answered as a
 stream of events (`converse` around `answer`), framed as server-sent events with keep-alives
@@ -26,7 +26,7 @@ from collections.abc import (
 )
 from contextlib import suppress
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import date
 from functools import partial
 from pathlib import Path
 from typing import Literal, cast
@@ -77,7 +77,7 @@ type RunTool = Callable[[str, object], Awaitable[tuple[str, bool]]]
 
 # --- The prompt ----------------------------------------------------------------------------------
 
-#: John's ruling on the voice (F7, K65): V2, extended. "V2 - plain verdict, the app may qote a note
+#: John's ruling on the voice (F7, K68): V2, extended. "V2 - plain verdict, the app may qote a note
 #: back as advice. and also may include streaks scores or rankings." For Ask's answers only, this
 #: rule replaces the app's three (no streaks, scores or rankings; no note or goals quoted back).
 #: No exclamation marks, no hype and no blame still hold either way (voice.md, "Ask").
@@ -254,10 +254,6 @@ def parse(body: Mapping[str, object], server_today: date) -> Question:
     if abs((day - server_today).days) > 1:
         raise AskInvalid("today")
     return Question(question.strip(), day, cast(str | None, conversation))
-
-
-def server_today(config: Config) -> date:
-    return datetime.fromtimestamp(config.clock(), UTC).date()
 
 
 # --- The caps ------------------------------------------------------------------------------------

@@ -872,6 +872,20 @@ def test_today_may_be_a_day_either_side_of_the_servers(
     assert events[-1] == ("done", {"stop": "end_turn", "saved": True})
 
 
+def test_the_servers_today_is_its_time_zones(
+    ask_client: TestClient, ask_config: Config, clock: Clock, upstream: Upstream
+) -> None:
+    """22:30 UTC on the 23rd is already the 24th in Amsterdam (CEST): the window is the 23rd to
+    the 25th there, where UTC's would be the 22nd to the 24th."""
+    sign_up(ask_client, ask_config)
+    clock.advance(14 * 3600 + 1800)
+    events = ask_events(ask_client, body(today="2026-10-25"))
+    assert events[-1] == ("done", {"stop": "end_turn", "saved": True})
+    r = ask_client.post("/api/ask", json=body(today="2026-10-22"))
+    assert (r.status_code, r.json()) == (400, {"error": "invalid"})
+    assert len(upstream.requests) == 1
+
+
 def test_the_longest_question_is_allowed(
     ask_client: TestClient, ask_config: Config, upstream: Upstream
 ) -> None:
@@ -1184,7 +1198,7 @@ def test_frames_are_one_line_json(
 
 def test_the_system_prompt_is_frozen_and_holds_the_rules() -> None:
     prompt = ask.SYSTEM_PROMPT
-    # John's ruling on the voice (V2, extended; K65) is in force.
+    # John's ruling on the voice (V2, extended; K68) is in force.
     assert ask.PLAIN_VERDICTS is True
     assert prompt == ask.system_prompt(plain_verdicts=True)
     for rule in (

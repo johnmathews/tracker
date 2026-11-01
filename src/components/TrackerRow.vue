@@ -26,8 +26,12 @@ const props = defineProps<{
   /** The row's place in the grid, 0 first: folded, it says which lines the row takes. */
   index: number
   item: Tracked
+  /** The item's page (`itemHref`), which its name links to. */
+  href: string
   /** The chips under the name, already in the Chip card's words ("3 × 12", "16 kg"). */
   details?: string[]
+  /** The item's notes in markdown (K43), from its details: the same on every week. */
+  note?: string
   /** Shows an edit button (in config mode) that emits `edit`; the dialog it opens edits the
    * whole item, its goal included. */
   editable?: boolean
@@ -46,9 +50,12 @@ const emit = defineEmits<{
   edit: []
 }>()
 
-/** The note (K43): one line in the row, the whole of it in the popover. Raw HTML never renders. */
-const noteLine = computed(() => (props.item.notes ? renderNoteLine(props.item.notes) : ''))
-const noteHtml = computed(() => (props.item.notes ? renderNote(props.item.notes) : ''))
+/**
+ * The note (K43): one line in the row, the whole of it in the popover, which scrolls when the
+ * notes are longer than the screen. Raw HTML never renders.
+ */
+const noteLine = computed(() => renderNoteLine(props.note ?? ''))
+const noteHtml = computed(() => renderNote(props.note ?? ''))
 
 /** Folded, the row's name line and box line (TrackerGrid's header is line 1). */
 const lines = computed(() => ({
@@ -96,13 +103,15 @@ async function remove(event: MouseEvent): Promise<void> {
 </script>
 
 <!--
-  One row of the WeekGrid card: the name in body-large 600, then the chips, and a DayMark per day. No
+  One row of the WeekGrid card: the name in body-large 600, a link to the item's page, then the
+  chips, and a DayMark per day. No
   week total (K33): the goal shows only in the item's dialog. In Edit plan the edit IconButton follows
   the name (its dialog edits everything, goal included) and the remove IconButton ends the row in a
   cell of its own. The edit button's negative margin keeps the name line's height, and the header
   is at least 44px tall (an IconButton's target) in both modes, so the row keeps its height (F25).
-  Those controls stay out of the Tab order until Enter (or F2) on their cell lets them in, and
-  Escape leaves them (gridNav), so each grid stays one tab stop in Edit plan too.
+  The name's link is its cell's widget (Enter opens the page, F9); the note's button and Edit
+  plan's controls stay out of the Tab order until F2 on their cell (or Enter, on the Remove cell)
+  lets them in, and Escape leaves them (gridNav), so each grid stays one tab stop.
 
   Folded, the name spans the seven days on the row's first line, the
   remove button over its right end in Edit plan; the days take the second line.
@@ -124,10 +133,14 @@ async function remove(event: MouseEvent): Promise<void> {
           <!-- The name and its chips share a line, wrapping when they must (K43). -->
           <span class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
             <span class="flex min-w-0 items-center gap-1">
-              <span
-                class="block min-w-0 text-(length:--fs-name) leading-tight font-semibold break-words text-ink"
+              <!-- The name is a link to the item's page (WeekGrid card, K64): it looks as it always
+                   has, underlines under the pointer, and prints as plain text. -->
+              <a
+                :href="href"
+                class="block min-w-0 rounded-[2px] text-(length:--fs-name) leading-tight font-semibold break-words text-ink no-underline decoration-2 underline-offset-3 hover:underline print:no-underline"
+                data-slot="item-link"
                 data-testid="item-name"
-                >{{ item.name }}</span
+                >{{ item.name }}</a
               >
               <IconButton
                 v-if="configMode && editable"
@@ -148,7 +161,7 @@ async function remove(event: MouseEvent): Promise<void> {
             >
           </span>
           <!-- The note on the next line, cut to one; a press opens the whole of it (K43). -->
-          <Popover v-if="item.notes" :title="item.name" align="start">
+          <Popover v-if="note" :title="item.name" align="start">
             <template #trigger>
               <!-- eslint-disable-next-line vue/no-v-html -- markdown-it with raw HTML off (lib/markdown) -->
               <button

@@ -5,8 +5,12 @@ import type { Tracked } from '@/lib/tracker'
 import { useGridNav } from '@/composables/gridNav'
 import { computed, ref } from 'vue'
 import TrackerRow from '@/components/TrackerRow.vue'
+import { itemHref } from '@/lib/routes'
+import type { Section } from '@/lib/trackerTypes'
 
 const props = defineProps<{
+  /** The section the rows belong to: each name links to its item's page in it. */
+  section: Section
   /** The rows' kind, for the name column's hidden header: "Exercise" or "Food". */
   label: string
   /** The table's name, repeating the section and week: "Exercises, week of 19 October". */
@@ -17,6 +21,8 @@ const props = defineProps<{
   /** How the marks are drawn: the device's mark set. The squiggles when not given. */
   markSet?: MarkSet
   detailsFor?: (item: Tracked) => string[]
+  /** Each item's notes, from its details (the same on every week); none when not given. */
+  noteFor?: (item: Tracked) => string
   /** Adds an edit button to each row in config mode, which emits `edit`. */
   editable?: boolean
   configMode: boolean
@@ -53,7 +59,7 @@ const columns = computed(() =>
 // and for Edit plan's controls in the row headers).
 const table = ref<HTMLTableElement | null>(null)
 useGridNav(table, {
-  widget: '[data-slot="day-mark-button"]',
+  widget: '[data-slot="day-mark-button"], [data-slot="item-link"]',
   start: '[data-slot="day-mark-button"][aria-current="date"]',
 })
 </script>
@@ -76,8 +82,8 @@ useGridNav(table, {
   after the days, so each row keeps its height (F25); its rows are a fixed 100u (K54).
 
   Keyboard (F15): the WAI-ARIA grid, one tab stop per grid (useGridNav). A day cell's focus is its
-  DayMark, the cell's one widget; the names take focus themselves and
-  draw the focus ring inset.
+  DayMark and a name cell's its name's link, each the cell's one widget (Enter on a name opens the
+  item's page, F9); Edit plan's Remove cells take focus themselves and draw the focus ring inset.
 -->
 <template>
   <table
@@ -152,7 +158,9 @@ useGridNav(table, {
         :key="it.id"
         :index="i"
         :item="it"
+        :href="itemHref(section, it.id)"
         :details="detailsFor?.(it)"
+        :note="noteFor?.(it)"
         :editable="editable"
         :config-mode="configMode"
         :days="days"

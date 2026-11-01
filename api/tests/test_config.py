@@ -1,4 +1,8 @@
+from collections.abc import Callable
+from dataclasses import replace
+from datetime import UTC, date, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -139,3 +143,62 @@ def test_a_blank_ask_model_reads_as_the_default() -> None:
 def test_ask_caps_must_allow_one(name: str, value: str) -> None:
     with pytest.raises(ValueError, match=name):
         Config.from_env({"PUBLIC_ORIGIN": "https://f.example", name: value})
+
+
+def test_the_time_zone_defaults_to_amsterdam() -> None:
+    cfg = Config.from_env({"PUBLIC_ORIGIN": "https://f.example"})
+    assert cfg.timezone == ZoneInfo("Europe/Amsterdam")
+    assert Config(data_dir=Path("/x"), public_origin="https://f.example").timezone == cfg.timezone
+
+
+@pytest.mark.parametrize("zone", ["UTC", "America/New_York", "Asia/Kolkata"])
+def test_reads_the_time_zone(zone: str) -> None:
+    cfg = Config.from_env({"PUBLIC_ORIGIN": "https://f.example", "TIMEZONE": zone})
+    assert cfg.timezone == ZoneInfo(zone)
+
+
+@pytest.mark.parametrize(
+    "zone", ["", "Mars/Olympus", "Europe/Amsterdam ", "Europe", "zone.tab", "../etc/passwd", "/etc"]
+)
+def test_rejects_an_unknown_time_zone(zone: str) -> None:
+    with pytest.raises(ValueError, match="TIMEZONE"):
+        Config.from_env({"PUBLIC_ORIGIN": "https://f.example", "TIMEZONE": zone})
+
+
+def at(utc: str) -> Callable[[], int]:
+    """A clock stopped at an ISO time in UTC."""
+    moment = int(datetime.fromisoformat(utc).replace(tzinfo=UTC).timestamp())
+    return lambda: moment
+
+
+@pytest.mark.parametrize(
+    ("utc", "today", "week"),
+    [
+        # Winter (CET, UTC+1): Sunday 23:30 UTC is already Monday 00:30 in Amsterdam.
+        ("2026-11-01T22:59:59", date(2026, 11, 1), "2026-10-26"),
+        ("2026-11-01T23:00:00", date(2026, 11, 2), "2026-11-02"),
+        ("2026-11-01T23:30:00", date(2026, 11, 2), "2026-11-02"),
+        # Summer (CEST, UTC+2): the week turns over at 22:00 UTC on Sunday.
+        ("2026-10-18T21:59:59", date(2026, 10, 18), "2026-10-12"),
+        ("2026-10-18T22:00:00", date(2026, 10, 19), "2026-10-19"),
+        # The Sunday the clocks go back: that week lasts until local midnight, 23:00 UTC.
+        ("2026-10-25T22:30:00", date(2026, 10, 25), "2026-10-19"),
+        ("2026-10-25T23:00:00", date(2026, 10, 26), "2026-10-26"),
+        # Midweek: a Wednesday belongs to the Monday before it.
+        ("2026-10-28T12:00:00", date(2026, 10, 28), "2026-10-26"),
+    ],
+)
+def test_today_and_this_week_are_local(utc: str, today: date, week: str) -> None:
+    cfg = Config(data_dir=Path("/x"), public_origin="https://f.example", clock=at(utc))
+    assert cfg.today() == today
+    assert cfg.this_week() == week
+
+
+def test_this_week_follows_the_configured_zone() -> None:
+    """Sunday 23:30 UTC: Monday in Amsterdam, still Sunday in UTC and New York."""
+    base = Config(
+        data_dir=Path("/x"), public_origin="https://f.example", clock=at("2026-11-01T23:30:00")
+    )
+    assert base.this_week() == "2026-11-02"
+    assert replace(base, timezone=ZoneInfo("UTC")).this_week() == "2026-10-26"
+    assert replace(base, timezone=ZoneInfo("America/New_York")).today() == date(2026, 11, 1)

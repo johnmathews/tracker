@@ -78,4 +78,5 @@ Changing one expected value (`daysMet` in `met-days.json`, 3 to 4) failed both s
 - Item ids are not cut, since `item_history` looks items up by them. Plans are bounded by the
   quota.
 - When the tracker-types run moves plan-item notes into `item_details`, `notes` here has to read
-  from there.
+  from there. Done when that branch merged `main`: `notes` reads the item's details through
+  `data.notes_of` ([261101-tracker-types-item-page.md](261101-tracker-types-item-page.md) §3).

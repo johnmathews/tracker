@@ -1,7 +1,16 @@
 <script setup lang="ts">
+import { computed, ref, watch } from 'vue'
 import { usePlannerStore } from '@/stores/planner'
-import { MAX_NOTES, MAX_TARGET, MIN_TARGET, type Exercise } from '@/lib/storage'
+import { useDetailsStore } from '@/stores/details'
+import {
+  MAX_DETAILS_NOTES,
+  MAX_TARGET,
+  MIN_TARGET,
+  NOTES_COUNT_FROM,
+  type Exercise,
+} from '@/lib/storage'
 import { MEASURE_OPTIONS, useExerciseForm } from '@/composables/exerciseForm'
+import { detailsIdProblem } from '@/lib/problems'
 import PerSideToggle from '@/components/PerSideToggle.vue'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
@@ -17,21 +26,43 @@ const props = defineProps<{
 const emit = defineEmits<{ close: [] }>()
 
 const store = usePlannerStore()
+const details = useDetailsStore()
 /** The Dialog card's hint under Note (K43). */
 const NOTE_HINT = 'Markdown works: **bold**, *italic*, links.'
+/** Notes the API could not store, though within the field's 20,000 characters (32 KB). */
+const NOTE_TOO_BIG = 'These notes are too long to save. Shorten them, then save again.'
 const form = useExerciseForm()
 const { name, sets, reps, weight, perSide, measure, measureChoice, amountLabel, target, notes } =
   form
-form.load(props.exercise)
+// The Note field is the exercise's notes, the same on every week (D2); the rest is this week's.
+/** The notes as the dialog opened with them: Save writes them only if they changed since. */
+const loadedNotes = props.exercise ? details.notesOf('exercise', props.exercise.id) : ''
+form.load(props.exercise, loadedNotes)
 /** Add or edit: the title, the fields' ids and the primary action follow. */
 const adding = !props.exercise
 const id = adding ? 'add-exercise' : 'edit-exercise'
+/** The count shows once the notes near their limit (TextArea card). */
+const noteCount = computed(() =>
+  notes.value.length >= NOTES_COUNT_FROM ? MAX_DETAILS_NOTES : undefined,
+)
+const noteError = ref<string | undefined>()
+watch(notes, () => (noteError.value = undefined))
 
 function save(): void {
-  const ok = props.exercise
-    ? store.updateExercise(props.exercise.id, form.value())
+  // Untouched notes stay as the store has them now: a newer copy may have arrived meanwhile.
+  const notesChanged = notes.value !== loadedNotes
+  const itemId = props.exercise?.id ?? null
+  // Nothing changes unless the notes can be saved too.
+  if (notesChanged && !details.canSetNotes('exercise', itemId, notes.value)) {
+    noteError.value = (itemId && detailsIdProblem(itemId, 'notes')) || NOTE_TOO_BIG
+    return
+  }
+  const saved = props.exercise
+    ? store.updateExercise(props.exercise.id, form.value()) && props.exercise.id
     : store.addExercise(form.value())
-  if (ok) emit('close')
+  if (!saved) return
+  if (notesChanged) details.setNotes('exercise', saved, notes.value)
+  emit('close')
 }
 </script>
 
@@ -113,8 +144,9 @@ function save(): void {
         v-model="notes"
         label="Note"
         :hint="NOTE_HINT"
-        :max-length="MAX_NOTES"
-        :maxlength="MAX_NOTES"
+        :error="noteError"
+        :max-length="noteCount"
+        :maxlength="MAX_DETAILS_NOTES"
         rows="3"
       />
     </form>

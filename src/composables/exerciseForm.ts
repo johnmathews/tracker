@@ -35,6 +35,8 @@ export const MEASURE_OPTIONS = [
 /**
  * State and input handling for the exercise's dialog, adding or editing (K54). `reps` holds the
  * amount field's digits whichever the measure: reps per set, or seconds per set when timed.
+ * `notes` holds the Note field: the item's notes, from its details (every week), which the dialog
+ * saves apart from this week's plan, so `value()` leaves them out.
  */
 export function useExerciseForm() {
   const name = ref('')
@@ -74,11 +76,11 @@ export function useExerciseForm() {
       perSide: perSide.value,
       weight: parseFloat(weight.value) || undefined,
       target: target.value,
-      notes: notes.value,
     }
   }
 
-  function load(e?: Exercise): void {
+  /** Fill the form from an exercise and its notes; nothing given, the form starts empty. */
+  function load(e?: Exercise, itemNotes = ''): void {
     name.value = e?.name ?? ''
     sets.value = e?.sets ? String(e.sets) : ''
     measure.value = e?.duration ? 'time' : 'reps'
@@ -87,7 +89,7 @@ export function useExerciseForm() {
     weight.value = e?.weight ? String(e.weight) : ''
     perSide.value = e?.perSide ?? false
     target.value = e?.target ?? NEW_EXERCISE_TARGET
-    notes.value = e?.notes ?? ''
+    notes.value = itemNotes
   }
 
   return {

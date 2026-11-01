@@ -110,6 +110,73 @@ MIGRATIONS = [
     """
     ALTER TABLE settings ADD COLUMN food_pick INTEGER NOT NULL DEFAULT 2;
     """,
+    # Personal API tokens, for the MCP endpoint. Stored hashed, as sessions are; `prefix` names one
+    # in `tracker-admin token` without revealing it, and is unique per user so a revoke hits one.
+    # Only adds a table, and IF NOT EXISTS lets it run again.
+    """
+    CREATE TABLE IF NOT EXISTS api_tokens (
+        token_hash TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        prefix TEXT NOT NULL,
+        scope TEXT NOT NULL CHECK (scope IN ('read', 'write')),
+        created_at INTEGER NOT NULL,
+        last_used_at INTEGER
+    ) STRICT;
+    CREATE UNIQUE INDEX IF NOT EXISTS api_tokens_by_user ON api_tokens (user_id, prefix);
+    """,
+    # Item details: one document per item for every week (D2), revised like plans. No CHECK on
+    # the section (F3): the API checks it against the registry, so a new tracker needs no rebuild.
+    # Each item's note moves in from the latest week whose copy has one (D3), the first such copy
+    # in that week, as `validate.lift_notes` reads a version 4 file. Plans keep their notes until
+    # next written. Written to finish on anything `items_json` may hold, and to run again over a
+    # table already there: the CASEs keep every json_* call on an array or an object, since SQLite
+    # may evaluate a WHERE's terms in any order.
+    """
+    CREATE TABLE IF NOT EXISTS item_details (
+        user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+        section TEXT NOT NULL,
+        item_id TEXT NOT NULL,
+        details_json TEXT NOT NULL,
+        rev INTEGER NOT NULL CHECK (rev > 0),
+        PRIMARY KEY (user_id, section, item_id)
+    ) STRICT, WITHOUT ROWID;
+
+    INSERT OR IGNORE INTO item_details (user_id, section, item_id, details_json, rev)
+    WITH items AS (
+        SELECT p.user_id, p.section, p.week, j.key AS pos,
+            CASE WHEN j.type = 'object' THEN j.value END AS item
+        FROM plans AS p, json_each(
+            CASE WHEN json_valid(p.items_json) THEN
+                CASE WHEN json_type(p.items_json) = 'array' THEN p.items_json END
+            END
+        ) AS j
+    ),
+    noted AS (
+        SELECT user_id, section, week, pos,
+            CASE WHEN json_type(item, '$.id') = 'text' THEN json_extract(item, '$.id') END
+                AS item_id,
+            CASE WHEN json_type(item, '$.notes') = 'text'
+                THEN trim(json_extract(item, '$.notes'), ' ' || char(9, 10, 13)) END AS note,
+            json_type(item, '$.name') AS name_type
+        FROM items
+    ),
+    ranked AS (
+        SELECT user_id, section, item_id, note,
+            row_number() OVER (
+                PARTITION BY user_id, section, item_id ORDER BY week DESC, pos
+            ) AS n
+        FROM noted
+        WHERE name_type = 'text' AND length(item_id) BETWEEN 1 AND 128
+            AND item_id <> '__proto__' AND note <> ''
+    )
+    SELECT user_id, section, item_id, json_object('notes', note), 1 FROM ranked WHERE n = 1;
+    """,
+    # The item pages' arrangement per tracker type (K66, P29): JSON as `item_sections.py`
+    # normalises it, NULL for every page in the default order with every section shown.
+    """
+    ALTER TABLE settings ADD COLUMN item_sections TEXT;
+    """,
     # My goals: the person's own words about what they are aiming for, which only Ask reads.
     # Saved settings start with none.
     """

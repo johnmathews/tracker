@@ -3,6 +3,7 @@ src/lib/__tests__/insights-parity.spec.ts runs too), then the readers over a rea
 
 import json
 import sqlite3
+from collections.abc import Mapping
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -10,14 +11,13 @@ from typing import Any
 import pytest
 
 from tracker_api import insights
-from tracker_api.data import import_data, put_settings
-from tracker_api.validate import MAX_NOTES, Section, Tracked
+from tracker_api.data import import_data, put_details, put_settings
+from tracker_api.validate import MAX_NOTES, ExportData, Section, Tracked
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "insights"
 CASES: list[tuple[str, Any]] = [
     (p.name, json.loads(p.read_text(encoding="utf-8"))) for p in sorted(FIXTURES.glob("*.json"))
 ]
-NO_LOG: Tracked = {"plans": {}, "log": {}}
 QUOTA = 10**9
 # Wednesday 28 October 2026, in the week of Monday 26 October.
 TODAY = date(2026, 10, 28)
@@ -31,16 +31,27 @@ def add_user(conn: sqlite3.Connection, username: str = "ann") -> int:
     return cur.lastrowid
 
 
+def tracked(section: Mapping[str, Any] | None) -> Tracked:
+    """A section as an import reads it: `plans`, `log` and `details`, each empty when left out."""
+    given = section or {}
+    return {
+        "plans": given.get("plans", {}),
+        "log": given.get("log", {}),
+        "details": given.get("details", {}),
+    }
+
+
 def load(
     conn: sqlite3.Connection,
     user_id: int,
     *,
-    exercise: Tracked = NO_LOG,
-    diet: Tracked = NO_LOG,
+    exercise: Mapping[str, Any] | None = None,
+    diet: Mapping[str, Any] | None = None,
     settings: dict[str, Any] | None = None,
 ) -> None:
-    """Store plans and marks the way an import does, and settings when given."""
-    import_data(conn, user_id, {"exercise": exercise, "diet": diet, "settings": None}, quota=QUOTA)
+    """Store plans, marks and item details the way an import does, and settings when given."""
+    data: ExportData = {"exercise": tracked(exercise), "diet": tracked(diet), "settings": None}
+    import_data(conn, user_id, data, quota=QUOTA)
     if settings is not None:
         put_settings(conn, user_id, settings)
 
@@ -101,11 +112,10 @@ def test_fixture_week_summary(conn: sqlite3.Connection, name: str, case: dict[st
     expected = case["expected"]
     section: Section = case["section"]
     uid = add_user(conn)
-    tracked: Tracked = {"plans": case["plans"], "log": case["log"]}
     if section == "exercise":
-        load(conn, uid, exercise=tracked, settings={"dailyPick": case["dailyTarget"]})
+        load(conn, uid, exercise=case, settings={"dailyPick": case["dailyTarget"]})
     else:
-        load(conn, uid, diet=tracked, settings={"foodPick": case["dailyTarget"]})
+        load(conn, uid, diet=case, settings={"foodPick": case["dailyTarget"]})
     out = insights.week_summary(conn, uid, section, case["week"], date.fromisoformat(case["today"]))
     assert out["week"] == case["week"]
     assert out["plan_week"] == expected["planWeek"]
@@ -126,9 +136,10 @@ def test_fixture_week_summary(conn: sqlite3.Connection, name: str, case: dict[st
             "partial": it["partial"],
             "missed": it["missed"],
             "goalMet": it["goal_met"],
+            "notes": it["notes"],
         }
         for it in out["items"]
-    ] == expected["items"]
+    ] == [{**it, "notes": it.get("notes", "")} for it in expected["items"]]
 
 
 # --- The pure rules beyond the fixtures ----------------------------------------------------------
@@ -220,11 +231,15 @@ def test_a_missed_day_counts_as_done_and_shows_as_missed(conn: sqlite3.Connectio
 
 def test_week_summary_shape(conn: sqlite3.Connection) -> None:
     uid = add_user(conn)
-    plan = [{"id": "pu", "name": "Push-ups", "reps": 10, "target": 2, "notes": "Slow."}]
+    plan = [{"id": "pu", "name": "Push-ups", "reps": 10, "target": 2}]
     load(
         conn,
         uid,
-        exercise={"plans": {"2026-10-19": plan}, "log": {"2026-10-26": {"pu": days(0, 3)}}},
+        exercise={
+            "plans": {"2026-10-19": plan},
+            "log": {"2026-10-26": {"pu": days(0, 3)}},
+            "details": {"pu": {"notes": "Slow.", "fields": {"equipment": "Mat"}}},
+        },
         settings={"dailyPick": 1},
     )
     out = insights.week_summary(conn, uid, "exercise", "2026-10-26", TODAY)
@@ -267,18 +282,63 @@ def test_week_summary_shape(conn: sqlite3.Connection) -> None:
 def test_names_and_notes_are_cut_in_output(conn: sqlite3.Connection) -> None:
     uid = add_user(conn)
     # Code points, as the API counts a note's length: an emoji is one.
-    plan = [{"id": "f", "name": "🥦" * 150, "target": 1, "notes": "n" * 600}]
-    load(conn, uid, diet={"plans": {"2026-10-26": plan}, "log": {}})
+    plan = [{"id": "f", "name": "🥦" * 150, "target": 1}]
+    # An item's notes may run to 20,000 code points; a reader gives the first 500, and a cut note
+    # ends in "…" so an agent can tell it isn't the whole note before writing one back.
+    notes = "🥕" * 600
+    load(conn, uid, diet={"plans": {"2026-10-26": plan}, "details": {"f": {"notes": notes}}})
     item = insights.week_summary(conn, uid, "diet", "2026-10-26", TODAY)["items"][0]
     assert item["name"] == "🥦" * insights.MAX_NAME
-    assert len(item["notes"]) == MAX_NOTES == 500
-    assert insights.goals(conn, uid, TODAY)["diet"][0]["name"] == "🥦" * insights.MAX_NAME
-    assert insights.item_history(conn, uid, "diet", "f", 1, TODAY)["name"] == "🥦" * 100
+    assert item["notes"] == "🥕" * (MAX_NOTES - 1) + "…"
+    assert MAX_NOTES == 500
+    goal = insights.goals(conn, uid, TODAY)["diet"][0]
+    assert goal["name"] == "🥦" * insights.MAX_NAME
+    assert goal["notes"] == "🥕" * (MAX_NOTES - 1) + "…"
+    history = insights.item_history(conn, uid, "diet", "f", 1, TODAY)
+    assert history["name"] == "🥦" * 100
+    # One item's reader gives its whole note, to read before writing one back.
+    assert history["notes"] == notes
+
+
+def test_item_history_gives_the_whole_note_in_any_week(conn: sqlite3.Connection) -> None:
+    uid = add_user(conn)
+    note = ("Slow on the way down. " * 900).strip()  # 19,799 code points
+    plan = {"2026-10-05": [{"id": "pu", "name": "Push-ups", "reps": 10, "target": 2}]}
+    load(conn, uid, exercise={"plans": plan, "details": {"pu": {"notes": note}}})
+    assert insights.item_history(conn, uid, "exercise", "pu", 2, TODAY)["notes"] == note
+    # An item no week shows still has its note; one without a note reads "".
+    load(conn, uid, diet={"details": {"gone": {"notes": "Still here."}}})
+    assert insights.item_history(conn, uid, "diet", "gone", 1, TODAY)["notes"] == "Still here."
+    assert insights.item_history(conn, uid, "diet", "veg", 1, TODAY)["notes"] == ""
 
 
 def test_an_item_without_notes_reads_an_empty_note(conn: sqlite3.Connection) -> None:
     uid = add_user(conn)
     assert insights.week_summary(conn, uid, "diet", "2026-10-26", TODAY)["items"][0]["notes"] == ""
+
+
+def test_notes_are_the_items_details_in_every_week(conn: sqlite3.Connection) -> None:
+    """An item's notes are its details, one copy for every week (D3), as its row and page show
+    them. A plan stored before migration 7 still holds a note per week until it is next written;
+    a reader never shows those."""
+    uid = add_user(conn)
+    for week, note in (("2026-10-19", "the old week's copy"), ("2026-10-26", "this week's copy")):
+        stale = [
+            {"id": "pu", "name": "Push-ups", "reps": 10, "target": 2, "notes": note},
+            {"id": "sq", "name": "Squats", "reps": 15, "target": 2, "notes": note},
+        ]
+        conn.execute(
+            "INSERT INTO plans VALUES (?, 'exercise', ?, ?, 1)", (uid, week, json.dumps(stale))
+        )
+    put_details(conn, uid, "exercise", "pu", {"notes": "Elbows in."}, 0, quota=QUOTA)
+    for week in ("2026-10-19", "2026-10-26"):
+        items = insights.week_summary(conn, uid, "exercise", week, TODAY)["items"]
+        assert [(it["id"], it["notes"]) for it in items] == [("pu", "Elbows in."), ("sq", "")]
+    goals = insights.goals(conn, uid, TODAY)["exercise"]
+    assert [(it["id"], it["notes"]) for it in goals] == [("pu", "Elbows in."), ("sq", "")]
+    # Another section's details for the same id are another item's.
+    put_details(conn, uid, "diet", "sq", {"notes": "Not squats."}, 0, quota=QUOTA)
+    assert insights.goals(conn, uid, TODAY)["exercise"][1]["notes"] == ""
 
 
 def test_readers_see_only_their_users_data(conn: sqlite3.Connection) -> None:
@@ -364,6 +424,7 @@ def test_item_history(conn: sqlite3.Connection) -> None:
     assert out["section"] == "exercise"
     assert out["item_id"] == "pu"
     assert out["name"] == "Push-ups"
+    assert out["notes"] == ""
     assert (out["start"], out["end"]) == ("2026-10-05", "2026-10-26")
     assert out["weeks"] == [
         {

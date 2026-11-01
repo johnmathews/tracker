@@ -1,5 +1,16 @@
 import type { AuthProblem } from '@/stores/session'
+import { isDetailsId } from '@/lib/storage'
 import { countOf } from '@/lib/words'
+
+/**
+ * Why an item's notes or details can't be saved, when its id is one the details path can't name
+ * (`isDetailsId`), or null when it can. The app makes no such id; an import or an old plan can.
+ */
+export function detailsIdProblem(id: string, what: 'notes' | 'details'): string | null {
+  if (isDetailsId(id)) return null
+  const why = id.includes('/') ? 'its id has a slash in it' : 'its id isn’t one the server takes'
+  return `This item’s ${what} can’t be saved: ${why}.`
+}
 
 /** The repeat-password field's error, on every form that asks for a new password twice. */
 export const MISMATCH = 'The passwords don’t match. Type the same password in both fields.'

@@ -16,7 +16,12 @@
             "stop": "end_turn",
             "askedAt": 1792742400
           },
-          { "question": "And food?", "answer": "", "stop": "refused", "askedAt": 1792742460 }
+          {
+            "question": "And food?",
+            "answer": "",
+            "stop": "refused",
+            "askedAt": 1792742460
+          }
         ]
       },
       {
@@ -37,15 +42,29 @@
             "stop": "refused",
             "askedAt": 1792742400
           },
-          { "question": "Again?", "answer": "Half", "stop": "error", "askedAt": 1792742400 },
-          { "question": "Still?", "answer": "Half", "stop": "cancelled", "askedAt": 1792742400 },
+          {
+            "question": "Again?",
+            "answer": "Half",
+            "stop": "error",
+            "askedAt": 1792742400
+          },
+          {
+            "question": "Still?",
+            "answer": "Half",
+            "stop": "cancelled",
+            "askedAt": 1792742400
+          },
           {
             "question": "Extra",
             "answer": "Kept.",
             "stop": "end_turn",
             "askedAt": 1792742400,
             "thinking": "x",
-            "content": [{ "type": "tool_use" }]
+            "content": [
+              {
+                "type": "tool_use"
+              }
+            ]
           }
         ],
         "user_id": 7
@@ -75,7 +94,12 @@
         "updatedAt": 1792742400,
         "turns": []
       },
-      { "title": "A title", "createdAt": 1792742400, "updatedAt": 1792742400, "turns": [] },
+      {
+        "title": "A title",
+        "createdAt": 1792742400,
+        "updatedAt": 1792742400,
+        "turns": []
+      },
       {
         "id": "é",
         "title": "A title",
@@ -83,7 +107,13 @@
         "updatedAt": 1792742400,
         "turns": []
       },
-      { "id": "t1", "title": 5, "createdAt": 1792742400, "updatedAt": 1792742400, "turns": [] },
+      {
+        "id": "t1",
+        "title": 5,
+        "createdAt": 1792742400,
+        "updatedAt": 1792742400,
+        "turns": []
+      },
       {
         "id": "t2",
         "title": " \n\t ",
@@ -91,7 +121,13 @@
         "updatedAt": 1792742400,
         "turns": []
       },
-      { "id": "tm1", "title": "A title", "createdAt": -1, "updatedAt": 1792742400, "turns": [] },
+      {
+        "id": "tm1",
+        "title": "A title",
+        "createdAt": -1,
+        "updatedAt": 1792742400,
+        "turns": []
+      },
       {
         "id": "tm2",
         "title": "A title",
@@ -120,17 +156,32 @@
         "updatedAt": 9007199254740992,
         "turns": []
       },
-      { "id": "tm6", "title": "A title", "createdAt": 1792742400, "turns": [] },
+      {
+        "id": "tm6",
+        "title": "A title",
+        "createdAt": 1792742400,
+        "turns": []
+      },
       {
         "id": "tl1",
         "title": "A title",
         "createdAt": 1792742400,
         "updatedAt": 1792742400,
         "turns": {
-          "0": { "question": "Q", "answer": "Fine.", "stop": "end_turn", "askedAt": 1792742400 }
+          "0": {
+            "question": "Q",
+            "answer": "Fine.",
+            "stop": "end_turn",
+            "askedAt": 1792742400
+          }
         }
       },
-      { "id": "tl2", "title": "A title", "createdAt": 1792742400, "updatedAt": 1792742400 },
+      {
+        "id": "tl2",
+        "title": "A title",
+        "createdAt": 1792742400,
+        "updatedAt": 1792742400
+      },
       {
         "id": "Kq3xL0aZ-9_bQ2mR",
         "title": "A second copy",
@@ -146,16 +197,64 @@
         "turns": [
           "nope",
           null,
-          { "question": "  ", "answer": "a", "stop": "end_turn", "askedAt": 1792742400 },
-          { "question": 3, "answer": "a", "stop": "end_turn", "askedAt": 1792742400 },
-          { "question": "q", "answer": null, "stop": "end_turn", "askedAt": 1792742400 },
-          { "question": "q", "answer": "a", "stop": "thinking", "askedAt": 1792742400 },
-          { "question": "q", "answer": "a", "stop": "END_TURN", "askedAt": 1792742400 },
-          { "question": "q", "answer": "a", "stop": "end_turn" },
-          { "question": "q", "answer": "a", "stop": "end_turn", "askedAt": -5 },
-          { "question": "q", "answer": "a", "stop": "end_turn", "askedAt": true },
-          { "answer": "a", "stop": "end_turn", "askedAt": 1792742400 },
-          { "question": "The one good turn", "answer": "Fine.", "stop": "end_turn", "askedAt": 0 }
+          {
+            "question": "  ",
+            "answer": "a",
+            "stop": "end_turn",
+            "askedAt": 1792742400
+          },
+          {
+            "question": 3,
+            "answer": "a",
+            "stop": "end_turn",
+            "askedAt": 1792742400
+          },
+          {
+            "question": "q",
+            "answer": null,
+            "stop": "end_turn",
+            "askedAt": 1792742400
+          },
+          {
+            "question": "q",
+            "answer": "a",
+            "stop": "thinking",
+            "askedAt": 1792742400
+          },
+          {
+            "question": "q",
+            "answer": "a",
+            "stop": "END_TURN",
+            "askedAt": 1792742400
+          },
+          {
+            "question": "q",
+            "answer": "a",
+            "stop": "end_turn"
+          },
+          {
+            "question": "q",
+            "answer": "a",
+            "stop": "end_turn",
+            "askedAt": -5
+          },
+          {
+            "question": "q",
+            "answer": "a",
+            "stop": "end_turn",
+            "askedAt": true
+          },
+          {
+            "answer": "a",
+            "stop": "end_turn",
+            "askedAt": 1792742400
+          },
+          {
+            "question": "The one good turn",
+            "answer": "Fine.",
+            "stop": "end_turn",
+            "askedAt": 0
+          }
         ]
       },
       {
@@ -177,8 +276,16 @@
   "expected": {
     "ok": true,
     "data": {
-      "exercise": { "plans": {}, "log": {} },
-      "diet": { "plans": {}, "log": {} },
+      "exercise": {
+        "plans": {},
+        "log": {},
+        "details": {}
+      },
+      "diet": {
+        "plans": {},
+        "log": {},
+        "details": {}
+      },
       "settings": null,
       "conversations": [
         {
@@ -193,7 +300,12 @@
               "stop": "end_turn",
               "askedAt": 1792742400
             },
-            { "question": "And food?", "answer": "", "stop": "refused", "askedAt": 1792742460 }
+            {
+              "question": "And food?",
+              "answer": "",
+              "stop": "refused",
+              "askedAt": 1792742460
+            }
           ]
         },
         {
@@ -208,10 +320,30 @@
               "stop": "max_tokens",
               "askedAt": 1792742400
             },
-            { "question": "Why?", "answer": "", "stop": "refused", "askedAt": 1792742400 },
-            { "question": "Again?", "answer": "", "stop": "error", "askedAt": 1792742400 },
-            { "question": "Still?", "answer": "", "stop": "cancelled", "askedAt": 1792742400 },
-            { "question": "Extra", "answer": "Kept.", "stop": "end_turn", "askedAt": 1792742400 }
+            {
+              "question": "Why?",
+              "answer": "",
+              "stop": "refused",
+              "askedAt": 1792742400
+            },
+            {
+              "question": "Again?",
+              "answer": "",
+              "stop": "error",
+              "askedAt": 1792742400
+            },
+            {
+              "question": "Still?",
+              "answer": "",
+              "stop": "cancelled",
+              "askedAt": 1792742400
+            },
+            {
+              "question": "Extra",
+              "answer": "Kept.",
+              "stop": "end_turn",
+              "askedAt": 1792742400
+            }
           ]
         },
         {

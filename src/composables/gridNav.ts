@@ -15,10 +15,12 @@ import { onBeforeUnmount, onMounted, type Ref } from 'vue'
  *   MutationObserver; a tab stop whose row has gone falls back to the start.
  * - **Keys.** Arrows move cell by cell and never wrap; Home and End go to the first and last cell
  *   in the row, Ctrl+Home and Ctrl+End to the first and last cell of the grid. Space and Enter are
- *   the widget's own (a DayMark toggles); on a cell without one they do nothing.
- * - **Controls inside a cell (Edit plan).** Anything else focusable in a cell (Edit in a
- *   row header, Remove in the row's last cell, a Stepper) is parked at `tabindex="-1"`, so Tab doesn't stop on every
- *   row's controls. Enter or F2 on the cell lets them back into the Tab order and focuses the
+ *   the widget's own (a DayMark toggles; Enter on a name's link opens the item's page in one
+ *   press, F9, and Space on it does nothing); on a cell without one they do nothing.
+ * - **Controls inside a cell.** Anything else focusable in a cell (a note's button and, in Edit
+ *   plan, Edit in a row header, Remove in the row's last cell) is parked at `tabindex="-1"`, so
+ *   Tab doesn't stop on every row's controls. F2 on the cell (or Enter, on a cell without a
+ *   widget) lets them back into the Tab order and focuses the
  *   first; Tab and Shift+Tab move among them (Shift+Tab from the first returns to the cell, which
  *   keeps the tab stop), arrows stay with the control (a Stepper's value), and Escape parks them and
  *   puts focus back on the cell. Leaving the cell parks them too. Focus that reaches a control some
@@ -162,7 +164,10 @@ export function createGridNav(table: HTMLTableElement, options: GridNavOptions):
       target.focus()
       return
     }
-    if ((ev.key === 'Enter' || ev.key === 'F2') && controlsIn(cell).length > 0) {
+    // Enter is a widget's own (a DayMark steps, a name's link opens the item's page, F9); on a
+    // cell without one it lets the controls in, as F2 does on any cell.
+    const entering = ev.key === 'F2' || (ev.key === 'Enter' && target === cell)
+    if (entering && controlsIn(cell).length > 0) {
       ev.preventDefault()
       enter(cell)
       controlsIn(cell)
@@ -170,8 +175,12 @@ export function createGridNav(table: HTMLTableElement, options: GridNavOptions):
         ?.focus()
       return
     }
-    if (target === cell && (ev.key === ' ' || ev.key === 'Enter')) {
-      // Nothing to act on (a name, a total, the Picked row); Space would scroll the page.
+    if (
+      (target === cell && (ev.key === ' ' || ev.key === 'Enter')) ||
+      (target.matches('a') && ev.key === ' ')
+    ) {
+      // Nothing to act on (a total, the Picked row), or a link, which Space doesn't follow; Space
+      // would scroll the page.
       ev.preventDefault()
       return
     }

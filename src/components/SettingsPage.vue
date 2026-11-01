@@ -4,6 +4,7 @@ import { ChevronLeft, Download, LogOut, Upload } from '@lucide/vue'
 import { usePlannerStore } from '@/stores/planner'
 import { useDietStore } from '@/stores/diet'
 import { useAskStore } from '@/stores/ask'
+import { useDetailsStore } from '@/stores/details'
 import { useSessionStore } from '@/stores/session'
 import { useSyncStore } from '@/stores/sync'
 import { request } from '@/lib/api'
@@ -71,6 +72,7 @@ const GOALS_PAUSE_MS = 600
 const store = usePlannerStore()
 const diet = useDietStore()
 const ask = useAskStore()
+const details = useDetailsStore()
 const session = useSessionStore()
 const sync = useSyncStore()
 const heading = useTemplateRef<HTMLHeadingElement>('heading')
@@ -137,20 +139,21 @@ const markSet = computed({
 })
 
 /**
- * The plans, marks and settings as this device has them, unsynced changes included, plus Ask's
+ * The plans, marks, item details and settings as this device has them, unsynced changes included, plus Ask's
  * conversations, which only the server keeps: its own export carries them (docs/api.md §3), so
  * one read fetches them all. Without a server the file still downloads, without them, and says so.
  */
 async function exportData(): Promise<void> {
   notice.value = null
   const file = buildExport({
-    exercise: { plans: store.plans, log: store.log },
-    diet: { plans: diet.plans, log: diet.log },
+    exercise: { plans: store.plans, log: store.log, details: details.docs.exercise },
+    diet: { plans: diet.plans, log: diet.log, details: details.docs.diet },
     settings: {
       accent: store.accent,
       dailyPick: store.dailyPick,
       foodPick: store.foodPick,
       goals: store.goals,
+      itemSections: store.itemSections,
     },
   })
   const res = await request<{ conversations?: unknown }>('GET', '/export', undefined, {

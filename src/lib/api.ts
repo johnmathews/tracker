@@ -3,8 +3,15 @@ import { isRecord } from '@/lib/storage'
 /**
  * The one way the client talks to the API (docs/api.md). Every reply becomes a typed result, so
  * callers branch on what happened rather than on status codes. `request` reads a JSON reply;
- * `stream` reads Ask's server-sent events (§3.1). Both map a refusal the same way (`errorFor`).
+ * `stream` reads Ask's server-sent events (§3.2). Both map a refusal the same way (`errorFor`).
  */
+
+/**
+ * A 409 `conflict`'s body: the server's revision, and its copy. A plan write's carries `items`
+ * (null when the server has no plan for the week); a details write's carries `details` (`{}` once
+ * cleared, null when the item never had any). Neither copy is validated here.
+ */
+export type ConflictBody = { rev: number; items?: unknown; details?: unknown }
 
 export type ApiError =
   /** No network, or the proxy could not reach the API (502, 503 or 504 without an API body). */
@@ -13,8 +20,8 @@ export type ApiError =
   | { kind: 'auth' }
   /** The server failed (a 5xx with no API error code): worth retrying later. */
   | { kind: 'server'; status: number }
-  /** A stale plan write; the body carries the server's `items` and `rev`. */
-  | { kind: 'conflict'; body: { items: unknown; rev: number } }
+  /** A stale plan or details write; the body carries the server's copy and `rev`. */
+  | { kind: 'conflict'; body: ConflictBody }
   /** Any other refusal, with the API's error code (`error` when the reply was not the API's). */
   | { kind: 'refused'; status: number; code: string; retryAfter?: number }
 
@@ -41,9 +48,10 @@ function errorFor(status: number, json: Record<string, unknown> | null): ApiErro
   // A 401 means the session has ended, unless the API says otherwise (a wrong password is
   // 401 `invalid`, which the login form has to tell apart).
   if (status === 401 && (code === null || code === 'auth')) return { kind: 'auth' }
-  // Only a plan write conflicts; any other 409 (a sign-up's `exists`) is a refusal like the rest.
+  // Only a plan or details write conflicts; any other 409 (a sign-up's `exists`) is a refusal
+  // like the rest.
   if (status === 409 && json !== null && code === 'conflict') {
-    return { kind: 'conflict', body: json as { items: unknown; rev: number } }
+    return { kind: 'conflict', body: json as ConflictBody }
   }
   if (status >= 500 && code === null) return { kind: 'server', status }
   const error: ApiError = { kind: 'refused', status, code: code ?? 'error' }
@@ -121,7 +129,7 @@ export type StreamResult = { ok: true } | { ok: false; error: StreamError }
 
 /**
  * With no frame for this long, the stream counts as cut. The API sends a keep-alive comment every
- * 15 s (docs/api.md §3.1), so a healthy stream is never quiet this long.
+ * 15 s (docs/api.md §3.2), so a healthy stream is never quiet this long.
  */
 export const STREAM_IDLE_MS = 30_000
 
@@ -155,7 +163,7 @@ function parseFrame(frame: string): StreamEvent | null {
 
 /**
  * POST `body` to `path` and read the reply as server-sent events, handing each to `onEvent` in
- * order (docs/api.md §3.1). A refusal before the stream maps as `request` maps it. Once the
+ * order (docs/api.md §3.2). A refusal before the stream maps as `request` maps it. Once the
  * stream has started it ends well only at a `done` or `error` event; ending without one, a
  * dropped connection, or `idleMs` with no frame at all is `cut`, because a proxy that cuts a
  * stream still answered 200. Aborting `signal` (Stop) ends it as `stopped`. Either way the reader

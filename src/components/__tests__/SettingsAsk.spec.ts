@@ -11,6 +11,8 @@ import { USER, emptyState, signedIn } from '@/lib/__tests__/signedIn'
 
 const NOW = new Date(2026, 10, 1, 9, 0)
 const PICKS = { accent: '#30d158', dailyPick: 3, foodPick: 2 }
+/** A settings write: the arrangement always goes, `{}` for the default (K66). */
+const SENT = { ...PICKS, itemSections: {} }
 
 let wrapper: VueWrapper
 let api: FakeApi
@@ -92,7 +94,7 @@ describe('Your goals in Settings', () => {
     expect(puts()).toEqual([])
     await vi.advanceTimersByTimeAsync(400)
     await settle()
-    expect(puts()).toEqual([{ ...PICKS, goals: 'Run 5 km' }])
+    expect(puts()).toEqual([{ ...SENT, goals: 'Run 5 km' }])
     await goalsBox().setValue('Run 5 km by May')
     await vi.advanceTimersByTimeAsync(599)
     await settle()
@@ -100,8 +102,8 @@ describe('Your goals in Settings', () => {
     await vi.advanceTimersByTimeAsync(1)
     await settle()
     expect(puts()).toEqual([
-      { ...PICKS, goals: 'Run 5 km' },
-      { ...PICKS, goals: 'Run 5 km by May' },
+      { ...SENT, goals: 'Run 5 km' },
+      { ...SENT, goals: 'Run 5 km by May' },
     ])
     expect(api.accounts.get(USER)!.settings!.goals).toBe('Run 5 km by May')
   })
@@ -111,7 +113,7 @@ describe('Your goals in Settings', () => {
     await goalsBox().setValue('Vegetables every day.\n')
     await goalsBox().trigger('blur')
     await settle()
-    expect(puts()).toEqual([{ ...PICKS, goals: 'Vegetables every day.' }])
+    expect(puts()).toEqual([{ ...SENT, goals: 'Vegetables every day.' }])
     // The trailing line break the person just typed stays in the box.
     expect(goalsBox().element.value).toBe('Vegetables every day.\n')
     // Leaving the box again with nothing new sends nothing.
@@ -126,7 +128,7 @@ describe('Your goals in Settings', () => {
     await goalsBox().setValue('Feel less stiff.')
     location.hash = '#/'
     await settle()
-    expect(puts()).toEqual([{ ...PICKS, goals: 'Feel less stiff.' }])
+    expect(puts()).toEqual([{ ...SENT, goals: 'Feel less stiff.' }])
   })
 
   it('keeps nothing of a half-typed draft when another tab signs out mid-pause', async () => {

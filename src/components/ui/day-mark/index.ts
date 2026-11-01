@@ -93,7 +93,7 @@ export const MARK_PENS: Record<MarkKind, string> = {
 }
 
 /** What a mark adds to the name; a great day says nothing more than aria-pressed does. */
-const MARK_WORDS: Record<MarkKind, string | null> = {
+export const MARK_WORDS: Record<MarkKind, string | null> = {
   great: null,
   partial: 'partly done',
   missed: "couldn't do it",

@@ -54,7 +54,8 @@ const KEYS: [string, string][] = [
   ['Home, End', 'First and last cell in the row.'],
   ['Ctrl+Home, Ctrl+End', 'First and last cell of the grid.'],
   ['Space, Enter', 'Step a day’s mark: great, partial, missed in each drawing, then empty.'],
-  ['Enter or F2, Escape', 'In Edit plan, on a name: into its Edit button; Escape back.'],
+  ['Enter on a name', 'Opens the item’s own page, in one press.'],
+  ['F2, Escape', 'On a name: into its note and, in Edit plan, its Edit button; Escape back.'],
 ]
 
 function marksFor(id: string): (Mark | null)[] {
@@ -77,6 +78,7 @@ function remove(id: string): void {
       /></BarAction>
       <div id="sg-week-grid-screen" class="w-full">
         <TrackerGrid
+          section="exercise"
           label="Exercise"
           table-label="Exercises, week of 19 October"
           :items="rows"

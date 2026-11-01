@@ -9,15 +9,49 @@
 ## 1. Overview
 
 A Vue 3 SPA with accounts. The API service in `api/` ([api.md](api.md)) holds each user's data, and
-the app syncs with it through the same origin (§7). Two Pinia stores hold what the app shows:
-`planner` (exercise plans, the log, the visible week, settings, the mode) and `diet` (food plans and
-their log), which takes its week from `planner`. Two more run the account: `session` (who is signed
-in, and whether the API sends email and answers questions) and `sync` (the per-user cache, the
-outbox of unsent writes, and reads). A fifth, `ask`, holds the Ask page's conversation and history
-(§3), read through `request` and `stream` in `src/lib/api.ts`; `src/lib/ask.ts` holds the page's
-words. Both data stores track
+the app syncs with it through the same origin (§7). Three Pinia stores hold what the app shows:
+`planner` (exercise plans, the log, the visible week, settings, the mode), `diet` (food plans and
+their log), which takes its week from `planner`, and `details` (each item's notes and fields, one
+copy for every week, §3). Two more run the account: `session` (who is signed in, and whether the API sends email and
+answers questions) and `sync` (the per-user cache, the outbox of unsent writes, and reads). A
+sixth, `ask`, holds the Ask page's conversation and history (§3), read through `request` and
+`stream` in `src/lib/api.ts`; `src/lib/ask.ts` holds the page's words. Both plan stores track
 the same thing, a mark per day against a weekly goal, through the pure helpers in
-`src/lib/tracker.ts`. `src/lib/words.ts` writes
+`src/lib/tracker.ts`.
+
+**Tracker types.** `src/lib/trackerTypes.ts` is the registry of tracker types. A section
+(`exercise`, `diet`) is the stored name, in URLs, the database, the cache and the outbox. Its type
+(`exercise`, `food`) is an attribute of it, mapped in `SECTIONS`. Each type gives:
+
+- the section's heading and the label of one item ("Exercises", "Exercise");
+- the marks a press steps through in each mark set (§6.2);
+- the chips under a name (`exerciseDetails` lives here, and `planner.ts` re-exports it);
+- the item page's fields, by key and label (exercise: Equipment, Works, Link; food: A serving,
+  Examples);
+- the setting that holds its daily target (`dailyPick`, `foodPick`) and a new item's goal.
+
+`api/src/tracker_api/types.py` holds the same registry, and `fixtures/types/registry.json` keeps
+the two in step: `trackerTypes.spec.ts` and `test_types.py` both read it. A second tracker of a type
+would be a new section in `SECTIONS`, with no rename. There is no screen for adding one yet.
+
+**The item page.** `src/lib/routes.ts` reads and writes the item page's address,
+`#/item/<section>/<id>`, and does its Back (`backToWeek`) and the Link field's site (`webHost`).
+`src/lib/history.ts` gives an item's recent weeks (`itemHistory`) and its latest plan
+(`latestPlanWith`), from the log and the plans. `src/composables/itemSource.ts` reads each
+section's plans, log and goal action from its store, for the page and for the route that checks
+the item exists.
+
+**The item page's sections** (K66, P29). `src/lib/itemSections.ts` holds which of the page's
+sections (`notes`, `details`, `plan`, `history`) each type's pages show, and in what order:
+`{order, hidden}` per type id, every key once in `order`, `hidden` a subset in the default order.
+`normaliseItemSections` drops unknown, repeated and non-string keys, appends missing ones in the
+default order, drops a type the registry lacks, and leaves out a type with the default
+arrangement. `api/src/tracker_api/item_sections.py` normalises the same way, and
+`fixtures/item-sections/normalise.json` keeps the two in step (`itemSections.spec.ts`,
+`test_item_sections.py`). The arrangement is the settings field `itemSections` (§3), so it syncs
+and exports with the account.
+
+`src/lib/words.ts` writes
 small counts as words: `numberWord` ("two", or "Two" to open a sentence, figures from 11 up) and
 `countOf` ("one change", "two changes"). `src/lib/plans.ts` decides which week's plan a week
 shows; `src/lib/dates.ts` holds the week maths (Monday of a week, `YYYY-MM-DD` keys and back,
@@ -27,10 +61,15 @@ labels, `DAY_NAMES`); `src/lib/theme.ts` holds the theme names and `isDark`. The
 (`src/composables/barReveal.ts`, the navbar out of sight) and `useFullscreen`
 (`src/composables/fullscreen.ts`, the browser's full screen).
 
+The API has a second client besides the app: agents that connect over MCP (`mcp_server.py`). Their
+tools read through `insights.py` and write through `edits.py`, so they follow the same rules as the
+app. [api.md](api.md) §3.1 describes the endpoint and [mcp.md](mcp.md) how to connect an agent.
+
 Every screen is built from the primitives in `src/components/ui/` (§6.3), which follow the design
 system's cards ([brand.md](brand.md)). `TrackerGrid` and `TrackerRow` (on the `DayMark`, `Chip`
 and `IconButton` primitives) take props, emit events, and serve both sections.
-`TrackerGrid` runs the grid's keyboard model (`useGridNav`, §6.5). `TrackerRow` asks the
+`TrackerGrid` runs the grid's keyboard model (`useGridNav`, §6.5) and links each name to its item's
+page. `TrackerRow` asks the
 `ConfirmDialog` (through `useConfirm`, §6.4) before emitting `remove`, and names where focus goes
 once the row has gone. `ExerciseGrid` and `DietSection` wire them to their store. `EditExerciseDialog` (which also adds an exercise when given none, K54) takes its field
 state and input cleaning through `useExerciseForm` (`src/composables/exerciseForm.ts`) and the
@@ -39,9 +78,10 @@ sign-out refusal into a sentence for the forms; `src/composables/importSummary.t
 for Settings → Import… and the first-login prompt.
 
 ```
-App.vue                 picks the screen (a link, planner, Settings, Ask, sign-up, reset or sign-in), the
-│                       .dark class, clock refresh, sync triggers (focus, visibility, online, minute
-│                       tick, storage), the planner-screens class (§6.6), and the one ConfirmHost
+App.vue                 picks the screen (a link, planner, Settings, an item's page, Ask,
+│                       sign-up, reset or sign-in), the .dark class, clock refresh, sync
+│                       triggers (focus, visibility, online, minute tick, storage), the
+│                       planner-screens class (§6.6), and the one ConfirmHost
 ├── ConfirmEmail.vue    a confirm-your-email link (#/confirm/<t>), signed in or out: confirms it
 ├── PasswordForm.vue    an invite or reset link (#/invite/<t>, #/reset/<t>): choose a password
 ├── SignupForm.vue      #/signup: email and password twice; field and form-level refusals
@@ -59,9 +99,15 @@ App.vue                 picks the screen (a link, planner, Settings, Ask, sign-u
 │                       (Marks, then Theme, K59), Your goals (My goals, saved when typing
 │                       pauses), Your data (Export and Import…, see §4) and Account (who is
 │                       signed in, Sign out)
-├── AskPage.vue         #/ask (K64–K68): the SidePanel with the HistoryList, and beside it Back
+├── AskPage.vue         #/ask (K67–K71): the SidePanel with the HistoryList, and beside it Back
 │                       to the week, the Transcript and the question box with the QuotaChip;
 │                       deleting asks in a ConfirmDialog of its own
+├── ItemPage.vue        the ItemPage card, at #/item/<section>/<id> (K64, K65): Back to the week
+│   │                   and Arrange sections, the type, the name and its chips; then rows like
+│   │                   Settings: Notes, Details, the week's plan (or the latest, read-only) and
+│   │                   Recent weeks, as the type's arrangement shows them (K66)
+│   └── RecentWeeks.vue the RecentWeeks card: up to eight weeks, newest first, a met week's count
+│                       in pen
 ├── SyncStatus.vue      loading, offline and conflict Banners above the planner
 ├── EmailStatus.vue     "Confirm your email." Banner, with Send it again, until it is confirmed
 ├── ImportPrompt.vue    this browser's log from before accounts, offered once (§7)
@@ -71,19 +117,22 @@ App.vue                 picks the screen (a link, planner, Settings, Ask, sign-u
 │   │                   mode the title alone, with the Exercises a day Stepper centred on its line, K62)
 │   ├── TrackerGrid.vue a <table> (WeekGrid card): day names, one TrackerRow per item, and
 │   │   │               the days that met the daily pick
-│   │   └── TrackerRow.vue  name and chips on one line, the note under them
-│   │                       (a button opening a Popover, K43); 7 × DayMark; in config
+│   │   └── TrackerRow.vue  name (a link to the item's page) and chips on one line, the
+│   │                       item's notes under them, from the details store (a button
+│   │                       opening a Popover, K43); 7 × DayMark; in config
 │   │                       mode the edit IconButton after the name, and the remove
 │   │                       IconButton in a last cell of its own
 │   └── EditExerciseDialog.vue  Dialog: Name; sets, Measure (Reps or Time), reps or seconds;
-│                           PerSideToggle, weight (kg), Times a week (the goal); then Note (K55);
+│                           PerSideToggle, weight (kg), Times a week (the goal); then Note (K55),
+│                           the item's notes for every week (the details store);
 │                           Edit exercise, or Add exercise from the button under the grid (K54)
 └── DietSection.vue     the Food section: SectionHeader (the title and the week; in config mode
                         the title alone, with the Foods a day Stepper centred on its line, K62), kept
                         with its grid, whose days that met foods a day turn green (K57); on the
                         screens, the "Back to Exercises" arrow (K42)
     ├── TrackerGrid.vue wired to diet: no chips
-    └── EditFoodDialog.vue  Dialog: Name, Times a week (the goal), then Note; Edit food, or
+    └── EditFoodDialog.vue  Dialog: Name, Times a week (the goal), then Note (the food's notes
+                            for every week); Edit food, or
                             Add food from the button under the grid (K54)
 ```
 
@@ -105,22 +154,26 @@ foods (with goals). Ticks live in a separate **log**, keyed by week and item id.
 - Items keep their ids when copied, so a week's ticks stay attached to the same exercise or food.
   Removing an item from one week leaves weeks with their own plan alone; its ticks stay in the log,
   uncounted.
+- An item's notes and fields are not part of any week's plan. They are its details, one copy for
+  every week, keyed by section and item id (the details store, §3). Before 2026-11-01 each week's
+  copy of an item carried its own note, so an edit on one week missed the weeks with their own plan.
 
 ## 3. Stores
 
 `usePlannerStore` is a setup store.
 
-| State                             | Kept by                                   | Notes                                                                              |
-| --------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------- |
-| `plans`                           | the sync store: server and per-user cache | week → `{ id, name, sets?, reps, duration?, perSide?, weight?, target, notes? }[]` |
-| `log`                             | the sync store: server and per-user cache | week Monday `YYYY-MM-DD` → exercise id → seven marks (`Days`, below)               |
-| `accent`, `dailyPick`, `foodPick` | the sync store: server and per-user cache | defaults `#30d158`, `3` and `2`. The accent is kept but draws nothing (K13)        |
-| `goals`, `goalsKnown`             | the sync store: server and per-user cache | My goals, `''` by default; only Ask reads them. `goalsKnown` is below              |
-| `theme`                           | `tracker-settings-v1` (the device)        | `system` (default), `light` or `dark`                                              |
-| `markSet`                         | `tracker-settings-v1` (the device)        | `squiggles` (default), `ticks`, `stamped-ticks`, `faces`, `stamped-faces`          |
-| `configMode`                      | no                                        | `false` (normal mode) on every load                                                |
-| `weekOffset`                      | no                                        | `0` is the current week                                                            |
-| `now`                             | no                                        | a ref so "today" can move; see §5                                                  |
+| State                             | Kept by                                   | Notes                                                                       |
+| --------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------- |
+| `plans`                           | the sync store: server and per-user cache | week → `{ id, name, sets?, reps, duration?, perSide?, weight?, target }[]`  |
+| `log`                             | the sync store: server and per-user cache | week Monday `YYYY-MM-DD` → exercise id → seven marks (`Days`, below)        |
+| `accent`, `dailyPick`, `foodPick` | the sync store: server and per-user cache | defaults `#30d158`, `3` and `2`. The accent is kept but draws nothing (K13) |
+| `goals`, `goalsKnown`             | the sync store: server and per-user cache | My goals, `''` by default; only Ask reads them. `goalsKnown` is below       |
+| `itemSections`                    | the sync store: server and per-user cache | each type's item-page arrangement (K66); `{}` is every page as it comes     |
+| `theme`                           | `tracker-settings-v1` (the device)        | `system` (default), `light` or `dark`                                       |
+| `markSet`                         | `tracker-settings-v1` (the device)        | `squiggles` (default), `ticks`, `stamped-ticks`, `faces`, `stamped-faces`   |
+| `configMode`                      | no                                        | `false` (normal mode) on every load                                         |
+| `weekOffset`                      | no                                        | `0` is the current week                                                     |
+| `now`                             | no                                        | a ref so "today" can move; see §5                                           |
 
 The stores start empty (showing the defaults) and never write the user's data themselves. The sync
 store fills them with `adopt` and saves their changes (§7).
@@ -132,8 +185,8 @@ store fills them with `adopt` and saves their changes (§7).
 exercises, so a removed exercise's history stays in `log` without inflating the numbers.
 
 **Actions** (plan edits apply to the visible week only): `toggle`, `changeTarget` (clamps 0–7),
-`addExercise` (returns `false` for an empty name; new exercises get goal 3 unless the input
-names one), `updateExercise` (replaces name, sets, reps or duration, per-side, weight and, when
+`addExercise` (returns the new id, or `null` for an empty name; new exercises get goal 3 unless
+the input names one), `updateExercise` (replaces name, sets, reps or duration, per-side, weight and, when
 given, the goal, keeping the id and history; `false` for an empty name or an id not in the week).
 An exercise counts reps or time, never both: a duration stores reps as 0. Then `removeExercise`, `setConfigMode`,
 `prevWeek`, `nextWeek`, `thisWeek`, `refreshNow`, `changeDailyPick` and `changeFoodPick` (each
@@ -141,7 +194,7 @@ clamps 1–8), `setGoals` (normalised as the API stores them; the same text agai
 nothing), `setTheme`, `portableSettings` (the accent, both daily picks and, once known, the
 goals), `savedSettings` (the same, or null while the user has none of their own), `adopt`
 (replace the data and settings wholesale), `adoptWeek` (replace one week's plan) and `clear` (forget
-the user on sign-out, keeping the theme).
+the user on sign-out, the details store included, keeping the theme).
 
 **My goals** are the person's own words about what they are aiming for, set in Settings and read
 only by Ask. `goalsKnown` turns true once the goals came from the server, from a cache that
@@ -149,21 +202,42 @@ carried them, or from `setGoals`. Until then `portableSettings` leaves them out,
 hasn't read them never sends or caches a stand-in `''` that would erase the saved ones (§7).
 Settings that `adopt` receives without `goals` keep the ones the store has. `setGoals` doesn't
 debounce: the Settings row commits its draft when the person stops typing, so one change is one
-write. The module also exports `exerciseDetails`, which gives the chips after a name, on its line (K43):
+write. The module also re-exports
+`exerciseDetails` from `src/lib/trackerTypes.ts`, which gives the chips after a name, on its line (K43):
 "3 × 12" or "3 × 8 each side" (or "10 reps a set" and "8 each side" without sets, "3 sets" without
 reps), "3 × 45 s" or "1 min 30 s each side" for a timed exercise (`durationText` in
 `src/lib/words.ts`), then "16 kg" when weighted, and no chip at all for none of these (the Chip
 card's words).
 
-`useDietStore` holds `plans` of foods (`{ id, name, target, notes? }`) and its own `log`, kept by the sync
+`useDietStore` holds `plans` of foods (`{ id, name, target }`) and its own `log`, kept by the sync
 store like the planner's. It reads `planner.weekKey`, so week navigation moves both
 sections. It derives `foods`, `dayCounts`, `grandTotal` and `goalsMet`, and
 offers `isEaten`, `totalFor`, `toggle`, `changeTarget` (0–7), `addFood` (a name, or a name with
-its goal and note from the Add food dialog; goal 3 when none is given, `false` for an empty name),
-`updateFood` (name, goal and note from the Edit food dialog, `false` for an empty name or a food
+its goal from the Add food dialog; goal 3 when none is given; the new id, or `null` for an empty
+name), `updateFood` (name and goal from the Edit food dialog, `false` for an empty name or a food
 not in the week), `removeFood`, `adopt`, `adoptWeek` and `clear`. Food goals work
 like exercise goals (met once the count reaches a non-zero goal). The daily target, foods a day,
 is the planner store's `foodPick`, with the other settings (K57).
+
+`Tracked` (`src/lib/tracker.ts`), the item shape both plan stores share, is `{ id, name, target }`.
+It has no `notes`: they are the item's details.
+
+`useDetailsStore` (`src/stores/details.ts`) holds `docs`, each section's details by item id. An
+item's details are `{ notes?, fields? }` (`ItemDetails` in `src/lib/storage.ts`): its notes in
+markdown, and its text fields by key. A blank key is left out, so `{}` is an item with none, and
+the store drops an empty document. The sync store fills it through `adopt` and saves its changes
+like the plans (§7). It offers:
+
+- `get(section, id)` (a frozen `{}` when there are none), `notesOf` and `fieldOf(section, id, key)`;
+- `canSetNotes(section, id, text)`, which a dialog asks before it saves anything (`id` null for an
+  item not added yet);
+- `setNotes` and `setField`, which store the document as the API would and return `false`, changing
+  nothing, over a limit (§4), over 32 KB, for a bad field key, a 33rd field or an id the API can't
+  name;
+- `adopt` (every section), `adoptItem(section, id, doc)` (one item, from a conflict) and `clear`.
+
+A page that saves as you type keeps its own draft of the text and calls a setter on each change,
+so a trailing space stays in the field while the stored copy is trimmed.
 
 `useSessionStore` also keeps what the API offers, from `GET /api/auth/options`: `mail` (it sends
 email) and `ask`, three-state: `null` until the API has said, then `true` or `false`. It loads
@@ -171,20 +245,20 @@ after every sign-in, including a remembered user's (F9), and again when the brow
 online; a failed read leaves `ask` as it was, and `askOff()` sets it false when the API answers
 503 `ask-off`. The bar's Ask button and the `#/ask` page show only while it is `true`.
 
-`useAskStore` holds the Ask page (docs/api.md §3.1). Nothing of a conversation is kept in the
+`useAskStore` holds the Ask page (docs/api.md §3.2). Nothing of a conversation is kept in the
 browser's storage; the history lives on the server.
 
-| State                    | Notes                                                                                     |
-| ------------------------ | ----------------------------------------------------------------------------------------- |
-| `turns`                  | the open conversation, as the Transcript draws it (`done`, `streaming`, `stopped`, `error`) |
-| `conversationId`         | the open conversation's id; `null` for a new one until `start` names it                    |
-| `status`                 | `idle` or `asking`                                                                        |
-| `draft`                  | the question box's words, kept while the person is on another page                        |
-| `remaining`, `limit`     | questions left today and the cap, from `GET /api/ask` and each `start`; `null` until read |
-| `openAt`                 | when asking opens again (ms), from a 429's `retryAfter`; `null` when not known            |
-| `conversations`          | the history list from `GET /api/ask/conversations`: `{ id, title, updatedAt }`            |
-| `unsynced`               | changes still in the outbox when the last question went (F11)                             |
-| `offline`, `notice`      | the last call couldn't reach the server; one line about the conversation (not kept, gone) |
+| State                | Notes                                                                                       |
+| -------------------- | ------------------------------------------------------------------------------------------- |
+| `turns`              | the open conversation, as the Transcript draws it (`done`, `streaming`, `stopped`, `error`) |
+| `conversationId`     | the open conversation's id; `null` for a new one until `start` names it                     |
+| `status`             | `idle` or `asking`                                                                          |
+| `draft`              | the question box's words, kept while the person is on another page                          |
+| `remaining`, `limit` | questions left today and the cap, from `GET /api/ask` and each `start`; `null` until read   |
+| `openAt`             | when asking opens again (ms), from a 429's `retryAfter`; `null` when not known              |
+| `conversations`      | the history list from `GET /api/ask/conversations`: `{ id, title, updatedAt }`              |
+| `unsynced`           | changes still in the outbox when the last question went (F11)                               |
+| `offline`, `notice`  | the last call couldn't reach the server; one line about the conversation (not kept, gone)   |
 
 `ask()` sends the box's words (or a Try again's question): it awaits `sync.flush()` first, notes
 what is still pending, and posts `{question, today, conversation?}` with `today` the browser's
@@ -213,10 +287,11 @@ with storage blocked or full the app keeps working in memory.
 | Key                                            | Holds                                                                           | Written |
 | ---------------------------------------------- | ------------------------------------------------------------------------------- | ------- |
 | `tracker-session-v1`                           | `{ user }`: the last signed-in user                                             | yes     |
-| `tracker-cache-v3:<user>`                      | the user's state as `GET /api/state` returns it, with `revs`                    | yes     |
-| `tracker-outbox-v3:<user>`                     | writes not yet sent (§7)                                                        | yes     |
+| `tracker-cache-v4:<user>`                      | the user's state as `GET /api/state` returns it, with `revs` and `detailRevs`   | yes     |
+| `tracker-outbox-v4:<user>`                     | writes not yet sent (§7)                                                        | yes     |
 | `tracker-import-v1:<user>`                     | the first-login prompt's answer, `imported` or `dismissed` (§7)                 | yes     |
 | `tracker-settings-v1`                          | `theme`, read before first paint by `public/theme-init.js`, and `markSet`       | both    |
+| `tracker-cache-v3:<user>`, `-outbox-v3:<user>` | the cache and outbox from before item details; moved at sign-in, notes lifted   | never   |
 | `tracker-cache-v2:<user>`, `-outbox-v2:<user>` | the cache and outbox from before the solid and hatch drawings; moved at sign-in | never   |
 | `tracker-cache-v1:<user>`, `-outbox-v1:<user>` | the cache and outbox from before marks had kinds; moved at sign-in (below)      | never   |
 | `tracker-v2`, `-diet-v2`                       | exercise and food `{ plans, log }` from before accounts                         | never   |
@@ -253,6 +328,21 @@ to `-v3` on 2026-10-26 (K41). `src/lib/__tests__/format.spec.ts` now records wha
 stores (the marks, and the fields an exercise and a food keep) and fails when the stored format
 changes under the same names.
 
+The names went to `-v4` on 2026-11-01, when notes moved from plan items into item details. A
+`-v4` cache holds each section's `details` and `detailRevs` beside its plans, log and `revs`, and
+its plan items carry no `notes`. Moving a `-v3` cache lifts its notes into details by the export's
+rule below (`liftNotes`, `normaliseState(v, true)`). The server lifted the same notes from its own
+plans (migration 7, [api.md](api.md) §2), so lifted notes are not sent. The exception is a section
+whose plan writes were still queued in the old outbox: a note there may have been edited or cleared
+offline, after the copy the server lifted. Each of its lifted items queues a `details` write marked
+`lifted`, and so does each item in a queued week's plan with no note in the cache, which sends a
+cleared document. The server's rev 1 is migration 7's copy of the old note, so a 409 at rev 1 to a
+lifted write sends it again at rev 1, and the device's copy wins, as the queued plan write would
+have. A note the server already holds is accepted as it is (P7). A conflict at rev 2 or later means
+the note changed after the migration, so it brings the server's copy in, as for any write. A newer
+edit to the item before the lifted write is sent replaces it and stays `lifted`. An id the details
+path can't name (§7) queues nothing.
+
 **Migration.** Before weekly plans, one list served every week: `{ exercises, log }` under
 `tracker-v1` (the design prototype's shape, under its key renamed) and `{ foods, log }` under
 `tracker-diet-v1`. When a v2 key is missing and its v1 key exists, `parsePlannerData` and
@@ -269,13 +359,10 @@ v2; now the conversion only feeds the import.
 - `duration` (seconds per set) is kept only as a whole number above 0, capped at 3600.
 - `sets` is kept only as a whole number from 1 to 20 (larger values cap at 20); `weight` (kg) only
   as a positive number, rounded to 2 decimals and capped at 500. Otherwise the key is left out.
-- `notes`, on an exercise or a food (K43), is kept only as a string, trimmed of spaces, tabs and
-  line breaks at its ends and cut to 500 characters, counted as code points so the API's Python
-  agrees (`normaliseNotes`). A blank note is left out. The row renders it with `src/lib/markdown.ts`
-  (markdown-it, raw HTML off, no images, headings, tables or rules): one line of inline formatting
-  in the row, where a link is its underlined text, and the whole note in a Popover, where links
-  open in a new tab with `rel="noopener noreferrer"`. The note is edited in the Edit exercise and
-  Edit food dialogs; an update that leaves `notes` out keeps the note, and an empty one clears it.
+- An exercise or a food keeps no `notes` (they are its details, below). A `notes` key on an item
+  in an export of version 4 or a `-v3` cache (K43) is read only to lift it into details: trimmed
+  of spaces, tabs and line breaks at its ends and cut to 500 characters, counted as code points so
+  the API's Python agrees (`normaliseNotes`).
 - Log weeks whose key is not `YYYY-MM-DD`, and entries that are not arrays, drop out; the rest
   normalise to exactly seven days (`normaliseMark`): `"great"`, `"partial"` and `"missed"` stay,
   a `true` from before marks had kinds reads as `"great"`, and anything else is an empty day (`null`).
@@ -285,6 +372,26 @@ v2; now the conversion only feeds the import.
 
 `parseDietData` applies the same rules to foods, with four default foods (Vegetables 7, Fruit 5,
 Fish 2, Nuts 3).
+
+**Item details** (`normaliseDetails`, `normaliseDetailsMap`), in the cache, an export and the
+API's replies, follow the API's rules exactly ([api.md](api.md) §3):
+
+- `notes` is a string trimmed of spaces, tabs and line breaks at its ends, cut to 20,000 code points
+  (`MAX_DETAILS_NOTES`) and trimmed again. A blank note is left out.
+- `fields` keeps keys matching `[a-z][a-z0-9_]{0,31}`, whether or not the type lists them, so
+  changing a type's field list never loses text. Each value is trimmed and cut to 500 code points
+  (`MAX_FIELD`), blanks drop out, and the first 32 that remain are kept.
+- Any other key is dropped, and an empty `fields` is left out.
+- A document over 32 KB as compact UTF-8 JSON (`detailsFit`) drops out of a map, as does an item id
+  over 128 characters or `__proto__`. 20,000 characters of a multi-byte script can pass 32 KB, so
+  the dialogs and the item page say "These notes are too long to save" for that case.
+
+The notes render with `src/lib/markdown.ts` (markdown-it, raw HTML off, no images, headings, tables
+or rules). The row shows one line of inline formatting, where a link is its underlined text. The
+whole note opens in a Popover that scrolls when it is taller than the window, and the item page
+shows it whole. Links there open in a new tab with `rel="noopener noreferrer"`. The notes are
+edited on the item page and in the Note field of the Edit exercise and Edit food dialogs. The
+field counts from 19,000 characters (`NOTES_COUNT_FROM`), and a blank one clears the notes.
 
 `parseSettings` accepts any `#rrggbb` accent (K3a, K13), clamps the daily pick to
 1–8, reads My goals with `normaliseGoals` (trimmed, cut to 1,000 code points, `''` when blank or
@@ -297,24 +404,35 @@ load as `system`, and before the mark set existed as `squiggles`.
 ```json
 {
   "format": "tracker-export",
-  "version": 4,
+  "version": 5,
   "exportedAt": "2026-10-24T09:30:00.000Z",
-  "exercise": { "plans": {}, "log": {} },
-  "diet": { "plans": {}, "log": {} },
+  "exercise": { "plans": {}, "log": {}, "details": {} },
+  "diet": { "plans": {}, "log": {}, "details": {} },
   "settings": { "accent": "#30d158", "dailyPick": 3, "foodPick": 2, "goals": "" },
   "conversations": [{ "id": "Kq3x…", "title": "…", "createdAt": 0, "updatedAt": 0, "turns": [] }]
 }
 ```
 
+`details` maps each item id to its `{ notes?, fields? }`, without revisions. `settings` also
+carries `itemSections` when a type's item page is arranged (K66); a file's arrangement is
+normalised like the cache's, and applies with the other settings only to an account that has none.
 The plans, marks and settings are the device's, unsynced changes included. Ask's conversations
 live only on the server, so Export reads them from `GET /api/export` (`api.md` §3) and adds that
 list; an account with none writes no `conversations` key, and offline the file downloads without
-them and says so. The theme is not exported, because it belongs to the device rather than the
-person. Import… reads a
-file through `parseExport` (`src/lib/transfer.ts`), which rejects anything that is not JSON, has
-another `format`, or has a `version` other than 1 to 4 (a version 1 file's `true` days read as
-`"great"`, K12; version 4 added notes, K43). My goals came later without a new version, as
-`foodPick` did: an older reader drops the key, and a file without it reads as no goals. Files exported under the earlier names carry
+them and says so. The theme is not
+exported, because it belongs to the device rather than the person. Import… reads a file through
+`parseExport` (`src/lib/transfer.ts`), which rejects anything that is not JSON, has another
+`format`, or has a `version` other than 1 to 5 (a version 1 file's `true` days read as `"great"`,
+K12; version 4 added notes on plan items, K43; version 5 moved them into `details`). My goals
+came without a new version, as `foodPick` did: an older reader drops the key, and a file without
+it reads as no goals.
+
+A file of version 4 or older carries its notes on plan items, so `liftNotes` lifts them into
+`details`, and any `details` key in it is ignored. Per item, the note comes from the latest week
+whose copy of the item has a non-blank one, and from the first such copy in that week. Only items
+the plan normaliser keeps count. The API's `lift_notes` and its migration 7 apply the same rule.
+
+Files exported under the earlier names carry
 `"format": "fitness-planner-export"` or `"exercise-planner-export"` and import the same way
 (`OLD_EXPORT_FORMATS`, in both languages). It validates the rest with the same normalisers
 as storage, so a hand-edited file loads the way a hand-edited `localStorage` value would. Missing
@@ -326,9 +444,10 @@ applies the same rules):
 - A week that already has a plan keeps it; a week with no plan takes the file's.
 - Per week, item and day, a marked day keeps its mark and an empty one takes the file's, so an
   import can add marks but never clears or changes one.
+- An item with details keeps them whole, and an item without takes the file's.
 - The file's accent and daily pick apply only when the account has no settings of their own yet.
 - The file's My goals fill the account's when those are empty, and never replace goals already
-  saved (F17, K69).
+  saved (F17, K72).
 - The file's Ask conversations are added when the account has none with their id; one it has is
   never changed.
 
@@ -339,9 +458,10 @@ read already in flight, which predates the import). Local writes still queued go
 server merges against everything this device has; if they cannot be sent, nothing is imported. When
 the import cannot be done, the Settings page says why (offline, a server failure, an ended session,
 a full account) and
-keeps the file ready to try again. The confirm step names how many weeks and marked days the file adds
-(`mergeSummary`, through `useImportSummary`, which the first-login prompt shares) before anything
-is written, and names the rest: the exercises and foods a day, your goals (goals that only fill
+keeps the file ready to try again. The confirm step names how many weeks and marked days the file
+adds, and how many items gain notes or details ("…plus the notes and details of two items"), before
+anything is written (`mergeSummary`, through `useImportSummary`, which the first-login prompt
+shares), and names the rest: the exercises and foods a day, your goals (goals that only fill
 empty ones count as a change on their own), and how many conversations from Ask the account
 doesn't have yet (Settings reads the history list first when the file has any). It is computed from the current state, so it stays right if another tab or a settings
 change lands while it is open. Importing the same file twice adds nothing the second time. Adding a week can change what
@@ -351,6 +471,7 @@ the intended result.
 `fixtures/transfer/` holds the parse and merge cases as JSON, each with its expected result.
 `src/lib/__tests__/transfer.spec.ts` runs every case. The format is the contract for the API's
 import and export as well: the API's tests (`api/tests/test_parity.py`) run the same files.
+`fixtures/types/registry.json` does the same for the tracker-type registry (§1).
 
 ## 5. Decisions beyond the design
 
@@ -364,7 +485,7 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
   a screen each, the page sprints between them, and the navbar keeps out of sight until it is
   wanted (K24, K25; §6.6). Edit plan is an ordinary page with a sticky navbar (K27), full
   width at the week's sizes with rows a fixed 100u (K54). Settings has no navbar (K52) and is full
-  width in rows like the week (K51). The navbar keeps the week controls, This week, Edit plan,
+  width in rows like the week (K51), and an item's page follows it, rows and all (K64, K65). The navbar keeps the week controls, This week, Edit plan,
   Settings, Print… and Full screen.
 - **Light and dark themes.** The handoff is dark-only. Settings offers System (the default, which
   follows `prefers-color-scheme` live), Light and Dark. `App.vue` toggles a `dark` class on
@@ -380,14 +501,62 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
   there is no Ink setting (K10). The theme and per-side choices are SegmentedControls: `aria-pressed` buttons in a
   `role="group"`. Marks is a RadioCard (a `radiogroup` of `role="radio"` rows), each row showing
   its set's three marks with `DayMarkDrawing`, the mark without its button (K20).
+- **An item's own page** (K64, K65, the ItemPage card). The handoff has nowhere to keep more about
+  an exercise or a food than its row. `ItemPage.vue`, at `#/item/<section>/<id>`, is one of
+  Settings' family: no Header, Settings' sizes, full width on the page's margins. Its layout is
+  option A of the mockup `261101-item-page`, rows like Settings (K65; K64 first built option B).
+  Under the head (Back to the week, the type, "Exercise", and the name in `title-1` with its
+  chips), each section is a row with its heading in the week's 320u name column
+  (`--grid-name-w`), its content to the right and a `line` rule above it, in this order:
+  - Notes, at the page's text size (`--set-text`), read as markdown, with Add notes or Edit notes
+    turning them into a field that saves as you type, and Done or Escape turning it back;
+  - Details, the type's fields, saving as you type, where a web address in Link adds "Open
+    youtube.com in a new tab";
+  - the plan, its controls in columns at least 300u wide;
+  - Recent weeks (`RecentWeeks.vue`), up to eight weeks ending with the opened week, never before
+    the item's first plan. Every mark counts toward a week's count, missed included (K9, K65).
+
+  Folded, one column in the same order, each heading over its content.
+
+  That is the default order. **Arrange sections** (K66), a quiet Button at the right of the head's
+  first line, puts the page in arranging: a line saying the choice is every exercise page's (or
+  every food page's), then every section as its heading over a Switch, "Show" (named "Show
+  Notes"), and IconButtons "Move Notes up" and "Move Notes down", with "Shown" or "Hidden" beside
+  it. Each change calls the planner store's `setArrangement` at once, so every page of the type
+  follows and it syncs as a settings operation. The button reads "Done" while arranging; Done or
+  Escape leaves. Focus stays on the button, and after a move on the moved section's same button,
+  or on its other one when the move reaches an end (the end's button is `aria-disabled` and its
+  press does nothing). Outside arranging the page renders only the shown sections, in order, so
+  print follows too; with none shown it says "Every section is hidden. Arrange sections to show
+  one."
+
+  The plan section edits the week the planner shows through the stores' own actions (`updateExercise`,
+  `changeTarget`), so a change shows in that week's row and in the weeks after it with no plan of
+  their own, and the page says so. Its heading is "This week's plan", or "Plan for the week of 19
+  October" for another week. An item not in that week (an old address, or an item since removed)
+  shows "Latest plan", read-only, from the latest week whose own plan holds it.
+
+- **The page's address and focus.** App opens the page for an address whose section is a registry
+  section and whose id the API could name, once the data shows the item is in the visible week or
+  in some week's plan. Any other `#/item/…` address opens the week and drops the hash, as does an
+  item another tab removed from every plan. Arriving moves focus to the item's name. Opened from the
+  week, the page marks its history entry (`markFromWeek`), so Back to the week goes back through
+  history and the browser's Back agrees. Opened from an address, Back replaces the entry with the
+  week. Either way focus returns to that item's name in its row. Signing out on the page drops the
+  hash, as on Settings.
+- **The name is a link.** In the week and in Edit plan, each row's name is an `<a href>` to its
+  item's page (`data-slot="item-link"`). It looks as it always has, underlines under the pointer and
+  prints as plain text. The pencil still opens the quick Edit dialog. In the grid the link is the
+  name cell's widget, so Enter opens the page in one press, and F2 reaches the cell's other controls
+  (§6.5).
 - **Config mode and normal mode.** Normal mode, the default on every load, only marks cells. The
   "Edit plan" BarAction in the navbar (a toggle button with `aria-pressed`, filled while on; K48)
   turns on config mode, which shows the
   edit and remove IconButtons, an "Add exercise" and an "Add food" button under the grids, and
   the daily targets centred on each title line, under the bar's week: a Stepper at max(44px, 40u)
   reading "4 per day", its label ("Exercises a day", "Foods a day") for a screen reader only
-  (K56, K62, K63). The week beside the titles is left out there. An item is added and changed only in its
-  dialog (Add or Edit exercise, Add or Edit food; K54), so rows have no Stepper; the remove button ends each
+  (K56, K62, K63). The week beside the titles is left out there. An item is added in its dialog and changed
+  in its dialog or on its page (Add or Edit exercise, Add or Edit food; K54, K64), so rows have no Stepper; the remove button ends each
   row, in a "Remove" column after the days. The mode is not saved, so the
   app always opens ready for ticking.
 - **Exercises and foods are editable.** The handoff had no way to change an item after adding it.
@@ -459,10 +628,12 @@ have no `<style>` blocks. Everything global is in `src/styles/main.css`.
 - **Type.** The type-style classes (`display`, `title-1`, `title-2`, `body-large`, `body`,
   `caption`, `label`, `note`) come from `tokens.css`. `main.css` adds the note's italic and the
   smaller `display` below 640px, in the same layer, so a utility beside a type class wins. One
-  block is unlayered on purpose: the Settings page's and the dialogs' page sizes (K51, K55),
-  scoped to `:is([data-slot='settings-page'], [data-slot='dialog'], [data-slot='confirm-dialog'])`
-  and keyed on the primitives' `data-slot` names, so it beats their fixed utilities there and
-  nowhere else. Numbers use `tabular-nums`. The fonts are the Fontsource variable
+  block is unlayered on purpose: the page sizes of Settings, an item's page and the dialogs (K51,
+  K65, K55), scoped to `:is([data-slot='settings-page'], [data-slot='item-page'],
+[data-slot='dialog'], [data-slot='confirm-dialog'])` and keyed on the primitives' `data-slot`
+  names, so it beats their fixed utilities there and nowhere else. After it, one rule gives the item
+  page's notes field NoteEditor's skin: a `tile` fill and the italic serif at the page's text size
+  (`--set-text`), at least 240u tall. Numbers use `tabular-nums`. The fonts are the Fontsource variable
   packages, imported in `src/main.ts` so Vite bundles them under `/assets/` (the CSP allows only
   `'self'`), with the latin files preloaded in `index.html`.
 - **Shape, focus and scroll.** `rounded-sm`, `rounded-md` and `rounded-lg` follow the radius tokens,
@@ -483,10 +654,11 @@ past the box. The device's mark set (`markSet` in the planner store, passed to D
 changes only the drawing (K20, K21): `markLook` gives the squiggle drawing, or a tick or face
 symbol (`MARK_SYMBOLS`) stroked in the pen, or stamped: the solid drawing in the pen with the
 symbol in `canvas` (in print, the light canvas). A press emits `toggle`; the stores step the day
-with `cycleDay` and `nextMark` (`src/lib/tracker.ts`) over `cycleFor(item, markSet)`: in the
-squiggles `EXERCISE_CYCLE` is every mark, drawing first, and `FOOD_CYCLE` the three green ones; in
-a symbol set the plain kinds once (`EXERCISE_KIND_CYCLE`, `FOOD_KIND_CYCLE`). A squiggle drawing
-there steps on from its kind.
+with `cycleDay` and `nextMark` (`src/lib/tracker.ts`) over `cycleFor(type, markSet)`, which reads
+the type's `cycle` from the registry. The cycles live in `src/lib/trackerTypes.ts`, and `tracker.ts`
+re-exports them. In the squiggles `EXERCISE_CYCLE` is every mark, drawing first, and `FOOD_CYCLE`
+the three green ones; in a symbol set the plain kinds once (`EXERCISE_KIND_CYCLE`,
+`FOOD_KIND_CYCLE`). A squiggle drawing there steps on from its kind.
 `isDone` and the totals count every kind. [brand.md](brand.md) §4 has the values.
 
 ### 6.3 The primitives
@@ -497,13 +669,13 @@ an `index.ts`. They are shadcn-vue (K1): owned source on Reka UI, added with the
 to the tokens and the cards. `cn` (`src/lib/utils.ts`) merges a consumer's classes over a
 component's own.
 
-| Group    | Primitives                                                                                                                                                                   |
-| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Basics   | Button (primary, secondary and quiet, 44px tall, `sm` 36px from 640px up), IconButton (44px, a required `label`), TextLink, BrandMark, BarAction (the Header's actions, K47) |
-| Forms    | TextField, TextArea, SegmentedControl, Switch, Stepper, RadioCard                                                                                                            |
-| Overlays | Dialog, ConfirmDialog with ConfirmHost, Popover                                                                                                                              |
-| Planner  | DayMark, Chip, SectionHeader                                                                                                                                                 |
-| Feedback | InlineMessage, Banner                                                                                                                                                        |
+| Group    | Primitives                                                                                                                                                                    |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Basics   | Button (primary, secondary and quiet, 44px tall, `sm` 36px from 640px up), IconButton (44px, a required `label`), TextLink, BrandMark, BarAction (the Header's actions, K47)  |
+| Forms    | TextField, TextArea, SegmentedControl, Switch, Stepper, RadioCard                                                                                                             |
+| Overlays | Dialog, ConfirmDialog with ConfirmHost, Popover                                                                                                                               |
+| Planner  | DayMark, Chip, SectionHeader                                                                                                                                                  |
+| Feedback | InlineMessage, Banner                                                                                                                                                         |
 | Ask      | Transcript (the turns in rows, answers through `answer()` in `src/lib/markdown.ts`), AnswerProgress (main.css's `pen-write` keyframe), QuotaChip, SidePanel (S1), HistoryList |
 
 The other cards are composed in the screens: Header in `AppNavbar.vue`, Panel in `AuthCard.vue`
@@ -536,12 +708,16 @@ Each grid is one tab stop, following the WAI-ARIA grid pattern with a roving tab
 - **The stop** starts on today's DayMark in the first row (`[aria-current="date"]`), else the first
   day, else the first cell, and then stays on the last cell focused. A `MutationObserver` keeps
   exactly one stop as rows come and go.
+- **Widgets.** A day cell's focus is its DayMark, and a name cell's is the name's link. Space and
+  Enter belong to the DayMark. Enter on a name follows the link, opening the item's page in one
+  press, and Space on it does nothing.
 - **Keys.** Arrows move cell by cell over the names and days, and never
-  wrap. Home and End go along the row, Ctrl+Home and Ctrl+End to the grid's ends. Space and Enter
-  belong to the DayMark. An `aria-hidden` cell is skipped.
-- **Edit plan.** The controls in a cell (Edit in the name cell, Remove in the
-  last cell) stay out of the Tab order. Enter or F2 on the cell lets them in, Tab moves among them,
-  and Escape puts focus back on the cell.
+  wrap. Home and End go along the row, Ctrl+Home and Ctrl+End to the grid's ends. An `aria-hidden`
+  cell is skipped.
+- **Controls in a cell.** The other controls in a cell (the note's button, and in Edit plan the Edit
+  button in the name cell and Remove in the last cell) stay out of the Tab order. F2 on the cell
+  lets them in, as does Enter on a cell without a widget (Remove's). Tab moves among them, and
+  Escape puts focus back on the cell, or on its widget: the name's link, in a name cell.
 
 "Skip to today", first in the tab order in `AppNavbar.vue`, focuses today's first mark in the
 first grid that has today. Tabbing to it brings the navbar into view on the planner's screens.
@@ -549,7 +725,8 @@ first grid that has today. Tabbing to it brings the navbar into view on the plan
 ### 6.6 The planner's screens
 
 `App.vue` puts `planner-screens` on `<html>` while the planner shows outside Edit plan (K27). That
-class turns on main.css's `full:` variant. With it, each section is a screen (`SCREEN` in
+class turns on main.css's `full:` variant. Settings and an item's page are ordinary pages that
+scroll, so neither has it. With it, each section is a screen (`SCREEN` in
 `src/lib/screens.ts`: `min-h-dvh`, a centred column, and `data-planner-screen`) and its grid takes
 the height left (`SCREEN_GRID`). `useScreenSprint` (`src/composables/screenSprint.ts`) keeps the
 page from resting across two screens. A wheel or a fling sprints as soon as the line between two
@@ -589,7 +766,7 @@ tall or less).
   screen leaves them out.
 - **Settings and Ask** are pages of their own (`#/settings`, `#/ask`), outside the screens and with
   no bar (K52): each starts with "Back to the week", and leaving one returns focus to the bar button
-  that opened it. Ask fills the window (K64, K67): the SidePanel (`h-dvh`) and the page beside it
+  that opened it. Ask fills the window (K67, K70): the SidePanel (`h-dvh`) and the page beside it
   scroll on their own, the page in Settings' rows and sizes (`data-slot="ask-page"` takes the
   `--set-*` sizes in main.css), with the question box as the last row. Folded, the panel is a
   drawer opened from beside "Back to the week". `#/ask` shows the week while `session.ask` is not
@@ -610,6 +787,12 @@ literal colours the system allows (`src/styles/__tests__/print.spec.ts` holds th
   header.
 - The Food section's heading stays with its grid (`print:break-inside-avoid`), and a section header never ends
   a page (`print:break-after-avoid`).
+- An item's page prints its head (the type, the name and its chips), its notes and its filled
+  details, each detail as its label over its value with no box. Back to the week, the plan, Recent
+  weeks, the notes' field and its button are `data-noprint`, and each row prints its heading over
+  its content, with no rule. The
+  notes print as read even while they are being edited. In the week, a name's link prints as plain
+  text.
 
 ### 6.8 The style guide
 
@@ -620,6 +803,14 @@ its real source, in each state. `src/main.ts` mounts it instead of the app at `/
 (`/styleguide?theme=dark`), so a browser test can open either theme.
 Each section is one entry in `src/styleguide/sections.ts`. Coverage excludes the folder, and the
 browser checks run against it.
+
+The RecentWeeks section draws the card's eight weeks in two mark sets. The ItemPage section renders
+the app's own `ItemPage` with `example` set, so it doesn't take focus as it arrives. ItemPage reads
+the stores, so the section sets up a Pinia of its own with the card's items, and edits there save
+nowhere. It shows one state at a time, chosen with a SegmentedControl, because two pages on one
+screen would repeat the same named regions, which axe's `landmark-unique` rule fails. The WeekGrid
+section's key
+table names Enter on a name (opens its page) and F2 (into the cell's other controls).
 
 ## 7. Accounts and sync
 
@@ -659,7 +850,7 @@ cannot stall syncing; replies that arrive after a sign-out or a user switch are 
 `DELETE` sends no body but still sends `Content-Type: application/json`, which the API asks of
 every write.
 
-**Ask's stream** (`api.md` §3.1). `stream()` in `src/lib/api.ts` posts the question with `fetch`
+**Ask's stream** (`api.md` §3.2). `stream()` in `src/lib/api.ts` posts the question with `fetch`
 and reads the reply's body with `getReader()`, since `EventSource` can't post. It splits the
 server-sent events at blank lines, wherever the chunks break, skips `:` comments (the 15-second
 keep-alives) and frames whose data isn't a JSON object, and hands each event to the store in
@@ -679,25 +870,74 @@ in the outbox:
 - `tick`: one day of one item and its mark (or `null`), `PUT /api/ticks/…` with `{ "mark": … }`,
   so devices marking different days never collide. An outbox saved before marks had kinds holds
   `done` instead; it is read as `"great"` or `null` on load;
-- `settings`: the accent, both daily picks and My goals, sent as one `PUT /api/settings`. The
-  goals go only when `goalsKnown`; a body without them keeps the saved ones on the server.
+- `details`: one item's details, sent as `PUT /api/details/<section>/<item>` with
+  `{ details, rev }`, the revision last seen (`detailRevs`). Clearing them sends `{}`. An item
+  whose id holds `/`, or is `.` or `..`, can't be named in that path, so it has no details
+  (`isDetailsId`, below);
+- `settings`: the accent, both daily picks, My goals and the item pages' arrangement,
+  `PUT /api/settings`. The goals go only when `goalsKnown`; a body without them keeps the saved
+  ones on the server.
+  `itemSections` always goes, `{}` for the default: the API keeps the saved arrangement when the
+  key is missing (a tab on older code), so leaving it out could never reset one.
 
-A newer operation for the same plan, cell or settings replaces a queued one. Each carries an id, so
-the reply to one already in flight removes only that one. Plan and settings operations read their
-values when sent, so the server always gets the latest. Operations go out one at a time, in order.
-A tick on a week with no plan of its own creates the plan first, as on the device.
+`send()` is a switch with a branch per kind, and a kind without one fails to type-check
+(`unhandled(op: never)`). Before 2026-11-01 anything that was not a plan or a tick went out as
+settings, which a fourth kind would have done silently. `isQueued` checks each kind's own fields,
+so an outbox entry of another kind, or with a section outside the registry, is dropped on load.
+
+A newer operation for the same plan, cell, item's details or settings replaces a queued one. Each
+carries an id, so the reply to one already in flight removes only that one. Plan, details and
+settings operations read their values when sent, so the server always gets the latest. Operations
+go out one at a time, in order. A tick on a week with no plan of its own creates the plan first, as
+on the device.
+
+**Details wait for the typing to pause.** Notes save as you type, so a details operation is queued
+and cached at once, then held for `DETAILS_DELAY` (1 s) after its item's last change, and sent once
+with the latest text. A reload in that second keeps the edit, since it is already in the outbox.
+Other operations go past held details, because nothing depends on an item's details being sent
+first. An import sends held details at once, so the server merges against them. A read in that
+second (focus, the minute timer) finds the outbox busy and skips `GET /api/state`; it is marked
+pending (`readPending`), and runs once the held details are sent and the outbox is empty.
 
 | Reply                                               | What happens                                                                                                                  |
 | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| success                                             | dequeued; a plan's new revision is stored                                                                                     |
-| 409 with the server copy                            | that week shows the server's plan, with a notice                                                                              |
-| 409 with no server plan                             | sent again as a create                                                                                                        |
+| success                                             | dequeued; a plan's or details' new revision is stored                                                                         |
+| 409 with the server copy                            | that week shows the server's plan, or that item the server's details, with a notice                                           |
+| 409 with no server plan or details                  | sent again as a create                                                                                                        |
 | offline, a timeout, or a 5xx with no API error code | kept; retried after 5 s, doubling to 60 s, and at once when the browser is back online                                        |
+| 404 to a details write                              | kept and retried as for a 5xx, holding the operations behind it (below)                                                       |
 | 401                                                 | kept; the sign-in form appears, and sending resumes after signing in                                                          |
 | any other refusal                                   | dropped, so one bad write cannot block the rest, with a notice that it was undone (for 413 `quota`, that the account is full) |
 
 Two devices creating the same week from the same carried plan send identical items, which the API
 accepts without a conflict (P7 in [decisions.md](decisions.md)), so the common case raises no notice.
+Details follow the same rule.
+
+**A details conflict** brings the server's copy in: the sync store writes it into `base` first, so
+adopting it is no change to send back, then `adoptItem` puts it in the details store. A cleared copy
+(`{}`) reads as no details. A write lifted from a `-v3` cache (§4) is the exception: a 409 at rev 1
+is migration 7's copy of the old note, so it is sent again at rev 1 instead. `SyncStatus` shows `DETAILS_CONFLICT_NOTICE`: "An item's notes or
+details were changed on another device, so this device now shows that version." An item page open
+on that item takes the server's copy into its field instead of overwriting it on the next keystroke.
+
+**A 404 on a details write** comes from an API older than details, which has no such route. The web
+image can land before the API's (P28), so the write is treated as a server failure: kept, retried
+with the backoff, and holding the outbox behind it. Dropping it, as for any other refusal, would
+lose the notes typed while the API was behind. The API must therefore deploy first
+([deployment.md](deployment.md) §3.1). A 404 to any other write is still dropped.
+
+A write that would 404 for good must therefore never be queued: it would hold the outbox forever.
+That is a details write for an id the path can't name. Starlette decodes `%2F` before routing, so
+`PUT /api/details/exercise/a%2Fb` gets 404 `not-found`, and the browser folds `.` and `..` out of
+a path. `isDetailsId` (`src/lib/storage.ts`) is `isItemId` without a `/` and not `.` or `..`. The
+details store's setters refuse any other id (false, so nothing is queued), and the item page and
+the edit dialogs say "This item’s notes can’t be saved: its id has a slash in it." (or "…details…",
+or "its id isn’t one the server takes" for the rest). A `-v3` lift queues nothing for one, and
+`sendDetails` drops one already queued by older code as refused. The API's details route refuses
+the same ids with 400 `invalid` (`check_details_id`, [api.md](api.md) §3). The app makes no such
+id: `newId()` is `x` and base36, and MCP's are made the same way. Only an import or a plan from
+elsewhere can carry one; plans and ticks keep any id of 1 to 128 characters, so its plan and marks
+still work.
 
 **Reads.** `GET /api/state` runs at start, on focus, on returning to a visible tab, and every minute
 while visible. It replaces local state only when the outbox is empty, and only if nothing changed
@@ -706,7 +946,8 @@ Vue runs the watcher after a reply can already have landed. Without that, an edi
 tick as the reply would be overwritten before it was ever queued. A refresh therefore never undoes
 an edit that has not reached the server.
 
-**The cache** holds the last state the stores showed, with each plan's revision, so a reload or a
+**The cache** holds the last state the stores showed, with each plan's and each item's details'
+revision, so a reload or a
 cold start offline shows data at once. It is written on every change and every read. Another tab's
 write to it arrives as a `storage` event, and this tab adopts it as both its state and its `base`:
 that tab's own writes are already in the shared outbox. Adopting it also counts as a local change,

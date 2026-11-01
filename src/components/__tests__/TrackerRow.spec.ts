@@ -19,15 +19,17 @@ async function settle(): Promise<void> {
   for (let i = 0; i < 4; i++) await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
-function mountRow(notes?: string): VueWrapper {
+function mountRow(note?: string): VueWrapper {
   const Table = defineComponent({
     setup: () => () =>
       h('table', [
         h('tbody', [
           h(TrackerRow, {
             index: 0,
-            item: { id: 'pu', name: 'Push-ups', target: 3, ...(notes ? { notes } : {}) },
+            item: { id: 'pu', name: 'Push-ups', target: 3 },
+            href: '#/item/exercise/pu',
             details: ['3 × 12'],
+            note,
             configMode: false,
             days: DAYS,
             marks: Array(7).fill(null),
@@ -58,8 +60,26 @@ describe('TrackerRow notes (K43)', () => {
     expect(link.getAttribute('rel')).toBe('noopener noreferrer')
   })
 
-  it('has no note line without a note', () => {
+  it('has no note line without a note, or with an empty one', () => {
     mountRow()
     expect(document.querySelector('[data-testid="item-note"]')).toBeNull()
+    wrapper!.unmount()
+    mountRow('')
+    expect(document.querySelector('[data-testid="item-note"]')).toBeNull()
+  })
+
+  it('keeps a long note to one line in the row, and the whole of it in a panel that scrolls', async () => {
+    const long = Array.from({ length: 400 }, (_, i) => `Line ${i + 1} of a long note.`).join('\n\n')
+    mountRow(long)
+    const note = document.querySelector<HTMLElement>('[data-testid="item-note"]')!
+    expect(note.classList).toContain('truncate')
+    note.click()
+    await settle()
+    const body = document.querySelector('[data-testid="item-note-body"]')!
+    expect(body.querySelectorAll('p')).toHaveLength(400)
+    // The Popover card's panel: never taller than the screen allows, scrolling inside.
+    const panel = body.closest<HTMLElement>('[data-slot="popover-content"]')!
+    expect(panel.className).toContain('overflow-y-auto')
+    expect(panel.className).toContain('max-h-(--reka-popover-content-available-height)')
   })
 })

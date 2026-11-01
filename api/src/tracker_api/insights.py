@@ -8,7 +8,8 @@ answer about a week never contradicts what the week shows.
 The readers above them take a connection, a user id and `today` (the asker's date: the server
 cannot know the browser's), and return plain JSON with snake_case keys and Monday `YYYY-MM-DD`
 week keys. They read only that user's rows, write nothing, and carry no user or session fields.
-Names and notes are cut in their output, since they reach a model as text (docs/api.md §1).
+Names and notes are cut in their output, since they reach a model as text (docs/api.md §1),
+except `item_history`'s note: one item's, given whole so it can be read before it is rewritten.
 """
 
 import copy
@@ -17,12 +18,14 @@ from collections.abc import Mapping, Sequence
 from datetime import date, timedelta
 from typing import TypedDict, cast
 
-from .data import load_settings, load_tracked
+from .data import load_settings, load_tracked, notes_of
+from .types import EXERCISE, SECTION_TYPES
 from .validate import (
     DEFAULT_DAILY_PICK,
     DEFAULT_FOOD_PICK,
     MAX_NOTES,
     SECTIONS,
+    DetailsMap,
     Item,
     MarkKind,
     Portable,
@@ -40,7 +43,7 @@ type WeekLog = Mapping[str, Sequence[str | None]]
 def default_items(section: Section) -> list[Item]:
     """The items a week shows while nothing is planned: storage.ts's defaultExercises and
     defaultFoods."""
-    if section == "exercise":
+    if SECTION_TYPES[section] is EXERCISE:
         return [
             {"id": "pu", "name": "Push-ups", "reps": 10, "target": 4},
             {"id": "pl", "name": "Pull-ups", "reps": 3, "target": 4},
@@ -199,6 +202,10 @@ class ItemHistory(TypedDict):
     item_id: str
     #: Its name in the latest week that shows it; None when no week in the range does.
     name: str | None
+    #: The item's whole note, uncut (up to 20,000 code points), the same in every week; "" when
+    #: it has none. The readers of many items cut theirs at MAX_NOTES; read it here before
+    #: writing one back.
+    notes: str
     start: str
     end: str
     weeks: list[HistoryWeek]
@@ -248,9 +255,9 @@ class Consistency(TypedDict):
 
 
 def _section(section: object) -> Section:
-    if section == "exercise" or section == "diet":
+    if section in SECTIONS:
         return section
-    raise InsightsError("section", "must be exercise or diet")
+    raise InsightsError("section", f"must be {' or '.join(SECTIONS)}")
 
 
 def _monday(key: object, field: str) -> date:
@@ -266,9 +273,11 @@ def _week_count(weeks: object) -> int:
 
 
 def _daily_target(settings: Portable | None, section: Section) -> int:
-    if section == "exercise":
-        return DEFAULT_DAILY_PICK if settings is None else settings["dailyPick"]
-    return DEFAULT_FOOD_PICK if settings is None else settings["foodPick"]
+    """Exercises a day or foods a day: the section's type names the setting (K30, K57)."""
+    key = SECTION_TYPES[section].pick_key
+    if settings is None:
+        return DEFAULT_DAILY_PICK if key == "dailyPick" else DEFAULT_FOOD_PICK
+    return settings[key]
 
 
 def _mondays(end: date, count: int) -> list[date]:
@@ -285,14 +294,22 @@ def _cut(text: str, limit: int) -> str:
     return text[:limit]
 
 
-def _item_week(item: Item, week: WeekLog) -> ItemWeek:
+def _cut_note(text: str) -> str:
+    """An item's notes in a reader of many items, at most MAX_NOTES code points. A longer note
+    (they run to 20,000) ends in "…", so an agent can tell it isn't the whole note: `item_history`
+    gives it whole."""
+    return text if len(text) <= MAX_NOTES else text[: MAX_NOTES - 1] + "…"
+
+
+def _item_week(item: Item, week: WeekLog, details: DetailsMap) -> ItemWeek:
     marks = [_kind(_mark(week, item["id"], i)) for i in range(7)]
     done = total_for(week, item["id"])
     return {
         "id": item["id"],
         "name": _cut(item["name"], MAX_NAME),
         "target": item["target"],
-        "notes": _cut(item.get("notes") or "", MAX_NOTES),
+        # The item's notes, one copy for every week (its details), not the week's plan's.
+        "notes": _cut_note(notes_of(details, item["id"])),
         "marks": marks,
         "done": done,
         "great": marks.count("great"),
@@ -321,7 +338,7 @@ def _summary(
             {"date": d.isoformat(), "count": counts[i], "met": met[i], "future": d > today}
             for i, d in enumerate(dates)
         ],
-        "items": [_item_week(it, log) for it in items],
+        "items": [_item_week(it, log, tracked["details"]) for it in items],
         "goals_met": goals_met(items, log),
         "days_met": sum(met),
     }
@@ -374,7 +391,7 @@ def item_history(
     today: date,
 ) -> ItemHistory:
     """One item over the last `weeks` weeks, today's included, oldest first: its goal and marks
-    in each week that shows it."""
+    in each week that shows it, and its whole note (the one reader that doesn't cut it)."""
     section = _section(section)
     count = _week_count(weeks)
     tracked = load_tracked(conn, user_id, section)
@@ -401,7 +418,7 @@ def item_history(
                 }
             )
             continue
-        shown = _item_week(item, tracked["log"].get(week, {}))
+        shown = _item_week(item, tracked["log"].get(week, {}), tracked["details"])
         name = shown["name"]
         rows.append(
             {
@@ -420,6 +437,7 @@ def item_history(
         "section": section,
         "item_id": item_id,
         "name": name,
+        "notes": notes_of(tracked["details"], item_id),
         "start": mondays[0].isoformat(),
         "end": mondays[-1].isoformat(),
         "weeks": rows,
@@ -431,15 +449,16 @@ def goals(conn: sqlite3.Connection, user_id: int, today: date) -> Goals:
     "My goals" note."""
     week = monday_of(today).isoformat()
     settings = load_settings(conn, user_id)
+    tracked = {section: load_tracked(conn, user_id, section) for section in SECTIONS}
     shown = {
         section: [
             {
                 "id": it["id"],
                 "name": _cut(it["name"], MAX_NAME),
                 "target": it["target"],
-                "notes": _cut(it.get("notes") or "", MAX_NOTES),
+                "notes": _cut_note(notes_of(tracked[section]["details"], it["id"])),
             }
-            for it in week_items(section, load_tracked(conn, user_id, section)["plans"], week)
+            for it in week_items(section, tracked[section]["plans"], week)
         ]
         for section in SECTIONS
     }

@@ -1,5 +1,6 @@
 import { isTheme, type Theme } from '@/lib/theme'
 import type { Plans } from '@/lib/plans'
+import { normaliseItemSections, type ItemSections } from '@/lib/itemSections'
 
 export type Exercise = {
   id: string
@@ -15,8 +16,6 @@ export type Exercise = {
   weight?: number
   /** Weekly goal in days, 0–7. */
   target: number
-  /** The owner's note, in markdown (K43); absent when there is none. */
-  notes?: string
 }
 
 export type Food = {
@@ -24,9 +23,18 @@ export type Food = {
   name: string
   /** Weekly goal in days, 0–7. */
   target: number
-  /** The owner's note, in markdown (K43); absent when there is none. */
-  notes?: string
 }
+
+/**
+ * An item's details (D2): its notes in markdown (K43) and its text fields by key, one copy for
+ * every week. A key is left out when blank, so `{}` is an item with none. The type's field list
+ * (src/lib/trackerTypes.ts) names the fields the app shows; other keys are kept, so changing the
+ * list never loses text.
+ */
+export type ItemDetails = { notes?: string; fields?: Record<string, string> }
+
+/** A section's details by item id; an item with none is left out. */
+export type DetailsMap = Record<string, ItemDetails>
 
 /**
  * How a marked day went (DayMark card): done well, done in part, or tried and couldn't. Every kind
@@ -81,7 +89,7 @@ export type PlannerData = { plans: Plans<Exercise>; log: Log }
 export type DietData = { plans: Plans<Food>; log: Log }
 
 /**
- * How an Ask turn ended (docs/api.md §3.1): with an answer (`end_turn`, or `max_tokens` cut
+ * How an Ask turn ended (docs/api.md §3.2): with an answer (`end_turn`, or `max_tokens` cut
  * short), or without one, keeping only its question.
  */
 export type AskStop = 'end_turn' | 'max_tokens' | 'refused' | 'error' | 'cancelled'
@@ -132,10 +140,26 @@ export const MAX_WEIGHT = 500
 export const MAX_SETS = 20
 export const MAX_DURATION = 3600
 export const NEW_FOOD_TARGET = 3
-/** A note's length, in characters (code points, as Python counts them). */
+/**
+ * A plan item's note's length, in characters (code points, as Python counts them): the notes an
+ * export of version 4 or a `-v3` cache carries in its plans (K43), which lift into details.
+ */
 export const MAX_NOTES = 500
 /** My goals' length, in characters (code points, as Python counts them). */
 export const MAX_GOALS = 1000
+/** An item's details: its notes in code points, each field's text in code points, how many fields,
+ * and the whole document as the API stores it (compact JSON, UTF-8) in bytes. As the API's. */
+export const MAX_DETAILS_NOTES = 20_000
+/** A notes field shows its count from here, near the limit (TextArea card; ItemPage card). */
+export const NOTES_COUNT_FROM = 19_000
+export const MAX_FIELD = 500
+export const MAX_FIELDS = 32
+export const MAX_DETAILS_BYTES = 32 * 1024
+/** An item's id, in characters: the bounds of the API's ticks and details paths. */
+export const MAX_ITEM_ID = 128
+/** A details field's key: lower case, a letter first, at most 32 characters. */
+const FIELD_KEY = /^[a-z][a-z0-9_]{0,31}$/
+const WEEK_KEY = /^\d{4}-\d{2}-\d{2}$/
 
 export const DEFAULT_SETTINGS: Settings = {
   accent: '#30d158',
@@ -194,28 +218,146 @@ export function normaliseWeight(v: unknown): number | undefined {
   return kg > 0 ? Math.min(MAX_WEIGHT, kg) : undefined
 }
 
-/**
- * A usable note: a string with spaces, tabs and line breaks trimmed from its ends, cut to
- * MAX_NOTES characters; undefined for anything else or for nothing left. The API's
- * `normalise_notes` does the same (the shared fixtures hold both to it).
- */
-export function normaliseNotes(v: unknown): string | undefined {
-  return cutText(v, MAX_NOTES) || undefined
+/** Spaces, tabs and line breaks off both ends, as Python's `strip(" \t\n\r")`. */
+function trimBlank(s: string): string {
+  return s.replace(/^[ \t\n\r]+|[ \t\n\r]+$/g, '')
+}
+
+/** A string's length in code points, as Python counts it. */
+export function codePoints(s: string): number {
+  let n = 0
+  for (const _ of s) n++
+  return n
 }
 
 /**
- * My goals, trimmed and cut as a note is but to MAX_GOALS characters; '' for anything that isn't
- * a string or for nothing left. The API's `normalise_goals` does the same.
+ * A usable text: a string with spaces, tabs and line breaks trimmed from its ends, cut to `limit`
+ * code points and trimmed again; undefined for anything else or for nothing left. The API's
+ * `normalise_text` does the same (the shared fixtures hold both to it).
+ */
+export function normaliseText(v: unknown, limit: number): string | undefined {
+  if (typeof v !== 'string') return undefined
+  return trimBlank(Array.from(trimBlank(v)).slice(0, limit).join('')) || undefined
+}
+
+/** A plan item's note from a version 4 export or a `-v3` cache (K43), cut to MAX_NOTES. */
+export function normaliseNotes(v: unknown): string | undefined {
+  return normaliseText(v, MAX_NOTES)
+}
+
+/**
+ * My goals: text cut to MAX_GOALS characters; '' for anything that isn't a string or for nothing
+ * left. The API's `normalise_goals` does the same.
  */
 export function normaliseGoals(v: unknown): string {
   return cutText(v, MAX_GOALS)
 }
 
-/** A string trimmed of spaces, tabs and line breaks at its ends and cut to `max` code points. */
+/** `normaliseText`, but '' rather than undefined for nothing usable: Ask's titles and turns. */
 export function cutText(v: unknown, max: number): string {
-  if (typeof v !== 'string') return ''
-  const trim = (s: string) => s.replace(/^[ \t\n\r]+|[ \t\n\r]+$/g, '')
-  return trim(Array.from(trim(v)).slice(0, max).join(''))
+  return normaliseText(v, max) ?? ''
+}
+
+/**
+ * Text fields: keys matching FIELD_KEY, any of them (D2), with text cut to MAX_FIELD code points;
+ * blanks drop out, and the first MAX_FIELDS that remain are kept. As the API's `normalise_fields`.
+ */
+export function normaliseFields(v: unknown): Record<string, string> {
+  const fields: Record<string, string> = {}
+  if (!isRecord(v)) return fields
+  let kept = 0
+  for (const [key, raw] of Object.entries(v)) {
+    if (kept === MAX_FIELDS) break
+    const text = normaliseText(raw, MAX_FIELD)
+    if (text !== undefined && FIELD_KEY.test(key)) {
+      fields[key] = text
+      kept++
+    }
+  }
+  return fields
+}
+
+/**
+ * An item's details document, or null when `v` is not an object. Blank notes and an empty `fields`
+ * are left out, so an item with no details is `{}`; other keys are dropped. The size cap is
+ * separate (`detailsFit`): normalising never refuses. As the API's `normalise_details`.
+ */
+export function normaliseDetails(v: unknown): ItemDetails | null {
+  if (!isRecord(v)) return null
+  const out: ItemDetails = {}
+  const notes = normaliseText(v.notes, MAX_DETAILS_NOTES)
+  if (notes !== undefined) out.notes = notes
+  const fields = normaliseFields(v.fields)
+  if (Object.keys(fields).length) out.fields = fields
+  return out
+}
+
+/** Whether a document is within MAX_DETAILS_BYTES as the API stores it (compact UTF-8 JSON). */
+export function detailsFit(details: ItemDetails): boolean {
+  return new TextEncoder().encode(JSON.stringify(details)).length <= MAX_DETAILS_BYTES
+}
+
+export function isEmptyDetails(details: ItemDetails | undefined): boolean {
+  return !details || (details.notes === undefined && details.fields === undefined)
+}
+
+/**
+ * An id the API's ticks and details paths can name: 1 to MAX_ITEM_ID characters, and never
+ * `__proto__` (assigning it would set an object's prototype instead).
+ */
+export function isItemId(id: string): boolean {
+  const n = codePoints(id)
+  return n >= 1 && n <= MAX_ITEM_ID && id !== '__proto__'
+}
+
+/**
+ * An id the details path can name in one segment: an item id with no `/`, and not `.` or `..`.
+ * The API decodes `%2F` before routing, and the browser folds dot segments out of a path, so a
+ * write for such an id would never reach its item and would be retried for good (D6). The app
+ * makes no such id (`newId` is `x` and base36), but an import or an old plan can carry one: its
+ * plan and marks work, its notes and details can't be saved. The API's `check_details_id` agrees.
+ */
+export function isDetailsId(id: string): boolean {
+  return isItemId(id) && !id.includes('/') && id !== '.' && id !== '..'
+}
+
+/**
+ * A section's details from a file, the cache or the API: a usable document per usable item id.
+ * Documents that are empty or over the size cap drop out. As the API's `normalise_details_map`.
+ */
+export function normaliseDetailsMap(v: unknown): DetailsMap {
+  const out: DetailsMap = {}
+  if (!isRecord(v)) return out
+  for (const [id, raw] of Object.entries(v)) {
+    const details = normaliseDetails(raw)
+    if (isItemId(id) && details && !isEmptyDetails(details) && detailsFit(details)) {
+      out[id] = details
+    }
+  }
+  return out
+}
+
+/**
+ * Plan notes as details (D3), from an export of version 4 or older or a `-v3` cache: per item, the
+ * note from the latest week whose copy of the item has one, the first such copy in that week. Only
+ * items the plan keeps count. As the API's `lift_notes`, and its migration 7.
+ */
+export function liftNotes(v: unknown, normalise: (item: unknown) => object | null): DetailsMap {
+  const out: DetailsMap = {}
+  if (!isRecord(v)) return out
+  const weeks = Object.keys(v)
+    .filter((week) => WEEK_KEY.test(week) && Array.isArray(v[week]))
+    .sort()
+    .reverse()
+  for (const week of weeks) {
+    for (const raw of v[week] as unknown[]) {
+      if (normalise(raw) === null) continue
+      const { id, notes: rawNotes } = raw as { id: string; notes?: unknown }
+      const notes = normaliseNotes(rawNotes)
+      if (notes !== undefined && isItemId(id) && !Object.hasOwn(out, id)) out[id] = { notes }
+    }
+  }
+  return out
 }
 
 export function normaliseExercise(v: unknown): Exercise | null {
@@ -223,7 +365,7 @@ export function normaliseExercise(v: unknown): Exercise | null {
   const weight = normaliseWeight(v.weight)
   const sets = toInt(v.sets, 0)
   const duration = toInt(v.duration, 0)
-  const notes = normaliseNotes(v.notes)
+  // An item keeps no `notes` (D3): they are the item's details, one copy for every week.
   return {
     id: v.id,
     name: v.name,
@@ -233,18 +375,15 @@ export function normaliseExercise(v: unknown): Exercise | null {
     ...(typeof v.perSide === 'boolean' ? { perSide: v.perSide } : {}),
     ...(weight !== undefined ? { weight } : {}),
     target: clamp(toInt(v.target, NEW_EXERCISE_TARGET), MIN_TARGET, MAX_TARGET),
-    ...(notes ? { notes } : {}),
   }
 }
 
 export function normaliseFood(v: unknown): Food | null {
   if (!isRecord(v) || typeof v.id !== 'string' || typeof v.name !== 'string') return null
-  const notes = normaliseNotes(v.notes)
   return {
     id: v.id,
     name: v.name,
     target: clamp(toInt(v.target, NEW_FOOD_TARGET), MIN_TARGET, MAX_TARGET),
-    ...(notes ? { notes } : {}),
   }
 }
 
@@ -334,7 +473,10 @@ export function parseDietData(
 }
 
 /** The settings that belong to the person rather than the device: not the theme, totals or marks. */
-export type PortableSettings = Pick<Settings, 'accent' | 'dailyPick' | 'foodPick' | 'goals'>
+export type PortableSettings = Pick<Settings, 'accent' | 'dailyPick' | 'foodPick' | 'goals'> & {
+  /** Each type's item-page arrangement (K66, P29); left out while every page has the default. */
+  itemSections?: ItemSections
+}
 
 /**
  * Portable settings as a tab or its cache knows them. `goals` is absent when the tab hasn't read
@@ -345,7 +487,8 @@ export type KnownSettings = Omit<PortableSettings, 'goals'> & { goals?: string }
 
 /**
  * Any `#rrggbb` accent, daily picks for exercises and foods clamped to 1–8, each falling back to
- * its default, and My goals as `normaliseGoals` reads them.
+ * its default, My goals as `normaliseGoals` reads them, and the item pages' arrangement as
+ * `normaliseItemSections` reads it, left out when every page has the default.
  */
 export function normalisePortableSettings(v: Record<string, unknown>): PortableSettings {
   const accent =
@@ -362,7 +505,14 @@ export function normalisePortableSettings(v: Record<string, unknown>): PortableS
     MIN_DAILY_PICK,
     MAX_DAILY_PICK,
   )
-  return { accent, dailyPick, foodPick, goals: normaliseGoals(v.goals) }
+  const itemSections = normaliseItemSections(v.itemSections)
+  return {
+    accent,
+    dailyPick,
+    foodPick,
+    goals: normaliseGoals(v.goals),
+    ...(Object.keys(itemSections).length ? { itemSections } : {}),
+  }
 }
 
 export function parseSettings(raw: string | null): Settings {

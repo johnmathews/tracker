@@ -1,16 +1,12 @@
 import { DAY_NAMES } from '@/lib/dates'
-import {
-  MARKS,
-  MARK_KINDS,
-  markKind,
-  type Days,
-  type Log,
-  type Mark,
-  type MarkSet,
-} from '@/lib/storage'
+import { markKind, type Days, type Log, type Mark, type MarkSet } from '@/lib/storage'
+import { TRACKER_TYPES, type TrackerTypeId } from '@/lib/trackerTypes'
 
-/** Anything tracked as a tick per day against a weekly goal: exercises and foods. */
-export type Tracked = { id: string; name: string; target: number; notes?: string }
+/**
+ * Anything tracked as a tick per day against a weekly goal: exercises and foods. Its notes are its
+ * details, one copy for every week (src/stores/details.ts), not part of a week's plan.
+ */
+export type Tracked = { id: string; name: string; target: number }
 
 /** One week of a log: item id → its days Mon–Sun. */
 export type WeekLog = Record<string, Days>
@@ -53,25 +49,17 @@ export function metDays(counts: number[], target: number): boolean[] {
   return counts.map((n) => n >= target)
 }
 
-/**
- * The marks a press steps through, after an empty day and back to it (DayMark card, K17), drawing
- * first: an exercise goes great, partial and missed in the zigzag, then in the solid, then in the
- * hatch; a food is eaten or not, so it goes great in each drawing.
- */
-export const EXERCISE_CYCLE: readonly Mark[] = MARKS
-export const FOOD_CYCLE: readonly Mark[] = MARKS.filter((m) => markKind(m) === 'great')
+// The cycles live with their types; they are named here too, where the week's logic reads them.
+export {
+  EXERCISE_CYCLE,
+  EXERCISE_KIND_CYCLE,
+  FOOD_CYCLE,
+  FOOD_KIND_CYCLE,
+} from '@/lib/trackerTypes'
 
-/**
- * The cycles for a tick or face set (K21): one symbol per kind, so a press steps through the plain
- * kinds once, great, partial and missed for an exercise and great for a food.
- */
-export const EXERCISE_KIND_CYCLE: readonly Mark[] = MARK_KINDS
-export const FOOD_KIND_CYCLE: readonly Mark[] = ['great']
-
-/** The cycle a press steps through for an exercise or a food, in the device's mark set. */
-export function cycleFor(item: 'exercise' | 'food', set: MarkSet): readonly Mark[] {
-  if (set === 'squiggles') return item === 'exercise' ? EXERCISE_CYCLE : FOOD_CYCLE
-  return item === 'exercise' ? EXERCISE_KIND_CYCLE : FOOD_KIND_CYCLE
+/** The cycle a press steps through for an item of a type, in the device's mark set. */
+export function cycleFor(type: TrackerTypeId, set: MarkSet): readonly Mark[] {
+  return TRACKER_TYPES[type].cycle(set)
 }
 
 /**

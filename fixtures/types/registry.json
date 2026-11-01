@@ -1,0 +1,22 @@
+{
+  "sections": { "exercise": "exercise", "diet": "food" },
+  "types": {
+    "exercise": {
+      "pickKey": "dailyPick",
+      "newTarget": 3,
+      "fields": [
+        { "key": "equipment", "label": "Equipment" },
+        { "key": "works", "label": "Works" },
+        { "key": "link", "label": "Link" }
+      ]
+    },
+    "food": {
+      "pickKey": "foodPick",
+      "newTarget": 3,
+      "fields": [
+        { "key": "serving", "label": "A serving" },
+        { "key": "examples", "label": "Examples" }
+      ]
+    }
+  }
+}

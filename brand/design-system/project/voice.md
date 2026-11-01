@@ -61,7 +61,7 @@ The planner sends two emails, both in the EmailLayout card, both from "Tracker".
 
 ## Ask
 
-Ask's answers are an AI's, written to a ruling of John's (2026-11-01, K65): "V2 - plain verdict, the app may qote a note back as advice. and also may include streaks scores or rankings." So in an answer, and only there:
+Ask's answers are an AI's, written to a ruling of John's (2026-11-01, K68): "V2 - plain verdict, the app may qote a note back as advice. and also may include streaks scores or rankings." So in an answer, and only there:
 
 - **A plain verdict:** "A little too little for March." "Too much" when it is. Facts still come first, then one next step.
 - **Goals and notes quoted back as advice:** "Your goal says “Ten pull-ups in a row by March”. One more rep a set every second week would get you there."

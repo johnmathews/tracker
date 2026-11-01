@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { MARKS, normaliseExercise, normaliseFood } from '@/lib/storage'
-import { CACHE_PREFIX, OLD_CACHE_PREFIXES, OLD_OUTBOX_PREFIXES, OUTBOX_PREFIX } from '@/stores/sync'
+import { MARKS, normaliseDetails, normaliseExercise, normaliseFood } from '@/lib/storage'
+import {
+  CACHE_PREFIX,
+  OLD_CACHE_PREFIXES,
+  OLD_OUTBOX_PREFIXES,
+  OUTBOX_PREFIX,
+  normaliseState,
+} from '@/stores/sync'
 
 /**
  * K14 as a test: the cache and outbox keys carry a version, and a change to what they store takes
@@ -8,9 +14,31 @@ import { CACHE_PREFIX, OLD_CACHE_PREFIXES, OLD_OUTBOX_PREFIXES, OUTBOX_PREFIX } 
  * doesn't know as empty and writes its copy back, emptying the newer tab's marks. That happened
  * twice (journal 261025-stale-tab, and the solid and hatch drawings of #38).
  *
- * Each row records what one version stores. A row may change only before its version ships.
+ * Each row records what one version stores: the marks, the fields an exercise and a food keep, the
+ * keys of a cached section, and the keys an item's details keep. A row may change only before its
+ * version ships.
  */
-const FORMATS: Record<string, { marks: string[]; exercise: string[]; food: string[] }> = {
+type Format = {
+  marks: string[]
+  exercise: string[]
+  food: string[]
+  section: string[]
+  details: string[]
+}
+
+const MARK_NAMES = [
+  'great',
+  'partial',
+  'missed',
+  'great-solid',
+  'partial-solid',
+  'missed-solid',
+  'great-hatch',
+  'partial-hatch',
+  'missed-hatch',
+]
+
+const FORMATS: Record<string, Format> = {
   'tracker-cache-v3:': {
     marks: [
       'great',
@@ -25,6 +53,16 @@ const FORMATS: Record<string, { marks: string[]; exercise: string[]; food: strin
     ],
     exercise: ['duration', 'id', 'name', 'notes', 'perSide', 'reps', 'sets', 'target', 'weight'],
     food: ['id', 'name', 'notes', 'target'],
+    section: ['log', 'plans', 'revs'],
+    details: [],
+  },
+  // Item details (D2): an item's notes leave its plan for its details, one copy for every week.
+  'tracker-cache-v4:': {
+    marks: MARK_NAMES,
+    exercise: ['duration', 'id', 'name', 'perSide', 'reps', 'sets', 'target', 'weight'],
+    food: ['id', 'name', 'target'],
+    section: ['detailRevs', 'details', 'log', 'plans', 'revs'],
+    details: ['fields', 'notes'],
   },
 }
 
@@ -53,10 +91,17 @@ describe('the stored format (K14)', () => {
   })
 
   it('stores what the row for the current key says; a change takes a new key', () => {
+    const details = normaliseDetails({
+      notes: 'a note',
+      fields: { equipment: 'Mat' },
+      probe: 'not a field',
+    })
     const now = {
       marks: [...MARKS],
       exercise: keptFields(normaliseExercise),
       food: keptFields(normaliseFood),
+      section: Object.keys(normaliseState({ exercise: {}, diet: {} })!.exercise).sort(),
+      details: Object.keys(details ?? {}).sort(),
     }
     expect(
       now,

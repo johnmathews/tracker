@@ -7,13 +7,16 @@ import {
   defaultExercises,
   defaultFoods,
   markKind,
+  type DetailsMap,
   type Log,
   type Mark,
   type MarkKind,
 } from '@/lib/storage'
 import { dayCounts, goalMet, goalsMet, metDays, totalFor, type Tracked } from '@/lib/tracker'
+import type { Section } from '@/lib/trackerTypes'
 import { usePlannerStore } from '@/stores/planner'
 import { useDietStore } from '@/stores/diet'
+import { noDetails, useDetailsStore } from '@/stores/details'
 import type { Exercise, Food } from '@/lib/storage'
 
 // The shared contract with the API's insights module: what a week shows, as the screen shows it.
@@ -29,16 +32,20 @@ type ExpectedItem = {
   partial: number
   missed: number
   goalMet: boolean
+  /** The item's notes, from its details, the same in every week; "" when left out. */
+  notes?: string
 }
 
 type InsightsCase = {
   description: string
-  section: 'exercise' | 'diet'
+  section: Section
   week: string
   today: string
   dailyTarget: number
   plans: Plans<Tracked>
   log: Log
+  /** The section's item details; none when left out. */
+  details?: DetailsMap
   expected: {
     planWeek: string | null
     dayCounts: number[]
@@ -63,6 +70,11 @@ function localDate(key: string): Date {
 
 function kindCount(days: (Mark | null)[], kind: MarkKind): number {
   return days.filter((m) => m !== null && markKind(m) === kind).length
+}
+
+/** The expected items with each one's notes spelt out, "" when the fixture leaves them out. */
+function expectedItems(c: InsightsCase): Required<ExpectedItem>[] {
+  return c.expected.items.map((it) => ({ ...it, notes: it.notes ?? '' }))
 }
 
 describe('insights fixtures', () => {
@@ -97,9 +109,11 @@ describe('insights fixtures', () => {
           partial: kindCount(days, 'partial'),
           missed: kindCount(days, 'missed'),
           goalMet: goalMet(done, it.target),
+          // An item's notes are its details', never a week's plan's.
+          notes: c.details?.[it.id]?.notes ?? '',
         }
       }),
-    ).toEqual(c.expected.items)
+    ).toEqual(expectedItems(c))
   })
 
   describe('through the stores', () => {
@@ -128,6 +142,8 @@ describe('insights fixtures', () => {
         [pick]: c.dailyTarget,
       })
       if (c.section === 'diet') diet.adopt(data as never)
+      const details = useDetailsStore()
+      details.adopt({ ...noDetails(), [c.section]: c.details ?? {} })
       // Whole weeks between today's Monday and the case's, which a week offset steps through.
       const weeks = Math.round(
         (localDate(c.week).getTime() - localDate(planner.currentWeekKey).getTime()) /
@@ -139,6 +155,10 @@ describe('insights fixtures', () => {
       const items: (Exercise | Food)[] = c.section === 'exercise' ? planner.exercises : diet.foods
       const counts = c.section === 'exercise' ? planner.dayCounts : diet.dayCounts
       expect(items.map((it) => it.id)).toEqual(c.expected.items.map((it) => it.id))
+      // The note the row and the item page show is the one insights gives.
+      expect(items.map((it) => details.notesOf(c.section, it.id))).toEqual(
+        expectedItems(c).map((it) => it.notes),
+      )
       expect(counts).toEqual(c.expected.dayCounts)
       expect(
         metDays(counts, c.section === 'exercise' ? planner.dailyPick : planner.foodPick),

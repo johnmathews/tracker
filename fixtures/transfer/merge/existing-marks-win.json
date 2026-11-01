@@ -7,7 +7,8 @@
         "pu": ["great", "partial", "missed", null, null, null, "great"],
         "sq": [null, null, null, null, null, null, "missed"]
       }
-    }
+    },
+    "details": {}
   },
   "incoming": {
     "plans": {},
@@ -16,7 +17,8 @@
         "pu": ["missed", "great", "partial", "partial", "missed", null, null],
         "sq": [null, null, null, null, null, "great", "great"]
       }
-    }
+    },
+    "details": {}
   },
   "expected": {
     "plans": {},
@@ -25,7 +27,8 @@
         "pu": ["great", "partial", "missed", "partial", "missed", null, "great"],
         "sq": [null, null, null, null, null, "great", "missed"]
       }
-    }
+    },
+    "details": {}
   },
-  "summary": { "weeks": 0, "ticks": 3 }
+  "summary": { "weeks": 0, "ticks": 3, "details": 0 }
 }

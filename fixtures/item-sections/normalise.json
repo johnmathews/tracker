@@ -1,0 +1,133 @@
+{
+  "about": "The item page's arrangement per tracker type (K66, P29): src/lib/itemSections.ts and api/src/tracker_api/item_sections.py both normalise each input to its output. A type with the default arrangement is left out.",
+  "keys": ["notes", "details", "plan", "history"],
+  "cases": [
+    { "name": "not an object", "input": null, "output": {} },
+    { "name": "a list", "input": [{ "order": ["plan"] }], "output": {} },
+    { "name": "a string", "input": "notes", "output": {} },
+    { "name": "empty", "input": {}, "output": {} },
+    {
+      "name": "the default arrangement is left out",
+      "input": {
+        "exercise": { "order": ["notes", "details", "plan", "history"], "hidden": [] },
+        "food": { "order": ["notes", "details", "plan", "history"], "hidden": [] }
+      },
+      "output": {}
+    },
+    {
+      "name": "a hidden section",
+      "input": {
+        "exercise": { "order": ["notes", "details", "plan", "history"], "hidden": ["details"] }
+      },
+      "output": {
+        "exercise": { "order": ["notes", "details", "plan", "history"], "hidden": ["details"] }
+      }
+    },
+    {
+      "name": "a new order, each type its own",
+      "input": {
+        "food": { "order": ["history", "notes", "details", "plan"], "hidden": [] },
+        "exercise": { "order": ["notes", "plan", "details", "history"], "hidden": ["plan"] }
+      },
+      "output": {
+        "exercise": { "order": ["notes", "plan", "details", "history"], "hidden": ["plan"] },
+        "food": { "order": ["history", "notes", "details", "plan"], "hidden": [] }
+      }
+    },
+    {
+      "name": "unknown and repeated keys drop out, missing ones follow in the default order",
+      "input": { "exercise": { "order": ["plan", "map", "plan", "history"], "hidden": [] } },
+      "output": {
+        "exercise": { "order": ["plan", "history", "notes", "details"], "hidden": [] }
+      }
+    },
+    {
+      "name": "hidden keeps known keys once, in the default order",
+      "input": {
+        "food": {
+          "order": ["notes", "details", "plan", "history"],
+          "hidden": ["history", "map", "details", "history"]
+        }
+      },
+      "output": {
+        "food": {
+          "order": ["notes", "details", "plan", "history"],
+          "hidden": ["details", "history"]
+        }
+      }
+    },
+    {
+      "name": "every section hidden",
+      "input": {
+        "exercise": {
+          "order": ["history", "plan", "details", "notes"],
+          "hidden": ["notes", "details", "plan", "history"]
+        }
+      },
+      "output": {
+        "exercise": {
+          "order": ["history", "plan", "details", "notes"],
+          "hidden": ["notes", "details", "plan", "history"]
+        }
+      }
+    },
+    {
+      "name": "a type the registry doesn't have drops out",
+      "input": {
+        "cardio": { "order": ["history"], "hidden": ["notes"] },
+        "__proto__": { "order": ["history"], "hidden": [] },
+        "diet": { "order": ["history"], "hidden": [] },
+        "exercise": { "order": ["history"], "hidden": [] }
+      },
+      "output": {
+        "exercise": { "order": ["history", "notes", "details", "plan"], "hidden": [] }
+      }
+    },
+    {
+      "name": "entries that aren't strings are passed over",
+      "input": {
+        "exercise": {
+          "order": [1, "plan", null, ["notes"], true],
+          "hidden": [{ "k": 1 }, "notes", 2]
+        }
+      },
+      "output": {
+        "exercise": { "order": ["plan", "notes", "details", "history"], "hidden": ["notes"] }
+      }
+    },
+    {
+      "name": "keys are matched exactly",
+      "input": { "exercise": { "order": ["History", " plan", "plan"], "hidden": ["NOTES"] } },
+      "output": {
+        "exercise": { "order": ["plan", "notes", "details", "history"], "hidden": [] }
+      }
+    },
+    {
+      "name": "an order or hidden that isn't a list reads as the default",
+      "input": {
+        "exercise": { "order": "history", "hidden": ["details"] },
+        "food": { "order": ["history"], "hidden": "notes" }
+      },
+      "output": {
+        "exercise": { "order": ["notes", "details", "plan", "history"], "hidden": ["details"] },
+        "food": { "order": ["history", "notes", "details", "plan"], "hidden": [] }
+      }
+    },
+    {
+      "name": "a type's arrangement that isn't an object reads as the default",
+      "input": { "exercise": ["history"], "food": null },
+      "output": {}
+    },
+    {
+      "name": "missing order or hidden reads as the default, other keys drop",
+      "input": {
+        "exercise": { "hidden": ["plan"], "pinned": ["notes"] },
+        "food": { "order": ["plan"] }
+      },
+      "output": {
+        "exercise": { "order": ["notes", "details", "plan", "history"], "hidden": ["plan"] },
+        "food": { "order": ["plan", "notes", "details", "history"], "hidden": [] }
+      }
+    }
+  ]
+}

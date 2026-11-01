@@ -1,0 +1,128 @@
+<!-- @dsCard group="Planner" height=820 subtitle="An item's last eight weeks, newest first: the marks and the count against the goal, a met week's count in pen" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RecentWeeks — preview</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: var(--space-6); background: var(--canvas); color: var(--ink); font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
+  .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .variant { margin: 0 0 var(--space-3); color: var(--ink-secondary); }
+  .gap { height: var(--space-8); }
+
+  /* The ItemPage's right-hand column at u = 1 (a 1280×800 screen): about 470px wide. */
+  .col { max-width: 470px; display: flex; flex-direction: column; gap: 18px; }
+  h2 { margin: 0; font: 600 27px/34px var(--font-sans); }
+  .lede { margin: 0; color: var(--ink-secondary); font-size: 19px; line-height: 28px; }
+  .lede strong { color: var(--ink); font-weight: 600; }
+
+  /* One line a week: when, the seven marks, the count. The columns line up across the weeks
+     (a subgrid), and the first is as wide as its longest label. */
+  .weeks { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: max-content max-content minmax(0, 1fr); column-gap: 14px; }
+  .wk { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); font-size: 19px; line-height: 28px; }
+  .wk:last-child { border-bottom: 1px solid var(--line); }
+  .wk-when { white-space: nowrap; }
+  .wk[aria-current] .wk-when { font-weight: 600; }
+  .wk-marks { display: flex; gap: 6px; }
+  /* "Not planned" may wrap on a phone; "3 of 3" and "2 days" never break (no-break spaces). */
+  .wk-count { color: var(--ink-secondary); }
+  /* A met week (K60's underline): pen, 600, a plain underline 2px thick, 0.22em under the letters. */
+  .wk-count[data-met] { color: var(--pen); font-weight: 600; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 0.22em; }
+
+  /* The marks: DayMark drawings, not buttons. Stamped ticks here: the solid drawing in the pen,
+     the symbol in paper; the box in control-border, drawn last, in every state. */
+  .mk { width: 24px; height: 24px; display: grid; place-items: center; flex: none; }
+  .mk svg { width: 100%; height: 100%; overflow: visible; }
+  .mk .bx { stroke: var(--control-border); }
+  .mk .ink { fill: currentColor; }
+  .mk .sym { stroke: var(--canvas); }
+  .mk[data-mark="great"] { color: var(--pen); }
+  .mk[data-mark="partial"] { color: var(--pen-partial); }
+  .mk[data-mark="missed"] { color: var(--pen-missed); }
+
+  /* Folded: the page's phone sizes. */
+  @media (max-width: 639px) {
+    body { padding: var(--space-4); }
+    h2 { font-size: 22px; line-height: 28px; }
+    .lede, .wk { font-size: 18px; line-height: 26px; }
+    .weeks { column-gap: 10px; }
+    .wk-marks { gap: 3px; }
+    /* Marks shrink with a narrow phone, so a week stays on one line down to 320px. */
+    .mk { width: min(24px, 5.4vw); height: min(24px, 5.4vw); }
+  }
+</style>
+</head>
+<body>
+<p class="variant label">Kettlebell swings, an exercise with a goal of three a week</p>
+<section class="col" aria-labelledby="h-ex">
+  <h2 id="h-ex">Recent weeks</h2>
+  <div id="ex"></div>
+</section>
+
+<div class="gap"></div>
+<p class="variant label">Nuts, a food added three weeks ago, with a goal of two</p>
+<section class="col" aria-labelledby="h-food">
+  <h2 id="h-food">Recent weeks</h2>
+  <div id="food"></div>
+</section>
+
+<script>
+(() => {
+  // The app's drawings (day-mark/index.ts): the box, the solid drawing, and the tick set's symbols.
+  const BOX = 'M6.5 4.8C12.5 4.3 23.5 4.6 30.2 4.9C31.4 5 31.6 6.1 31.5 7.2C31.2 13.5 31.4 22.5 31.2 29.4C31.2 30.6 30.3 31.3 29.1 31.3C22.5 31.6 13 31.2 6.6 31.4C5.4 31.4 4.7 30.6 4.7 29.4C4.6 22.8 4.9 13 4.6 6.8C4.6 5.6 5.4 4.9 6.5 4.8Z'
+  const STAMP = 'M5.8 33.2C5.2 33 4.9 32.7 4.9 32.4C4.9 31.9 4.6 31.8 3.3 31.7C2 31.6 1.9 31.6 1.6 31.1C1.4 30.8 1.3 30.2 1.3 29.7C1.2 29.4 1.6 29.1 2.2 29C2.5 29 2.7 29 2.8 28.9C2.9 28.8 3.1 28.7 3.2 28.7C3.6 28.7 3.7 28.5 3.5 27.6C3.4 26.8 3.5 23.7 3.6 23.3C3.6 23.3 3.7 23 3.7 22.7C3.8 22.2 3.8 22 3.9 21.3C4 20.8 4.1 20.7 4.3 20.6C4.4 20.5 4.5 20.4 4.5 20.1C4.5 19.8 4.5 19.7 4.8 19.6C5.2 19.4 5.2 17.9 4.8 17.3C4.7 17.1 4.6 16.2 4.6 16C4.7 15.9 4.7 15.8 4.6 15.7C4.6 15.5 4.6 15.2 4.6 14C4.6 12.5 4.5 12.3 4.3 12.3C4 12.3 3.4 9.5 3.5 8.4C3.5 8.2 3.5 7.9 3.4 7.2C3.3 6.3 3.3 6 3.5 5.6C3.7 5 4.1 4.8 4.5 5C4.8 5.3 6 5.3 6.2 5C6.4 4.9 6.4 4.9 6.7 4.8C6.9 4.8 7 4.8 7.2 4.7C7.4 4.6 7.4 4.6 7.9 4.6C8.2 4.6 9 4.7 9.7 4.7C10.3 4.7 11 4.7 11.2 4.7C11.4 4.7 11.9 4.8 12.3 4.8C12.7 4.8 13.3 4.8 13.6 4.8C14 4.9 14.4 4.9 14.9 4.9C15.6 4.8 16.1 4.9 16.3 5.1C16.4 5.1 16.6 5.2 16.7 5.2C16.9 5.2 17 5.3 17.1 5.3C17.4 5.5 18.1 5.5 18.3 5.3C18.6 5.1 18.8 5.1 19.1 5.3C19.4 5.5 21.7 5.5 23.8 5.2C25.2 5.1 25.5 5.1 26.9 5.1C27.8 5.1 28.9 5.1 29.5 5.1C30.5 5.1 30.5 5.1 30.8 5.2C30.9 5.3 31.1 5.4 31.2 5.4C31.2 5.3 31.4 5.4 31.5 5.5C31.6 5.6 31.7 5.8 31.8 5.8C32.1 6 32.2 6.9 32.1 7.6C31.9 8.1 31.9 8.3 32 8.6C32.1 8.6 32.2 8.9 32.3 9.1C32.7 9.9 33.2 12.2 33.1 13.3C33.1 13.8 33 14.8 33 15.4C32.9 16.1 32.9 16.7 32.9 16.9C32.8 17 32.8 17.6 32.7 18.1C32.6 18.7 32.6 19.2 32.5 19.3C32.5 19.4 32.4 20.2 32.3 21C32.2 21.9 32.1 22.6 32.1 22.7C32.1 22.8 32 23.3 32 23.8C32 24.2 31.9 24.7 31.9 24.8C31.8 25 31.7 25.5 31.7 26.1C31.6 26.5 31.6 26.8 31.5 27C31.2 27.7 31.2 27.7 31 27.8C30.6 27.9 30.5 28.6 30.7 29.1C31.1 29.8 31 31.1 30.5 31.1C30.4 31.1 30.3 31.3 30.2 31.5C30.2 31.6 30 32.1 29.9 32.2C29.4 32.5 27.6 32.4 26.2 32.1C25.9 32 25.6 32 25.4 31.9C24.5 31.8 24.3 31.8 23.8 31.8C23.4 31.7 23 31.7 22.9 31.7C22.7 31.6 22.3 31.6 22 31.6C21.6 31.6 21.2 31.5 21.1 31.5C20.9 31.4 20.8 31.4 20.3 31.5C19.9 31.5 19.7 31.5 19.4 31.5C18.9 31.3 18.7 31.3 18.1 31.4C17.3 31.5 17.2 31.5 16.8 31.3C16.5 31.2 16.5 31.2 15.6 31.2C14.4 31.3 14.4 31.3 14.2 31.1C14 31 12.6 30.9 11.6 31.1C11.3 31.1 10.7 31.1 10.3 31.2C9.3 31.2 8.9 31.2 8.6 31.4C8.5 31.4 8.3 31.5 8.2 31.5C8 31.5 8 31.5 7.7 31.8C7.7 31.9 7.6 31.9 7.6 32C7.6 32 7.5 32.1 7.5 32.2C7.4 32.6 7.1 33 6.7 33.2C6.3 33.4 6.3 33.4 5.8 33.2Z'
+  const TICKS = {
+    great: 'M8.6 18.2C10.6 19.9 12.6 22.4 14.6 25.9C15 26.6 15.6 26.6 16 25.9C19.4 19.2 24.6 11.6 31.6 5.2',
+    partial: 'M18.6 9.8C23.4 9.6 26.6 13.4 26.4 18.2C26.2 23.2 22.4 26.6 17.8 26.4C13 26.2 9.6 22.6 9.8 17.8C10 13.4 13.2 10.2 17.4 9.6',
+    missed: 'M9.2 9.4C15 14.8 21.4 21.6 27.4 27.6M27 9C21.6 14 15.4 20.6 9.2 27.4',
+  }
+  const mark = (kind) => `<span class="mk"${kind ? ` data-mark="${kind}"` : ''}><svg viewBox="0 0 36 36" fill="none" stroke-linecap="round" stroke-linejoin="round">${kind ? `<path class="ink" d="${STAMP}" fill-rule="evenodd"/><path class="sym" d="${TICKS[kind]}" stroke-width="3.25"/>` : ''}<path class="bx" d="${BOX}" stroke-width="1.75"/></svg></span>`
+
+  const WORDS = ['none', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight']
+  const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+  const KIND = { great: '', partial: ' (partly done)', missed: " (couldn't do it)" }
+  const list = (xs) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`)
+
+  // weeks: [short date, full date, goal (null: not planned), seven marks], newest first; the first is this week.
+  function draw(el, labelId, weeks) {
+    const done = (w) => w[3].filter(Boolean).length
+    const isMet = (w) => w[2] > 0 && done(w) >= w[2]
+    const met = weeks.filter(isMet).length
+    const lede = met > 0 && weeks.length > 1
+      ? `<p class="lede">The goal was met in <strong>${WORDS[met]} of the last ${WORDS[weeks.length]} weeks</strong>.</p>`
+      : ''
+    const rows = weeks.map((w, i) => {
+      const n = done(w)
+      const ok = isMet(w)
+      const count = w[2] === null ? 'Not planned' : w[2] === 0 ? `${n} ${n === 1 ? 'day' : 'days'}` : `${n} of ${w[2]}`
+      const marked = w[3].map((k, d) => (k ? DAYS[d] + KIND[k] : null)).filter(Boolean)
+      const said = marked.length ? `Marked ${list(marked)}.` : 'Nothing marked.'
+      const when = i === 0
+        ? `<span class="wk-when">This week<span class="vh">.</span></span>`
+        : `<span class="wk-when"><span aria-hidden="true">${w[0]}</span><span class="vh">Week of ${w[1]}.</span></span>`
+      return `<li class="wk"${i === 0 ? ' aria-current="date"' : ''}>${when}<span class="wk-marks" aria-hidden="true">${w[3].map(mark).join('')}</span><span class="vh"> ${said} </span><span class="wk-count"${ok ? ' data-met' : ''}>${count}${ok ? '<span class="vh">, goal met</span>' : ''}</span></li>`
+    }).join('')
+    el.innerHTML = `${lede}<ol class="weeks" aria-labelledby="${labelId}">${rows}</ol>`
+  }
+
+  const g = 'great', p = 'partial', x = 'missed', _ = null
+  draw(document.getElementById('ex'), 'h-ex', [
+    ['26 Oct', '26 October', 3, [g, _, g, _, _, _, _]],
+    ['19 Oct', '19 October', 3, [g, _, p, _, g, _, _]],
+    ['12 Oct', '12 October', 3, [_, g, _, _, g, _, g]],
+    ['5 Oct', '5 October', 3, [g, _, _, x, _, _, _]],
+    ['28 Sep', '28 September', 3, [_, g, _, g, _, g, _]],
+    ['21 Sep', '21 September', null, [_, _, _, _, _, _, _]],
+    ['14 Sep', '14 September', 3, [g, _, g, _, _, g, _]],
+    ['7 Sep', '7 September', 3, [_, p, _, _, g, _, _]],
+  ])
+  draw(document.getElementById('food'), 'h-food', [
+    ['26 Oct', '26 October', 2, [g, _, _, _, _, _, _]],
+    ['19 Oct', '19 October', 2, [g, _, g, _, g, _, _]],
+    ['12 Oct', '12 October', 0, [_, g, _, _, _, _, _]],
+  ])
+})()
+</script>
+</body>
+</html>

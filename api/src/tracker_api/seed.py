@@ -1,7 +1,8 @@
 """`tracker-admin seed-demo`: a demo account with three weeks of plausible marks, for a local stack
 only (docs/api.md §5). It goes through the same parser and merge as Settings → Import, so it
-adds a week's plan only where the account has none and fills only empty days: a second run
-changes nothing, and nothing the person marked by hand is ever overwritten."""
+adds a week's plan only where the account has none, fills only empty days, and gives details only
+to items that have none: a second run changes nothing, and nothing the person wrote or marked by
+hand is ever overwritten."""
 
 import json
 import sqlite3
@@ -27,6 +28,8 @@ class SeedResult(TypedDict):
     created: bool
     weeks: int
     ticks: int
+    #: Items that gained details.
+    details: int
 
 
 # The ids match the app's default plan (defaultExercises and defaultFoods in src/lib/storage.ts),
@@ -44,6 +47,22 @@ FOODS: list[dict[str, object]] = [
     {"id": "fish", "name": "Fish", "target": 2},
     {"id": "nuts", "name": "Nuts", "target": 3},
 ]
+
+#: Details for one exercise and one food, so the item page has something to show; the fields are
+#: ones their type lists (types.py).
+EXERCISE_DETAILS: dict[str, dict[str, object]] = {
+    "pu": {
+        "notes": "Slow on the way down, **three seconds**, and keep the elbows in.\n\n"
+        "On a bad day, do them against the kitchen counter.",
+        "fields": {"equipment": "None", "works": "Chest, shoulders, triceps"},
+    },
+}
+FOOD_DETAILS: dict[str, dict[str, object]] = {
+    "fish": {
+        "notes": "Oily fish counts double for the omega-3s.",
+        "fields": {"serving": "A palm-sized fillet", "examples": "Salmon, mackerel, sardines"},
+    },
+}
 
 type Week = dict[str, list[str | None]]
 
@@ -116,7 +135,9 @@ def demo_file(today: date) -> str:
     monday = today - timedelta(days=today.weekday())
     weeks = [monday - timedelta(weeks=2), monday - timedelta(weeks=1), monday]
 
-    def section(items: list[dict[str, object]], marks: list[Week]) -> dict[str, object]:
+    def section(
+        items: list[dict[str, object]], marks: list[Week], details: dict[str, dict[str, object]]
+    ) -> dict[str, object]:
         log: dict[str, Week] = {}
         for start, days_by_item in zip(weeks, marks, strict=True):
             week = start.isoformat()
@@ -126,14 +147,14 @@ def demo_file(today: date) -> str:
                 ]
                 for item, days in days_by_item.items()
             }
-        return {"plans": {w.isoformat(): items for w in weeks}, "log": log}
+        return {"plans": {w.isoformat(): items for w in weeks}, "log": log, "details": details}
 
     return json.dumps(
         {
             "format": EXPORT_FORMAT,
             "version": EXPORT_VERSION,
-            "exercise": section(EXERCISES, EXERCISE_WEEKS),
-            "diet": section(FOODS, FOOD_WEEKS),
+            "exercise": section(EXERCISES, EXERCISE_WEEKS, EXERCISE_DETAILS),
+            "diet": section(FOODS, FOOD_WEEKS, FOOD_DETAILS),
             "settings": {"accent": "#30d158", "dailyPick": 3, "foodPick": 2},
         }
     )
@@ -162,4 +183,9 @@ def seed(conn: sqlite3.Connection, config: Config, email: str, password: str | N
     added = import_data(
         conn, user_id, parse_export(demo_file(today)), quota=config.user_quota_bytes
     )
-    return {"created": created, "weeks": added["weeks"], "ticks": added["ticks"]}
+    return {
+        "created": created,
+        "weeks": added["weeks"],
+        "ticks": added["ticks"],
+        "details": added["details"],
+    }
