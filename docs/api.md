@@ -3,7 +3,7 @@
 > Purpose
 >
 > The API service in `api/`: accounts, sessions, invites, email, the synced data, the read-only
-> insights over it, the admin CLI and backups. It is the reference for the endpoints the client
+> insights over it, the MCP endpoint and its API tokens, the admin CLI and backups. It is the reference for the endpoints the client
 > calls and for running the service.
 
 ## 1. Overview
@@ -13,21 +13,23 @@ in SQLite at `$DATA_DIR/fitness.db` (WAL mode, foreign keys on). The web contain
 `/api/` to it, so the browser sees one origin and the CSP stays unchanged. Every user's rows are
 scoped by `user_id`, and no endpoint reads another user's data.
 
-| Module        | Holds                                                                                            |
-| ------------- | ------------------------------------------------------------------------------------------------ |
-| `config.py`   | `Config`, read from the environment (§6)                                                         |
-| `db.py`       | connections, the schema and its migrations                                                       |
-| `validate.py` | the port of `src/lib/storage.ts` and `src/lib/transfer.ts`                                       |
-| `auth.py`     | password hashing, lockout, sessions, sign-up and its caps, invite, reset and confirmation tokens |
-| `outbox.py`   | which emails go out and when: the limits (§4.1), the links, the message                          |
-| `emails.py`   | the two emails, built to the EmailLayout card, and that card's preview                           |
-| `mail.py`     | the Resend client, and sending after the response                                                |
-| `data.py`     | reading and writing plans, ticks and settings; import, export; the quota (`usage`)               |
-| `insights.py` | read-only views of a user's weeks, counted as the screen counts them (§1.1)                      |
-| `app.py`      | the HTTP layer: routes, the write checks, error mapping                                          |
-| `backup.py`   | the daily `VACUUM INTO` copy                                                                     |
-| `cli.py`      | `tracker-admin`                                                                                  |
-| `seed.py`     | `tracker-admin seed-demo`: a demo account and three weeks of marks, on a local stack only        |
+| Module          | Holds                                                                                                                 |
+| --------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `config.py`     | `Config`, read from the environment (§6)                                                                              |
+| `db.py`         | connections, the schema and its migrations                                                                            |
+| `validate.py`   | the port of `src/lib/storage.ts` and `src/lib/transfer.ts`, and the write checks REST and MCP share                   |
+| `auth.py`       | password hashing, lockout, sessions, sign-up and its caps, invite, reset and confirmation tokens, personal API tokens |
+| `outbox.py`     | which emails go out and when: the limits (§4.1), the links, the message                                               |
+| `emails.py`     | the two emails, built to the EmailLayout card, and that card's preview                                                |
+| `mail.py`       | the Resend client, and sending after the response                                                                     |
+| `data.py`       | reading and writing plans, ticks and settings; import, export; the quota (`usage`)                                    |
+| `insights.py`   | read-only views of a user's weeks, counted as the screen counts them (§1.1)                                           |
+| `edits.py`      | the MCP write tools' rules: one item, one mark or the daily targets at a time, as the app changes them (§3.1)         |
+| `app.py`        | the HTTP layer: routes, the write checks, error mapping, and where `/api/mcp` is served (§3.1)                        |
+| `mcp_server.py` | the MCP endpoint: the SDK server, its token check, and the tools (§3.1)                                               |
+| `backup.py`     | the daily `VACUUM INTO` copy                                                                                          |
+| `cli.py`        | `tracker-admin`                                                                                                       |
+| `seed.py`       | `tracker-admin seed-demo`: a demo account and three weeks of marks, on a local stack only                             |
 
 ### 1.1 Insights
 
@@ -73,6 +75,7 @@ Every reader keeps these rules:
 | `invites`       | `token_hash`                        | `kind` (`invite` or `reset`), `username`, `user_id` (resets), `expires_at`, `used_at`, `mailed` (a reset sent by email)                                                 |
 | `confirmations` | `token_hash`                        | `user_id`, `created_at`, `expires_at`, `used_at`: confirm-your-email links                                                                                              |
 | `mail_log`      | `id`                                | `user_id`, `kind` (`confirm` or `reset`), `sent_at`: one row per email attempted (a failed send still counts), for the limits                                           |
+| `api_tokens`    | `token_hash`                        | `user_id`, `name`, `prefix` (unique per user), `scope` (`read` or `write`), `created_at`, `last_used_at`: personal API tokens (§4)                                      |
 | `settings`      | `user_id`                           | `accent`, `daily_pick`, `food_pick` (K57)                                                                                                                               |
 | `plans`         | `(user_id, section, week)`          | `items_json`, `rev`                                                                                                                                                     |
 | `ticks`         | `(user_id, section, week, item_id)` | `days`, `partial`, `missed`, `solid`, `hatch`: 7-bit masks (bit 0 is Monday); see below                                                                                 |
@@ -92,7 +95,13 @@ startup inside a transaction. Version 1 is the first six tables; version 2 adds 
 `missed` (default 0), so every tick stored before marks had kinds reads as `great`; version 3 adds
 email: `email_confirmed_at`, `mailed`, `confirmations` and `mail_log`. Every account from before
 it starts unconfirmed. Version 4 adds `solid` and `hatch` (default 0), so every older mark reads as
-the zigzag. Version 5 adds `food_pick` to `settings` (default 2), foods a day (K57).
+the zigzag. Version 5 adds `food_pick` to `settings` (default 2), foods a day (K57). Version 6 adds
+`api_tokens` and its `(user_id, prefix)` index, personal API tokens (§4).
+
+Version 6 only adds a table, so it reshapes no data, and it uses `IF NOT EXISTS`, so it can run
+again. To back it out, revert the code: the empty table can stay, because `user_version` only
+moves forward and older code never reads the table. A database that ran version 6 stays at 6, so
+after such a revert, a different step must not ship as version 6: append it as version 7.
 
 ## 3. Endpoints
 
@@ -104,8 +113,8 @@ else, it gets 401 `auth`. The client sends it on every read and write, so a tab 
 person can never touch the data of someone who signed in later in another tab.
 
 **Writes** (`POST`, `PUT`) must send `Content-Type: application/json` and an `Origin` header equal
-to `PUBLIC_ORIGIN`; otherwise they get 403 `origin` or 415 `content-type`. `SameSite=Lax` alone
-would not stop a request from another `*.itsa-pizza.com` host, because the browser counts it as
+to `PUBLIC_ORIGIN`; otherwise they get 403 `origin` or 415 `content-type`. `/api/mcp` follows its
+own rules (§3.1). `SameSite=Lax` alone would not stop a request from another `*.itsa-pizza.com` host, because the browser counts it as
 same-site. Bodies over 1 MiB get 413 `too-large`, counted as they stream in, so a chunked body is
 cut off at the limit rather than read whole. A body with nothing to send, such as logout's, is `{}`.
 
@@ -128,6 +137,7 @@ cut off at the limit rather than read whole. A body with nothing to send, such a
 | `PUT /settings`                            | session | `{accent, dailyPick, foodPick}` → the stored settings; no `foodPick` keeps the saved one       |
 | `GET /export`                              | session | the export file (`architecture.md` §4)                                                         |
 | `POST /import`                             | session | an export file, merged in; → `{weeks, ticks, settings}` added                                  |
+| `POST /mcp`                                | token   | one MCP request, answered as JSON (§3.1)                                                       |
 
 **The account** is `{username}`: the account's email (the field keeps its old name, so older
 tabs and clients work unchanged). While mail is on it also carries `confirmed`, true once the
@@ -178,6 +188,130 @@ apply only when the account has none. It returns what it added (`ticks` counts t
 that gained a mark), in one transaction. A file that fails to parse gets 400 with `json`,
 `format` or `version`, the same codes the client shows.
 
+### 3.1 MCP
+
+[mcp.md](mcp.md) says how to mint a token and connect each Claude client.
+
+`POST /api/mcp` serves the Model Context Protocol (MCP) over Streamable HTTP, so an agent such as
+Claude Code can work with the account's data. The official `mcp` SDK (2.3) serves it from
+the API process, through the same nginx route as every other `/api/` path. This section covers
+the endpoint's rules. The tools are listed below.
+
+- **The URL** is exactly `$PUBLIC_ORIGIN/api/mcp`. The API routes that path itself, so it never
+  answers with a redirect. `/api/mcp/` is not the endpoint: it gets REST's guard, and past it a
+  307 to the path without the slash.
+- **Auth.** The request sends a personal API token (§4) as `Authorization: Bearer trk_…`, and
+  only there. The route never reads the session cookie, and no REST route accepts a token. A
+  `token` or `access_token` in the query string gets 400 `token-in-url` before anything else is
+  checked, because nginx and uvicorn log query strings. No token, an unknown or revoked one, or a
+  disabled account's token gets 401 with `WWW-Authenticate: Bearer error="invalid_token"`. The
+  header also names a `resource_metadata` URL, which answers 404: the endpoint has no OAuth flow.
+- **The write guard** (§3) works differently on this path:
+  - A request with no `Origin` passes, since an agent is not a browser and sends none.
+  - An `Origin` other than `PUBLIC_ORIGIN` still gets 403 `origin`, the MCP spec's defence
+    against DNS rebinding.
+  - The guard skips its `Content-Type` check. The SDK answers a POST that is not JSON with 400.
+  - The 1 MiB cap stays. A `Content-Length` over it gets 413 `too-large`, and the SDK cuts a
+    chunked body off at the same size.
+- **Host.** The SDK accepts a `Host` of `PUBLIC_ORIGIN`'s host without its port (nginx forwards
+  `$host`), or `localhost` or `127.0.0.1` with any port. Any other `Host` gets 421, so the LAN
+  port's address does not serve MCP. Use the public HTTPS URL, where the token travels encrypted.
+- **Stateless JSON.** Each POST carries one JSON-RPC message and gets one JSON response. There is
+  no `Mcp-Session-Id` and no SSE stream, so a deploy drops no session and nginx's 60-second idle
+  cut never applies. Any other method gets 405 `method`: there is no GET stream to open and no
+  session to end with `DELETE`. Both kinds of client work: one that starts with `initialize`
+  (revisions 2024-11-05 to 2025-11-25), and one on the 2026-07-28 revision, which sends its
+  protocol version with every request.
+
+| Tool     | Scope | Returns                                                                   |
+| -------- | ----- | ------------------------------------------------------------------------- |
+| `whoami` | read  | `{email, scope}`: the token's account and its scope, to test a connection |
+
+A token of either scope may call a `read` tool. Only a `write` token may call a write tool (below).
+
+**Read tools.** Each wraps the reader of the same name in `insights.py` (§1.1) and returns its
+result unchanged, with `this_week` (the Monday of today's week) and `today` added, both in the
+account's timezone, so the agent knows "now". Every read tool has `readOnlyHint`. The server
+passes `today` to the reader, since `insights.py` never reads the clock. `section` is `exercise`
+(the default) or `diet` (food). A week is a Monday written `YYYY-MM-DD`.
+
+| Tool           | Arguments (defaults)                                                      | Returns                                                         |
+| -------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `week_summary` | `section` (`exercise`), `week` (this week)                                | One week: each item's marks against its goal, and the met days  |
+| `weeks`        | `section` (`exercise`), `start` (3 weeks before `end`), `end` (this week) | `week_summary` for each week from `start` to `end`, 26 at most  |
+| `item_history` | `item_id`, `section` (`exercise`), `weeks` (8)                            | One item's goal and marks over the last `weeks` weeks           |
+| `goals`        | none                                                                      | This week's goals for both sections, daily targets and the note |
+| `consistency`  | `section` (`exercise`), `weeks` (8)                                       | Met-day and goal-met rates over the last `weeks` weeks, streaks |
+
+A refused argument (a `week` that is not a Monday, an unknown `section`, a `weeks` outside 1
+to 26) returns a tool result with `isError: true` whose text names the field, as `week: must be a
+Monday, written YYYY-MM-DD`. It is not a JSON-RPC error. A week so near the year 1 or 9999 that
+the weeks around it can't be counted gets `date: a week or date is out of range`.
+
+**Write tools.** These change John's plans, marks and daily targets as the app does. Each needs a
+`write` token. A `read` token gets a tool error that says the token is read-only and how to mint
+one with `--write`. The rules live in `edits.py`, over `data.put_plan`, `data.set_tick` and
+`data.put_settings`, so REST's endpoints and limits are unchanged.
+
+| Tool                | Arguments (defaults)                                                        | Annotations       |
+| ------------------- | --------------------------------------------------------------------------- | ----------------- |
+| `add_item`          | `name`, `section` (`exercise`), `week` (this week), the item fields below   | not idempotent    |
+| `update_item`       | `item_id`, `section` (`exercise`), `week` (this week), the fields to change | `idempotentHint`  |
+| `remove_item`       | `item_id`, `section` (`exercise`), `week` (this week)                       | `destructiveHint` |
+| `mark_day`          | `item_id`, `mark`, `section` (`exercise`), `date` (today)                   | `idempotentHint`  |
+| `set_daily_targets` | `exercises_a_day`, `foods_a_day` (each left as it is when not given)        | `idempotentHint`  |
+
+Every write tool has `readOnlyHint` false and `openWorldHint` false; only `remove_item` has
+`destructiveHint` true.
+
+- **A change to a week is a change to that week and the weeks that carry it forward**, as in the
+  app (architecture.md §2). A week with no plan of its own gets a copy of the plan it shows: its
+  source week's, or the defaults when nothing is planned. An item tool creates the week at `rev`
+  0 with the change already applied to the copy, in one write, as the app's sync sends `own()`
+  and the edit. `mark_day` first creates the plain copy (`edits.own_week`), then sets the day, as
+  a tick on the device does. A device creating the same week from the same source does not
+  conflict (P7). The source week is never written. `copied_from` in the result names the week
+  copied, `defaults`, or null when the week had its own plan.
+- **Item fields use the app's words.** An exercise has `name`, `sets` (0 to 20), `reps` (0 to
+  9999), `seconds` (0 to 3600), `per_side`, `weight_kg` (0 to 500), `times_a_week` (0 to 7) and
+  `note` (up to 500 characters). A food has `name`, `times_a_week` and `note`. They are stored as
+  `name`, `sets`, `reps`, `duration`, `perSide`, `weight`, `target` and `notes`; `edits.WORDS`
+  holds that mapping. A 0, or an empty `note`, clears the field. An exercise counts reps or
+  seconds, not both: giving `seconds` to an exercise with reps sets its reps to 0, and giving
+  `reps` drops its seconds. Names are trimmed, may not be empty, and are capped at 80 characters.
+  A new exercise's `times_a_week` is 3, as is a new food's.
+- **Ids are made by the server**, in the app's shape: `x`, the time in milliseconds in base 36, and
+  four random base-36 characters. An id already used in the section is never reused.
+- **`mark_day`** marks one item on one date. The week is that date's Monday and the day its
+  weekday. It may be in the future, as on screen. `mark` is one of the nine marks
+  (§2), or null to clear the day. A food takes only `great`, `great-solid` or `great-hatch`, the
+  marks the app gives a food. An item the week does not show is refused.
+- **`set_daily_targets`** sets exercises a day and foods a day, each 1 to 8. The accent and the
+  target not given keep their saved values, or the defaults while none are saved.
+- **Conflicts.** A plan write that meets a newer `rev` re-reads the week and applies the change
+  again, up to three tries in all, then fails with a tool error. The app adopts the server's copy
+  on its next read, as after any 409 (architecture.md §7).
+- **Refusals** are tool results with `isError: true`, whose text names the field, as
+  `item_id: no item xq in the week of 2026-10-19`. They cover a week that is not a Monday, an
+  unknown item id, an out-of-range or unknown field, a strict-validation problem, three conflicts
+  in a row and a full account (`quota`). Nothing is changed when a call is refused, with one
+  exception, which the app shares: a mark refused for the quota on a week without its own plan
+  leaves that week's copied plan in place. The week shows the same items either way.
+  Arguments that don't fit a tool's schema (a `mark` outside the nine, text for a number) are
+  refused by the SDK, whose text names the argument and what it accepts.
+
+Each result gives what was there before, so a change can be undone by hand (there is no undo
+table):
+
+| Tool                 | Returns                                                                                                                                                         |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the three item tools | `section`, `week`, `item` (the item added, updated or removed), `before` and `after` (the week's items, in the app's words), `rev`, `copied_from`               |
+| `mark_day`           | `section`, `date`, `week`, `day` (0 is Monday), `item_id`, `before` and `after` (the day's mark or null), `days` (the item's seven marks), `rev`, `copied_from` |
+| `set_daily_targets`  | `before` and `after`, each `{exercises_a_day, foods_a_day}`                                                                                                     |
+
+`remove_item` leaves the item's marks in the log, uncounted, as the app does. Adding the item back
+gives it a new id, so those marks stay detached; `before` holds the item for reference.
+
 ## 4. Accounts and sessions
 
 - **Sign-up.** `POST /auth/signup` with `{email, password}` creates an account and signs it in.
@@ -199,7 +333,8 @@ that gained a mark), in one transaction. A file that fails to parse gets 400 wit
   and lower-cased, so every new account, invited or signed up, signs in with an email. Inviting
   an email that already has an account fails; use `reset`. With mail on, redeeming an invite
   sends a confirm link, as sign-up does. `tracker-admin reset <email>` mints a reset link the same
-  way, valid for 24 hours. Using it ends every session of that user and clears any lockout.
+  way, valid for 24 hours. Using it ends every session and API token of that user and clears any
+  lockout.
   Minting a new link revokes the earlier unused `tracker-admin` links of the same kind for that account
   (a new invite leaves a reset link alone, and the reverse). A reset sent by email
   (§4.1) revokes nothing, and nothing revokes it but its hour running out. The token travels
@@ -227,6 +362,15 @@ that gained a mark), in one transaction. A file that fails to parse gets 400 wit
   refresh moves the expiry forward and re-sends the cookie. Logout ends one session.
   `tracker-admin revoke-sessions <email>` and a reset end them all. A disabled user's sessions stop
   working at once.
+- **API tokens** let a program act as the account, for the MCP endpoint.
+  `tracker-admin token create <email> --name <name>` prints one once: `trk_` and 43 random
+  URL-safe characters. The database keeps only its SHA-256 hash and its `prefix`, the 8
+  characters after `trk_`, which names the token without revealing it. A token has the
+  `read` scope, or `write` with `--write`. Tokens do not expire, and `last_used_at` moves at most
+  once a day. `token revoke` ends one; `revoke-sessions`, a reset (from `tracker-admin` or by
+  email) and `disable` end them all. A disabled account cannot mint one, and its tokens stop
+  working at once. No REST route accepts a token, and nothing logs one: the CLI prints it to its
+  own output only.
 
 ### 4.1 Email
 
@@ -270,11 +414,21 @@ resets are `tracker-admin`'s, as before.
 ```sh
 docker compose exec fitness-api tracker-admin invite alice@example.com   # prints the invite link
 docker compose exec fitness-api tracker-admin reset alice@example.com    # prints a reset link
-docker compose exec fitness-api tracker-admin users            # email, created, disabled, sessions
-docker compose exec fitness-api tracker-admin disable alice@example.com  # blocks login, ends sessions
+docker compose exec fitness-api tracker-admin users            # email, created, disabled, sessions, tokens
+docker compose exec fitness-api tracker-admin disable alice@example.com  # blocks login, ends sessions and tokens
 docker compose exec fitness-api tracker-admin enable alice@example.com
-docker compose exec fitness-api tracker-admin revoke-sessions alice@example.com
+docker compose exec fitness-api tracker-admin revoke-sessions alice@example.com  # ends sessions and tokens
+docker compose exec fitness-api tracker-admin token create alice@example.com --name laptop  # a read token, printed once
+docker compose exec fitness-api tracker-admin token create alice@example.com --name agent --write  # read and write
+docker compose exec fitness-api tracker-admin token list alice@example.com  # name, prefix, scope, created, last used
+docker compose exec fitness-api tracker-admin token revoke alice@example.com <prefix>
+docker compose exec fitness-api tracker-admin token revoke alice@example.com --all
 ```
+
+`token create` and `token list` show each token's prefix as `trk_` and its 8 characters, and
+`token revoke` takes it in that form or without the `trk_`. The `trk_` form never starts with
+`-`, so the shell and the CLI read it as an argument. A prefix that names no token of that account
+fails with status 1 and revokes nothing.
 
 `tracker-admin seed-demo [email] [--password …]` is for a local stack only. It refuses unless
 `PUBLIC_ORIGIN` is `http://localhost` or `http://127.0.0.1` (any port) and `COOKIE_SECURE=false`.
@@ -297,6 +451,7 @@ every kind in every drawing, met and unmet goals, and a day over the pick.
 | `RESEND_API_KEY` | (unset)               | turns mail on (§4.1); a key with sending access is enough. Never logged   |
 | `MAIL_FROM`      | (required with a key) | the From line, `Name <address>` on a domain verified in Resend            |
 | `MAIL_PER_HOUR`  | `30`                  | emails of every kind, across all accounts, in any rolling hour; 1 or more |
+| `TIMEZONE`       | `Europe/Amsterdam`    | the IANA zone that decides today and this week for the MCP tools          |
 
 ## 7. Backups
 
@@ -342,6 +497,9 @@ Reviewed and kept on purpose, for a small service with open sign-up (D9 in
   be trusted. `tracker-admin reset` clears it.
 - **Sessions have no absolute lifetime.** A session used at least every 90 days lasts
   indefinitely. Logout, `revoke-sessions`, a reset and `disable` all end it.
+- **API tokens have no lifetime at all.** A token works until something revokes it:
+  `token revoke`, `revoke-sessions`, a reset or `disable`. `token list` shows when each was last
+  used, to the day, so a forgotten one is easy to spot and revoke.
 
 ## 9. Validation parity
 
@@ -403,14 +561,31 @@ Tests sit in `api/tests/`:
   races, sessions sliding and expiring, invite and reset links, races between redemptions;
   sign-up's email rule (254 characters, ASCII), password length, taken emails, `MAX_USERS`, the
   hourly limit (invites not counted), parallel sign-ups against the cap and for one email, and a
-  reset for an email account.
+  reset for an email account; API tokens: lookup and scope, malformed and unknown tokens, disabled
+  accounts, revocation by a reset, `disable` and `revoke-sessions`, hash-only storage, and the
+  daily `last_used_at`.
 - `test_mail.py`: the Resend request's shape and its errors, the two emails (words, escaping,
   the email rules) and the EmailLayout card being current, `GET /auth/options`, confirming
   (links, expiry, resend and its limits, invited accounts, mail off, a failed send), forgot
   password (same answer for anyone, the hour's lifetime, confirming by a mailed reset only, silent
   limits) and `MAIL_PER_HOUR` across kinds.
 - `test_db.py`, `test_config.py`, `test_backup.py`, `test_cli.py`: migrations (including racing
-  ones, the WAL switch, and old ticks reading as `great` after step 2), configuration from the environment, daily copies, `tracker-admin`.
+  ones, the WAL switch, old ticks reading as `great` after step 2, and every row surviving step
+  6 from a populated database), configuration from the environment (`TIMEZONE`, and the week
+  turning over at local midnight), daily copies, `tracker-admin`.
+- `test_mcp.py`: the MCP endpoint through `TestClient`: `initialize`, `tools/list` and `whoami`
+  with a token, on both protocol kinds, and each refusal (no, bad, revoked or disabled token; a
+  cookie alone; a token in the query string; a foreign `Origin` or `Host`; a method other than
+  POST; an oversized body; a redirect). Where the endpoint's rule differs from REST's, the same
+  test checks a REST route too, so an exemption wider than `/api/mcp` fails. Then every tool:
+  the parity cases through `week_summary`, the read tools' defaults and refusals (a week at the
+  calendar's end included), a read token refused on writes, and each write's result.
+- `test_edits.py`: the plan edits behind the write tools: copying a carried week first, the ids
+  the server makes, each field's bounds, replaying a conflict, the quota, and marks per section.
+- `test_validate.py`: the write checks REST and MCP share: week keys, plan bodies, item ids, days,
+  marks and the stricter item shape for MCP writes.
+- `test_seed.py`: `seed-demo` against a local stack only, adding what is missing and never
+  overwriting a mark.
 - `conftest.py` gives each test a temporary database, a controllable clock, a cheap hasher and a
   mailer that records instead of sending (`mail_client`);
   `fixtures.py` reads `fixtures/transfer/`.
