@@ -63,7 +63,7 @@ Sign-up is open by default: anyone who can reach the app can create an account u
   upstream is a variable resolved through Docker's DNS (`resolver 127.0.0.11`), so nginx starts and
   keeps serving the app while the API is down. `/api/` then answers 502, or 504 within 3 seconds
   while nginx still holds the stopped container's address (`proxy_connect_timeout 3s`); the client
-  treats both as offline. Bodies are capped at 1 MiB, as the API caps them. The API's own `Cache-Control` is
+  treats both as offline. Bodies are capped at 6 MiB, the API's limit for an import; the API holds every other write to 1 MiB. The API's own `Cache-Control` is
   hidden and the server-level `no-store` sent instead, so each response carries exactly one.
 - `/assets/*`: hashed bundles with `Cache-Control: public, max-age=31536000, immutable`; a missing
   asset returns 404 rather than falling back.

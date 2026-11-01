@@ -121,7 +121,8 @@ person can never touch the data of someone who signed in later in another tab.
 **Writes** (`POST`, `PUT`, `DELETE`) must send `Content-Type: application/json` and an `Origin`
 header equal to `PUBLIC_ORIGIN`; otherwise they get 403 `origin` or 415 `content-type`.
 `SameSite=Lax` alone would not stop a request from another `*.itsa-pizza.com` host, because the
-browser counts it as same-site. Bodies over 1 MiB get 413 `too-large`, counted as they stream in, so
+browser counts it as same-site. Bodies over 1 MiB get 413 `too-large` (6 MiB for `POST /api/import`,
+so a full account's export goes back in whole), counted as they stream in, so
 a chunked body is cut off at the limit rather than read whole. A body with nothing to send, such as
 logout's, is `{}`. A `DELETE` sends no body at all, but the same `Content-Type` header.
 

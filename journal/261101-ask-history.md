@@ -115,6 +115,6 @@ Then the before-the-first-frame probe found the gap above. Its test failed on th
 - **W7, `api.ts`.** `request()` accepts only GET, POST and PUT, and sets `Content-Type` only with
   a body. A DELETE must send `Content-Type: application/json`.
 - **The import limits are below what an account can hold.** Storage has no cap on conversations
-  or turns, and a file reads only 500 of 200 turns each. `POST /import` takes 1 MiB, against a
-  5 MiB quota. An account with a long history couldn't round-trip through one file. That needs
-  John's call.
+  or turns, and a file reads only 500 of 200 turns each. `POST /import` took 1 MiB, against a
+  5 MiB quota, so an account with a long history couldn't round-trip through one file. John
+  raised the import limit to 6 MiB (see `261101-ask-page.md`).

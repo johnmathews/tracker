@@ -33,6 +33,15 @@ from .validate import (
 #: The package's logger; `create_app_from_env` gives it a handler.
 log = logging.getLogger("tracker_api")
 MAX_BODY = 1 << 20
+#: An import file may hold a whole account (the 5 MiB quota) with room for JSON's overhead, so
+#: /api/import alone takes up to 6 MiB; every other write stays at MAX_BODY.
+MAX_IMPORT_BODY = 6 << 20
+
+
+def body_limit(path: str) -> int:
+    return MAX_IMPORT_BODY if path == "/api/import" else MAX_BODY
+
+
 WRITES = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 # The HTTP status for each refusal code an auth step can raise.
 AUTH_STATUS = {
@@ -123,7 +132,7 @@ def create_app(
             if content_type != "application/json":
                 return error_response(415, "content-type")
             length = request.headers.get("content-length", "0")
-            if not length.isdigit() or int(length) > MAX_BODY:
+            if not length.isdigit() or int(length) > body_limit(request.url.path):
                 return error_response(413, "too-large")
         response = await call_next(request)
         response.headers["Cache-Control"] = "no-store"
@@ -160,9 +169,10 @@ def create_app(
         # Counted as it arrives: a chunked body has no Content-Length for the guard to check, and
         # reading it whole first would let one request exhaust the container's memory.
         raw = bytearray()
+        limit = body_limit(request.url.path)
         async for chunk in request.stream():
             raw += chunk
-            if len(raw) > MAX_BODY:
+            if len(raw) > limit:
                 raise ApiError(413, "too-large")
         try:
             # utf-8-sig drops a byte-order mark, as the browser's File.text() does.

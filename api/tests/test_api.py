@@ -1,6 +1,7 @@
 """The HTTP layer through FastAPI's TestClient, against a real SQLite file."""
 
 import asyncio
+import copy
 import json
 from collections.abc import MutableMapping
 from dataclasses import replace
@@ -649,6 +650,40 @@ def test_users_cannot_see_or_change_each_others_data(client: TestClient, config:
 def post_import(client: TestClient, payload: Any) -> Any:
     text = payload if isinstance(payload, str) else json.dumps(payload)
     return client.post("/api/import", content=text, headers={"Content-Type": "application/json"})
+
+
+def padded_export(size: int) -> str:
+    """An export file of about `size` bytes: the sample, with a long goals text as padding."""
+    sample = copy.deepcopy(read_fixture("sample/export.json"))
+    sample["settings"]["goals"] = "x" * size
+    return json.dumps(sample)
+
+
+def test_an_import_may_be_up_to_six_mebibytes(client: TestClient, config: Config) -> None:
+    """A full account (5 MiB quota) must round-trip through Export and Import, so /api/import
+    takes up to 6 MiB; every other write stays at 1 MiB."""
+    sign_up(client, config)
+    r = post_import(client, padded_export(3 << 20))
+    assert r.status_code == 200
+    assert r.json()["weeks"] == 6
+
+
+def test_a_chunked_import_over_a_mebibyte_is_read(client: TestClient, config: Config) -> None:
+    sign_up(client, config)
+    text = padded_export(2 << 20).encode()
+
+    def chunks() -> Any:
+        for i in range(0, len(text), 64 * 1024):
+            yield text[i : i + 64 * 1024]
+
+    r = client.post("/api/import", content=chunks(), headers={"Content-Type": "application/json"})
+    assert r.status_code == 200
+
+
+def test_an_import_over_six_mebibytes_is_refused(client: TestClient, config: Config) -> None:
+    sign_up(client, config)
+    r = post_import(client, padded_export(6 << 20))
+    assert (r.status_code, r.json()) == (413, {"error": "too-large"})
 
 
 def test_sample_import_then_export_round_trips(client: TestClient, config: Config) -> None:

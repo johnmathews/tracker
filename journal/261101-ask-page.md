@@ -57,10 +57,11 @@ On the mockup `brand/design-system/mockups/261101-ask-page` (three rounds, plan 
   from `retryAfter` replaces it. Adding `retryAfter` to `GET /api/ask` would make it exact.
 - **The mockup's Settings frame still had a Planner row** (copied before K59 removed it), so
   "between Planner and Your data" became between Appearance and Your data.
-- **The import body limit stays 1 MiB.** An export with many conversations can pass it, and then
-  the API answers 413 `too-large`. The app has no words of its own for that code: Settings says
-  "The server refused the import, so nothing changed." That is accepted for now; raising the
-  limit for `/import`, or a sentence that names the size, waits on John.
+- **The import body limit is 6 MiB** (John, 2026-11-01: "yes raise it to 6 MiB"), for
+  `POST /api/import` only: a full account's export (5 MiB quota) goes back in whole. Every other
+  write stays at 1 MiB in the API; nginx allows 6 MiB on `/api/` and the API holds each route to
+  its own limit. A file over 6 MiB still gets 413 `too-large`, and Settings says "The server
+  refused the import, so nothing changed."
 
 ## 4. Checks
 
