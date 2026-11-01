@@ -77,7 +77,7 @@ type RunTool = Callable[[str, object], Awaitable[tuple[str, bool]]]
 
 # --- The prompt ----------------------------------------------------------------------------------
 
-#: John's ruling on the voice (F7, K68): V2, extended. "V2 - plain verdict, the app may qote a note
+#: John's ruling on the voice (K68): V2, extended. "V2 - plain verdict, the app may qote a note
 #: back as advice. and also may include streaks scores or rankings." For Ask's answers only, this
 #: rule replaces the app's three (no streaks, scores or rankings; no note or goals quoted back).
 #: No exclamation marks, no hype and no blame still hold either way (voice.md, "Ask").
@@ -250,7 +250,7 @@ def parse(body: Mapping[str, object], server_today: date) -> Question:
         day = date.fromisoformat(today)
     except ValueError:
         raise AskInvalid("today") from None
-    # Every time zone's date is within a day of UTC's.
+    # The date in any zone within a day of TIMEZONE is within a day of the server's.
     if abs((day - server_today).days) > 1:
         raise AskInvalid("today")
     return Question(question.strip(), day, cast(str | None, conversation))

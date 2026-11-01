@@ -12,7 +12,7 @@ export type Additions = {
   details: number
   /** The file's settings apply: the account has none of its own. */
   settings: boolean
-  /** The file's My goals fill goals that are empty (F17): a change on its own. */
+  /** The file's My goals fill goals that are empty (K72): a change on its own. */
   goals: boolean
   /** Ask conversations whose id the account doesn't have yet. */
   conversations: number

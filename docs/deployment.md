@@ -126,13 +126,15 @@ first, then the web.
   older API answers 404. The app keeps that write and every write queued behind it, retrying with
   the backoff (`sync.ts`, P28), so nothing is lost. Syncing stalls until the API is updated, and the
   app shows itself as offline with the changes waiting.
-- **Migrations 7 and 8 run when the API starts.** `db.migrate` runs in the app's startup, and in
+- **Migrations 7 to 11 run when the API starts.** `db.migrate` runs in the app's startup, and in
   every `tracker-admin` command, before anything is served. Each step commits with its schema
   version under the write lock, so the API and a `tracker-admin` command starting together can't
   both apply it. A database not yet at step 6 (`api_tokens`, the MCP release) takes it first.
   Step 7 creates `item_details` and copies each item's latest note into it ([api.md](api.md) §2).
   Step 8 adds the nullable `settings.item_sections` (each type's item-page arrangement, K66);
-  existing rows read as NULL, every page as it was.
+  existing rows read as NULL, every page as it was. Steps 9 to 11 are Ask's: step 9 adds
+  `settings.goals` (`''`, no goals, for every saved row), step 10 `ask_log` and step 11
+  `ask_conversations` and `ask_turns`. They only add, so they reshape nothing.
 - **Settings from the new app reach an older API safely.** An API from before step 8 ignores the
   `itemSections` key, so an arrangement made before the API updates is not saved there and the
   next read puts the pages back to the default. Updating the API first avoids it. Once it is

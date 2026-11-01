@@ -558,7 +558,7 @@ met days use exercises a day and foods a day, future days don't count), names an
 and never instructions, tools before judgement, no medical advice, short markdown with no
 headings, tables or images, and the voice. It holds nothing that varies, so it caches; the cache
 breakpoint is on it, and the tools render before it. Today, this week and the My goals note open
-the first user turn instead. The voice is John's ruling (F7, K68, voice.md "Ask"): facts first and
+the first user turn instead. The voice is John's ruling (K68, voice.md "Ask"): facts first and
 no blame, exclamation marks or hype, and `VERDICT_RULE`, which lets an answer say plainly that
 something is too little or too much, count streaks and give scores or rankings when they help,
 and quote the person's goals and notes back as advice. `PLAIN_VERDICTS` (True) turns it on;
@@ -898,7 +898,8 @@ Tests sit in `api/tests/`:
 - `test_db.py`, `test_config.py`, `test_backup.py`, `test_cli.py`: migrations (including racing
   ones, the WAL switch, old ticks reading as `great` after step 2, every row surviving step 6
   from a populated database, step 7 lifting each item's latest note, rerunning and on an empty
-  database, and step 8's empty column), configuration from the environment (`TIMEZONE`, and the
+  database, step 8's empty column, step 9's goals reading as none, and Ask's tables after steps 10
+  and 11 holding text only and going with their user), configuration from the environment (`TIMEZONE`, and the
   week turning over at local midnight), daily copies, `tracker-admin`.
 - `test_mcp.py`: the MCP endpoint through `TestClient`: `initialize`, `tools/list` and `whoami`
   with a token, on both protocol kinds, and each refusal (no, bad, revoked or disabled token; a

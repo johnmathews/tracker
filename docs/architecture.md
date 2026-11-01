@@ -447,7 +447,7 @@ applies the same rules):
 - An item with details keeps them whole, and an item without takes the file's.
 - The file's accent and daily pick apply only when the account has no settings of their own yet.
 - The file's My goals fill the account's when those are empty, and never replace goals already
-  saved (F17, K72).
+  saved (K72).
 - The file's Ask conversations are added when the account has none with their id; one it has is
   never changed.
 
