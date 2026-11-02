@@ -59,7 +59,7 @@ merge commit never reaches main.
 
 ## Shipped (2026-11-02)
 
-- PR #58 was squash-merged as `bc31eb8` at 07:57 CET. CI on `main` passed (check, e2e, api),
+- PR #58 was squash-merged as `bc31eb8` at 07:55 CET. CI on `main` passed (check, e2e, api),
   and `docker.yml` then published `ghcr.io/johnmathews/tracker` and `tracker-api` from that
   commit. What's Up Docker on the home server pulls `latest` from there.
 - Ask stays hidden in production until `fitness-api` gets `ANTHROPIC_API_KEY` from the vault
