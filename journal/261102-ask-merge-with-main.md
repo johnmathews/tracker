@@ -56,3 +56,13 @@ merge commit never reaches main.
   resolution; the squash merge flattens both.
 - The peer sessions' own worktrees and branches were not touched. Both have merged; the PR
   number goes to them when it opens.
+
+## Shipped (2026-11-02)
+
+- PR #58 was squash-merged as `bc31eb8` at 07:55 CET. CI on `main` passed (check, e2e, api),
+  and `docker.yml` then published `ghcr.io/johnmathews/tracker` and `tracker-api` from that
+  commit. What's Up Docker on the home server pulls `latest` from there.
+- Ask stays hidden in production until `fitness-api` gets `ANTHROPIC_API_KEY` from the vault
+  (`docs/deployment.md`). Until then, nothing else changes for anyone.
+- The design-system artifact is at version 55, with the five Ask cards and voice.md's Ask
+  section. Its index's `lastChange` is committed in #59.
