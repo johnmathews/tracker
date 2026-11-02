@@ -789,6 +789,38 @@ def test_the_app_logs_its_info_lines_under_uvicorn(
     assert logging.getLogger("tracker_api.ask").isEnabledFor(logging.INFO)
 
 
+def test_each_line_is_logged_once_beside_the_mcp_sdks_root_handler(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Any, api_logger: logging.Logger
+) -> None:
+    """The MCP SDK's server calls `logging.basicConfig`, which gives the root logger a plain
+    handler. The package's lines go to its own handler only, or every line prints twice."""
+    from tracker_api.app import create_app_from_env
+
+    monkeypatch.setenv("PUBLIC_ORIGIN", ORIGIN)
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    api_logger.handlers.clear()
+    create_app_from_env()
+
+    class Kept(logging.Handler):
+        def __init__(self) -> None:
+            super().__init__()
+            self.lines: list[str] = []
+
+        def emit(self, record: logging.LogRecord) -> None:
+            self.lines.append(record.getMessage())
+
+    root, own = Kept(), Kept()
+    logging.getLogger().addHandler(root)
+    api_logger.addHandler(own)
+    try:
+        logging.getLogger("tracker_api.ask").info("ask ended stop=end_turn rounds=1")
+    finally:
+        logging.getLogger().removeHandler(root)
+    assert own.lines == ["ask ended stop=end_turn rounds=1"]
+    assert root.lines == []
+
+
 # --- validation ----------------------------------------------------------------------------------
 
 
