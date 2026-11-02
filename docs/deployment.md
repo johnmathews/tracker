@@ -53,8 +53,9 @@ after another, so the peak stays at one hash's 64 MiB.
 The MCP SDK raised these on 2026-11-01. Measured the same way, after a sign-up, a login and ten
 MCP tool calls, the peak was 126 MiB in three runs. On the image before MCP it was 108–111 MiB.
 Resting memory rose from about 44 MiB to about 60 MiB. One run, the first start after a build,
-read 140 MiB. Give the API **`mem_limit: 160m`** at least; 192m leaves room for that first start. The web
-container's 64m would be killed by the first login.
+read 140 MiB. Give the API **`mem_limit: 192m`**, as the compose example in the README does: 160m
+holds the peak, and 192m leaves room for that first start. John's home server has run 192m since
+2026-11-02. The web container's 64m would be killed by the first login.
 
 `docker compose up --build` runs both images locally: the app on `http://localhost:8083` and the API
 on `http://localhost:8000`, with the API's data in the `api-data` volume. Create a first account at
