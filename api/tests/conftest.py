@@ -41,10 +41,11 @@ def fast_hasher(monkeypatch: pytest.MonkeyPatch) -> None:
 def api_logger() -> Iterator[logging.Logger]:
     """The package logger, put back as it was: `create_app_from_env` gives it a handler."""
     log = logging.getLogger("tracker_api")
-    handlers, level = list(log.handlers), log.level
+    handlers, level, propagate = list(log.handlers), log.level, log.propagate
     yield log
     log.handlers[:] = handlers
     log.setLevel(level)
+    log.propagate = propagate
 
 
 @pytest.fixture

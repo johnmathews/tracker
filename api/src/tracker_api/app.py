@@ -563,4 +563,7 @@ def create_app_from_env() -> FastAPI:
         handler.setFormatter(logging.Formatter("%(levelname)s:  %(name)s %(message)s"))
         log.addHandler(handler)
         log.setLevel(logging.INFO)
+    # The MCP SDK's server calls logging.basicConfig, which gives the root logger a plain
+    # handler of its own; passing lines on to it as well would print each one twice.
+    log.propagate = False
     return create_app(Config.from_env())

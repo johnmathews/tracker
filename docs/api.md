@@ -720,7 +720,9 @@ details for 2 items.", the marks depending on the day of the week), or "Nothing 
 | `ASK_PER_DAY`       | `30`                  | questions per account in any rolling 24 hours; 1 or more                  |
 | `ASK_PER_DAY_TOTAL` | `300`                 | questions across all accounts in any rolling 24 hours; 1 or more          |
 
-**Logging.** The API's own lines go to stderr at info and above (`docker logs fitness-api`). The
+**Logging.** The API's own lines go to stderr at info and above (`docker logs fitness-api`), once
+each, as `INFO:  tracker_api.<module> …`. They don't also go on to the root logger, which the MCP
+SDK sets up with a plain handler of its own (`logging.basicConfig`). The
 logs never hold what a person wrote or was told: no question, history, answer, note, goals or
 item name, and no email address. For Ask they hold, per request to Anthropic, the request id, the
 stop reason and the token counts (input, output, cache read, cache write), and per question the
