@@ -1,0 +1,25 @@
+{
+  "description": "An empty list of conversations is carried as one.",
+  "input": {
+    "format": "tracker-export",
+    "version": 3,
+    "conversations": []
+  },
+  "expected": {
+    "ok": true,
+    "data": {
+      "exercise": {
+        "plans": {},
+        "log": {},
+        "details": {}
+      },
+      "diet": {
+        "plans": {},
+        "log": {},
+        "details": {}
+      },
+      "settings": null,
+      "conversations": []
+    }
+  }
+}

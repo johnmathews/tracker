@@ -1,0 +1,71 @@
+<!-- @dsCard group="Ask" height=940 subtitle="Past conversations in the side panel, grouped Today, Last week and Earlier, with a bin each" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HistoryList — preview</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: var(--space-6); background: var(--canvas); color: var(--ink); font-family: var(--font-sans); }
+  .panels { display: flex; flex-wrap: wrap; gap: var(--space-8); align-items: flex-start; }
+  .variant { margin: 0 0 var(--space-3); color: var(--ink-secondary); }
+
+  /* The SidePanel's body at u = 1: 300px wide, 12px in from each side. */
+  .side { width: 300px; max-width: 100%; display: flex; flex-direction: column; gap: 12px; padding: 12px 12px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); }
+  .new { display: inline-flex; align-items: center; justify-content: flex-start; gap: var(--space-2); width: 100%; height: 44px; padding: 0 var(--space-4); border: 1px solid var(--control-border); border-radius: var(--radius-md); background: transparent; color: var(--ink); font: 600 18px/26px var(--font-sans); cursor: pointer; }
+  .new svg { width: 20px; height: 20px; }
+  .new:hover, .new.is-hover { background: var(--tile); }
+  .groups { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .group h3 { margin: 0 0 4px; padding: 0 8px; color: var(--ink-secondary); font-size: 16px; line-height: 22px; font-weight: 600; }
+  .list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .item { display: flex; align-items: center; border-radius: var(--radius-md); }
+  .item:hover, .item:focus-within, .item.is-hover, .item.current { background: var(--tile); }
+  .open { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 9px 8px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); font: inherit; font-size: 19px; line-height: 1.4; text-align: left; cursor: pointer; }
+  .item.current .open { font-weight: 600; }
+  .bin { flex: none; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink-secondary); cursor: pointer; opacity: 0; }
+  .bin svg { width: 18px; height: 18px; }
+  .item:hover .bin, .item:focus-within .bin, .item.is-hover .bin, .item.current .bin { opacity: 1; }
+  @media (hover: none) { .bin { opacity: 1; } }
+  .bin:hover { color: var(--ink); background: var(--canvas); }
+  .open:focus-visible, .bin:focus-visible, .new:focus-visible, .link:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .foot { margin: 0; padding-top: 8px; border-top: 1px solid var(--line); }
+  .link { min-height: 44px; padding: 0 8px; border: 0; background: none; color: var(--ink-secondary); font: inherit; font-size: 16px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+  .link:hover { color: var(--ink); }
+  .empty { margin: 0; padding: 0 8px; color: var(--ink-secondary); }
+  @media (max-width: 639px) { body { padding: var(--space-4); } .open { font-size: 16px; } }
+</style>
+</head>
+<body>
+<div class="panels">
+  <div>
+    <p class="caption variant">Grouped, one open, one hovered</p>
+    <div class="side">
+      <button type="button" class="new"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>New conversation</button>
+      <div class="groups">
+        <div class="group" role="group" aria-labelledby="g1"><h3 id="g1">Today</h3><ul class="list">
+          <li class="item current"><button type="button" class="open" aria-current="true">Is my diet good enough?</button><button type="button" class="bin" aria-label="Delete “Is my diet good enough?”"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></li>
+          <li class="item is-hover"><button type="button" class="open">Am I doing enough to meet my goals this month?</button><button type="button" class="bin" aria-label="Delete “Am I doing enough to meet my goals this month?”"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></li>
+        </ul></div>
+        <div class="group" role="group" aria-labelledby="g2"><h3 id="g2">Last week</h3><ul class="list">
+          <li class="item"><button type="button" class="open">Why do my knees ache after squats?</button><button type="button" class="bin" aria-label="Delete “Why do my knees ache after squats?”"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></li>
+          <li class="item"><button type="button" class="open">How steady was October?</button><button type="button" class="bin" aria-label="Delete “How steady was October?”"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></li>
+        </ul></div>
+        <div class="group" role="group" aria-labelledby="g3"><h3 id="g3">Earlier</h3><ul class="list">
+          <li class="item"><button type="button" class="open">Should I add a rest day?</button><button type="button" class="bin" aria-label="Delete “Should I add a rest day?”"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></li>
+          <li class="item"><button type="button" class="open">Is three times a week enough for pull-ups?</button><button type="button" class="bin" aria-label="Delete “Is three times a week enough for pull-ups?”"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></li>
+        </ul></div>
+      </div>
+      <p class="foot"><button type="button" class="link">Delete all conversations</button></p>
+    </div>
+  </div>
+  <div>
+    <p class="caption variant">Empty</p>
+    <div class="side">
+      <button type="button" class="new"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>New conversation</button>
+      <p class="caption empty">Past conversations show here.</p>
+    </div>
+  </div>
+</div>
+<script></script>
+</body>
+</html>

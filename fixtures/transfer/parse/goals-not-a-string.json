@@ -1,0 +1,34 @@
+{
+  "description": "Goals that aren't a string are no goals; so are none at all, as in every file from before My goals.",
+  "input": {
+    "format": "tracker-export",
+    "version": 4,
+    "settings": {
+      "accent": "#0a84ff",
+      "dailyPick": 4,
+      "foodPick": 3,
+      "goals": ["Run"]
+    }
+  },
+  "expected": {
+    "ok": true,
+    "data": {
+      "exercise": {
+        "plans": {},
+        "log": {},
+        "details": {}
+      },
+      "diet": {
+        "plans": {},
+        "log": {},
+        "details": {}
+      },
+      "settings": {
+        "accent": "#0a84ff",
+        "dailyPick": 4,
+        "foodPick": 3,
+        "goals": ""
+      }
+    }
+  }
+}

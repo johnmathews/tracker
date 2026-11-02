@@ -50,5 +50,5 @@ def test_validate_reads_the_registry() -> None:
     assert expected == validate.NORMALISERS
     targets = (validate.NEW_EXERCISE_TARGET, validate.NEW_FOOD_TARGET)
     assert targets == (SECTION_TYPES["exercise"].new_target, SECTION_TYPES["diet"].new_target)
-    # The export's sections are the registry's, plus settings.
-    assert set(validate.ExportData.__annotations__) == {*SECTIONS, "settings"}
+    # The export's sections are the registry's, plus settings and Ask's conversations.
+    assert set(validate.ExportData.__annotations__) == {*SECTIONS, "settings", "conversations"}

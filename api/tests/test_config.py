@@ -108,6 +108,43 @@ def test_mail_per_hour_must_allow_one() -> None:
         Config.from_env(env)
 
 
+def test_ask_is_off_unless_a_key_is_set() -> None:
+    cfg = Config.from_env({"PUBLIC_ORIGIN": "https://f.example", "ANTHROPIC_API_KEY": ""})
+    assert cfg.ask_enabled is False
+    assert cfg.anthropic_api_key is None
+    assert cfg.ask_model == "claude-sonnet-5-5"
+    assert (cfg.ask_per_day, cfg.ask_per_day_total) == (30, 300)
+
+
+def test_reads_ask_settings_and_hides_the_key() -> None:
+    cfg = Config.from_env(
+        {
+            "PUBLIC_ORIGIN": "https://f.example",
+            "ANTHROPIC_API_KEY": "sk-ant-secret",
+            "ASK_MODEL": "claude-opus-5-5",
+            "ASK_PER_DAY": "5",
+            "ASK_PER_DAY_TOTAL": "40",
+        }
+    )
+    assert cfg.ask_enabled is True
+    assert cfg.anthropic_api_key == "sk-ant-secret"
+    assert cfg.ask_model == "claude-opus-5-5"
+    assert (cfg.ask_per_day, cfg.ask_per_day_total) == (5, 40)
+    assert "sk-ant-secret" not in repr(cfg)
+
+
+def test_a_blank_ask_model_reads_as_the_default() -> None:
+    cfg = Config.from_env({"PUBLIC_ORIGIN": "https://f.example", "ASK_MODEL": ""})
+    assert cfg.ask_model == "claude-sonnet-5-5"
+
+
+@pytest.mark.parametrize("name", ["ASK_PER_DAY", "ASK_PER_DAY_TOTAL"])
+@pytest.mark.parametrize("value", ["0", "-1", "many"])
+def test_ask_caps_must_allow_one(name: str, value: str) -> None:
+    with pytest.raises(ValueError, match=name):
+        Config.from_env({"PUBLIC_ORIGIN": "https://f.example", name: value})
+
+
 def test_the_time_zone_defaults_to_amsterdam() -> None:
     cfg = Config.from_env({"PUBLIC_ORIGIN": "https://f.example"})
     assert cfg.timezone == ZoneInfo("Europe/Amsterdam")

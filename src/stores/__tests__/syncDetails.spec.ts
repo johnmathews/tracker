@@ -368,7 +368,7 @@ describe('sync of item details', () => {
     })
     expect(outcome).toEqual({
       ok: true,
-      added: { weeks: 0, ticks: 0, details: 1, settings: false },
+      added: { weeks: 0, ticks: 0, details: 1, settings: false, conversations: 0 },
     })
     const imported = api.calls.find((c) => c.path === '/import')!.body as SyncState
     expect(imported.exercise.details).toEqual({ pl: { notes: 'From the file' } })
@@ -601,7 +601,7 @@ describe('details in diff and normaliseState', () => {
   const snapshot = (exercise = empty(), diet = empty()) => ({
     exercise,
     diet,
-    settings: { accent: '#30d158', dailyPick: 3, foodPick: 2 },
+    settings: { accent: '#30d158', dailyPick: 3, foodPick: 2, goals: '' },
   })
 
   it('finds each item whose details changed, were added, or were cleared', () => {

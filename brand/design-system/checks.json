@@ -32,7 +32,12 @@
     "SearchResult",
     "InlineMessage",
     "Banner",
-    "EmailLayout"
+    "EmailLayout",
+    "Transcript",
+    "AnswerProgress",
+    "QuotaChip",
+    "SidePanel",
+    "HistoryList"
   ],
   "extra_contrast_pairs": [
     [
@@ -133,7 +138,8 @@
     "Forms",
     "Overlays",
     "Planner",
-    "Feedback"
+    "Feedback",
+    "Ask"
   ],
   "email_preview": "components/EmailLayout/preview.html"
 }

@@ -21,6 +21,7 @@ import {
   type DetailsMap,
   type Exercise,
   type Food,
+  type KnownSettings,
   type Log,
   type Mark,
   type PortableSettings,
@@ -98,11 +99,17 @@ type SectionState<T> = {
 export type SyncState = {
   exercise: SectionState<Exercise>
   diet: SectionState<Food>
-  settings: PortableSettings | null
+  settings: KnownSettings | null
 }
 type Snapshot = { exercise: Tracked; diet: Tracked; settings: PortableSettings }
-/** What `POST /api/import` added. */
-export type ImportAdded = { weeks: number; ticks: number; details: number; settings: boolean }
+/** What `POST /api/import` added; `conversations` counts Ask's (docs/api.md §3). */
+export type ImportAdded = {
+  weeks: number
+  ticks: number
+  details: number
+  settings: boolean
+  conversations: number
+}
 export type ImportOutcome =
   | { ok: true; added: ImportAdded }
   | { ok: false; code: 'offline' | 'server' | 'auth' | 'quota' | 'error' }
@@ -230,8 +237,17 @@ export function normaliseState(v: unknown, itemNotes = false): SyncState | null 
   return {
     exercise: sectionState(v.exercise, normaliseExercise, itemNotes),
     diet: sectionState(v.diet, normaliseFood, itemNotes),
-    settings: isRecord(v.settings) ? normalisePortableSettings(v.settings) : null,
+    settings: isRecord(v.settings) ? knownSettings(v.settings) : null,
   }
+}
+
+/**
+ * Settings as a cache or the API words them. Goals are kept only when they are there: a tab from
+ * before My goals writes none, and reading that as "no goals" would erase them (F1).
+ */
+function knownSettings(v: Record<string, unknown>): KnownSettings {
+  const { goals, ...rest } = normalisePortableSettings(v)
+  return typeof v.goals === 'string' ? { ...rest, goals } : rest
 }
 
 /** The operations that take the server from `base` to `local`. */
@@ -270,6 +286,7 @@ export function diff(base: Snapshot, local: Snapshot): Op[] {
     bs.accent !== ls.accent ||
     bs.dailyPick !== ls.dailyPick ||
     bs.foodPick !== ls.foodPick ||
+    bs.goals !== ls.goals ||
     // No key and `{}` are both every page as it comes (K66).
     JSON.stringify(bs.itemSections ?? {}) !== JSON.stringify(ls.itemSections ?? {})
   ) {
@@ -353,6 +370,7 @@ export const useSyncStore = defineStore('sync', () => {
         accent: planner.accent,
         dailyPick: planner.dailyPick,
         foodPick: planner.foodPick,
+        goals: planner.goals,
         itemSections: planner.itemSections,
       },
     })
@@ -549,12 +567,14 @@ export const useSyncStore = defineStore('sync', () => {
 
   async function sendSettings(gen: number): Promise<Outcome | ApiError> {
     // The arrangement always goes, `{}` for the default: the API keeps the saved one when the
-    // key is missing (an older tab), so leaving it out could never reset it.
+    // key is missing (an older tab), so leaving it out could never reset it. Goals go only once
+    // this tab has read them or the person set them: an absent key keeps the saved ones (F1).
     const res = await call('PUT', '/settings', {
       accent: planner.accent,
       dailyPick: planner.dailyPick,
       foodPick: planner.foodPick,
       itemSections: planner.itemSections,
+      ...(planner.goalsKnown ? { goals: planner.goals } : {}),
     })
     if (gen !== generation) return 'stop'
     return res.ok ? 'done' : res.error
@@ -690,6 +710,8 @@ export const useSyncStore = defineStore('sync', () => {
       exercise: data.exercise,
       diet: data.diet,
       ...(data.settings ? { settings: data.settings } : {}),
+      // Ask's history: the server adds the ones it has no id for, and never changes the rest.
+      ...(data.conversations ? { conversations: data.conversations } : {}),
     }
     const res = await call<ImportAdded>('POST', '/import', file)
     if (gen !== generation) return { ok: false, code: 'error' }
@@ -788,6 +810,7 @@ export const useSyncStore = defineStore('sync', () => {
         planner.accent,
         planner.dailyPick,
         planner.foodPick,
+        planner.goals,
         planner.itemSections,
       ],
       capture,

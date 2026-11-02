@@ -361,7 +361,7 @@ def test_import_keeps_existing_details_and_adds_missing_ones(
         client,
         v5({"pu": {"notes": "theirs"}, "sq": {"notes": "squats"}, "pl": {"fields": {"a": "b"}}}),
     )
-    assert r.json() == {"weeks": 0, "ticks": 0, "details": 2, "settings": False}
+    assert r.json() == {"weeks": 0, "ticks": 0, "details": 2, "settings": False, "conversations": 0}
     exercise = state(client)["exercise"]
     assert exercise["details"] == {
         "pu": {"notes": "mine"},
@@ -372,7 +372,13 @@ def test_import_keeps_existing_details_and_adds_missing_ones(
     assert exercise["detailRevs"] == {"pu": 1, "sq": 2, "pl": 1}
     # The same file again adds nothing.
     again = post_import(client, v5({"pu": {"notes": "theirs"}, "sq": {"notes": "squats"}}))
-    assert again.json() == {"weeks": 0, "ticks": 0, "details": 0, "settings": False}
+    assert again.json() == {
+        "weeks": 0,
+        "ticks": 0,
+        "details": 0,
+        "settings": False,
+        "conversations": 0,
+    }
 
 
 def test_a_files_document_over_32_kb_drops_out(client: TestClient, config: Config) -> None:
@@ -383,7 +389,7 @@ def test_a_files_document_over_32_kb_drops_out(client: TestClient, config: Confi
     assert data["exercise"]["details"] == {"sq": {"notes": "fine"}}
     sign_up(client, config)
     r = post_import(client, v5({"pu": big, "sq": {"notes": "fine"}}))
-    assert r.json() == {"weeks": 0, "ticks": 0, "details": 1, "settings": False}
+    assert r.json() == {"weeks": 0, "ticks": 0, "details": 1, "settings": False, "conversations": 0}
 
 
 def test_a_version_4_import_lifts_notes_into_details(client: TestClient, config: Config) -> None:
@@ -410,7 +416,7 @@ def test_a_version_4_import_lifts_notes_into_details(client: TestClient, config:
             "diet": {"plans": {WEEK: [{"id": "veg", "name": "Veg", "notes": "Not juice"}]}},
         },
     )
-    assert r.json() == {"weeks": 3, "ticks": 0, "details": 3, "settings": False}
+    assert r.json() == {"weeks": 3, "ticks": 0, "details": 3, "settings": False, "conversations": 0}
     s = state(client)
     assert s["exercise"]["details"] == {
         "kh": {"notes": "my halos"},

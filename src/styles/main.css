@@ -176,13 +176,15 @@
 }
 
 /*
- * The Settings page, an item's page and the dialogs at the week's size (SettingsPage card, K51;
- * ItemPage card, K65; Dialog card, K55). Their controls keep their cards' shapes and colours and take the page's `--set-*` sizes
- * here, outside the layers, so the sizes win over the primitives' fixed utilities there only.
+ * The Settings page, an item's page, the Ask page and the dialogs at the week's size (SettingsPage
+ * card, K51; ItemPage card, K65; the Ask mockup, layout A; Dialog card, K55). Their controls keep
+ * their cards' shapes and colours and take the page's `--set-*` sizes here, outside the layers, so
+ * the sizes win over the primitives' fixed utilities there only.
  */
 :is(
     [data-slot='settings-page'],
     [data-slot='item-page'],
+    [data-slot='ask-page'],
     [data-slot='dialog'],
     [data-slot='confirm-dialog']
   )
@@ -191,6 +193,7 @@
 :is(
     [data-slot='settings-page'],
     [data-slot='item-page'],
+    [data-slot='ask-page'],
     [data-slot='dialog'],
     [data-slot='confirm-dialog']
   )
@@ -202,6 +205,7 @@
 :is(
     [data-slot='settings-page'],
     [data-slot='item-page'],
+    [data-slot='ask-page'],
     [data-slot='dialog'],
     [data-slot='confirm-dialog']
   )
@@ -213,6 +217,7 @@
 :is(
     [data-slot='settings-page'],
     [data-slot='item-page'],
+    [data-slot='ask-page'],
     [data-slot='dialog'],
     [data-slot='confirm-dialog']
   )
@@ -221,6 +226,7 @@
 :is(
     [data-slot='settings-page'],
     [data-slot='item-page'],
+    [data-slot='ask-page'],
     [data-slot='dialog'],
     [data-slot='confirm-dialog']
   )
@@ -232,6 +238,7 @@
 :is(
     [data-slot='settings-page'],
     [data-slot='item-page'],
+    [data-slot='ask-page'],
     [data-slot='dialog'],
     [data-slot='confirm-dialog']
   )
@@ -243,6 +250,7 @@
 :is(
     [data-slot='settings-page'],
     [data-slot='item-page'],
+    [data-slot='ask-page'],
     [data-slot='dialog'],
     [data-slot='confirm-dialog']
   )
@@ -250,6 +258,7 @@
 :is(
     [data-slot='settings-page'],
     [data-slot='item-page'],
+    [data-slot='ask-page'],
     [data-slot='dialog'],
     [data-slot='confirm-dialog']
   )
@@ -257,6 +266,7 @@
 :is(
     [data-slot='settings-page'],
     [data-slot='item-page'],
+    [data-slot='ask-page'],
     [data-slot='dialog'],
     [data-slot='confirm-dialog']
   )
@@ -267,6 +277,7 @@
 :is(
     [data-slot='settings-page'],
     [data-slot='item-page'],
+    [data-slot='ask-page'],
     [data-slot='dialog'],
     [data-slot='confirm-dialog']
   )
@@ -280,6 +291,7 @@
 :is(
     [data-slot='settings-page'],
     [data-slot='item-page'],
+    [data-slot='ask-page'],
     [data-slot='dialog'],
     [data-slot='confirm-dialog']
   )
@@ -290,6 +302,7 @@
 :is(
     [data-slot='settings-page'],
     [data-slot='item-page'],
+    [data-slot='ask-page'],
     [data-slot='dialog'],
     [data-slot='confirm-dialog']
   )
@@ -297,6 +310,7 @@
 :is(
     [data-slot='settings-page'],
     [data-slot='item-page'],
+    [data-slot='ask-page'],
     [data-slot='dialog'],
     [data-slot='confirm-dialog']
   )
@@ -307,6 +321,7 @@
 :is(
     [data-slot='settings-page'],
     [data-slot='item-page'],
+    [data-slot='ask-page'],
     [data-slot='dialog'],
     [data-slot='confirm-dialog']
   )
@@ -315,6 +330,7 @@
 :is(
     [data-slot='settings-page'],
     [data-slot='item-page'],
+    [data-slot='ask-page'],
     [data-slot='dialog'],
     [data-slot='confirm-dialog']
   )
@@ -326,6 +342,7 @@
 :is(
     [data-slot='settings-page'],
     [data-slot='item-page'],
+    [data-slot='ask-page'],
     [data-slot='dialog'],
     [data-slot='confirm-dialog']
   )
@@ -338,6 +355,7 @@
 :is(
     [data-slot='settings-page'],
     [data-slot='item-page'],
+    [data-slot='ask-page'],
     [data-slot='dialog'],
     [data-slot='confirm-dialog']
   )
@@ -414,6 +432,7 @@
 :is(
     [data-slot='settings-page'],
     [data-slot='item-page'],
+    [data-slot='ask-page'],
     [data-slot='dialog'],
     [data-slot='confirm-dialog']
   )
@@ -426,6 +445,7 @@
 :is(
     [data-slot='settings-page'],
     [data-slot='item-page'],
+    [data-slot='ask-page'],
     [data-slot='dialog'],
     [data-slot='confirm-dialog']
   )
@@ -438,6 +458,7 @@
 :is(
     [data-slot='settings-page'],
     [data-slot='item-page'],
+    [data-slot='ask-page'],
     [data-slot='dialog'],
     [data-slot='confirm-dialog']
   )
@@ -447,6 +468,7 @@
 :is(
     [data-slot='settings-page'],
     [data-slot='item-page'],
+    [data-slot='ask-page'],
     [data-slot='dialog'],
     [data-slot='confirm-dialog']
   )
@@ -457,6 +479,7 @@
 :is(
     [data-slot='settings-page'],
     [data-slot='item-page'],
+    [data-slot='ask-page'],
     [data-slot='dialog'],
     [data-slot='confirm-dialog']
   )
@@ -467,6 +490,7 @@
 :is(
     [data-slot='settings-page'],
     [data-slot='item-page'],
+    [data-slot='ask-page'],
     [data-slot='dialog'],
     [data-slot='confirm-dialog']
   )
@@ -477,6 +501,7 @@
 :is(
     [data-slot='settings-page'],
     [data-slot='item-page'],
+    [data-slot='ask-page'],
     [data-slot='dialog'],
     [data-slot='confirm-dialog']
   )
@@ -488,6 +513,7 @@
 :is(
     [data-slot='settings-page'],
     [data-slot='item-page'],
+    [data-slot='ask-page'],
     [data-slot='dialog'],
     [data-slot='confirm-dialog']
   )
@@ -501,6 +527,7 @@
   :is(
       [data-slot='settings-page'],
       [data-slot='item-page'],
+      [data-slot='ask-page'],
       [data-slot='dialog'],
       [data-slot='confirm-dialog']
     )
@@ -511,6 +538,7 @@
   :is(
       [data-slot='settings-page'],
       [data-slot='item-page'],
+      [data-slot='ask-page'],
       [data-slot='dialog'],
       [data-slot='confirm-dialog']
     )
@@ -522,6 +550,7 @@
   :is(
       [data-slot='settings-page'],
       [data-slot='item-page'],
+      [data-slot='ask-page'],
       [data-slot='dialog'],
       [data-slot='confirm-dialog']
     )
@@ -531,6 +560,7 @@
   :is(
       [data-slot='settings-page'],
       [data-slot='item-page'],
+      [data-slot='ask-page'],
       [data-slot='dialog'],
       [data-slot='confirm-dialog']
     )
@@ -539,6 +569,21 @@
     gap: 6px;
     padding-left: 0;
   }
+}
+
+/* The Ask page's question box is taller than a Settings field (the mockup's 120u), and its start
+   questions wrap inside their buttons, at the body weight, rather than run past a phone's edge. */
+[data-slot='ask-page'] [data-slot='text-area-input'] {
+  min-height: max(96px, calc(var(--u) * 120));
+  resize: vertical;
+}
+[data-slot='ask-page'] [data-ask-start] {
+  height: auto;
+  min-height: var(--set-control);
+  padding-block: calc(var(--u) * 8);
+  white-space: normal;
+  text-align: left;
+  font-weight: 400;
 }
 
 /* Type-style details tokens.css does not emit: the note is italic, the display smaller on phones.
@@ -639,6 +684,19 @@
   --text-base--line-height: 26px;
   --text-sm: 16px;
   --text-sm--line-height: 22px;
+
+  /* AnswerProgress's pen (its card, and the Ask mockup's `ask-write`): a stroke at 35% ink
+     brightens to full and back. Used only under motion-safe; at rest the stroke stays at 35%. */
+  --animate-pen-write: pen-write 1.2s ease-in-out infinite;
+  @keyframes pen-write {
+    0%,
+    100% {
+      opacity: 0.35;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
 }
 
 /* tokens.css already declares --font-sans/--font-serif and --radius-sm/md/lg on :root, in the

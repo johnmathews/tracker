@@ -8,8 +8,8 @@ Plain, calm and brief, in the second person. Facts first, then the next step. Th
 - **No exclamation marks.** Nothing is that surprising.
 - **No hype:** never "crushed it", "beast mode", "amazing", "awesome".
 - **No guilt:** never "You missed 3 days". An empty box says it already.
-- **No streaks**, scores or rankings, in words or numbers.
-- **Notes belong to the person.** The app never prompts for one and never quotes one back as advice.
+- **No streaks**, scores or rankings, in words or numbers. Ask's answers are the one exception (see Ask).
+- **Notes belong to the person.** The app never prompts for one and never quotes one back as advice. Ask's answers may (see Ask).
 - **Errors say what happened and what to do:** "That password didn't match. Try again, or ask for a new invite."
 - **Sentence case everywhere**, including buttons and labels. No uppercase eyebrows.
 
@@ -58,3 +58,27 @@ The planner sends two emails, both in the EmailLayout card, both from "Tracker".
 | If you did not request this, please contact support | If you didn’t ask, ignore this email. Your password stays as it is. |
 | Email sent! | A new link is on its way to sam@example.com. |
 | Please wait before requesting another email | Can’t send another email yet. Try again in one minute. (It doesn't say why: a minute's gap, five a day, or the whole planner's hour.) |
+
+## Ask
+
+Ask's answers are an AI's, written to a ruling of John's (2026-11-01, K68): "V2 - plain verdict, the app may qote a note back as advice. and also may include streaks scores or rankings." So in an answer, and only there:
+
+- **A plain verdict:** "A little too little for March." "Too much" when it is. Facts still come first, then one next step.
+- **Goals and notes quoted back as advice:** "Your goal says “Ten pull-ups in a row by March”. One more rep a set every second week would get you there."
+- **Streaks, scores and rankings** when they help answer the question: "Four weeks running at four days."
+
+The rest of the rules hold in answers too: no exclamation marks, no hype, no blame ("Two of four this week", never "You missed two days"), small numbers as words, sentence case. The carve-out is for answers, not the app: the Ask page's own words, the previews and every other screen keep the rules above, and the gate still bans "streak" in previews. The prompt carries the ruling as `VERDICT_RULE` in `api/src/tracker_api/ask.py`.
+
+The page's own words, from the mockup:
+
+| Instead of | Write |
+| --- | --- |
+| Thinking… | Reading your weeks… |
+| 3 questions remaining | Three questions left today (figures from four up: "27 questions left today") |
+| Daily limit reached | No questions left today. Under the box: You can ask again from 09:14 tomorrow. |
+| Network error | The answer stopped before it finished, because the AI service didn’t respond. Your question is kept. (Then a "Try again" button.) |
+| You have unsynced changes | Two changes on this device aren’t synced yet, so the answer won’t include them. |
+| Save failed: storage full | Your account is full, so this answer wasn’t saved. |
+| Disclaimer: AI can make mistakes | Answers come from an AI and can be wrong. They aren’t medical advice. |
+
+In Settings, the Your goals row is "What you’re working towards", with "Ask reads this when it answers. Nothing else does." under it. Deleting history asks first and names the thing: "Delete “Is my diet good enough?”?", Delete; "Delete all conversations?", Delete all.

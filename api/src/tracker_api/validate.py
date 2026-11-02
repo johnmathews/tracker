@@ -31,7 +31,9 @@ OLD_EXPORT_FORMATS = ("fitness-planner-export", "exercise-planner-export")
 #: lifts into the item's details on import, the latest week's winning. Version 3 files carry a mark
 #: per day with its drawing (`great`, `partial-solid`, `missed-hatch` … or null). Version 2 files
 #: carry the kinds alone, which read as the zigzag; version 1 files a `true` per done day, which
-#: reads as `great`. All five import.
+#: reads as `great`. All five import. Settings may carry My goals (`goals`) with no new version,
+#: as `foodPick` came: a reader from before them drops the key, and a file without them reads as
+#: none. Ask's conversations (`conversations`) came the same way.
 EXPORT_VERSION = 5
 #: The last version whose notes live in plan items.
 LAST_ITEM_NOTES_VERSION = 4
@@ -46,6 +48,8 @@ MAX_SETS = 20
 MAX_DURATION = 3600
 #: A plan item's note's length, in characters, from export version 4 (K43).
 MAX_NOTES = 500
+#: My goals' length, in characters (code points).
+MAX_GOALS = 1000
 #: An item's name, in characters, for `strict_item` (MCP writes). REST and the web app set no cap.
 MAX_NAME = 80
 #: An item's id, in characters: the bounds of the ticks and details paths, and of MCP writes.
@@ -60,11 +64,22 @@ DEFAULT_ACCENT = "#30d158"
 DEFAULT_DAILY_PICK = 3
 #: Foods a day (K57), in the same bounds as the daily pick.
 DEFAULT_FOOD_PICK = 2
+#: Ask's history, in characters (code points): a conversation's title, a question, an answer.
+MAX_TITLE = 80
+MAX_QUESTION = 2000
+MAX_ANSWER = 64_000
+#: What one file may bring: conversations, and turns in each. The rest are dropped.
+MAX_CONVERSATIONS = 500
+MAX_CONVERSATION_TURNS = 200
+#: A time in Unix seconds is a whole number from 0 to JavaScript's largest safe integer.
+MAX_TIME = 2**53 - 1
 
 # `[0-9]` rather than `\d`, which in Python also matches non-ASCII digits; fullmatch rather than
 # `$`, which in Python also matches before a trailing newline.
 WEEK_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 ACCENT_RE = re.compile(r"#[0-9a-fA-F]{6}")
+#: A conversation's id: URL-safe, as `secrets.token_urlsafe` makes them, so it can sit in a path.
+CONVERSATION_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 #: A details field's key: lower case, a letter first, at most 32 characters.
 FIELD_KEY_RE = re.compile(r"[a-z][a-z0-9_]{0,31}")
 
@@ -129,14 +144,42 @@ class Portable(TypedDict):
     accent: str
     dailyPick: int
     foodPick: int
+    #: My goals, in the person's words; "" when there are none.
+    goals: str
     #: Each type's item-page arrangement (K66, P29); left out while every page has the default.
     itemSections: NotRequired[ItemSections]
+
+
+#: How an Ask turn ended: with an answer (`end_turn`, or `max_tokens` cut short), or without one.
+type AskStop = Literal["end_turn", "max_tokens", "refused", "error", "cancelled"]
+STOPS: tuple[AskStop, ...] = ("end_turn", "max_tokens", "refused", "error", "cancelled")
+#: The stops that keep their answer; any other turn's answer is "".
+ANSWERED: tuple[AskStop, ...] = ("end_turn", "max_tokens")
+
+
+class Turn(TypedDict):
+    """One question in a conversation and how it was answered; text only."""
+
+    question: str
+    answer: str
+    stop: AskStop
+    askedAt: int
+
+
+class Conversation(TypedDict):
+    id: str
+    title: str
+    createdAt: int
+    updatedAt: int
+    turns: list[Turn]
 
 
 class ExportData(TypedDict):
     exercise: Tracked
     diet: Tracked
     settings: Portable | None
+    #: Present only when the file carries a list of them.
+    conversations: NotRequired[list[Conversation]]
 
 
 class Summary(TypedDict):
@@ -215,6 +258,12 @@ def normalise_notes(v: object) -> str | None:
     """A plan item's note from export version 4 (K43): text cut to MAX_NOTES characters. The web
     app's `normaliseNotes` does the same."""
     return normalise_text(v, MAX_NOTES)
+
+
+def normalise_goals(v: object) -> str:
+    """My goals: text cut to MAX_GOALS characters; "" for anything that isn't a string or for
+    nothing left. The web app's `normaliseGoals` does the same."""
+    return normalise_text(v, MAX_GOALS) or ""
 
 
 def normalise_fields(v: object) -> dict[str, str]:
@@ -517,10 +566,87 @@ def normalise_portable(v: dict[str, Any]) -> Portable:
         "foodPick": clamp(
             to_int(v.get("foodPick"), DEFAULT_FOOD_PICK), MIN_DAILY_PICK, MAX_DAILY_PICK
         ),
+        "goals": normalise_goals(v.get("goals")),
     }
     item_sections = normalise_item_sections(v.get("itemSections"))
     if item_sections:
         out["itemSections"] = item_sections
+    return out
+
+
+def is_conversation_id(v: object) -> TypeIs[str]:
+    return isinstance(v, str) and CONVERSATION_ID_RE.fullmatch(v) is not None
+
+
+def normalise_title(v: object) -> str:
+    """A conversation's title, trimmed and cut as a note is but to MAX_TITLE characters; "" for
+    anything that isn't a string or for nothing left."""
+    return normalise_text(v, MAX_TITLE) or ""
+
+
+def normalise_answer(v: str, stop: AskStop) -> str:
+    """An answer as it is kept: trimmed and cut to MAX_ANSWER characters for a turn that ended
+    with one, and "" for any other, so a refusal's partial text is never kept."""
+    return (normalise_text(v, MAX_ANSWER) or "") if stop in ANSWERED else ""
+
+
+def _time(v: object) -> int | None:
+    n = as_number(v)
+    if n is None or not n.is_integer() or not 0 <= n <= MAX_TIME:
+        return None
+    return int(n)
+
+
+def normalise_turn(v: object) -> Turn | None:
+    """A usable turn, or None: the question is trimmed and cut to MAX_QUESTION characters and
+    must not be blank; the answer must be a string; the stop one of STOPS; `askedAt` a time.
+    Any other key is dropped, so no tool call or thinking block is ever kept."""
+    if not isinstance(v, dict):
+        return None
+    question = normalise_text(v.get("question"), MAX_QUESTION) or ""
+    answer, stop, asked_at = v.get("answer"), v.get("stop"), _time(v.get("askedAt"))
+    if not question or not isinstance(answer, str) or stop not in STOPS or asked_at is None:
+        return None
+    kind = cast(AskStop, stop)
+    return {
+        "question": question,
+        "answer": normalise_answer(answer, kind),
+        "stop": kind,
+        "askedAt": asked_at,
+    }
+
+
+def normalise_conversation(v: object) -> Conversation | None:
+    """A usable conversation, or None: a URL-safe id, a title that isn't blank, two times and a
+    list of turns. Turns that fail drop out, and only the first MAX_CONVERSATION_TURNS stay."""
+    if not isinstance(v, dict) or not is_conversation_id(v.get("id")):
+        return None
+    title = normalise_title(v.get("title"))
+    created, updated = _time(v.get("createdAt")), _time(v.get("updatedAt"))
+    turns = v.get("turns")
+    if not title or created is None or updated is None or not isinstance(turns, list):
+        return None
+    kept = [t for t in map(normalise_turn, turns) if t is not None]
+    return {
+        "id": v["id"],
+        "title": title,
+        "createdAt": created,
+        "updatedAt": updated,
+        "turns": kept[:MAX_CONVERSATION_TURNS],
+    }
+
+
+def normalise_conversations(v: list[Any]) -> list[Conversation]:
+    """A file's conversations: the valid ones, the first of each id, at most MAX_CONVERSATIONS."""
+    out: list[Conversation] = []
+    seen: set[str] = set()
+    for conversation in map(normalise_conversation, v):
+        if conversation is None or conversation["id"] in seen:
+            continue
+        seen.add(conversation["id"])
+        out.append(conversation)
+        if len(out) == MAX_CONVERSATIONS:
+            break
     return out
 
 
@@ -576,6 +702,10 @@ def parse_export(text: str) -> ExportData:
         name: section(name, parsed.get(name), item_notes=item_notes) for name in SECTIONS
     }
     data["settings"] = normalise_portable(settings) if isinstance(settings, dict) else None
+    # Conversations that aren't a list read as none, as in a file from before them.
+    conversations = parsed.get("conversations")
+    if isinstance(conversations, list):
+        data["conversations"] = normalise_conversations(conversations)
     return cast(ExportData, data)
 
 
@@ -622,8 +752,30 @@ def merge_summary(existing: Tracked, incoming: Tracked) -> Summary:
 
 
 def merge_settings(existing: Portable | None, incoming: Portable | None) -> Portable | None:
-    """Saved settings win; the file's apply only where none are saved."""
-    return existing if existing is not None else incoming
+    """Saved settings win; the file's apply only where none are saved. The one exception is My
+    goals: the file's fill saved goals that are empty, and never replace ones that aren't."""
+    if existing is None:
+        return incoming
+    # A file read without its goals has none to give, as in the web app.
+    goals = incoming.get("goals") if incoming is not None else None
+    if not existing["goals"] and goals:
+        return {**existing, "goals": goals}
+    return existing
+
+
+def merge_conversations(
+    existing: list[Conversation], incoming: list[Conversation]
+) -> list[Conversation]:
+    """The account's conversations as they are, then the file's whose id isn't among them, in the
+    file's order and the first of each id: an import never changes a conversation it has.
+    Returns new objects."""
+    out = copy.deepcopy(existing)
+    seen = {c["id"] for c in existing}
+    for conversation in incoming:
+        if conversation["id"] not in seen:
+            seen.add(conversation["id"])
+            out.append(copy.deepcopy(conversation))
+    return out
 
 
 type Masks = tuple[int, int, int, int, int]

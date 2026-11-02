@@ -4,13 +4,14 @@ import {
   buildExport,
   downloadExport,
   exportFilename,
+  mergeConversations,
   mergeSettings,
   mergeSummary,
   mergeTracked,
   parseExport,
   type ExportData,
 } from '@/lib/transfer'
-import type { DetailsMap, Exercise, Log } from '@/lib/storage'
+import type { Conversation, DetailsMap, Exercise, Log } from '@/lib/storage'
 import type { ItemSections } from '@/lib/itemSections'
 import type { Plans } from '@/lib/plans'
 import { fixtureCases, readFixture } from './fixtures'
@@ -24,10 +25,19 @@ type MergeCase = {
   summary: { weeks: number; ticks: number; details: number }
 }
 type SettingsCase = { existing: unknown; incoming: unknown; expected: unknown }
+type ConversationsCase = {
+  description: string
+  existing: Conversation[]
+  incoming: Conversation[]
+  expected: Conversation[]
+  added: number
+}
 
 describe('parseExport fixtures', () => {
   it('finds the fixture files', () => {
     expect(fixtureCases('parse').length).toBeGreaterThanOrEqual(8)
+    const conversations = fixtureCases('parse').filter(([n]) => n.startsWith('conversations'))
+    expect(conversations.length).toBeGreaterThanOrEqual(4)
   })
 
   it.each(fixtureCases<ParseCase>('parse'))('%s', (_, c) => {
@@ -55,6 +65,36 @@ describe('mergeSettings fixtures', () => {
       expect(mergeSettings(c.existing as never, c.incoming as never)).toEqual(c.expected)
     },
   )
+})
+
+describe('mergeConversations fixtures', () => {
+  const file = readFixture('merge-conversations.json') as { cases: ConversationsCase[] }
+  it('finds the cases', () => {
+    expect(file.cases.length).toBeGreaterThanOrEqual(5)
+  })
+
+  it.each(file.cases.map((c) => [c.description, c] as const))('%s', (_, c) => {
+    const merged = mergeConversations(c.existing, c.incoming)
+    expect(merged).toEqual(c.expected)
+    expect(merged.length - c.existing.length).toBe(c.added)
+  })
+})
+
+describe('mergeConversations', () => {
+  it('copies what it adds, so later edits do not reach the imported data', () => {
+    const incoming: Conversation[] = [
+      {
+        id: 'a',
+        title: 'A',
+        createdAt: 1,
+        updatedAt: 1,
+        turns: [{ question: 'Q', answer: 'A', stop: 'end_turn', askedAt: 1 }],
+      },
+    ]
+    const merged = mergeConversations([], incoming)
+    merged[0]!.turns[0]!.answer = 'Changed'
+    expect(incoming[0]!.turns[0]!.answer).toBe('A')
+  })
 })
 
 describe('mergeTracked', () => {
@@ -102,7 +142,7 @@ describe('buildExport', () => {
     const file = buildExport({
       exercise,
       diet: { plans: {}, log: {}, details: {} },
-      settings: { accent: '#0a84ff', dailyPick: 4, foodPick: 3 },
+      settings: { accent: '#0a84ff', dailyPick: 4, foodPick: 3, goals: 'Run 5 km.' },
       now: new Date('2026-10-24T09:30:00.000Z'),
     })
     expect(file).toEqual({
@@ -111,7 +151,7 @@ describe('buildExport', () => {
       exportedAt: '2026-10-24T09:30:00.000Z',
       exercise,
       diet: { plans: {}, log: {}, details: {} },
-      settings: { accent: '#0a84ff', dailyPick: 4, foodPick: 3 },
+      settings: { accent: '#0a84ff', dailyPick: 4, foodPick: 3, goals: 'Run 5 km.' },
     })
   })
 
@@ -120,7 +160,7 @@ describe('buildExport', () => {
     const file = buildExport({
       exercise: cache,
       diet: cache,
-      settings: { accent: '#0a84ff', dailyPick: 4, foodPick: 3 },
+      settings: { accent: '#0a84ff', dailyPick: 4, foodPick: 3, goals: '' },
     })
     expect(file.exercise).toEqual({ plans: {}, log: {}, details: {} })
     expect(file.diet).toEqual({ plans: {}, log: {}, details: {} })
@@ -134,7 +174,7 @@ describe('buildExport', () => {
       exercise: { plans: {}, log: {}, details: {} },
       diet: { plans: {}, log: {}, details: {} },
     }
-    const settings = { accent: '#0a84ff', dailyPick: 4, foodPick: 3 }
+    const settings = { accent: '#0a84ff', dailyPick: 4, foodPick: 3, goals: '' }
     expect(buildExport({ ...base, settings: { ...settings, itemSections } }).settings).toEqual({
       ...settings,
       itemSections,
@@ -144,7 +184,7 @@ describe('buildExport', () => {
     )
   })
 
-  it('round-trips through parseExport', () => {
+  it('round-trips through parseExport, My goals included', () => {
     const data = {
       exercise: {
         plans: { '2026-10-19': [{ id: 'sq', name: 'Squats', sets: 3, reps: 15, target: 4 }] },
@@ -160,6 +200,7 @@ describe('buildExport', () => {
         accent: '#bf5af2',
         dailyPick: 2,
         foodPick: 2,
+        goals: 'Fish twice a week.',
         itemSections: { food: { order: ['plan', 'notes', 'details', 'history'], hidden: [] } },
       },
     } satisfies ExportData
@@ -194,7 +235,7 @@ describe('downloadExport', () => {
     const file = buildExport({
       exercise: { plans: {}, log: {}, details: {} },
       diet: { plans: {}, log: {}, details: {} },
-      settings: { accent: '#30d158', dailyPick: 3, foodPick: 2 },
+      settings: { accent: '#30d158', dailyPick: 3, foodPick: 2, goals: '' },
     })
     downloadExport(file, new Date(2026, 9, 24))
     expect(click).toHaveBeenCalledOnce()

@@ -12,9 +12,12 @@ A Vue 3 SPA with accounts. The API service in `api/` ([api.md](api.md)) holds ea
 the app syncs with it through the same origin (§7). Three Pinia stores hold what the app shows:
 `planner` (exercise plans, the log, the visible week, settings, the mode), `diet` (food plans and
 their log), which takes its week from `planner`, and `details` (each item's notes and fields, one
-copy for every week, §3). Two more run the account: `session` (who is signed in) and `sync` (the
-per-user cache, the outbox of unsent writes, and reads). Both plan stores track the same thing, a
-mark per day against a weekly goal, through the pure helpers in `src/lib/tracker.ts`.
+copy for every week, §3). Two more run the account: `session` (who is signed in, and whether the API sends email and
+answers questions) and `sync` (the per-user cache, the outbox of unsent writes, and reads). A
+sixth, `ask`, holds the Ask page's conversation and history (§3), read through `request` and
+`stream` in `src/lib/api.ts`; `src/lib/ask.ts` holds the page's words. Both plan stores track
+the same thing, a mark per day against a weekly goal, through the pure helpers in
+`src/lib/tracker.ts`.
 
 **Tracker types.** `src/lib/trackerTypes.ts` is the registry of tracker types. A section
 (`exercise`, `diet`) is the stored name, in URLs, the database, the cache and the outbox. Its type
@@ -75,10 +78,10 @@ sign-out refusal into a sentence for the forms; `src/composables/importSummary.t
 for Settings → Import… and the first-login prompt.
 
 ```
-App.vue                 picks the screen (a link, planner, Settings, an item's page, sign-up, reset
-│                       or sign-in), the .dark class, clock refresh, sync triggers (focus,
-│                       visibility, online, minute tick, storage), the planner-screens class
-│                       (§6.6), and the one ConfirmHost
+App.vue                 picks the screen (a link, planner, Settings, an item's page, Ask,
+│                       sign-up, reset or sign-in), the .dark class, clock refresh, sync
+│                       triggers (focus, visibility, online, minute tick, storage), the
+│                       planner-screens class (§6.6), and the one ConfirmHost
 ├── ConfirmEmail.vue    a confirm-your-email link (#/confirm/<t>), signed in or out: confirms it
 ├── PasswordForm.vue    an invite or reset link (#/invite/<t>, #/reset/<t>): choose a password
 ├── SignupForm.vue      #/signup: email and password twice; field and form-level refusals
@@ -87,13 +90,18 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 │                       session; links to #/signup, and to #/forgot where the API sends email
 │   (all five inside AuthCard.vue: a centred Panel with the BrandMark)
 ├── AppNavbar.vue       the Header card: Skip to today, BrandMark, This week beside ‹ › and the
-│                       week, then the BarActions Edit plan (a toggle), Settings (to the
-│                       Settings page), Print… and Full screen (useFullscreen, where the browser
-│                       has one); full width, sized by main.css's --bar-* (K47, K49, K50); on
-│                       the planner's screens out of sight until wanted (useBarReveal, §6.6)
+│                       week, then the BarActions Edit plan (a toggle), Ask (to the Ask page,
+│                       only while the API answers questions), Settings (to the Settings page),
+│                       Print… and Full screen (useFullscreen, where the browser has one); full
+│                       width, sized by main.css's --bar-* (K47, K49, K50); on the planner's
+│                       screens out of sight until wanted (useBarReveal, §6.6)
 ├── SettingsPage.vue    the SettingsPage card, at #/settings: Back to the week, then Appearance
-│                       (Marks, then Theme, K59), Your data (Export and Import…, see §4) and
-│                       Account (who is signed in, Sign out)
+│                       (Marks, then Theme, K59), Your goals (My goals, saved when typing
+│                       pauses), Your data (Export and Import…, see §4) and Account (who is
+│                       signed in, Sign out)
+├── AskPage.vue         #/ask (K67–K71): the SidePanel with the HistoryList, and beside it Back
+│                       to the week, the Transcript and the question box with the QuotaChip;
+│                       deleting asks in a ConfirmDialog of its own
 ├── ItemPage.vue        the ItemPage card, at #/item/<section>/<id> (K64, K65): Back to the week
 │   │                   and Arrange sections, the type, the name and its chips; then rows like
 │   │                   Settings: Notes, Details, the week's plan (or the latest, read-only) and
@@ -159,6 +167,7 @@ foods (with goals). Ticks live in a separate **log**, keyed by week and item id.
 | `plans`                           | the sync store: server and per-user cache | week → `{ id, name, sets?, reps, duration?, perSide?, weight?, target }[]`  |
 | `log`                             | the sync store: server and per-user cache | week Monday `YYYY-MM-DD` → exercise id → seven marks (`Days`, below)        |
 | `accent`, `dailyPick`, `foodPick` | the sync store: server and per-user cache | defaults `#30d158`, `3` and `2`. The accent is kept but draws nothing (K13) |
+| `goals`, `goalsKnown`             | the sync store: server and per-user cache | My goals, `''` by default; only Ask reads them. `goalsKnown` is below       |
 | `itemSections`                    | the sync store: server and per-user cache | each type's item-page arrangement (K66); `{}` is every page as it comes     |
 | `theme`                           | `tracker-settings-v1` (the device)        | `system` (default), `light` or `dark`                                       |
 | `markSet`                         | `tracker-settings-v1` (the device)        | `squiggles` (default), `ticks`, `stamped-ticks`, `faces`, `stamped-faces`   |
@@ -181,10 +190,19 @@ the input names one), `updateExercise` (replaces name, sets, reps or duration, p
 given, the goal, keeping the id and history; `false` for an empty name or an id not in the week).
 An exercise counts reps or time, never both: a duration stores reps as 0. Then `removeExercise`, `setConfigMode`,
 `prevWeek`, `nextWeek`, `thisWeek`, `refreshNow`, `changeDailyPick` and `changeFoodPick` (each
-clamps 1–8), `setTheme`, `savedSettings` (the accent and both daily picks, or null while the user
-has none of their own), `adopt`
+clamps 1–8), `setGoals` (normalised as the API stores them; the same text again changes
+nothing), `setTheme`, `portableSettings` (the accent, both daily picks and, once known, the
+goals), `savedSettings` (the same, or null while the user has none of their own), `adopt`
 (replace the data and settings wholesale), `adoptWeek` (replace one week's plan) and `clear` (forget
-the user on sign-out, the details store included, keeping the theme). The module also re-exports
+the user on sign-out, the details store included, keeping the theme).
+
+**My goals** are the person's own words about what they are aiming for, set in Settings and read
+only by Ask. `goalsKnown` turns true once the goals came from the server, from a cache that
+carried them, or from `setGoals`. Until then `portableSettings` leaves them out, so a tab that
+hasn't read them never sends or caches a stand-in `''` that would erase the saved ones (§7).
+Settings that `adopt` receives without `goals` keep the ones the store has. `setGoals` doesn't
+debounce: the Settings row commits its draft when the person stops typing, so one change is one
+write. The module also re-exports
 `exerciseDetails` from `src/lib/trackerTypes.ts`, which gives the chips after a name, on its line (K43):
 "3 × 12" or "3 × 8 each side" (or "10 reps a set" and "8 each side" without sets, "3 sets" without
 reps), "3 × 45 s" or "1 min 30 s each side" for a timed exercise (`durationText` in
@@ -220,6 +238,44 @@ like the plans (§7). It offers:
 
 A page that saves as you type keeps its own draft of the text and calls a setter on each change,
 so a trailing space stays in the field while the stored copy is trimmed.
+
+`useSessionStore` also keeps what the API offers, from `GET /api/auth/options`: `mail` (it sends
+email) and `ask`, three-state: `null` until the API has said, then `true` or `false`. It loads
+after every sign-in, including a remembered user's (F9), and again when the browser comes back
+online; a failed read leaves `ask` as it was, and `askOff()` sets it false when the API answers
+503 `ask-off`. The bar's Ask button and the `#/ask` page show only while it is `true`.
+
+`useAskStore` holds the Ask page (docs/api.md §3.2). Nothing of a conversation is kept in the
+browser's storage; the history lives on the server.
+
+| State                | Notes                                                                                       |
+| -------------------- | ------------------------------------------------------------------------------------------- |
+| `turns`              | the open conversation, as the Transcript draws it (`done`, `streaming`, `stopped`, `error`) |
+| `conversationId`     | the open conversation's id; `null` for a new one until `start` names it                     |
+| `status`             | `idle` or `asking`                                                                          |
+| `draft`              | the question box's words, kept while the person is on another page                          |
+| `remaining`, `limit` | questions left today and the cap, from `GET /api/ask` and each `start`; `null` until read   |
+| `openAt`             | when asking opens again (ms), from a 429's `retryAfter`; `null` when not known              |
+| `conversations`      | the history list from `GET /api/ask/conversations`: `{ id, title, updatedAt }`              |
+| `unsynced`           | changes still in the outbox when the last question went (F11)                               |
+| `offline`, `notice`  | the last call couldn't reach the server; one line about the conversation (not kept, gone)   |
+
+`ask()` sends the box's words (or a Try again's question): it awaits `sync.flush()` first, notes
+what is still pending, and posts `{question, today, conversation?}` with `today` the browser's
+date (F15) and `conversation` left out for a new one, or after a new one's first turn wasn't kept
+(`done.saved` false). Text deltas collect in a buffer that is drawn once per animation frame.
+`done` and `error` end the turn; a refused answer's text is discarded. A stream that ends with
+neither is a failure, as is 30 seconds with no frame (`stream`, §7). Stop aborts the stream and
+keeps what arrived. A question the server never took (429, 503 `ask-off`, offline, a deleted
+conversation's 404) leaves no turn and goes back in the box. `open(id)` shows a past conversation,
+`newConversation()` empties the page, and `remove(id)` and `removeAll()` delete on the server and
+return the sentence for the ConfirmDialog when they can't. Every call sends `X-Expected-User`. The
+store clears itself, with any answer still streaming, when the session signs out or changes user;
+`App.vue` creates it so that watch always runs.
+
+In `AskPage.vue`, Return in the question box sends, like Send, and Shift+Return starts a new
+line. A Return that picks an input method's candidate (`isComposing`) is left to the input method.
+While an answer is being written, Return does nothing, so a next question can wait in the box.
 
 The planner writes only the theme and `markSet`, each merged into whatever
 `tracker-settings-v1` already holds.
@@ -338,8 +394,9 @@ edited on the item page and in the Note field of the Edit exercise and Edit food
 field counts from 19,000 characters (`NOTES_COUNT_FROM`), and a blank one clears the notes.
 
 `parseSettings` accepts any `#rrggbb` accent (K3a, K13), clamps the daily pick to
-1–8, accepts only `system`, `light` or `dark` as the theme and only one of `MARK_SETS` as the
-mark set, falling back to the defaults otherwise. Settings saved before the theme option existed
+1–8, reads My goals with `normaliseGoals` (trimmed, cut to 1,000 code points, `''` when blank or
+not a string), accepts only `system`, `light` or `dark` as the theme and only one of `MARK_SETS`
+as the mark set, falling back to the defaults otherwise. Settings saved before the theme option existed
 load as `system`, and before the mark set existed as `squiggles`.
 
 **Export and import.** Settings → Export downloads `tracker-YYYY-MM-DD.json`:
@@ -351,18 +408,24 @@ load as `system`, and before the mark set existed as `squiggles`.
   "exportedAt": "2026-10-24T09:30:00.000Z",
   "exercise": { "plans": {}, "log": {}, "details": {} },
   "diet": { "plans": {}, "log": {}, "details": {} },
-  "settings": { "accent": "#30d158", "dailyPick": 3, "foodPick": 2 }
+  "settings": { "accent": "#30d158", "dailyPick": 3, "foodPick": 2, "goals": "" },
+  "conversations": [{ "id": "Kq3x…", "title": "…", "createdAt": 0, "updatedAt": 0, "turns": [] }]
 }
 ```
 
 `details` maps each item id to its `{ notes?, fields? }`, without revisions. `settings` also
 carries `itemSections` when a type's item page is arranged (K66); a file's arrangement is
 normalised like the cache's, and applies with the other settings only to an account that has none.
-The theme is not
+The plans, marks and settings are the device's, unsynced changes included. Ask's conversations
+live only on the server, so Export reads them from `GET /api/export` (`api.md` §3) and adds that
+list; an account with none writes no `conversations` key, and offline the file downloads without
+them and says so. The theme is not
 exported, because it belongs to the device rather than the person. Import… reads a file through
 `parseExport` (`src/lib/transfer.ts`), which rejects anything that is not JSON, has another
 `format`, or has a `version` other than 1 to 5 (a version 1 file's `true` days read as `"great"`,
-K12; version 4 added notes on plan items, K43; version 5 moved them into `details`).
+K12; version 4 added notes on plan items, K43; version 5 moved them into `details`). My goals
+came without a new version, as `foodPick` did: an older reader drops the key, and a file without
+it reads as no goals.
 
 A file of version 4 or older carries its notes on plan items, so `liftNotes` lifts them into
 `details`, and any `details` key in it is ignored. Per item, the note comes from the latest week
@@ -383,8 +446,13 @@ applies the same rules):
   import can add marks but never clears or changes one.
 - An item with details keeps them whole, and an item without takes the file's.
 - The file's accent and daily pick apply only when the account has no settings of their own yet.
+- The file's My goals fill the account's when those are empty, and never replace goals already
+  saved (K72).
+- The file's Ask conversations are added when the account has none with their id; one it has is
+  never changed.
 
-Confirming sends the file to `POST /api/import` (`sync.importFile`): the server merges it against
+Confirming sends the file to `POST /api/import` (`sync.importFile`, with its `conversations` when
+it has any): the server merges it against
 the account's real state in one transaction, and the app then reads the account afresh (after any
 read already in flight, which predates the import). Local writes still queued go out first, so the
 server merges against everything this device has; if they cannot be sent, nothing is imported. When
@@ -393,7 +461,9 @@ a full account) and
 keeps the file ready to try again. The confirm step names how many weeks and marked days the file
 adds, and how many items gain notes or details ("…plus the notes and details of two items"), before
 anything is written (`mergeSummary`, through `useImportSummary`, which the first-login prompt
-shares). It is computed from the current state, so it stays right if another tab or a settings
+shares), and names the rest: the exercises and foods a day, your goals (goals that only fill
+empty ones count as a change on their own), and how many conversations from Ask the account
+doesn't have yet (Settings reads the history list first when the file has any). It is computed from the current state, so it stays right if another tab or a settings
 change lands while it is open. Importing the same file twice adds nothing the second time. Adding a week can change what
 an unplanned week carries forward from (§2). The import took its history from the file, so that is
 the intended result.
@@ -599,13 +669,14 @@ an `index.ts`. They are shadcn-vue (K1): owned source on Reka UI, added with the
 to the tokens and the cards. `cn` (`src/lib/utils.ts`) merges a consumer's classes over a
 component's own.
 
-| Group    | Primitives                                                                                                                                                                   |
-| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Basics   | Button (primary, secondary and quiet, 44px tall, `sm` 36px from 640px up), IconButton (44px, a required `label`), TextLink, BrandMark, BarAction (the Header's actions, K47) |
-| Forms    | TextField, TextArea, SegmentedControl, Switch, Stepper, RadioCard                                                                                                            |
-| Overlays | Dialog, ConfirmDialog with ConfirmHost, Popover                                                                                                                              |
-| Planner  | DayMark, Chip, SectionHeader                                                                                                                                                 |
-| Feedback | InlineMessage, Banner                                                                                                                                                        |
+| Group    | Primitives                                                                                                                                                                    |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Basics   | Button (primary, secondary and quiet, 44px tall, `sm` 36px from 640px up), IconButton (44px, a required `label`), TextLink, BrandMark, BarAction (the Header's actions, K47)  |
+| Forms    | TextField, TextArea, SegmentedControl, Switch, Stepper, RadioCard                                                                                                             |
+| Overlays | Dialog, ConfirmDialog with ConfirmHost, Popover                                                                                                                               |
+| Planner  | DayMark, Chip, SectionHeader                                                                                                                                                  |
+| Feedback | InlineMessage, Banner                                                                                                                                                         |
+| Ask      | Transcript (the turns in rows, answers through `answer()` in `src/lib/markdown.ts`), AnswerProgress (main.css's `pen-write` keyframe), QuotaChip, SidePanel (S1), HistoryList |
 
 The other cards are composed in the screens: Header in `AppNavbar.vue`, Panel in `AuthCard.vue`
 and `ImportPrompt.vue`, WeekGrid in `TrackerGrid.vue` and `TrackerRow.vue`, PlannerScreen in
@@ -620,7 +691,9 @@ true for the verb, false for Cancel or Escape. One `<ConfirmHost />`, mounted on
 shows the open question in a ConfirmDialog (Reka's AlertDialog). A newer question answers an older
 one false. `returnFocus` names where focus goes on closing when the control that asked has gone, as
 after a removal. Removing a row (`TrackerRow`) asks this way. Sign out uses a ConfirmDialog of its own on the Settings page, because it shows the
-unsynced count, a busy state and an error.
+unsynced count, a busy state and an error. So do the Ask page's two deletes (one conversation,
+or all): Cancel returns focus to the bin that asked (its `data-history-delete`), and a delete moves
+it to the next conversation's bin, else to New conversation.
 
 A question never outlives what it asked about. It is answered false when the component that asked
 goes away, and `App.vue` closes any open question (`dismissConfirm()`) when the signed-in user
@@ -672,8 +745,8 @@ tall or less).
   The named sizes (`--fs-name`, `--grid-name-w`, `--screen-pad-x`, …) derive from it, and folded
   they switch to `--n` (1 on a phone, up to 1.4). Components set `text-(length:--fs-name)` beside a
   type class, so the class keeps the font and weight and the size follows the screen. The other
-  families: `--bar-*` sizes the Header and its BarActions (K47); `--set-*` the Settings page's and
-  the dialogs' type and controls (K51, K55); `--edit-ib`, `--edit-ib-icon`, `--grid-edit-w` and
+  families: `--bar-*` sizes the Header and its BarActions (K47); `--set-*` the Settings and Ask
+  pages' and the dialogs' type and controls (K51, K55); `--edit-ib`, `--edit-ib-icon`, `--grid-edit-w` and
   `--grid-remove-w` Edit plan's row buttons and their columns (K54). Outside the planner's screens
   (Edit plan) `--grid-row-min` and `--grid-row-max` are a fixed max(76px, 100u), since that page
   scrolls rather than filling the window.
@@ -691,6 +764,13 @@ tall or less).
   Exercises screen, and one pointing up, "Back to Exercises", 48px from the top of Food, below the
   bar's strip and handle. Each sprints to the other screen's top with `sprintToScreen`. A short
   screen leaves them out.
+- **Settings and Ask** are pages of their own (`#/settings`, `#/ask`), outside the screens and with
+  no bar (K52): each starts with "Back to the week", and leaving one returns focus to the bar button
+  that opened it. Ask fills the window (K67, K70): the SidePanel (`h-dvh`) and the page beside it
+  scroll on their own, the page in Settings' rows and sizes (`data-slot="ask-page"` takes the
+  `--set-*` sizes in main.css), with the question box as the last row. Folded, the panel is a
+  drawer opened from beside "Back to the week". `#/ask` shows the week while `session.ask` is not
+  `true`, and drops the address once it is `false`; signing out on either page drops it too.
 
 ### 6.7 Print
 
@@ -748,7 +828,8 @@ a refusal like any other. Invite and reset links arrive as `#/invite/<token>` an
 out to be invalid; offline or busy, the page offers to try again.
 
 **Email** (`api.md` §4.1). The sign-in form asks `GET /api/auth/options` whether the API sends
-email, and only then links "Forgot your password?" to `#/forgot`. That form posts the email and
+email, and only then links "Forgot your password?" to `#/forgot`. The session store asks again
+after every sign-in and when the browser comes back online, for the `ask` flag too (§3). That form posts the email and
 then always says a link is on its way if there is an account, whatever the server found. The
 account the API returns on sign-in and from `/auth/me` carries `confirmed` for an email account
 while mail is on; the session store keeps it, and `EmailStatus` shows the confirm banner while it
@@ -765,7 +846,21 @@ never read or write the account of someone who signed in afterwards in another t
 shared, the name is not. The session store also follows `storage` events on the session key, so
 when another tab signs out or in as someone else, this tab stops syncing, clears the stores, and
 follows. Every request gives up after 15 seconds and counts as offline, so one dead connection
-cannot stall syncing; replies that arrive after a sign-out or a user switch are ignored.
+cannot stall syncing; replies that arrive after a sign-out or a user switch are ignored. A
+`DELETE` sends no body but still sends `Content-Type: application/json`, which the API asks of
+every write.
+
+**Ask's stream** (`api.md` §3.2). `stream()` in `src/lib/api.ts` posts the question with `fetch`
+and reads the reply's body with `getReader()`, since `EventSource` can't post. It splits the
+server-sent events at blank lines, wherever the chunks break, skips `:` comments (the 15-second
+keep-alives) and frames whose data isn't a JSON object, and hands each event to the store in
+order. A refusal before the stream maps exactly as `request` maps it (one `errorFor`), so 503
+`ask-off` is a refusal and a 503 from the proxy is offline. The stream ends well only at `done` or
+`error`. Ending without either, a dropped connection, or 30 seconds with no frame at all
+(keep-alives count) is `cut`: a proxy that cuts a stream still answered 200 (W5's C3). Stop aborts
+it as `stopped`. Either way the reader is cancelled, so the request closes and the API stops the
+answer and keeps the question. Before asking, the store awaits `sync.flush()`: marks still in the
+outbox aren't on the server, so the page says how many the answer won't include (F11).
 
 **Writes.** The stores change state at once. A deep watcher in the sync store diffs their state
 against `base`, the state the server is known to hold, and turns each difference into an operation
@@ -779,7 +874,9 @@ in the outbox:
   `{ details, rev }`, the revision last seen (`detailRevs`). Clearing them sends `{}`. An item
   whose id holds `/`, or is `.` or `..`, can't be named in that path, so it has no details
   (`isDetailsId`, below);
-- `settings`: the accent, both daily picks and the item pages' arrangement, `PUT /api/settings`.
+- `settings`: the accent, both daily picks, My goals and the item pages' arrangement,
+  `PUT /api/settings`. The goals go only when `goalsKnown`; a body without them keeps the saved
+  ones on the server.
   `itemSections` always goes, `{}` for the default: the API keeps the saved arrangement when the
   key is missing (a tab on older code), so leaving it out could never reset one.
 
@@ -856,8 +953,19 @@ write to it arrives as a `storage` event, and this tab adopts it as both its sta
 that tab's own writes are already in the shared outbox. Adopting it also counts as a local change,
 so a read this tab already had in flight cannot overwrite it. Adopting never writes the cache back:
 a tab still open on older code words the cache differently (before K57 its settings had no
-`foodPick`), and a write-back would set the two tabs echoing it between them, each undoing the
-other's marks as they were made. The cache is validated with the
+`foodPick`, and before My goals no `goals`), and a write-back would set the two tabs echoing it
+between them, each undoing the other's marks as they were made.
+
+**My goals and older tabs (F1).** A tab from before My goals neither reads nor sends them. Three
+rules keep its writes from erasing them. The API keeps the saved goals when a settings write
+leaves them out. `normaliseState` keeps `goals` only when a cache or reply carries them as text,
+so adopting that tab's cache keeps the goals this tab has. And a tab that has never read them
+(it started from that tab's cache, offline) sends and caches settings without them until a
+read brings them. The diff compares the goals, so an edit to them is sent. The Settings row
+follows the same rule: its box takes typing only once the goals are known, or once a read from the
+server found an account with no settings at all (a new one, whose goals are empty), and it saves
+its draft when typing pauses for 600 ms or the box loses focus, so one pause is one write (F18).
+Goals that change elsewhere show in the box unless the person is mid-pause. The cache is validated with the
 storage normalisers when read, and outbox entries one by one, so a damaged key cannot break the app
 or stick the outbox. A plan write for a week the stores no longer hold is dropped rather than sent
 as an empty plan.

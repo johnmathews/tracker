@@ -13,6 +13,7 @@ import {
   expectNoAxeViolations,
   expectNoSidewaysScroll,
   openApp,
+  openAsk,
   openSignIn,
   openSignUp,
   openForgot,
@@ -80,6 +81,21 @@ test.describe('the app passes axe', () => {
       await expectNoAxeViolations(page)
     })
 
+    test(`the Ask page with an answer and the history, desktop, ${theme}`, async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 900 })
+      await openAsk(page, theme)
+      await expectNoAxeViolations(page)
+    })
+
+    test(`the Ask page, its delete question open, desktop, ${theme}`, async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 900 })
+      await openAsk(page, theme)
+      await page.getByRole('button', { name: 'Delete all conversations' }).click()
+      await page.getByRole('alertdialog').waitFor()
+      await settle(page)
+      await expectNoAxeViolations(page)
+    })
+
     test(`an item’s page, desktop, notes being edited, ${theme}`, async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 900 })
       await openApp(page, { theme })
@@ -88,6 +104,16 @@ test.describe('the app passes axe', () => {
       await settle(page)
       await expectNoAxeViolations(page)
       await page.getByRole('button', { name: 'Edit notes' }).click()
+      await settle(page)
+      await expectNoAxeViolations(page)
+    })
+
+    test(`the Ask page, 375px, and its history drawer, ${theme}`, async ({ page }) => {
+      await page.setViewportSize({ width: 375, height: 800 })
+      await openAsk(page, theme)
+      await expectNoAxeViolations(page)
+      await page.getByRole('button', { name: 'Show history' }).click()
+      await page.getByRole('dialog', { name: 'Conversation history' }).waitFor()
       await settle(page)
       await expectNoAxeViolations(page)
     })

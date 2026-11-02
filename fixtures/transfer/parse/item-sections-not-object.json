@@ -10,7 +10,7 @@
     "data": {
       "exercise": { "plans": {}, "log": {}, "details": {} },
       "diet": { "plans": {}, "log": {}, "details": {} },
-      "settings": { "accent": "#0a84ff", "dailyPick": 4, "foodPick": 5 }
+      "settings": { "accent": "#0a84ff", "dailyPick": 4, "foodPick": 5, "goals": "" }
     }
   }
 }

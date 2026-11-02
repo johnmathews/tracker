@@ -657,7 +657,7 @@ describe('the Settings page', () => {
         .get(PANEL)
         .findAll('h2')
         .map((h) => h.text()),
-    ).toEqual(['Appearance', 'Your data', 'Account'])
+    ).toEqual(['Appearance', 'Your goals', 'Your data', 'Account'])
     // Marks, then Theme (K59); the daily targets are set in Edit plan (K56).
     expect(
       wrapper
@@ -697,7 +697,7 @@ describe('the Settings page', () => {
   }
 
   it('keeps a saved accent as it is, though nothing shows it any more', async () => {
-    mountWithSettings({ accent: '#ff9f0a', dailyPick: 3, foodPick: 2 })
+    mountWithSettings({ accent: '#ff9f0a', dailyPick: 3, foodPick: 2, goals: '' })
     await wrapper.get('[data-testid="edit-plan-button"]').trigger('click')
     await wrapper.get('button[aria-label="More exercises a day"]').trigger('click')
     await settle()
@@ -706,6 +706,7 @@ describe('the Settings page', () => {
       accent: '#ff9f0a',
       dailyPick: 4,
       foodPick: 2,
+      goals: '',
     })
     expect(document.documentElement.style.getPropertyValue('--user-pen-light')).toBe('')
   })
@@ -771,6 +772,8 @@ describe('export and import', () => {
     await rowCells('Squats')[3]!.trigger('click')
     await openSettings()
     await button('Export').trigger('click')
+    // Export reads Ask's conversations from the server first.
+    await flushPromises()
     expect(click).toHaveBeenCalledOnce()
     expect((click.mock.contexts[0] as HTMLAnchorElement).download).toBe('tracker-2026-10-23.json')
     const file = JSON.parse(await blob!.text())
@@ -808,11 +811,14 @@ describe('export and import', () => {
     })
     await openSettings()
     await button('Export').trigger('click')
+    // Export reads the server's export for Ask's history first.
+    await flushPromises()
     const file = JSON.parse(await blob!.text())
     expect(file.settings).toEqual({
       accent: '#30d158',
       dailyPick: 3,
       foodPick: 2,
+      goals: '',
       itemSections: { exercise: arranged },
     })
   })
@@ -1009,6 +1015,8 @@ describe('export and import with the sample data', () => {
   const { revs: _er, detailRevs: _ed, ...exercise } = cache.exercise
   const { revs: _dr, detailRevs: _dd, ...diet } = cache.diet
   const { accent, dailyPick, foodPick } = cache.settings as PortableSettings
+  // The cache and the file carry the same goals.
+  const { goals } = sample.settings as PortableSettings
 
   /** The sample as alice's cache, a fresh copy each time. */
   function sampleCache(): SyncState {
@@ -1058,6 +1066,8 @@ describe('export and import with the sample data', () => {
     ).toEqual(['Push-ups', 'Pull-ups', 'Squats', 'Kettlebell halos', 'Plank'])
     await openSettings()
     await button('Export').trigger('click')
+    // The account has no Ask conversations, so the file is the sample as it was.
+    await flushPromises()
     expect(JSON.parse(await blob!.text())).toEqual({ ...sample, exportedAt: NOW.toISOString() })
   })
 
@@ -1071,7 +1081,7 @@ describe('export and import with the sample data', () => {
     await input.trigger('change')
     await flushPromises()
     expect(wrapper.get('[data-testid="import-summary"]').text()).toBe(
-      'Adds six weekly plans and 102 marked days, plus the notes and details of two items and the exercises and foods a day. Existing plans and marks stay as they are.',
+      'Adds six weekly plans and 102 marked days, plus the notes and details of two items, the exercises and foods a day and your goals. Existing plans and marks stay as they are.',
     )
     await button('Import').trigger('click')
     await flushPromises()
@@ -1079,7 +1089,7 @@ describe('export and import with the sample data', () => {
     const { revs: _d, detailRevs: _dd, ...cachedDiet } = cached().diet
     expect(cachedExercise).toEqual(exercise)
     expect(cachedDiet).toEqual(diet)
-    expect(cached().settings).toEqual({ accent, dailyPick, foodPick })
+    expect(cached().settings).toEqual({ accent, dailyPick, foodPick, goals })
     // Every plan, tick and item's details reached the server too.
     const server = api.state(USER) as SyncState
     const { plans, log, details } = server.exercise
@@ -1089,7 +1099,7 @@ describe('export and import with the sample data', () => {
       log: server.diet.log,
       details: server.diet.details,
     }).toEqual(diet)
-    expect(server.settings).toEqual({ accent, dailyPick, foodPick })
+    expect(server.settings).toEqual({ accent, dailyPick, foodPick, goals })
     // The theme is per device, so it never left this browser.
     expect(localStorage.getItem('tracker-settings-v1')).toBeNull()
   })
@@ -1658,6 +1668,7 @@ describe('config mode and weekly plans', () => {
       accent: '#30d158',
       dailyPick: 1,
       foodPick: 8,
+      goals: '',
     })
   })
 

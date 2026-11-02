@@ -1,0 +1,36 @@
+<!-- @dsCard group="Ask" height=330 subtitle="Questions left today, in words from three down; ink at none left" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>QuotaChip — preview</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: var(--space-6); background: var(--canvas); color: var(--ink); font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
+  .chip { display: inline-block; background: var(--tile); color: var(--ink-secondary); border-radius: var(--radius-sm); padding: 2px var(--space-2); white-space: nowrap; }
+  .chip.none { color: var(--ink); }
+  h2 { margin: 0 0 var(--space-3); color: var(--ink-secondary); }
+  .chips { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0 0 var(--space-6); padding: 0; list-style: none; }
+  .foot { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; max-width: 720px; }
+  .aside { margin: 0; color: var(--ink-secondary); }
+  @media (max-width: 639px) { body { padding: var(--space-4); } }
+</style>
+</head>
+<body>
+<h2 class="label">Every count</h2>
+<ul class="chips">
+  <li><span class="chip label">27 questions left today</span></li>
+  <li><span class="chip label">4 questions left today</span></li>
+  <li><span class="chip label">Three questions left today</span></li>
+  <li><span class="chip label">Two questions left today</span></li>
+  <li><span class="chip label">One question left today</span></li>
+  <li><span class="chip label none">No questions left today</span></li>
+</ul>
+<h2 class="label">At the foot of the question box</h2>
+<div class="foot">
+  <span class="chip label none">No questions left today</span>
+  <p class="caption aside">You can ask again from 09:14 tomorrow.</p>
+</div>
+<script></script>
+</body>
+</html>

@@ -29,12 +29,17 @@ def _step_of(marker: str) -> int:
 TOKENS_STEP = "CREATE TABLE IF NOT EXISTS api_tokens"
 DETAILS_STEP = "CREATE TABLE IF NOT EXISTS item_details"
 SECTIONS_STEP = "ADD COLUMN item_sections"
+GOALS_STEP = "ADD COLUMN goals"
+ASK_LOG_STEP = "CREATE TABLE ask_log"
+ASK_HISTORY_STEP = "CREATE TABLE ask_conversations"
 
 
 def test_steps_are_numbered_as_the_docs_say() -> None:
-    """Schema 6 adds API tokens, 7 item details, 8 the item pages' arrangement (docs/api.md §2)."""
-    assert SCHEMA_VERSION == 8
-    assert [_step_of(m) + 1 for m in (TOKENS_STEP, DETAILS_STEP, SECTIONS_STEP)] == [6, 7, 8]
+    """Schema 6 adds API tokens, 7 item details, 8 the item pages' arrangement, 9 My goals,
+    10 Ask's caps and 11 Ask's history (docs/api.md §2)."""
+    assert SCHEMA_VERSION == 11
+    steps = (TOKENS_STEP, DETAILS_STEP, SECTIONS_STEP, GOALS_STEP, ASK_LOG_STEP, ASK_HISTORY_STEP)
+    assert [_step_of(m) + 1 for m in steps] == [6, 7, 8, 9, 10, 11]
 
 
 def before_details(path: Path, monkeypatch: pytest.MonkeyPatch) -> sqlite3.Connection:
@@ -192,12 +197,17 @@ def test_item_sections_migration_adds_an_empty_column(
     c.execute("INSERT INTO users (id, username, password_hash, created_at) VALUES (1, 'a', 'h', 0)")
     c.execute("INSERT INTO settings VALUES (1, '#30d158', 4, 3)")
     db.migrate(c)
-    assert c.execute("PRAGMA user_version").fetchone()[0] == 8
+    assert c.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
     columns = {r["name"]: r for r in c.execute("PRAGMA table_info(settings)")}
     assert columns["item_sections"]["type"] == "TEXT"
     assert columns["item_sections"]["notnull"] == 0
     assert c.execute("SELECT item_sections FROM settings").fetchone()[0] is None
-    assert load_settings(c, 1) == {"accent": "#30d158", "dailyPick": 4, "foodPick": 3}
+    assert load_settings(c, 1) == {
+        "accent": "#30d158",
+        "dailyPick": 4,
+        "foodPick": 3,
+        "goals": "",
+    }
     c.close()
 
 
@@ -228,6 +238,90 @@ def test_marks_migration_reads_existing_ticks_as_great(
             "sq": [None] * 7,
         }
     }
+    c.close()
+
+
+def test_goals_migration_gives_saved_settings_none(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Settings saved before My goals keep every value, and read as having no goals."""
+    from tracker_api import db
+    from tracker_api.data import load_settings
+
+    c = connect(tmp_path / "f.db")
+    # Found by its text, not its index, so a rebase that renumbers it needs no edit here.
+    before = next(i for i, m in enumerate(db.MIGRATIONS) if "ADD COLUMN goals" in m)
+    monkeypatch.setattr(db, "MIGRATIONS", db.MIGRATIONS[:before])
+    db.migrate(c)
+    c.execute("INSERT INTO users (id, username, password_hash, created_at) VALUES (1, 'a', 'h', 0)")
+    c.execute(
+        "INSERT INTO settings (user_id, accent, daily_pick, food_pick) VALUES (1, '#0a84ff', 5, 4)"
+    )
+    monkeypatch.undo()
+    db.migrate(c)
+    assert c.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
+    assert load_settings(c, 1) == {"accent": "#0a84ff", "dailyPick": 5, "foodPick": 4, "goals": ""}
+    with pytest.raises(sqlite3.IntegrityError):
+        c.execute("UPDATE settings SET goals = NULL")
+    c.close()
+
+
+def test_ask_log_holds_times_only_and_goes_with_its_user(tmp_path: Path) -> None:
+    """The Ask cap's log: who asked and when, and nothing of what was asked."""
+    c = connect(tmp_path / "f.db")
+    migrate(c)
+    columns = [r["name"] for r in c.execute("PRAGMA table_info(ask_log)")]
+    assert columns == ["id", "user_id", "asked_at"]
+    indexes = {r["name"] for r in c.execute("PRAGMA index_list(ask_log)")}
+    assert {"ask_log_by_user", "ask_log_by_time"} <= indexes
+    c.execute("INSERT INTO users (id, username, password_hash, created_at) VALUES (1, 'a', 'h', 0)")
+    c.execute("INSERT INTO ask_log (user_id, asked_at) VALUES (1, 100)")
+    c.execute("DELETE FROM users WHERE id = 1")
+    assert c.execute("SELECT COUNT(*) FROM ask_log").fetchone()[0] == 0
+    c.close()
+
+
+def test_ask_history_is_text_per_account_and_goes_with_its_user(tmp_path: Path) -> None:
+    """Ask's history: conversations keyed by account and id, and text-only turns that go with
+    their conversation, which goes with its user."""
+    c = connect(tmp_path / "f.db")
+    migrate(c)
+    conversation = [r["name"] for r in c.execute("PRAGMA table_info(ask_conversations)")]
+    assert conversation == ["user_id", "id", "title", "created_at", "updated_at"]
+    turn = [r["name"] for r in c.execute("PRAGMA table_info(ask_turns)")]
+    assert turn == ["user_id", "conversation_id", "seq", "question", "answer", "stop", "asked_at"]
+    for uid in (1, 2):
+        c.execute(
+            "INSERT INTO users (id, username, password_hash, created_at) VALUES (?, ?, 'h', 0)",
+            (uid, f"u{uid}"),
+        )
+    # The same id in two accounts is two conversations: an import never meets another's.
+    for uid in (1, 2):
+        c.execute(
+            "INSERT INTO ask_conversations VALUES (?, 'c1', 'How was my week?', 10, 20)", (uid,)
+        )
+        c.execute(
+            "INSERT INTO ask_turns VALUES (?, 'c1', 0, 'How was it?', 'Fine.', 'end_turn', 10)",
+            (uid,),
+        )
+    bad = [
+        # No answer is kept with a turn that didn't end with one.
+        "INSERT INTO ask_turns VALUES (1, 'c1', 1, 'q', 'Half an answer', 'cancelled', 11)",
+        "INSERT INTO ask_turns VALUES (1, 'c1', 1, 'q', '', 'thinking', 11)",
+        "INSERT INTO ask_turns VALUES (1, 'c1', 0, 'q', '', 'error', 11)",  # the same seq
+        "INSERT INTO ask_turns VALUES (1, 'c2', 0, 'q', '', 'error', 11)",  # no such conversation
+        "INSERT INTO ask_turns VALUES (1, 'c1', -1, 'q', '', 'error', 11)",
+        "INSERT INTO ask_conversations VALUES (3, 'c1', 't', 0, 0)",  # no such user
+    ]
+    for sql in bad:
+        with pytest.raises(sqlite3.IntegrityError):
+            c.execute(sql)
+    c.execute("INSERT INTO ask_turns VALUES (1, 'c1', 1, 'q', '', 'refused', 11)")
+    c.execute("DELETE FROM ask_conversations WHERE user_id = 1")
+    assert [tuple(r) for r in c.execute("SELECT user_id FROM ask_turns")] == [(2,)]
+    c.execute("DELETE FROM users WHERE id = 2")
+    for table in ("ask_conversations", "ask_turns"):
+        assert c.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0  # noqa: S608
     c.close()
 
 
@@ -307,7 +401,7 @@ def test_deleting_a_user_cascades_to_their_rows(conn: sqlite3.Connection) -> Non
     conn.execute(
         "INSERT INTO users (id, username, password_hash, created_at) VALUES (1, 'a', 'h', 0)"
     )
-    conn.execute("INSERT INTO settings VALUES (1, '#30d158', 3, 2, NULL)")
+    conn.execute("INSERT INTO settings (user_id, accent, daily_pick) VALUES (1, '#30d158', 3)")
     conn.execute("INSERT INTO plans VALUES (1, 'exercise', '2026-10-19', '[]', 1)")
     conn.execute("INSERT INTO ticks VALUES (1, 'diet', '2026-10-19', 'veg', 5, 0, 0, 0, 0)")
     conn.execute("INSERT INTO sessions VALUES ('t', 1, 0, 0, 0)")

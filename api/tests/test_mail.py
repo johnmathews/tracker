@@ -172,8 +172,8 @@ def test_the_design_system_card_is_current() -> None:
 
 
 def test_options_say_whether_mail_is_on(client: TestClient, mail_client: TestClient) -> None:
-    assert client.get("/api/auth/options").json() == {"mail": False}
-    assert mail_client.get("/api/auth/options").json() == {"mail": True}
+    assert client.get("/api/auth/options").json() == {"mail": False, "ask": False}
+    assert mail_client.get("/api/auth/options").json() == {"mail": True, "ask": False}
 
 
 def test_me_has_no_confirmed_flag_without_mail(client: TestClient) -> None:

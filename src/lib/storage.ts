@@ -88,11 +88,31 @@ export type PlannerData = { plans: Plans<Exercise>; log: Log }
 
 export type DietData = { plans: Plans<Food>; log: Log }
 
+/**
+ * How an Ask turn ended (docs/api.md §3.2): with an answer (`end_turn`, or `max_tokens` cut
+ * short), or without one, keeping only its question.
+ */
+export type AskStop = 'end_turn' | 'max_tokens' | 'refused' | 'error' | 'cancelled'
+
+/** One question in an Ask conversation and its answer, text only. Times are Unix seconds. */
+export type AskTurn = { question: string; answer: string; stop: AskStop; askedAt: number }
+
+/** An Ask conversation as the API keeps it and exports it; keys camelCase, as the rest of the API's. */
+export type Conversation = {
+  id: string
+  title: string
+  createdAt: number
+  updatedAt: number
+  turns: AskTurn[]
+}
+
 export type Settings = {
   accent: string
   dailyPick: number
   /** Foods a day (K57): a day whose food marks reach it turns green. */
   foodPick: number
+  /** My goals: the person's own words about what they are aiming for; only Ask reads them. */
+  goals: string
   theme: Theme
   /** How marked days are drawn; the device's choice. */
   markSet: MarkSet
@@ -125,6 +145,8 @@ export const NEW_FOOD_TARGET = 3
  * export of version 4 or a `-v3` cache carries in its plans (K43), which lift into details.
  */
 export const MAX_NOTES = 500
+/** My goals' length, in characters (code points, as Python counts them). */
+export const MAX_GOALS = 1000
 /** An item's details: its notes in code points, each field's text in code points, how many fields,
  * and the whole document as the API stores it (compact JSON, UTF-8) in bytes. As the API's. */
 export const MAX_DETAILS_NOTES = 20_000
@@ -143,6 +165,7 @@ export const DEFAULT_SETTINGS: Settings = {
   accent: '#30d158',
   dailyPick: 3,
   foodPick: 2,
+  goals: '',
   theme: 'system',
   markSet: 'squiggles',
 }
@@ -220,6 +243,19 @@ export function normaliseText(v: unknown, limit: number): string | undefined {
 /** A plan item's note from a version 4 export or a `-v3` cache (K43), cut to MAX_NOTES. */
 export function normaliseNotes(v: unknown): string | undefined {
   return normaliseText(v, MAX_NOTES)
+}
+
+/**
+ * My goals: text cut to MAX_GOALS characters; '' for anything that isn't a string or for nothing
+ * left. The API's `normalise_goals` does the same.
+ */
+export function normaliseGoals(v: unknown): string {
+  return cutText(v, MAX_GOALS)
+}
+
+/** `normaliseText`, but '' rather than undefined for nothing usable: Ask's titles and turns. */
+export function cutText(v: unknown, max: number): string {
+  return normaliseText(v, max) ?? ''
 }
 
 /**
@@ -437,14 +473,23 @@ export function parseDietData(
 }
 
 /** The settings that belong to the person rather than the device: not the theme, totals or marks. */
-export type PortableSettings = Pick<Settings, 'accent' | 'dailyPick' | 'foodPick'> & {
+export type PortableSettings = Pick<Settings, 'accent' | 'dailyPick' | 'foodPick' | 'goals'> & {
   /** Each type's item-page arrangement (K66, P29); left out while every page has the default. */
   itemSections?: ItemSections
 }
 
-/** Any `#rrggbb` accent, and daily picks for exercises and foods clamped to 1–8, each falling back
- * to its default; the item pages' arrangement as `normaliseItemSections` reads it, left out when
- * every page has the default. */
+/**
+ * Portable settings as a tab or its cache knows them. `goals` is absent when the tab hasn't read
+ * them from the server or had them from the person: a cache written by a tab from before My goals
+ * has none, and sending a stand-in would erase the saved ones (F1).
+ */
+export type KnownSettings = Omit<PortableSettings, 'goals'> & { goals?: string }
+
+/**
+ * Any `#rrggbb` accent, daily picks for exercises and foods clamped to 1–8, each falling back to
+ * its default, My goals as `normaliseGoals` reads them, and the item pages' arrangement as
+ * `normaliseItemSections` reads it, left out when every page has the default.
+ */
 export function normalisePortableSettings(v: Record<string, unknown>): PortableSettings {
   const accent =
     typeof v.accent === 'string' && /^#[0-9a-f]{6}$/i.test(v.accent)
@@ -465,6 +510,7 @@ export function normalisePortableSettings(v: Record<string, unknown>): PortableS
     accent,
     dailyPick,
     foodPick,
+    goals: normaliseGoals(v.goals),
     ...(Object.keys(itemSections).length ? { itemSections } : {}),
   }
 }

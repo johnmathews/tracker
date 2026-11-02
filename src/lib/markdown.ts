@@ -33,6 +33,32 @@ const line = notes()
 line.renderer.rules.link_open = () => '<span class="note-link">'
 line.renderer.rules.link_close = () => '</span>'
 
+/**
+ * An answer on the Ask page (Transcript card, F8), in the markdown Claude writes. Raw HTML stays
+ * text and markdown-it's link check drops `javascript:`, `vbscript:`, `file:` and most `data:`
+ * links, as in a note; every link opens in a new tab and tells it nothing. It keeps paragraphs,
+ * lists, emphasis, inline code, quotes and code blocks. The system prompt asks for no headings,
+ * tables or images (api ask.py), so when one comes anyway:
+ *
+ * - a heading becomes a bold paragraph, so its words still read as a lead-in rather than "## …";
+ * - a table stays its text: alignment would add `style` attributes, and a wide table would scroll
+ *   the page sideways on a phone;
+ * - a rule is left out, since the paragraphs already part and the rows have their own hairlines;
+ * - an image is never fetched (its words and link stay).
+ *
+ * It renders a half-streamed chunk as it stands: an unclosed `**` shows as its asterisks until the
+ * closing pair arrives.
+ */
+const answers = new MarkdownIt({ html: false, linkify: true }).disable(['image', 'table'])
+answers.renderer.rules.link_open = whole.renderer.rules.link_open
+answers.renderer.rules.heading_open = () => '<p><strong>'
+answers.renderer.rules.heading_close = () => '</strong></p>\n'
+answers.renderer.rules.hr = () => ''
+
+export function answer(src: string): string {
+  return answers.render(src)
+}
+
 export function renderNote(src: string): string {
   return whole.render(src)
 }

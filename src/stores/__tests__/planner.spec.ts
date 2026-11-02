@@ -549,6 +549,57 @@ describe('savedSettings', () => {
     expect(s.savedSettings()).toBeNull()
   })
 
+  describe('My goals', () => {
+    const PICKS = { accent: '#30d158', dailyPick: 3, foodPick: 2 }
+
+    it('start unknown, so they are neither sent nor cached', () => {
+      const s = usePlannerStore()
+      expect(s.goals).toBe('')
+      expect(s.goalsKnown).toBe(false)
+      expect(s.portableSettings()).toEqual(PICKS)
+      s.changeDailyPick(1)
+      expect(s.savedSettings()).toEqual({ ...PICKS, dailyPick: 4 })
+    })
+
+    it('are set normalised, and count as the person’s settings', () => {
+      const s = usePlannerStore()
+      s.setGoals('  Run 5 km by March.\n\n')
+      expect(s.goals).toBe('Run 5 km by March.')
+      expect(s.goalsKnown).toBe(true)
+      expect(s.savedSettings()).toEqual({ ...PICKS, goals: 'Run 5 km by March.' })
+      s.setGoals('')
+      expect(s.portableSettings()).toEqual({ ...PICKS, goals: '' })
+    })
+
+    it('ignore the same text again, and stay unknown when nothing changed', () => {
+      const s = usePlannerStore()
+      s.setGoals('   ')
+      expect(s.goalsKnown).toBe(false)
+      expect(s.savedSettings()).toBeNull()
+    })
+
+    it('are adopted when the settings carry them, and kept when they don’t', () => {
+      const s = usePlannerStore()
+      s.adopt({ plans: {}, log: {} }, { ...PICKS, goals: 'Lose 3 kg.' })
+      expect([s.goals, s.goalsKnown]).toEqual(['Lose 3 kg.', true])
+      // A tab from before My goals wrote these, or there are no settings at all.
+      s.adopt({ plans: {}, log: {} }, { ...PICKS, dailyPick: 5 })
+      expect([s.goals, s.dailyPick]).toEqual(['Lose 3 kg.', 5])
+      s.adopt({ plans: {}, log: {} }, null)
+      expect([s.goals, s.goalsKnown]).toEqual(['Lose 3 kg.', true])
+      s.adopt({ plans: {}, log: {} }, { ...PICKS, goals: '' })
+      expect([s.goals, s.goalsKnown]).toEqual(['', true])
+    })
+
+    it('are forgotten on sign-out', () => {
+      const s = usePlannerStore()
+      s.setGoals('Lose 3 kg.')
+      s.clear()
+      expect([s.goals, s.goalsKnown]).toEqual(['', false])
+      expect(s.portableSettings()).toEqual(PICKS)
+    })
+  })
+
   it('does not count a theme change: the theme is the device’s', async () => {
     const s = usePlannerStore()
     s.setTheme('dark')

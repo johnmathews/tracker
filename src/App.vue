@@ -4,6 +4,7 @@ import { usePlannerStore } from '@/stores/planner'
 import AppNavbar from '@/components/AppNavbar.vue'
 import WeekHeader from '@/components/WeekHeader.vue'
 import SettingsPage from '@/components/SettingsPage.vue'
+import AskPage from '@/components/AskPage.vue'
 import ExerciseGrid from '@/components/ExerciseGrid.vue'
 import DietSection from '@/components/DietSection.vue'
 import LoginForm from '@/components/LoginForm.vue'
@@ -19,6 +20,7 @@ import { dismissConfirm } from '@/composables/useConfirm'
 import { useMediaQuery } from '@/composables/useMediaQuery'
 import { useScreenSprint } from '@/composables/screenSprint'
 import { isDark } from '@/lib/theme'
+import { useAskStore } from '@/stores/ask'
 import { isItemHash, itemHref, markFromWeek, parseItemHash, type ItemRoute } from '@/lib/routes'
 import { itemExists, useItemSource } from '@/composables/itemSource'
 import ItemPage from '@/components/ItemPage.vue'
@@ -28,6 +30,8 @@ import { useSyncStore } from '@/stores/sync'
 const store = usePlannerStore()
 const session = useSessionStore()
 const sync = useSyncStore()
+// Made here, not on the Ask page, so it forgets its conversation on any sign-out or user change.
+useAskStore()
 // Started before the first render: a remembered user is signed in synchronously, so the app
 // shows their cached data straight away instead of flashing the sign-in screen.
 void session.init()
@@ -54,12 +58,13 @@ function confirmToken(): string | null {
 const confirmLink = ref(confirmToken())
 
 /**
- * The page the hash asks for: Settings at `#/settings`, an item's page at `#/item/<section>/<id>`
- * (ItemPage card, D5), otherwise the planner.
+ * The page the hash asks for: Settings at `#/settings`, Ask at `#/ask`, an item's page at
+ * `#/item/<section>/<id>` (ItemPage card, D5), otherwise the planner.
  */
-type Page = 'planner' | 'settings' | 'item'
+type Page = 'planner' | 'settings' | 'ask' | 'item'
 function pageFor(): Page {
   if (location.hash === '#/settings') return 'settings'
+  if (location.hash === '#/ask') return 'ask'
   return parseItemHash(location.hash) ? 'item' : 'planner'
 }
 /** Drop the hash from the address bar and history: the page it named doesn't apply. */
@@ -72,6 +77,13 @@ const page = ref<Page>(pageFor())
 const item = ref<ItemRoute | null>(parseItemHash(location.hash))
 /** The item whose page was open last, so Back can put focus on its name. */
 let leftItem: ItemRoute | null = null
+/**
+ * The page on screen: Ask only while the API answers questions (F10). Until the flag has loaded
+ * the week shows and `#/ask` stays, so a remembered Ask page opens once the flag says yes.
+ */
+const shown = computed<Page>(() =>
+  page.value === 'ask' && session.ask !== true ? 'planner' : page.value,
+)
 function onHash(): void {
   link.value = linkToken()
   confirmLink.value = confirmToken()
@@ -85,29 +97,44 @@ function onHash(): void {
   // Opened from the week in this tab: its Back goes back through history (lib/routes).
   if (page.value === 'item' && before === 'planner') markFromWeek()
 }
-// Back from Settings, focus returns to the Settings button that opened it; back from an item's
+/** Drop the page from the address bar, so a reload opens the week. */
+function forgetPage(): void {
+  dropHash()
+  item.value = null
+  page.value = 'planner'
+}
+// Back from Settings or Ask, focus returns to the bar button that opened it; back from an item's
 // page, to that item's name in its row (WeekGrid card).
-watch(page, async (now, before) => {
-  if (now !== 'planner') return
+const OPENERS: Record<'settings' | 'ask', string> = {
+  settings: 'settings-button',
+  ask: 'ask-button',
+}
+watch(shown, async (now, before) => {
+  if (now !== 'planner' || before === 'planner') return
   await nextTick()
-  if (before === 'settings')
-    document.querySelector<HTMLElement>('[data-testid="settings-button"]')?.focus()
-  else if (before === 'item' && leftItem) {
+  if (before !== 'item')
+    document.querySelector<HTMLElement>(`[data-testid="${OPENERS[before]}"]`)?.focus()
+  else if (leftItem) {
     const href = itemHref(leftItem.section, leftItem.id)
     ;[...document.querySelectorAll<HTMLElement>('[data-slot="item-link"]')]
       .find((a) => a.getAttribute('href') === href)
       ?.focus()
   }
 })
-// Signing out on Settings or an item's page lands on the sign-in screen, and the next sign-in on
-// the week.
+// Ask is off on this planner (no key, or turned off since): `#/ask` means the week.
+watch(
+  () => page.value === 'ask' && session.ask === false,
+  (off) => {
+    if (off) forgetPage()
+  },
+  { immediate: true },
+)
+// Signing out on Settings, Ask or an item's page lands on the sign-in screen, and the next sign-in
+// on the week.
 watch(
   () => session.status,
   (status) => {
-    if (status !== 'signed-out' || page.value === 'planner') return
-    dropHash()
-    item.value = null
-    page.value = 'planner'
+    if (status === 'signed-out' && page.value !== 'planner') forgetPage()
   },
 )
 // An address naming no item in any week's plan opens the week instead (ItemPage card), once the
@@ -151,15 +178,15 @@ watch(
   { immediate: true },
 )
 
-// The planner's screens (PlannerScreen card, K24–K27): outside Edit plan and Settings each section
-// fills the screen, the page sprints between them and the bar keeps out of sight. The class on
-// <html> turns on main.css's `full:` variant.
+// The planner's screens (PlannerScreen card, K24–K27): outside Edit plan and the other pages each
+// section fills the screen, the page sprints between them and the bar keeps out of sight. The
+// class on <html> turns on main.css's `full:` variant.
 const screens = computed(
   () =>
     session.status === 'signed-in' &&
     !link.value &&
     !confirmLink.value &&
-    page.value === 'planner' &&
+    shown.value === 'planner' &&
     !store.configMode,
 )
 watchEffect(() => document.documentElement.classList.toggle('planner-screens', screens.value))
@@ -192,6 +219,8 @@ function onFocus(): void {
 }
 function onOnline(): void {
   void sync.flush()
+  // The flag may not have loaded yet (offline at start), and the key may have changed meanwhile.
+  void session.loadOptions()
 }
 function onStorage(ev: StorageEvent): void {
   if (ev.storageArea !== localStorage) return
@@ -243,24 +272,27 @@ onBeforeUnmount(() => {
     @leave="closeLink"
   />
   <template v-else-if="session.status === 'signed-in'">
-    <!-- The Settings page and an item's page have no bar: each links back to the week (K52). -->
-    <AppNavbar v-if="page === 'planner'" :overlay="screens" />
+    <!-- Settings, Ask and an item's page have no bar: each links back to the week (K52). -->
+    <AppNavbar v-if="shown === 'planner'" :overlay="screens" />
     <!-- Settings, an item's page and Edit plan are full width on the page's margins, like the week
-         (K51, K54, K64). -->
+         (K51, K54, K64). Ask fills the screen beside its side panel and sets its own margins. -->
     <main
       class="print:max-w-none print:p-0 full:max-w-none full:p-0"
       :class="
-        page !== 'planner' || store.configMode
-          ? 'px-(--screen-pad-x) pb-[calc(var(--u)*64)]'
-          : 'mx-auto max-w-6xl px-4 pb-16 sm:px-6 lg:px-8'
+        shown === 'ask'
+          ? undefined
+          : shown !== 'planner' || store.configMode
+            ? 'px-(--screen-pad-x) pb-[calc(var(--u)*64)]'
+            : 'mx-auto max-w-6xl px-4 pb-16 sm:px-6 lg:px-8'
       "
     >
-      <template v-if="page === 'settings'">
+      <AskPage v-if="shown === 'ask'" />
+      <template v-else-if="shown === 'settings'">
         <SyncStatus />
         <EmailStatus />
         <SettingsPage />
       </template>
-      <template v-else-if="page === 'item' && sync.loaded">
+      <template v-else-if="shown === 'item' && sync.loaded">
         <SyncStatus />
         <EmailStatus />
         <ItemPage

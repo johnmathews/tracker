@@ -72,9 +72,72 @@ function state() {
   }
 }
 
+const NOON = Math.floor(TODAY.getTime() / 1000)
+const DAY = 24 * 3600
+
+/** Ask's history as the API lists it (docs/api.md §3.2): Today, Last week and Earlier. */
+const CONVERSATIONS = [
+  { id: 'diet', title: 'Is my diet good enough?', updatedAt: NOON - 600, turns: 1 },
+  {
+    id: 'month',
+    title: 'Am I doing enough to meet my goals this month?',
+    updatedAt: NOON - 3 * DAY,
+    turns: 1,
+  },
+  { id: 'rest', title: 'Should I add a rest day?', updatedAt: NOON - 20 * DAY, turns: 1 },
+]
+
+/** The answer every question gets: a paragraph, a list and bold, as Claude writes them. */
+const ANSWER = [
+  'Mostly, yes. Over four weeks you met **Push-ups** and **Squats** every week.',
+  '',
+  '- Pull-ups met its three days twice.',
+  '- Back extensions is at two of three this week.',
+  '',
+  'Your goal says “Ten pull-ups in a row by March”. One more rep a set every second week would get you there.',
+].join('\n')
+
+/** One server-sent event, as the API frames it. */
+function sse(event: string, data: unknown): string {
+  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
+}
+
+/** The Ask routes, for a planner with Ask on. Anything else under /ask/ is not one of these. */
+function askReply(method: string, path: string): { json?: unknown; body?: string } | null {
+  if (method === 'GET' && path === '/ask') return { json: { remaining: 27, limit: 30 } }
+  if (method === 'GET' && path === '/ask/conversations')
+    return { json: { conversations: CONVERSATIONS } }
+  const open = /^\/ask\/conversations\/(\w+)$/.exec(path)
+  const found = open && CONVERSATIONS.find((c) => c.id === open[1])
+  if (method === 'GET' && found) {
+    return {
+      json: {
+        ...found,
+        createdAt: found.updatedAt,
+        turns: [
+          { question: found.title, answer: ANSWER, stop: 'end_turn', askedAt: found.updatedAt },
+        ],
+      },
+    }
+  }
+  if (method === 'POST' && path === '/ask') {
+    const words = ANSWER.split(/(?<= )/)
+    return {
+      body: [
+        sse('start', { remaining: 26, conversation: 'diet' }),
+        ': keep-alive\n\n',
+        ...words.map((delta) => sse('text', { delta })),
+        sse('done', { stop: 'end_turn', saved: true }),
+      ].join(''),
+    }
+  }
+  return null
+}
+
 /**
  * Opens the app signed in as alice, with the API mocked: /auth/me knows her, /state returns the
- * week above, and every write succeeds.
+ * week above, and every write succeeds. With `ask`, the planner answers questions: the bar has
+ * Ask, and /api/ask answers from the history and the answer above.
  */
 export async function openApp(
   page: Page,
@@ -83,6 +146,7 @@ export async function openApp(
     unconfirmed = false,
     moreExercises = 0,
     moreFoods = 0,
+    ask = false,
   }: {
     theme?: Theme
     /** The account's email is not confirmed yet, so the confirm banner shows. */
@@ -91,6 +155,8 @@ export async function openApp(
     moreExercises?: number
     /** Foods for the Food screen, enough to run past it. */
     moreFoods?: number
+    /** Ask is on (an Anthropic key on the server). */
+    ask?: boolean
   } = {},
 ): Promise<{ settings: Settings | null }> {
   await page.clock.setFixedTime(TODAY)
@@ -120,6 +186,13 @@ export async function openApp(
       s.settings = req.postDataJSON() as Settings
       return route.fulfill({ json: s.settings })
     }
+    if (req.method() === 'GET' && path === '/auth/options')
+      return route.fulfill({ json: { mail: false, ask } })
+    const reply = ask ? askReply(req.method(), path) : null
+    if (reply?.body) {
+      return route.fulfill({ body: reply.body, contentType: 'text/event-stream' })
+    }
+    if (reply) return route.fulfill({ json: reply.json })
     if (req.method() === 'PUT') return route.fulfill({ json: { rev: 1 } })
     return route.fulfill({ json: {} })
   })
@@ -148,6 +221,23 @@ export async function callUpBar(page: Page): Promise<void> {
   const width = page.viewportSize()?.width ?? 1280
   await page.mouse.move(width / 2, 4)
   await page.locator('[data-slot="bar"][data-shown="true"]').waitFor()
+  await settle(page)
+}
+
+/**
+ * Opens the Ask page from the bar, with Ask on, and asks a question, so the page shows a whole
+ * answer in the conversation, the history beside it (or, folded, behind its toggle), the chip
+ * and the note.
+ */
+export async function openAsk(page: Page, theme: Theme = 'light'): Promise<void> {
+  await openApp(page, { theme, ask: true })
+  await callUpBar(page)
+  await page.getByRole('button', { name: 'Ask', exact: true }).click()
+  await page.getByRole('heading', { level: 1, name: 'Ask' }).waitFor()
+  await page.getByLabel('Your question').fill('Am I doing enough to meet my goals this month?')
+  await page.getByRole('button', { name: 'Send' }).click()
+  await page.getByText('One more rep a set every second week').waitFor()
+  await page.getByText('26 questions left today').waitFor()
   await settle(page)
 }
 

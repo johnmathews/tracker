@@ -1,6 +1,7 @@
 """The HTTP layer through FastAPI's TestClient, against a real SQLite file."""
 
 import asyncio
+import copy
 import json
 from collections.abc import MutableMapping
 from dataclasses import replace
@@ -586,11 +587,13 @@ def test_settings_are_normalised(client: TestClient, config: Config) -> None:
         "accent": "#30d158",
         "dailyPick": 8,
         "foodPick": 1,
+        "goals": "",
     }
     assert client.get("/api/state").json()["settings"] == {
         "accent": "#30d158",
         "dailyPick": 8,
         "foodPick": 1,
+        "goals": "",
     }
 
 
@@ -603,18 +606,50 @@ def test_settings_without_a_food_pick_keep_the_saved_one(
         "accent": "#bf5af2",
         "dailyPick": 4,
         "foodPick": 2,
+        "goals": "",
     }
     client.put("/api/settings", json={"accent": "#bf5af2", "dailyPick": 4, "foodPick": 6})
     assert client.put("/api/settings", json={"accent": "#bf5af2", "dailyPick": 3}).json() == {
         "accent": "#bf5af2",
         "dailyPick": 3,
         "foodPick": 6,
+        "goals": "",
     }
+
+
+def test_settings_without_goals_keep_the_saved_ones(client: TestClient, config: Config) -> None:
+    """A tab still running the app from before My goals sends no `goals` (F1): it must not erase
+    the saved text, and neither must a value that isn't a string."""
+    sign_up(client, config)
+    mine = {"accent": "#30d158", "dailyPick": 3, "foodPick": 2}
+    assert client.put("/api/settings", json={**mine, "goals": "Lose 3 kg."}).json() == {
+        **mine,
+        "goals": "Lose 3 kg.",
+    }
+    old_tab = {"accent": "#30d158", "dailyPick": 5, "foodPick": 2}
+    assert client.put("/api/settings", json=old_tab).json() == {**old_tab, "goals": "Lose 3 kg."}
+    assert client.put("/api/settings", json={**old_tab, "goals": None}).json()["goals"] == (
+        "Lose 3 kg."
+    )
+    assert client.get("/api/state").json()["settings"] == {**old_tab, "goals": "Lose 3 kg."}
+    # Clearing them on purpose is a string too.
+    assert client.put("/api/settings", json={**old_tab, "goals": "  "}).json()["goals"] == ""
+
+
+def test_goals_are_normalised_like_notes(client: TestClient, config: Config) -> None:
+    sign_up(client, config)
+    # Without any saved settings, no goals reads as none.
+    assert client.put("/api/settings", json={"dailyPick": 3}).json()["goals"] == ""
+    # Trimmed of spaces, tabs and line breaks, and cut at 1,000 code points (an emoji is one).
+    text = "\n\t Run 5 km.\n" + "🥦" * 1200
+    saved = client.put("/api/settings", json={"goals": text}).json()["goals"]
+    assert saved == "Run 5 km.\n" + "🥦" * (1000 - len("Run 5 km.\n"))
+    assert len(saved) == 1000
 
 
 #: An exercise page with Details hidden and Recent weeks first (K66).
 ARRANGED = {"order": ["history", "notes", "details", "plan"], "hidden": ["details"]}
-SETTINGS = {"accent": "#bf5af2", "dailyPick": 4, "foodPick": 3}
+SETTINGS = {"accent": "#bf5af2", "dailyPick": 4, "foodPick": 3, "goals": ""}
 
 
 def test_settings_carry_each_types_item_page_arrangement(
@@ -743,7 +778,7 @@ def test_users_cannot_see_or_change_each_others_data(client: TestClient, config:
     assert alice["exercise"]["plans"] == {WEEK: [PUSHUPS]}
     assert alice["exercise"]["log"] == {WEEK: {"pu": ["partial"] + [None] * 6}}
     assert alice["diet"] == EMPTY
-    assert alice["settings"] == {"accent": "#0a84ff", "dailyPick": 5, "foodPick": 4}
+    assert alice["settings"] == {"accent": "#0a84ff", "dailyPick": 5, "foodPick": 4, "goals": ""}
 
 
 # --- import and export --------------------------------------------------------------------------
@@ -754,25 +789,74 @@ def post_import(client: TestClient, payload: Any) -> Any:
     return client.post("/api/import", content=text, headers={"Content-Type": "application/json"})
 
 
+def padded_export(size: int) -> str:
+    """An export file of about `size` bytes: the sample, with a long goals text as padding."""
+    sample = copy.deepcopy(read_fixture("sample/export.json"))
+    sample["settings"]["goals"] = "x" * size
+    return json.dumps(sample)
+
+
+def test_an_import_may_be_up_to_six_mebibytes(client: TestClient, config: Config) -> None:
+    """A full account (5 MiB quota) must round-trip through Export and Import, so /api/import
+    takes up to 6 MiB; every other write stays at 1 MiB."""
+    sign_up(client, config)
+    r = post_import(client, padded_export(3 << 20))
+    assert r.status_code == 200
+    assert r.json()["weeks"] == 6
+
+
+def test_a_chunked_import_over_a_mebibyte_is_read(client: TestClient, config: Config) -> None:
+    sign_up(client, config)
+    text = padded_export(2 << 20).encode()
+
+    def chunks() -> Any:
+        for i in range(0, len(text), 64 * 1024):
+            yield text[i : i + 64 * 1024]
+
+    r = client.post("/api/import", content=chunks(), headers={"Content-Type": "application/json"})
+    assert r.status_code == 200
+
+
+def test_an_import_over_six_mebibytes_is_refused(client: TestClient, config: Config) -> None:
+    sign_up(client, config)
+    r = post_import(client, padded_export(6 << 20))
+    assert (r.status_code, r.json()) == (413, {"error": "too-large"})
+
+
 def test_sample_import_then_export_round_trips(client: TestClient, config: Config) -> None:
     sign_up(client, config)
     sample = read_fixture("sample/export.json")
     r = post_import(client, sample)
     # The same counts the browser's confirm step shows for this file (App.spec.ts).
-    assert r.json() == {"weeks": 6, "ticks": 102, "details": 2, "settings": True}
+    assert r.json() == {
+        "weeks": 6,
+        "ticks": 102,
+        "details": 2,
+        "settings": True,
+        "conversations": 0,
+    }
     exported = client.get("/api/export")
     assert sample["version"] == exported.json()["version"] == 5
     assert (
         exported.headers["content-disposition"] == 'attachment; filename="tracker-2026-10-23.json"'
     )
-    assert exported.json() == {**sample, "exportedAt": "2026-10-23T08:00:00.000Z"}
+    assert exported.json() == {
+        **sample,
+        "exportedAt": "2026-10-23T08:00:00.000Z",
+        "conversations": [],
+    }
     assert post_import(client, sample).json() == {
         "weeks": 0,
         "ticks": 0,
         "details": 0,
         "settings": False,
+        "conversations": 0,
     }
-    assert client.get("/api/export").json() == {**sample, "exportedAt": "2026-10-23T08:00:00.000Z"}
+    assert client.get("/api/export").json() == {
+        **sample,
+        "exportedAt": "2026-10-23T08:00:00.000Z",
+        "conversations": [],
+    }
 
 
 def test_import_merges_without_deleting(client: TestClient, config: Config) -> None:
@@ -793,13 +877,38 @@ def test_import_merges_without_deleting(client: TestClient, config: Config) -> N
             "settings": {"accent": "#0a84ff", "dailyPick": 4},
         },
     )
-    assert r.json() == {"weeks": 1, "ticks": 1, "details": 0, "settings": False}
+    assert r.json() == {"weeks": 1, "ticks": 1, "details": 0, "settings": False, "conversations": 0}
     state = client.get("/api/state").json()
     assert state["exercise"]["plans"] == {"2026-10-12": [squats], WEEK: [PUSHUPS]}
     assert state["exercise"]["revs"] == {"2026-10-12": 1, WEEK: 1}
     # A version 1 file's true day reads as great; the day already marked keeps its mark.
     assert state["exercise"]["log"][WEEK]["pu"][:2] == ["missed", "great"]
-    assert state["settings"] == {"accent": "#ff9f0a", "dailyPick": 2, "foodPick": 2}
+    assert state["settings"] == {"accent": "#ff9f0a", "dailyPick": 2, "foodPick": 2, "goals": ""}
+
+
+def test_import_fills_empty_goals_only(client: TestClient, config: Config) -> None:
+    """A file's goals fill an account's empty goals; goals already saved stay (F17)."""
+    sign_up(client, config)
+    client.put("/api/settings", json={"accent": "#ff9f0a", "dailyPick": 2})
+    settings = {"accent": "#0a84ff", "dailyPick": 4, "goals": "Run 5 km by March."}
+    file = {"format": "tracker-export", "version": 5, "settings": settings}
+    assert post_import(client, file).json() == {
+        "weeks": 0,
+        "ticks": 0,
+        "details": 0,
+        "settings": True,
+        "conversations": 0,
+    }
+    # Only the goals came from the file: the saved picks stay.
+    assert client.get("/api/state").json()["settings"] == {
+        "accent": "#ff9f0a",
+        "dailyPick": 2,
+        "foodPick": 2,
+        "goals": "Run 5 km by March.",
+    }
+    again = {**file, "settings": {**settings, "goals": "Something else."}}
+    assert post_import(client, again).json()["settings"] is False
+    assert client.get("/api/state").json()["settings"]["goals"] == "Run 5 km by March."
 
 
 @pytest.mark.parametrize(
@@ -841,7 +950,7 @@ def test_import_keeps_existing_marks_and_fills_empty_days(
             "exercise": {"log": {WEEK: {"pu": incoming, "sq": ["missed", _, _, _, _, _, _]}}},
         },
     )
-    assert r.json() == {"weeks": 0, "ticks": 4, "details": 0, "settings": False}
+    assert r.json() == {"weeks": 0, "ticks": 4, "details": 0, "settings": False, "conversations": 0}
     log = client.get("/api/state").json()["exercise"]["log"]
     assert log == {
         WEEK: {
@@ -854,7 +963,7 @@ def test_import_keeps_existing_marks_and_fills_empty_days(
     # The same file again adds nothing.
     assert post_import(
         client, {"format": "fitness-planner-export", "version": 2, "exercise": {"log": log}}
-    ).json() == {"weeks": 0, "ticks": 0, "details": 0, "settings": False}
+    ).json() == {"weeks": 0, "ticks": 0, "details": 0, "settings": False, "conversations": 0}
 
 
 def test_a_version_1_import_exports_as_version_5(client: TestClient, config: Config) -> None:
@@ -870,6 +979,7 @@ def test_a_version_1_import_exports_as_version_5(client: TestClient, config: Con
         "ticks": 2,
         "details": 0,
         "settings": False,
+        "conversations": 0,
     }
     exported = client.get("/api/export").json()
     assert exported["version"] == 5
@@ -886,7 +996,7 @@ def test_import_accepts_a_byte_order_mark(client: TestClient, config: Config) ->
     r = client.post(
         "/api/import", content=body.encode(), headers={"Content-Type": "application/json"}
     )
-    assert r.json() == {"weeks": 0, "ticks": 0, "details": 0, "settings": False}
+    assert r.json() == {"weeks": 0, "ticks": 0, "details": 0, "settings": False, "conversations": 0}
 
 
 def test_ticks_on_different_days_from_many_connections_all_land(
@@ -950,3 +1060,94 @@ def test_a_request_for_another_user_is_refused(client: TestClient, config: Confi
         client.get("/api/state", headers={"X-Expected-User": "BOB@example.com"}).status_code == 200
     )
     assert client.get("/api/auth/me").json() == {"username": "bob@example.com"}
+
+
+# --- Ask's history in export and import -----------------------------------------------------------
+
+CONVERSATION: dict[str, Any] = {
+    "id": "Kq3xL0aZ-9_bQ2mR",
+    "title": "How was my week?",
+    "createdAt": 1_792_742_400,
+    "updatedAt": 1_792_742_460,
+    "turns": [
+        {
+            "question": "How was my week?",
+            "answer": "Four of five goals, and push-ups on three days.",
+            "stop": "end_turn",
+            "askedAt": 1_792_742_400,
+        },
+        {"question": "And my food?", "answer": "", "stop": "refused", "askedAt": 1_792_742_460},
+    ],
+}
+
+
+def add_conversation(config: Config, uid: int, conversation: dict[str, Any]) -> None:
+    """A conversation saved as Ask saves one: the row, then each turn as its answer ends."""
+    conn = connect(config.db_path)
+    try:
+        cid = conversation["id"]
+        data.create_conversation(conn, uid, cid, conversation["title"], conversation["createdAt"])
+        for turn in conversation["turns"]:
+            saved = data.save_turn(conn, uid, cid, turn, conversation["updatedAt"], quota=QUOTA)
+            assert saved == "saved"
+    finally:
+        conn.close()
+
+
+def export_file(conversations: list[Any]) -> dict[str, Any]:
+    return {"format": "tracker-export", "version": 5, "conversations": conversations}
+
+
+def test_export_then_import_round_trips_conversations(client: TestClient, config: Config) -> None:
+    sign_up(client, config)
+    add_conversation(config, 1, CONVERSATION)
+    exported = client.get("/api/export").json()
+    assert exported["version"] == 5
+    assert exported["conversations"] == [CONVERSATION]
+    nothing = {"weeks": 0, "ticks": 0, "details": 0, "settings": False}
+    with other_client(config) as bob:
+        sign_up(bob, config, "bob@example.com")
+        # Ids belong to an account: the same id in Bob's is a conversation of his own.
+        assert post_import(bob, exported).json() == {**nothing, "conversations": 1}
+        assert bob.get("/api/export").json()["conversations"] == [CONVERSATION]
+        assert bob.get(f"/api/ask/conversations/{CONVERSATION['id']}").json() == CONVERSATION
+        assert post_import(bob, exported).json() == {**nothing, "conversations": 0}
+    # Alice's own file adds nothing to her account.
+    assert post_import(client, exported).json() == {**nothing, "conversations": 0}
+    assert client.get("/api/export").json()["conversations"] == [CONVERSATION]
+
+
+def test_import_never_changes_a_conversation_the_account_has(
+    client: TestClient, config: Config
+) -> None:
+    sign_up(client, config)
+    add_conversation(config, 1, CONVERSATION)
+    changed = {
+        **CONVERSATION,
+        "title": "Changed",
+        "turns": [{"question": "Other", "answer": "Other.", "stop": "end_turn", "askedAt": 1}],
+    }
+    new = {**CONVERSATION, "id": "a-new-one", "updatedAt": 1_792_742_999}
+    invalid = {**CONVERSATION, "id": "has a space"}
+    r = post_import(client, export_file([changed, invalid, new]))
+    assert r.json() == {
+        "weeks": 0,
+        "ticks": 0,
+        "details": 0,
+        "settings": False,
+        "conversations": 1,
+    }
+    # Newest first, as the list shows them.
+    assert client.get("/api/export").json()["conversations"] == [new, CONVERSATION]
+
+
+def test_an_import_of_conversations_over_the_quota_adds_nothing(
+    client: TestClient, config: Config
+) -> None:
+    sign_up(client, config)
+    with other_client(replace(config, user_quota_bytes=100)) as c:
+        c.post("/api/auth/login", json={"username": "alice@example.com", "password": PASSWORD})
+        r = post_import(c, export_file([CONVERSATION]))
+        assert (r.status_code, r.json()) == (413, {"error": "quota"})
+    assert usage(config) == 0
+    assert client.get("/api/export").json()["conversations"] == []

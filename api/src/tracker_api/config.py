@@ -71,6 +71,12 @@ class Config:
     confirm_days: int = 7
     #: A reset link sent by email; one minted by `tracker-admin reset` lasts `reset_hours`.
     mail_reset_minutes: int = 60
+    #: Ask is on when this is set. Kept out of repr, as the Resend key is.
+    anthropic_api_key: str | None = field(default=None, repr=False)
+    ask_model: str = "claude-sonnet-5-5"
+    #: Questions per account in any rolling 24 hours, and across all accounts.
+    ask_per_day: int = 30
+    ask_per_day_total: int = 300
     #: Where today and this week are counted (`today`, `this_week`).
     timezone: ZoneInfo = field(default_factory=lambda: ZoneInfo(DEFAULT_TIMEZONE))
     #: Unix seconds; injectable so tests can move time.
@@ -88,6 +94,10 @@ class Config:
     @property
     def mail_enabled(self) -> bool:
         return self.resend_api_key is not None
+
+    @property
+    def ask_enabled(self) -> bool:
+        return self.anthropic_api_key is not None
 
     @property
     def db_path(self) -> Path:
@@ -124,5 +134,10 @@ class Config:
             mail_from=sender,
             # At least one: the limit is a cap, and 0 would make every reset request fail.
             mail_per_hour=_count(env, "MAIL_PER_HOUR", 30, least=1),
+            anthropic_api_key=env.get("ANTHROPIC_API_KEY") or None,
+            ask_model=env.get("ASK_MODEL") or "claude-sonnet-5-5",
+            # At least one each: the key turns Ask off, and 0 would refuse every question.
+            ask_per_day=_count(env, "ASK_PER_DAY", 30, least=1),
+            ask_per_day_total=_count(env, "ASK_PER_DAY_TOTAL", 300, least=1),
             timezone=_zone(env),
         )

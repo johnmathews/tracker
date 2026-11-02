@@ -25,6 +25,7 @@
         "accent": "#30d158",
         "dailyPick": 3,
         "foodPick": 2,
+        "goals": "",
         "itemSections": {
           "exercise": { "order": ["history", "plan", "notes", "details"], "hidden": ["details"] }
         }

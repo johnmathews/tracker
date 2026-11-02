@@ -66,7 +66,7 @@ jobs:
         if: matrix.name == 'api'
         run: |
           docker run --rm --platform linux/arm64 api-smoke:arm64 \
-            python -c "import argon2, cryptography, mcp, pydantic_core, rpds, tracker_api.app, zoneinfo; zoneinfo.ZoneInfo('Europe/Amsterdam'); print('ok')"
+            python -c "import anthropic, argon2, cryptography, jiter, mcp, pydantic_core, rpds, tracker_api.app, zoneinfo; zoneinfo.ZoneInfo('Europe/Amsterdam'); print('ok')"
 
   # Both images together behind nginx, as production runs them: sign-up, writes and reads through
   # the /api proxy, the write guard, and nginx still serving the app with the API stopped.

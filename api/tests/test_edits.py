@@ -834,22 +834,39 @@ def test_parse_date(text: str, ok: bool) -> None:
 def test_set_daily_targets_keeps_the_accent_and_the_other_target(
     conn: sqlite3.Connection, uid: int
 ) -> None:
-    put_settings(conn, uid, {"accent": "#123456", "dailyPick": 3, "foodPick": 4})
+    put_settings(
+        conn, uid, {"accent": "#123456", "dailyPick": 3, "foodPick": 4, "goals": "Run 5 km."}
+    )
     out = edits.set_daily_targets(conn, uid, exercises_a_day=5)
     assert out == {
         "before": {"exercises_a_day": 3, "foods_a_day": 4},
         "after": {"exercises_a_day": 5, "foods_a_day": 4},
     }
-    assert load_settings(conn, uid) == {"accent": "#123456", "dailyPick": 5, "foodPick": 4}
+    assert load_settings(conn, uid) == {
+        "accent": "#123456",
+        "dailyPick": 5,
+        "foodPick": 4,
+        "goals": "Run 5 km.",
+    }
     out = edits.set_daily_targets(conn, uid, foods_a_day=1)
     assert out["after"] == {"exercises_a_day": 5, "foods_a_day": 1}
-    assert load_settings(conn, uid) == {"accent": "#123456", "dailyPick": 5, "foodPick": 1}
+    assert load_settings(conn, uid) == {
+        "accent": "#123456",
+        "dailyPick": 5,
+        "foodPick": 1,
+        "goals": "Run 5 km.",
+    }
 
 
 def test_set_daily_targets_starts_from_the_defaults(conn: sqlite3.Connection, uid: int) -> None:
     out = edits.set_daily_targets(conn, uid, exercises_a_day=8, foods_a_day=1)
     assert out["before"] == {"exercises_a_day": 3, "foods_a_day": 2}
-    assert load_settings(conn, uid) == {"accent": "#30d158", "dailyPick": 8, "foodPick": 1}
+    assert load_settings(conn, uid) == {
+        "accent": "#30d158",
+        "dailyPick": 8,
+        "foodPick": 1,
+        "goals": "",
+    }
 
 
 @pytest.mark.parametrize(
@@ -871,4 +888,9 @@ def test_set_daily_targets_refuses_out_of_range_values(
         edits.set_daily_targets(conn, uid, **kw)
     assert e.value.field == field
     assert ("1 to 8" in str(e.value)) or ("give" in str(e.value))
-    assert load_settings(conn, uid) == {"accent": "#123456", "dailyPick": 3, "foodPick": 2}
+    assert load_settings(conn, uid) == {
+        "accent": "#123456",
+        "dailyPick": 3,
+        "foodPick": 2,
+        "goals": "",
+    }

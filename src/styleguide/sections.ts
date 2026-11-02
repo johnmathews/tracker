@@ -23,6 +23,11 @@ import SectionHeaderSection from './sections/SectionHeaderSection.vue'
 import WeekGridSection from './sections/WeekGridSection.vue'
 import RecentWeeksSection from './sections/RecentWeeksSection.vue'
 import ItemPageSection from './sections/ItemPageSection.vue'
+import TranscriptSection from './sections/TranscriptSection.vue'
+import AnswerProgressSection from './sections/AnswerProgressSection.vue'
+import QuotaChipSection from './sections/QuotaChipSection.vue'
+import SidePanelSection from './sections/SidePanelSection.vue'
+import HistoryListSection from './sections/HistoryListSection.vue'
 
 /**
  * One section of the style guide. StyleGuide.vue renders each as
@@ -211,5 +216,40 @@ export const SECTIONS: readonly StyleGuideSection[] = [
     summary:
       'An exercise’s or a food’s own page: its notes fill the page, with this week’s plan, its recent weeks and its details in a column beside them.',
     component: ItemPageSection,
+  },
+  {
+    id: 'sg-transcript',
+    title: 'Transcript',
+    summary:
+      'The conversation on the Ask page, in rows like Settings: each question in the left column and its answer to the right, at a reading measure, with hairlines between the rows.',
+    component: TranscriptSection,
+  },
+  {
+    id: 'sg-answer-progress',
+    title: 'AnswerProgress',
+    summary:
+      'The line that shows an answer is on its way: a pen of three short strokes, then the words “Reading your weeks…”.',
+    component: AnswerProgressSection,
+  },
+  {
+    id: 'sg-quota-chip',
+    title: 'QuotaChip',
+    summary:
+      'A Chip under the question box that says how many questions are left today, in words from three down.',
+    component: QuotaChipSection,
+  },
+  {
+    id: 'sg-side-panel',
+    title: 'SidePanel',
+    summary:
+      'A full-height panel beside the page that hides to a strip of icons, and becomes a drawer over the page on a phone; the Ask page keeps its history in it.',
+    component: SidePanelSection,
+  },
+  {
+    id: 'sg-history-list',
+    title: 'HistoryList',
+    summary:
+      'The past conversations inside the SidePanel on the Ask page: “New conversation”, then every conversation grouped by Today, Last week and Earlier, and “Delete all conversations” at the foot.',
+    component: HistoryListSection,
   },
 ]

@@ -132,13 +132,14 @@ hand.
 clock is fixed to Wednesday 21 October 2026, so every run sees the same week.
 
 - `a11y.spec.ts`: axe (WCAG 2.0–2.2 A and AA plus best practice) on the style guide in both themes,
-  and on the app's (its mocked week holds every kind of mark) week view, the bar called up, Edit plan, open Settings, an item's page (desktop with its notes being edited, folded at 390px, and while arranging at both sizes, with nothing scrolling sideways), the folded week at 375px,
+  and on the app's (its mocked week holds every kind of mark) week view, the bar called up, Edit plan, open Settings, an item's page (desktop with its notes being edited, folded at 390px, and while arranging at both sizes, with nothing scrolling sideways), the Ask page (an answer with the history beside it, its Delete all question open, and at 375px with the history drawer open), the folded week at 375px,
   sign-in, and create an account (empty and with errors showing), in light and dark; and the focus ring's shape, a solid 2px outline at 2px offset. Two
   "dark really is dark" tests guard the audit: on the style guide and on the app, the `.dark` class
   must be set and `--canvas` must differ from light, so a dark audit can never quietly re-run
   light.
-- `phone.spec.ts`: no sideways scroll at 375px on the style guide, sign-in, create an account, and
-  the folded week and Edit plan, and every cell of the folded week stays on screen as the keyboard
+- `phone.spec.ts`: no sideways scroll at 375px on the style guide, sign-in, create an account,
+  the folded week and Edit plan, the Ask page (empty with no goals yet, and with an answer and its
+  history drawer open) and the Settings page, and every cell of the folded week stays on screen as the keyboard
   walks it. `callUpBar` in `support.ts` brings the navbar into view before a test presses its
   controls, since on the planner's screens it is out of sight.
 - `notes.spec.ts`: an item's note on one line under the name and chips, and a press opening it
@@ -264,9 +265,10 @@ listed in [api.md](api.md) §10):
   controls (Enter or F2 in, Escape out, parked when focus leaves), rows coming and going, and a name
   that is a link (its cell's widget, Enter its own in one press, Space doing nothing, F2 into the
   cell's other controls and Escape back to the link).
-- `src/components/ui/__tests__/`: one spec per primitive (BarAction, Banner, BrandMark, Button, Chip,
-  ConfirmDialog, DayMark, Dialog, IconButton, InlineMessage, Popover, RadioCard, SectionHeader,
-  SegmentedControl, Stepper, Switch, TextArea, TextField, TextLink), each checking its
+- `src/components/ui/__tests__/`: one spec per primitive (AnswerProgress, BarAction, Banner,
+  BrandMark, Button, Chip, ConfirmDialog, DayMark, Dialog, HistoryList, IconButton, InlineMessage,
+  Popover, QuotaChip, RadioCard, SectionHeader, SegmentedControl, SidePanel, Stepper, Switch,
+  TextArea, TextField, TextLink, Transcript), each checking its
   roles, accessible names, sizes, states and the role colours its card names. Examples: an
   IconButton renders nothing without a label, the Popover closes when focus leaves it (F14), the
   Stepper's limits stay focusable with `aria-disabled`.
@@ -324,9 +326,33 @@ listed in [api.md](api.md) §10):
   offers, Add (merged on the fake server, shown, remembered), Not mine, Later, offline, refused and
   over-quota imports, an account that already holds everything, a browser with no earlier log, waiting for
   the account's state, and per-user answers.
+- `src/lib/__tests__/ask.spec.ts`: the Ask page's words: when asking opens again (a time today or
+  tomorrow from `Retry-After`, or within a day), the unsynced-changes note in words, a kept turn as
+  the Transcript draws it, and the history list's well-formed items.
+- `src/stores/__tests__/ask.spec.ts`: the Ask store against the fake API: the questions left and
+  the history, a question with the local date streamed and then listed, a blank or second
+  question ignored, this device's changes sent first (F11), one draw per animation frame, Stop, a
+  stream that ends without `done` or `error`, a refusal's text dropped, a full account, 429, 503
+  `ask-off`, a deleted conversation's 404, opening and deleting conversations and why a delete
+  failed, offline, Try again, an ended session, and everything forgotten on sign-out or another
+  user.
 - `src/stores/__tests__/session.spec.ts`: sign-in from a remembered user (online, offline, ended), a
   still-valid cookie, switching user, every login refusal, invite links, sign-out forgetting the
   device's data, and sign-out refused offline.
+- `src/components/__tests__/Ask.spec.ts`: the Ask page in the mounted app: the bar's Ask button
+  only while the API says Ask is on, `#/ask` falling back to the week while it is off or unknown,
+  focus in and out, signing out on it, the empty page with and without goals, an answer streamed
+  and counted, Return sending (Shift+Return a new line, an input method's Return its own, nothing
+  while an answer is written), Stop, a failed answer and Try again, the cap, offline, unsynced
+  changes, a full account, and the history panel: grouped by Today, Last week and Earlier,
+  deleting one or all after asking with focus kept in place, a failed delete, the strip the
+  device remembers, and the drawer on a phone.
+- `src/components/__tests__/SettingsAsk.spec.ts`: Settings → Your goals (its place and label, one
+  save per pause in typing, at once on leaving the box or closing the page, nothing kept of a
+  draft another tab signed out under, goals saved elsewhere never over a draft, closed until the
+  saved goals are known, a new account), and Export and Import with Ask's history (the server's
+  conversations in the file, none or offline, goals that fill empty ones, conversations already
+  here left out of the count).
 - `src/components/__tests__/App.spec.ts`: the mounted app in jsdom. Covers rendering, the today
   column, stepping a cell through its marks with `aria-pressed` (a food only on and off), the goal stepper and its bounds,
   navigation, confirm-before-remove, print, the visibility and one-minute clock refresh, another

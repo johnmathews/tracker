@@ -56,8 +56,19 @@
   and the top of Food leads to the other. Held upright, a phone or an iPad folds the week: each row's name
   above its seven boxes. A day that reaches its daily target turns green.
 - **Settings** is a page of its own. It sets how marks are drawn (Squiggles, Ticks, Stamped ticks,
-  Faces or Stamped faces) and the theme (System, Light or Dark), holds export and import, and
-  shows who is signed in, with **Sign out**.
+  Faces or Stamped faces) and the theme (System, Light or Dark), keeps **Your goals** (what you
+  are aiming for, in your own words, which only Ask reads; saved when you pause typing), holds
+  export and import, and shows who is signed in, with **Sign out**.
+- **Ask** is a page where you ask an AI (Claude) about what you track: whether you are doing too
+  much or too little for your goals, whether your diet is good enough, how steady your weeks are.
+  It reads your plans, marks, weekly goals, daily targets and Your goals, and the answer streams in
+  as it is written, with a Stop button. It may say plainly that something is too little or too
+  much, quote your goals and notes back, and count streaks. Each account may ask 30 questions in
+  any 24 hours by default; a chip under the box says how many are left. **History**, a panel down the left
+  (a drawer on a phone), keeps every conversation on the server, synced across devices and in the
+  export: pick one to carry on, start a **New conversation**, or delete one or all. Ask shows in
+  the bar only where the API has an Anthropic key (`docs/api.md` §3.2). Answers come from an AI
+  and can be wrong, and aren't medical advice.
 - **Accounts and sync.** Anyone can **Create an account** from the sign-in screen with an email and
   a password, or be invited by a link that names their email. Every account signs in with its email. Sign-up
   closes once `MAX_USERS` accounts exist (`docs/api.md` §4), and each account may store 5 MiB
@@ -65,11 +76,12 @@
   and **Forgot your password?** emails a reset link (§4.1). Plans, marks, notes, details and the daily targets are
   stored on the server and sync across devices; the theme and the marks stay with each device. The app opens from a cached
   copy and keeps working offline, sending changes once the connection is back.
-- **Export and import.** Settings → **Export** downloads your plans, marks, notes, details and
-  daily targets as a JSON file; **Import…** merges such a file into your account. An import only
-  adds: weeks you already have keep their plan, an item's notes and details stay as they are, and
-  no mark is ever cleared or changed. The export is your own copy of your
-  data.
+- **Export and import.** Settings → **Export** downloads your plans, marks, notes, details, daily
+  targets, goals and Ask conversations as a JSON file; **Import…** merges such a file into your
+  account. An import only adds: weeks you already have keep their plan, an item's notes and
+  details stay as they are, no mark is ever cleared or changed, goals fill yours only when they
+  are empty, and a conversation you already have stays as it is. The export is your own copy of
+  your data.
 - **Moving a log from before accounts.** A browser that kept a log before accounts existed offers
   it once you sign in: **Add to my account** merges it in, **Not mine** stops the question for you
   on that browser, **Later** asks next time. A log in another browser or profile can be moved with

@@ -27,7 +27,8 @@ describe('nginx.conf', () => {
     expect(api).toContain('proxy_pass $api;')
     // A stopped API's stale address times out rather than refusing; don't hold requests for 60 s.
     expect(api).toContain('proxy_connect_timeout 3s;')
-    expect(api).toContain('client_max_body_size 1m;')
+    // An import may be a whole account (6 MiB); the API holds every other write to 1 MiB.
+    expect(api).toContain('client_max_body_size 6m;')
     // The API's own Cache-Control is dropped so the server-level one is the only one sent.
     expect(api).toContain('proxy_hide_header Cache-Control;')
     expect(api).not.toContain('add_header')

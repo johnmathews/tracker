@@ -101,14 +101,14 @@ describe('sync', () => {
   })
 
   it('loads from the server when the device has no cache', async () => {
-    api.accounts.get(USER)!.settings = { accent: '#0a84ff', dailyPick: 5, foodPick: 4 }
+    api.accounts.get(USER)!.settings = { accent: '#0a84ff', dailyPick: 5, foodPick: 4, goals: '' }
     const sync = useSyncStore()
     sync.start(USER, lost)
     expect(sync.loaded).toBe(false)
     await flushPromises()
     expect(sync.loaded).toBe(true)
     expect(usePlannerStore().accent).toBe('#0a84ff')
-    expect(cached().settings).toEqual({ accent: '#0a84ff', dailyPick: 5, foodPick: 4 })
+    expect(cached().settings).toEqual({ accent: '#0a84ff', dailyPick: 5, foodPick: 4, goals: '' })
   })
 
   it('ignores a cache it cannot read', async () => {
@@ -155,6 +155,7 @@ describe('sync', () => {
       accent: '#30d158',
       dailyPick: 4,
       foodPick: 2,
+      goals: '',
     })
     expect(cached().settings).toEqual({ accent: '#30d158', dailyPick: 4, foodPick: 2 })
   })
@@ -167,6 +168,7 @@ describe('sync', () => {
       accent: '#30d158',
       dailyPick: 3,
       foodPick: 4,
+      goals: '',
     })
     expect(cached().settings).toEqual({ accent: '#30d158', dailyPick: 3, foodPick: 4 })
   })
@@ -187,6 +189,7 @@ describe('sync', () => {
     })
     expect(api.accounts.get(USER)!.settings).toEqual({
       ...settings,
+      goals: '',
       itemSections: { exercise: arranged },
     })
     expect(cached().settings).toEqual({ ...settings, itemSections: { exercise: arranged } })
@@ -197,7 +200,7 @@ describe('sync', () => {
     })
     await settle()
     expect(api.calls.at(-1)).toMatchObject({ body: { ...settings, itemSections: {} } })
-    expect(api.accounts.get(USER)!.settings).toEqual(settings)
+    expect(api.accounts.get(USER)!.settings).toEqual({ ...settings, goals: '' })
     expect(cached().settings).toEqual(settings)
   })
 
@@ -210,6 +213,7 @@ describe('sync', () => {
       accent: '#30d158',
       dailyPick: 3,
       foodPick: 2,
+      goals: '',
       itemSections: { food: arranged },
     }
     const { planner } = await start(emptyState())
@@ -461,6 +465,70 @@ describe('sync', () => {
     await settle()
     expect(planner.exercises).toEqual([SQUATS])
     expect(localStorage.getItem(CACHE_PREFIX + USER)).toBe(written)
+  })
+
+  describe('My goals (F1)', () => {
+    const PICKS = { accent: '#30d158', dailyPick: 3, foodPick: 2 }
+
+    it('sends the goals the person sets, in one settings write', async () => {
+      const { planner } = await start(emptyState())
+      planner.setGoals('  Run 5 km by March.\n')
+      await settle()
+      expect(api.paths('PUT')).toEqual(['PUT /settings'])
+      expect(api.calls.at(-1)!.body).toEqual({
+        ...PICKS,
+        goals: 'Run 5 km by March.',
+        itemSections: {},
+      })
+      expect(api.accounts.get(USER)!.settings).toEqual({ ...PICKS, goals: 'Run 5 km by March.' })
+      expect(cached().settings).toEqual({ ...PICKS, goals: 'Run 5 km by March.' })
+      // The same text again is no change, so nothing more is sent.
+      planner.setGoals('Run 5 km by March.')
+      await settle()
+      expect(api.paths('PUT')).toEqual(['PUT /settings'])
+    })
+
+    it('keeps its goals when a tab on older code writes the cache without them', async () => {
+      api.accounts.get(USER)!.settings = { ...PICKS, goals: 'Lose 3 kg.' }
+      const { sync, planner } = await start()
+      expect(planner.goals).toBe('Lose 3 kg.')
+      const other = emptyState()
+      other.settings = { ...PICKS, dailyPick: 5 } as SyncState['settings']
+      const written = JSON.stringify(other)
+      localStorage.setItem(CACHE_PREFIX + USER, written)
+      sync.onStorage(CACHE_PREFIX + USER)
+      await settle()
+      expect(planner.dailyPick).toBe(5)
+      expect(planner.goals).toBe('Lose 3 kg.')
+      expect(localStorage.getItem(CACHE_PREFIX + USER)).toBe(written)
+      // The next settings write still carries them.
+      planner.changeFoodPick(1)
+      await settle()
+      const sent = { ...PICKS, dailyPick: 5, foodPick: 3, goals: 'Lose 3 kg.' }
+      expect(api.calls.at(-1)!.body).toEqual({ ...sent, itemSections: {} })
+      expect(api.accounts.get(USER)!.settings).toEqual(sent)
+    })
+
+    it('never sends goals it has not read, when it starts from an older tab’s cache', async () => {
+      api.accounts.get(USER)!.settings = { ...PICKS, goals: 'Lose 3 kg.' }
+      api.offline = true // the cache is all this tab has
+      const old = emptyState()
+      old.settings = { ...PICKS } as SyncState['settings']
+      const { sync, planner } = await start(old)
+      expect(planner.goals).toBe('')
+      planner.changeDailyPick(1)
+      await settle()
+      // Its cache doesn't claim goals it never had, so no other tab adopts an empty one.
+      expect(cached().settings).toEqual({ ...PICKS, dailyPick: 4 })
+      api.offline = false
+      await sync.refresh()
+      const put = api.calls.find((c) => c.method === 'PUT' && c.path === '/settings')!
+      expect(put.body).toEqual({ ...PICKS, dailyPick: 4, itemSections: {} })
+      const saved = { ...PICKS, dailyPick: 4, goals: 'Lose 3 kg.' }
+      expect(api.accounts.get(USER)!.settings).toEqual(saved)
+      expect(planner.goals).toBe('Lose 3 kg.')
+      expect(cached().settings).toEqual(saved)
+    })
   })
 
   it('ignores a tab still open on the code from before the solid and hatch drawings', async () => {
@@ -805,7 +873,7 @@ describe('importFile', () => {
       details: {},
     },
     diet: { plans: {}, log: {}, details: {} },
-    settings: { accent: '#0a84ff', dailyPick: 5, foodPick: 4 },
+    settings: { accent: '#0a84ff', dailyPick: 5, foodPick: 4, goals: '' },
   }
 
   it('sends pending writes first, imports on the server, then shows the merged state', async () => {
@@ -815,7 +883,10 @@ describe('importFile', () => {
     await settle()
     api.offline = false
     const outcome = await sync.importFile(data)
-    expect(outcome).toEqual({ ok: true, added: { weeks: 1, ticks: 2, details: 0, settings: true } })
+    expect(outcome).toEqual({
+      ok: true,
+      added: { weeks: 1, ticks: 2, details: 0, settings: true, conversations: 0 },
+    })
     const order = api.paths().filter((p) => !p.startsWith('GET'))
     expect(order.at(-1)).toBe('POST /import')
     expect(api.calls.find((c) => c.path === '/import')!.expectedUser).toBe(USER)
@@ -824,6 +895,38 @@ describe('importFile', () => {
     expect(planner.plans['2026-10-12']).toEqual([SQUATS])
     expect(planner.isDone('pu', 3) && planner.isDone('sq', 0)).toBe(true)
     expect(planner.accent).toBe('#0a84ff')
+  })
+
+  it('posts the file’s Ask conversations, which the server adds when it has none of their id', async () => {
+    const { sync } = await start(emptyState())
+    const turn = { question: 'Q', answer: 'A', stop: 'end_turn' as const, askedAt: 1 }
+    api.addConversation(USER, { id: 'kept', title: 'Mine', turns: [turn] })
+    const conversations = [
+      { id: 'kept', title: 'Theirs', createdAt: 1, updatedAt: 2, turns: [] },
+      { id: 'new', title: 'New', createdAt: 1, updatedAt: 2, turns: [turn] },
+    ]
+    const outcome = await sync.importFile({ ...data, conversations })
+    expect(outcome).toMatchObject({ ok: true, added: { conversations: 1 } })
+    const sent = api.calls.find((c) => c.path === '/import')!.body as Record<string, unknown>
+    expect(sent.conversations).toEqual(conversations)
+    expect(api.accounts.get(USER)!.conversations.map((c) => c.title)).toEqual(['Mine', 'New'])
+    // A file with no list sends none, as one from before Ask.
+    await sync.importFile(data)
+    const last = api.calls.filter((c) => c.path === '/import').at(-1)!.body as object
+    expect('conversations' in last).toBe(false)
+  })
+
+  it('fills empty goals from the file, and keeps goals already saved', async () => {
+    const picks = { accent: '#ff9f0a', dailyPick: 2, foodPick: 2 }
+    api.accounts.get(USER)!.settings = { ...picks, goals: '' }
+    const { sync, planner } = await start()
+    const file = { ...data, settings: { ...data.settings!, goals: 'Run 5 km by March.' } }
+    expect(await sync.importFile(file)).toMatchObject({ ok: true, added: { settings: true } })
+    expect([planner.accent, planner.goals]).toEqual(['#ff9f0a', 'Run 5 km by March.'])
+    const other = { ...file, settings: { ...file.settings, goals: 'Something else.' } }
+    expect(await sync.importFile(other)).toMatchObject({ ok: true, added: { settings: false } })
+    expect(planner.goals).toBe('Run 5 km by March.')
+    expect(api.accounts.get(USER)!.settings).toEqual({ ...picks, goals: 'Run 5 km by March.' })
   })
 
   it('reports being offline and changes nothing', async () => {
@@ -909,7 +1012,7 @@ describe('importFile', () => {
 })
 
 describe('diff', () => {
-  const settings = { accent: '#30d158', dailyPick: 3, foodPick: 2 }
+  const settings = { accent: '#30d158', dailyPick: 3, foodPick: 2, goals: '' }
   const empty = () => ({
     exercise: { plans: {}, log: {}, details: {} },
     diet: { plans: {}, log: {}, details: {} },
@@ -918,6 +1021,12 @@ describe('diff', () => {
 
   it('is empty for identical snapshots', () => {
     expect(diff(empty(), empty())).toEqual([])
+  })
+
+  it('finds changed goals', () => {
+    const local = empty()
+    local.settings.goals = 'Run 5 km.'
+    expect(diff(empty(), local)).toEqual([{ kind: 'settings' }])
   })
 
   it('finds a changed foods a day', () => {
@@ -979,5 +1088,16 @@ describe('normaliseState', () => {
       diet: { plans: {}, log: {}, details: {}, revs: {}, detailRevs: {} },
       settings: null,
     })
+  })
+
+  it('keeps goals only when the settings carry them as text', () => {
+    const state = (settings: unknown) =>
+      normaliseState({ exercise: {}, diet: {}, settings })!.settings
+    const picks = { accent: '#30d158', dailyPick: 3, foodPick: 2 }
+    expect(state({ ...picks, goals: ' Run 5 km. ' })).toEqual({ ...picks, goals: 'Run 5 km.' })
+    expect(state({ ...picks, goals: '' })).toEqual({ ...picks, goals: '' })
+    // A tab from before My goals, or a damaged value: not known, so never "none".
+    expect(state(picks)).toEqual(picks)
+    expect(state({ ...picks, goals: 7 })).toEqual(picks)
   })
 })

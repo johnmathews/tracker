@@ -73,7 +73,7 @@ Sign-up is open by default: anyone who can reach the app can create an account u
   upstream is a variable resolved through Docker's DNS (`resolver 127.0.0.11`), so nginx starts and
   keeps serving the app while the API is down. `/api/` then answers 502, or 504 within 3 seconds
   while nginx still holds the stopped container's address (`proxy_connect_timeout 3s`); the client
-  treats both as offline. Bodies are capped at 1 MiB, as the API caps them. The API's own `Cache-Control` is
+  treats both as offline. Bodies are capped at 6 MiB, the API's limit for an import; the API holds every other write to 1 MiB. The API's own `Cache-Control` is
   hidden and the server-level `no-store` sent instead, so each response carries exactly one.
 - `/assets/*`: hashed bundles with `Cache-Control: public, max-age=31536000, immutable`; a missing
   asset returns 404 rather than falling back.
@@ -126,13 +126,15 @@ first, then the web.
   older API answers 404. The app keeps that write and every write queued behind it, retrying with
   the backoff (`sync.ts`, P28), so nothing is lost. Syncing stalls until the API is updated, and the
   app shows itself as offline with the changes waiting.
-- **Migrations 7 and 8 run when the API starts.** `db.migrate` runs in the app's startup, and in
+- **Migrations 7 to 11 run when the API starts.** `db.migrate` runs in the app's startup, and in
   every `tracker-admin` command, before anything is served. Each step commits with its schema
   version under the write lock, so the API and a `tracker-admin` command starting together can't
   both apply it. A database not yet at step 6 (`api_tokens`, the MCP release) takes it first.
   Step 7 creates `item_details` and copies each item's latest note into it ([api.md](api.md) §2).
   Step 8 adds the nullable `settings.item_sections` (each type's item-page arrangement, K66);
-  existing rows read as NULL, every page as it was.
+  existing rows read as NULL, every page as it was. Steps 9 to 11 are Ask's: step 9 adds
+  `settings.goals` (`''`, no goals, for every saved row), step 10 `ask_log` and step 11
+  `ask_conversations` and `ask_turns`. They only add, so they reshape nothing.
 - **Settings from the new app reach an older API safely.** An API from before step 8 ignores the
   `itemSections` key, so an arrangement made before the API updates is not saved there and the
   next read puts the pages back to the default. Updating the API first avoids it. Once it is
@@ -171,6 +173,27 @@ on:
 A failed send never shows to the person; it is logged by the API as `confirm email not sent` or
 `reset email not sent` with Resend's answer, so `docker logs fitness-api` is the place to look.
 Resend's own dashboard lists every email it accepted.
+
+**Ask** (`api.md` §3.2) is off until the API gets `ANTHROPIC_API_KEY`. To turn it on:
+
+1. In the Anthropic Console, create an API key for Tracker in a workspace of its own, so its
+   usage and limits stand apart.
+2. In the same workspace, set a monthly spend limit. The app caps questions (`ASK_PER_DAY` per
+   account and `ASK_PER_DAY_TOTAL` for everyone), but the Console's limit is the one that holds
+   whatever the app does.
+3. Keep the key in the home-server vault, and have the compose template pass it to `fitness-api`
+   as `ANTHROPIC_API_KEY`. `ASK_MODEL`, `ASK_PER_DAY` and `ASK_PER_DAY_TOTAL` keep their defaults
+   unless set. Leave `ANTHROPIC_LOG` unset: at `debug` the SDK logs every request body.
+4. Redeploy the API. `GET /api/auth/options` then answers `"ask": true`, and the app shows Ask.
+
+Each question logs its rounds with Anthropic's request ids and token counts, and a line
+`ask ended stop=… rounds=…` with the totals; none holds what was asked or answered. A line
+`ask upstream refused` at error level usually means a bad or revoked key. Unsetting the key and
+redeploying turns Ask off again; nothing else changes.
+
+For a local stack, `docker-compose.yml` passes `ANTHROPIC_API_KEY` from the shell that runs it,
+and leaves Ask off when the shell has none. A local API started with `uv run uvicorn` reads it the
+same way.
 
 The web container must reach the API as `fitness-api` on a shared Docker network: `nginx.conf`
 names that host. `docker-compose.yml` does this locally, and the home-server compose file does it

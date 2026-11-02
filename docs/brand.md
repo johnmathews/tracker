@@ -19,8 +19,8 @@ are in the [brand design](specs/2026-10-24-brand-design.md), and the rulings in
 
 The design system is a claude.ai Design System artifact:
 <https://claude.ai/artifact/9pkE17ugXFGGyBirapyCgH>. It holds the brand book, the tokens in a light
-and a dark theme, 33 components with live previews and guidelines (Basics, Forms, Overlays, Planner,
-Feedback, Screens), the cover and the assets. The artifact is private to its owner until it is shared, so
+and a dark theme, 38 components with live previews and guidelines (Basics, Forms, Overlays, Planner,
+Feedback, Screens, Ask), the cover and the assets. The artifact is private to its owner until it is shared, so
 other readers work from the source below. Agents designing for Tracker read its README
 first.
 

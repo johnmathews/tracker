@@ -1,17 +1,20 @@
 """The HTTP layer: routes, the write checks, and error mapping (docs/api.md §3)."""
 
+import logging
 import sqlite3
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from contextlib import asynccontextmanager, suppress
+from functools import partial
 from typing import Annotated, Any
 
+from anthropic import AsyncAnthropic
 from fastapi import BackgroundTasks, Depends, FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.routing import Route
 
-from . import auth, data, outbox
+from . import ask, auth, data, outbox
 from .backup import BackupThread
 from .config import Config
 from .db import connect, migrate
@@ -28,13 +31,25 @@ from .validate import (
     check_details_id,
     check_item_id,
     check_plan_body,
+    normalise_title,
     parse_export,
     parse_json,
     tick_mark,
     week_key,
 )
 
+#: The package's logger; `create_app_from_env` gives it a handler.
+log = logging.getLogger("tracker_api")
 MAX_BODY = 1 << 20
+#: An import file may hold a whole account (the 5 MiB quota) with room for JSON's overhead, so
+#: /api/import alone takes up to 6 MiB; every other write stays at MAX_BODY.
+MAX_IMPORT_BODY = 6 << 20
+
+
+def body_limit(path: str) -> int:
+    return MAX_IMPORT_BODY if path == "/api/import" else MAX_BODY
+
+
 WRITES = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 # Query parameters a client might put a token in. nginx and uvicorn log query strings.
 TOKEN_PARAMS = frozenset({"token", "access_token"})
@@ -79,12 +94,24 @@ def error_response(
     )
 
 
-def create_app(config: Config, run_backups: bool = True, mailer: Mailer | None = None) -> FastAPI:
-    """The API. Mail goes through `mailer`, by default Resend's when the config turns mail on."""
+def create_app(
+    config: Config,
+    run_backups: bool = True,
+    mailer: Mailer | None = None,
+    ask_client: AsyncAnthropic | None = None,
+) -> FastAPI:
+    """The API. Mail goes through `mailer`, by default Resend's when the config turns mail on;
+    Ask goes through `ask_client`, by default one made with the config's Anthropic key."""
     if not config.mail_enabled:
         mailer = None
     elif mailer is None:
         mailer = ResendMailer(config.resend_api_key or "", config.mail_from)
+    owns_ask_client = config.ask_enabled and ask_client is None
+    if not config.ask_enabled:
+        ask_client = None
+    elif ask_client is None:
+        # The key is passed explicitly, so the SDK reads no credentials from the environment.
+        ask_client = AsyncAnthropic(api_key=config.anthropic_api_key)
 
     mcp = build_mcp(config, MAX_BODY)
 
@@ -101,13 +128,16 @@ def create_app(config: Config, run_backups: bool = True, mailer: Mailer | None =
             yield
         if backups:
             backups.stop()
+        if owns_ask_client and ask_client is not None:
+            await ask_client.close()
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.mailer = mailer
+    app.state.ask_client = ask_client
 
     def too_large(request: Request) -> bool:
         length = request.headers.get("content-length", "0")
-        return not length.isdigit() or int(length) > MAX_BODY
+        return not length.isdigit() or int(length) > body_limit(request.url.path)
 
     def rest_refusal(request: Request) -> Response | None:
         """Origin plus SameSite=Lax is REST's CSRF defence, so every write must carry both."""
@@ -186,9 +216,10 @@ def create_app(config: Config, run_backups: bool = True, mailer: Mailer | None =
         # Counted as it arrives: a chunked body has no Content-Length for the guard to check, and
         # reading it whole first would let one request exhaust the container's memory.
         raw = bytearray()
+        limit = body_limit(request.url.path)
         async for chunk in request.stream():
             raw += chunk
-            if len(raw) > MAX_BODY:
+            if len(raw) > limit:
                 raise ApiError(413, "too-large")
         try:
             # utf-8-sig drops a byte-order mark, as the browser's File.text() does.
@@ -317,7 +348,7 @@ def create_app(config: Config, run_backups: bool = True, mailer: Mailer | None =
 
     @app.get("/api/auth/options")
     def options() -> dict[str, bool]:
-        return {"mail": mailer is not None}
+        return {"mail": mailer is not None, "ask": ask_client is not None}
 
     @app.post("/api/auth/forgot", status_code=202)
     def forgot(body: Body, background: BackgroundTasks, conn: Conn) -> dict[str, str]:
@@ -442,6 +473,77 @@ def create_app(config: Config, run_backups: bool = True, mailer: Mailer | None =
             raise ApiError(400, e.code) from None
         return dict(data.import_data(conn, user.id, parsed, quota=config.user_quota_bytes))
 
+    def need_ask() -> AsyncAnthropic:
+        if ask_client is None:
+            raise ApiError(503, "ask-off")
+        return ask_client
+
+    @app.get("/api/ask")
+    def ask_left(user: User, conn: Conn) -> dict[str, int]:
+        need_ask()
+        return {"remaining": ask.remaining(conn, config, user.id), "limit": config.ask_per_day}
+
+    @app.post("/api/ask")
+    def ask_question(body: Body, user: User, conn: Conn) -> ask.EventStream:
+        """Refusals come before the stream as JSON; after it starts, as an `error` event."""
+        client = need_ask()
+        try:
+            question = ask.parse(body, config.today())
+        except ask.AskInvalid:
+            raise ApiError(400, "invalid") from None
+        # A missing or another account's conversation is refused before the claim: it costs
+        # no question.
+        cid = question.conversation
+        if cid is not None and not data.has_conversation(conn, user.id, cid):
+            raise ApiError(404, "not-found")
+        start = None
+        if cid is None:
+            cid = ask.new_conversation_id()
+            start = (cid, normalise_title(question.text))
+        try:
+            left = ask.claim(conn, config, user.id, start)
+        except ask.AskLimit as e:
+            wait = e.retry_after
+            raise ApiError(429, "too-many", {"Retry-After": str(wait)}, retryAfter=wait) from None
+        asked_at = config.clock()
+        turns = [(t["question"], t["answer"]) for t in data.load_turns(conn, user.id, cid)]
+        settings = data.load_settings(conn, user.id)
+        goals = "" if settings is None else settings["goals"]
+        save = ask.saver(config, user.id, cid, question.text, asked_at)
+        events = ask.converse(
+            client,
+            config.ask_model,
+            ask.messages(question, turns, goals),
+            ask.tools_for(config.db_path, user.id, question.today),
+            save,
+            {"remaining": left, "conversation": cid},
+        )
+        # A client gone before the first frame never runs `converse`, so the response's close
+        # saves the question too; after any earlier save it does nothing.
+        return ask.EventStream(ask.frames(events), on_close=partial(save, "", "cancelled"))
+
+    @app.get("/api/ask/conversations")
+    def conversations(user: User, conn: Conn) -> dict[str, Any]:
+        """Ask's history, newest first. It works with Ask off, so it stays the person's to read
+        and to delete."""
+        return {"conversations": data.list_conversations(conn, user.id)}
+
+    @app.get("/api/ask/conversations/{conversation_id}")
+    def conversation(conversation_id: str, user: User, conn: Conn) -> dict[str, Any]:
+        found = data.load_conversation(conn, user.id, conversation_id)
+        if found is None:
+            raise ApiError(404, "not-found")
+        return dict(found)
+
+    @app.delete("/api/ask/conversations/{conversation_id}", status_code=204)
+    def delete_conversation(conversation_id: str, user: User, conn: Conn) -> None:
+        if not data.delete_conversation(conn, user.id, conversation_id):
+            raise ApiError(404, "not-found")
+
+    @app.delete("/api/ask/conversations", status_code=204)
+    def delete_conversations(user: User, conn: Conn) -> None:
+        data.delete_conversations(conn, user.id)
+
     # The exact path: a Mount would answer `/api/mcp` with a 307 to `/api/mcp/`, whose Location
     # says http:// behind nginx. The SDK app routes the same path, so it gets the request as it
     # came and reads only the Authorization header, never the session cookie. POST only: in
@@ -454,4 +556,11 @@ def create_app(config: Config, run_backups: bool = True, mailer: Mailer | None =
 
 def create_app_from_env() -> FastAPI:
     """The uvicorn entry point: `uvicorn --factory tracker_api.app:create_app_from_env`."""
+    # uvicorn configures only its own loggers, so without a handler the API's info lines (Ask's
+    # usage, the daily backup) would be dropped.
+    if not log.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(levelname)s:  %(name)s %(message)s"))
+        log.addHandler(handler)
+        log.setLevel(logging.INFO)
     return create_app(Config.from_env())

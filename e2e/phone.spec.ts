@@ -6,6 +6,7 @@ import {
   THEMES,
   expectNoSidewaysScroll,
   openApp,
+  openAsk,
   openSignIn,
   openSignUp,
   openForgot,
@@ -63,6 +64,25 @@ test.describe('no sideways scroll at 375px', () => {
     await settle(page)
     await expectNoSidewaysScroll(page)
   })
+  for (const theme of THEMES) {
+    test(`the Ask page with an answer, and its history drawer, ${theme}`, async ({ page }) => {
+      await openAsk(page, theme)
+      await expectNoSidewaysScroll(page)
+      await page.getByRole('button', { name: 'Show history' }).click()
+      await page.getByRole('dialog', { name: 'Conversation history' }).waitFor()
+      await settle(page)
+      await expectNoSidewaysScroll(page)
+    })
+  }
+
+  test('the Ask page, empty, with no goals yet', async ({ page }) => {
+    await openApp(page, { ask: true })
+    await callUpBar(page)
+    await page.getByRole('button', { name: 'Ask', exact: true }).click()
+    await page.getByText('Your goals in Settings are empty').waitFor()
+    await expectNoSidewaysScroll(page)
+  })
+
   test('the Settings page', async ({ page }) => {
     await openApp(page)
     await callUpBar(page)
