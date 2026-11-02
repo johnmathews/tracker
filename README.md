@@ -181,7 +181,7 @@ services:
       # MAIL_FROM: Tracker <planner@fitness.example.com>
     volumes:
       - ./fitness-data:/data # owned by uid 10001
-    mem_limit: 160m
+    mem_limit: 192m
     restart: unless-stopped
 ```
 
