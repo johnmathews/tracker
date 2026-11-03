@@ -19,6 +19,8 @@
     "ConfirmDialog",
     "Popover",
     "SettingsPage",
+    "ConnectionsSection",
+    "ConnectPage",
     "ItemPage",
     "DayMark",
     "WeekGrid",

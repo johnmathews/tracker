@@ -657,7 +657,7 @@ describe('the Settings page', () => {
         .get(PANEL)
         .findAll('h2')
         .map((h) => h.text()),
-    ).toEqual(['Appearance', 'Your goals', 'Your data', 'Account'])
+    ).toEqual(['Appearance', 'Your goals', 'Your data', 'Connections', 'Account'])
     // Marks, then Theme (K59); the daily targets are set in Edit plan (K56).
     expect(
       wrapper
@@ -709,6 +709,47 @@ describe('the Settings page', () => {
       goals: '',
     })
     expect(document.documentElement.style.getPropertyValue('--user-pen-light')).toBe('')
+  })
+})
+
+describe('the connect link (#/connect/<id>), a link route', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+  afterEach(() => wrapper?.unmount())
+
+  /** As a link opened in a running tab: one hashchange. */
+  async function go(hash: string): Promise<void> {
+    history.replaceState(null, '', `/${hash}`)
+    window.dispatchEvent(new HashChangeEvent('hashchange'))
+    await settle()
+  }
+
+  it('shows the consent screen over the week while signed in, and leads back to it', async () => {
+    mountApp()
+    api.addRequest('req1')
+    await settle()
+    expect(wrapper.find('[data-testid="exercise-grid"]').exists()).toBe(true)
+    await go('#/connect/req1')
+    expect(wrapper.get('h1').text()).toBe('Connect Claude')
+    expect(wrapper.find('[data-testid="exercise-grid"]').exists()).toBe(false)
+    expect(wrapper.find('[data-slot="bar"]').exists()).toBe(false)
+    expect(document.documentElement.classList.contains('planner-screens')).toBe(false)
+    await go('#/connect/used')
+    expect(wrapper.get('h1').text()).toBe('This link has expired')
+    await wrapper
+      .findAll('a')
+      .find((a) => a.text() === 'Go to the week')!
+      .trigger('click')
+    await settle()
+    expect(wrapper.find('[data-testid="exercise-grid"]').exists()).toBe(true)
+  })
+
+  it('takes only an id the API could have made', async () => {
+    mountApp()
+    await go('#/connect/a%20b')
+    expect(wrapper.find('[data-testid="connect-page"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="exercise-grid"]').exists()).toBe(true)
   })
 })
 

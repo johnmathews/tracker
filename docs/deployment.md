@@ -76,6 +76,11 @@ Sign-up is open by default: anyone who can reach the app can create an account u
   while nginx still holds the stopped container's address (`proxy_connect_timeout 3s`); the client
   treats both as offline. Bodies are capped at 6 MiB, the API's limit for an import; the API holds every other write to 1 MiB. The API's own `Cache-Control` is
   hidden and the server-level `no-store` sent instead, so each response carries exactly one.
+- `/.well-known/oauth-protected-resource/api/mcp`, `/.well-known/oauth-protected-resource` and
+  `/.well-known/oauth-authorization-server`: OAuth's discovery documents ([api.md](api.md) §3.3),
+  forwarded to the API the same way as `/api/`, with the same single `no-store` header. These
+  three paths are exact matches. Any other `/.well-known/` path is a 404, not the app's
+  `index.html`. The Vite dev server proxies the same three paths.
 - `/assets/*`: hashed bundles with `Cache-Control: public, max-age=31536000, immutable`; a missing
   asset returns 404 rather than falling back.
 - Everything else gets `Cache-Control: no-cache`, so a new deploy takes effect on the next load.
@@ -127,7 +132,7 @@ first, then the web.
   older API answers 404. The app keeps that write and every write queued behind it, retrying with
   the backoff (`sync.ts`, P28), so nothing is lost. Syncing stalls until the API is updated, and the
   app shows itself as offline with the changes waiting.
-- **Migrations 7 to 11 run when the API starts.** `db.migrate` runs in the app's startup, and in
+- **Migrations 7 to 12 run when the API starts.** `db.migrate` runs in the app's startup, and in
   every `tracker-admin` command, before anything is served. Each step commits with its schema
   version under the write lock, so the API and a `tracker-admin` command starting together can't
   both apply it. A database not yet at step 6 (`api_tokens`, the MCP release) takes it first.
@@ -135,7 +140,9 @@ first, then the web.
   Step 8 adds the nullable `settings.item_sections` (each type's item-page arrangement, K66);
   existing rows read as NULL, every page as it was. Steps 9 to 11 are Ask's: step 9 adds
   `settings.goals` (`''`, no goals, for every saved row), step 10 `ask_log` and step 11
-  `ask_conversations` and `ask_turns`. They only add, so they reshape nothing.
+  `ask_conversations` and `ask_turns`. Step 12 adds OAuth's five tables (`oauth_requests`,
+  `oauth_grants`, `oauth_retired`, `oauth_codes`, `oauth_access`). They only add, so they reshape
+  nothing.
 - **Settings from the new app reach an older API safely.** An API from before step 8 ignores the
   `itemSections` key, so an arrangement made before the API updates is not saved there and the
   next read puts the pages back to the default. Updating the API first avoids it. Once it is
@@ -209,3 +216,94 @@ whole path through nginx:
 
 CI runs it on every pull request (the `compose` job in `docker.yml`); locally it takes about a
 minute and leaves nothing running.
+
+## 5. Connecting Claude (OAuth and Cloudflare)
+
+claude.ai and Claude Code connect to `https://tracker.itsa-pizza.com/api/mcp` with an OAuth
+sign-in ([mcp.md](mcp.md) §4, [api.md](api.md) §3.3). Anthropic's servers make the requests that
+discover the sign-in, fetch the tokens and call the tools, so Cloudflare must let them through.
+The person's own browser, which loads the consent page, needs no exception.
+
+### 5.1 What to change in Cloudflare
+
+Without a change, Cloudflare refuses these requests at the edge. A client that is not a browser
+gets `403` with the body `error code: 1010` (a browser-integrity block on the client's signature),
+and the API logs nothing, because the request never reaches it. A `403` with that body is
+Cloudflare's, not the tracker's. Measured on this host on 2026-11-02: Python's default user agent
+got 1010 on `/api/mcp` and on `/.well-known/oauth-authorization-server`.
+
+Anthropic's servers call out from `160.79.104.0/21` (Anthropic's outbound range; check it
+again if connections stop working). Make one of these
+changes on the `itsa-pizza.com` zone. The first is preferred.
+
+1. **An IP Access rule (preferred).** In Security › WAF › Tools, add an IP Access Rule for
+   `160.79.104.0/21` with the action **Allow**, for this zone. An Allow rule skips Browser
+   Integrity Check and also **Bot Fight Mode**. If the zone has Bot Fight Mode on, a WAF skip rule
+   cannot let Anthropic through, because Bot Fight Mode cannot be skipped by one. This rule covers
+   every path on the zone, so it also covers the other apps on `itsa-pizza.com` for that range,
+   which is acceptable for one published range of one company's servers.
+2. **A WAF custom rule that skips Browser Integrity Check.** In Security › WAF › Custom rules, add
+   a rule ordered first, with the action **Skip**, skipping Browser Integrity Check, and this
+   expression:
+
+   ```text
+   (ip.src in {160.79.104.0/21}) and (starts_with(http.request.uri.path, "/api/mcp") or starts_with(http.request.uri.path, "/.well-known/") or starts_with(http.request.uri.path, "/api/oauth/"))
+   ```
+
+   Family-finances has a rule like this that matches `/mcp` only. That does not cover the tracker,
+   whose endpoint is `/api/mcp`, so copy the expression above rather than reusing finances' rule.
+   If Bot Fight Mode is on, use the Allow rule instead.
+
+Cloudflare does not need a rule for `/api/oauth/authorize`: the person's browser opens it.
+
+### 5.2 Check from outside, then connect
+
+claude.ai keeps its copy of the discovery documents for about 5 minutes. After a change, wait that
+long before judging a connect.
+
+From a machine outside the home network, with no browser user agent:
+
+```sh
+curl -s https://tracker.itsa-pizza.com/.well-known/oauth-protected-resource/api/mcp
+curl -s https://tracker.itsa-pizza.com/.well-known/oauth-protected-resource
+curl -s https://tracker.itsa-pizza.com/.well-known/oauth-authorization-server
+curl -si -X POST https://tracker.itsa-pizza.com/api/mcp | head -5
+```
+
+The first three print JSON. Your own address is not in Anthropic's range, so this proves the
+tracker answers at the edge, not that the rule lets Anthropic through; the first real connect
+proves that. A `1010` here means Cloudflare also blocks `curl`. The documents' `issuer` is
+`https://tracker.itsa-pizza.com` with no trailing slash, and the `resource` is
+`https://tracker.itsa-pizza.com/api/mcp`.
+
+The fourth prints `HTTP/2 401` and a `www-authenticate` header with
+`resource_metadata="https://tracker.itsa-pizza.com/.well-known/oauth-protected-resource/api/mcp"`.
+A 502 means the API is down. A `1010` or a Cloudflare HTML page means the edge still blocks.
+
+The API needs no setting for this. `OAUTH_CLIENT_HOSTS` defaults to `claude.ai,claude.com`
+([api.md](api.md) §6), and the API must be able to fetch documents from `https://claude.ai`
+(outbound HTTPS from the container).
+
+**The first real connect.** After the deploy and the check:
+
+1. **claude.ai.** In Settings › Connectors, choose Add custom connector, paste
+   `https://tracker.itsa-pizza.com/api/mcp` with nothing under advanced settings, and choose
+   Connect. The tracker's consent page opens. Sign in with the account's email and password,
+   leave Read only chosen, and choose Connect. claude.ai should show the connector as connected.
+   Ask "How is my training going this week?" and check that it calls a tool.
+2. **Claude Code.** Run `claude mcp add --transport http tracker https://tracker.itsa-pizza.com/api/mcp`,
+   start `claude`, run `/mcp`, choose tracker and Authenticate, and approve in the browser.
+3. **In the tracker**, Settings › Connections should list both under Apps, marked New.
+
+If claude.ai asks for a client ID, or fails after the consent page with "invalid client" or a
+registration error, it tried Dynamic Client Registration, which the tracker does not offer. Record
+that and the exact text it showed. Adding registration would be a new decision (P32).
+
+**What to look for in the API log** (`docker logs fitness-api`). A good connect logs, in order:
+`oauth authorize from claude.ai: waiting for consent`, then
+`oauth grant <id> approved for user <n> by https://claude.ai/…`, then the MCP calls. A refusal logs
+its reason: `oauth authorize refused a client: …` (the client could not be checked),
+`oauth authorize from claude.ai refused: …` (a bad request), or `oauth authorization_code refused: …`
+(the code, verifier, redirect or client did not match). Nothing in these lines holds a token, a
+code, a password or a request id. If none of the first line appears, the request did not reach the
+API, so look at Cloudflare. A Cloudflare block never reaches the API's log.

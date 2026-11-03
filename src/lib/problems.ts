@@ -1,6 +1,7 @@
 import type { AuthProblem } from '@/stores/session'
 import { isDetailsId } from '@/lib/storage'
-import { countOf } from '@/lib/words'
+import { countOf, numberWord } from '@/lib/words'
+import { MAX_CONNECTIONS } from '@/lib/connections'
 
 /**
  * Why an item's notes or details can't be saved, when its id is one the details path can't name
@@ -14,6 +15,30 @@ export function detailsIdProblem(id: string, what: 'notes' | 'details'): string 
 
 /** The repeat-password field's error, on every form that asks for a new password twice. */
 export const MISMATCH = 'The passwords don’t match. Type the same password in both fields.'
+
+/** Why connecting an app on the consent screen did not work (docs/api.md, the OAuth routes). */
+export type ConnectProblem = {
+  code: AuthProblem['code'] | 'no-request' | 'disabled'
+  retryAfter?: number
+}
+
+/**
+ * A sentence for each way connecting an app can fail. A wrong password, the lockout, a busy
+ * server and no network read as signing in does; `too-many` here is the account's connections,
+ * not the sign-up rate limit.
+ */
+export function describeConnectProblem(p: ConnectProblem): string {
+  switch (p.code) {
+    case 'too-many':
+      return `You have ${numberWord(MAX_CONNECTIONS)} connections, the most there can be. Remove one in Settings › Connections, then try again.`
+    case 'no-request':
+      return 'This link has expired. Go back to the app and connect again.'
+    case 'disabled':
+      return 'This account is turned off. Ask whoever runs this planner.'
+    default:
+      return describeProblem({ ...p, code: p.code })
+  }
+}
 
 /** A sentence for each way a sign-in, a sign-up, a link or a sign-out can fail. */
 export function describeProblem(p: AuthProblem): string {

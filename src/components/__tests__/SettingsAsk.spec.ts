@@ -76,6 +76,7 @@ describe('Your goals in Settings', () => {
       'Appearance',
       'Your goals',
       'Your data',
+      'Connections',
       'Account',
     ])
     const field = page.get('[data-slot="text-area"]')

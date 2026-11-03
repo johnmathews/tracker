@@ -188,6 +188,10 @@ export async function openApp(
     }
     if (req.method() === 'GET' && path === '/auth/options')
       return route.fulfill({ json: { mail: false, ask } })
+    // Settings › Connections: nothing connected and no tokens, unless a spec routes them itself.
+    if (req.method() === 'GET' && path === '/tokens') return route.fulfill({ json: { tokens: [] } })
+    if (req.method() === 'GET' && path === '/connections')
+      return route.fulfill({ json: { connections: [] } })
     const reply = ask ? askReply(req.method(), path) : null
     if (reply?.body) {
       return route.fulfill({ body: reply.body, contentType: 'text/event-stream' })

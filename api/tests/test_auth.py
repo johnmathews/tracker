@@ -176,7 +176,8 @@ def test_ending_sessions(conn: sqlite3.Connection, config: Config) -> None:
     auth.end_session(conn, a)
     assert auth.session_user(conn, config, a) is None
     assert auth.session_user(conn, config, b) is not None
-    assert auth.revoke_sessions(conn, "alice@example.com") == (1, 0)  # (sessions, tokens)
+    # (sessions, tokens, connections)
+    assert auth.revoke_sessions(conn, "alice@example.com") == (1, 0, 0)
     assert auth.session_user(conn, config, b) is None
 
 
@@ -612,7 +613,7 @@ def _disable(conn: sqlite3.Connection, config: Config) -> None:
 
 
 def _revoke_sessions(conn: sqlite3.Connection, config: Config) -> None:
-    assert auth.revoke_sessions(conn, "alice@example.com") == (1, 2)
+    assert auth.revoke_sessions(conn, "alice@example.com") == (1, 2, 0)
 
 
 @pytest.mark.parametrize("action", [_reset, _mailed_reset, _disable, _revoke_sessions])

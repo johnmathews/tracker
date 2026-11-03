@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Connections, to try</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="settings.css">
+<link rel="stylesheet" href="conn.css">
+<style>
+  html, body { margin: 0; height: 100%; background: var(--canvas); }
+  #screen { width: 100vw; height: 100vh; height: 100dvh; }
+  .mock { position: fixed; z-index: 50; left: 8px; bottom: 8px; font: 600 14px/20px var(--font-sans); color: var(--ink-secondary); }
+  .mock > button { height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius-full); background: var(--canvas); color: inherit; font: inherit; cursor: pointer; }
+  .mock .panel { display: none; position: absolute; left: 0; bottom: 40px; width: max-content; max-width: calc(100vw - 16px); padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-overlay); color: var(--ink); }
+  .mock.open .panel { display: grid; gap: 10px; }
+  .mock .panel div { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .mock .panel span { width: 64px; color: var(--ink-secondary); font-weight: 400; }
+  .mock .panel button { min-width: 44px; height: 36px; padding: 0 10px; border: 1px solid var(--control-border); border-radius: var(--radius-md); background: transparent; color: var(--ink); font: inherit; cursor: pointer; }
+  .mock .panel button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+</style>
+</head>
+<body>
+<div id="screen"></div>
+<div class="mock">
+  <div class="panel" role="group" aria-label="Mockup">
+    <div><span>Screen</span><button data-k="view" data-v="consent">Consent</button><button data-k="view" data-v="settings">Settings</button></div>
+    <div><span>Consent</span><button data-k="copt" data-v="c1">C1</button><button data-k="copt" data-v="c2">C2</button>
+      <button data-k="cstate" data-v="in">Signed in</button><button data-k="cstate" data-v="out">Signed out</button><button data-k="cstate" data-v="wrong">Wrong</button><button data-k="cstate" data-v="code">Claude Code</button><button data-k="cstate" data-v="expired">Expired</button></div>
+    <div><span>Settings</span><button data-k="lopt" data-v="l1">L1</button><button data-k="lopt" data-v="l2">L2</button>
+      <button data-k="lstate" data-v="list">List</button><button data-k="lstate" data-v="new">New</button><button data-k="lstate" data-v="empty">Empty</button><button data-k="lstate" data-v="create">Create</button><button data-k="lstate" data-v="shown">Shown once</button><button data-k="lstate" data-v="toomany">Too many</button><button data-k="lstate" data-v="confirm">Confirm</button></div>
+    <div><span>Theme</span><button data-k="theme" data-v="system">System</button><button data-k="theme" data-v="light">Light</button><button data-k="theme" data-v="dark">Dark</button></div>
+  </div>
+  <button type="button" aria-expanded="false">Mockup</button>
+</div>
+<script src="icons.js"></script>
+<script src="conn.js"></script>
+<script>
+  // The hash carries the choice: "#settings-l2-shown-dark", "#consent-c1-wrong".
+  const CS = ['in', 'out', 'wrong', 'code', 'expired']
+  const LS = ['list', 'new', 'empty', 'create', 'shown', 'toomany', 'confirm']
+  const read = () => {
+    const p = location.hash.slice(1).split('-')
+    const view = p.includes('settings') ? 'settings' : 'consent'
+    return {
+      view,
+      copt: p.find((x) => x === 'c1' || x === 'c2') || 'c1',
+      lopt: p.find((x) => x === 'l1' || x === 'l2') || 'l1',
+      cstate: p.find((x) => CS.includes(x)) || 'in',
+      lstate: p.find((x) => LS.includes(x)) || 'list',
+      theme: p.find((x) => x === 'light' || x === 'dark') || 'system',
+    }
+  }
+  const write = (s) => {
+    const parts = s.view === 'consent' ? ['consent', s.copt, s.cstate] : ['settings', s.lopt, s.lstate]
+    if (s.theme !== 'system') parts.push(s.theme)
+    location.hash = parts.join('-')
+  }
+  function start() {
+    const s = read()
+    if (s.theme === 'system') document.documentElement.removeAttribute('data-theme')
+    else document.documentElement.dataset.theme = s.theme
+    const el = document.createElement('div')
+    el.id = 'screen'
+    document.getElementById('screen').replaceWith(el)
+    if (s.view === 'consent') CN.consent(el, { opt: s.copt, state: s.cstate })
+    else CN.settings(el, { opt: s.lopt, state: s.lstate })
+    document.querySelectorAll('.mock .panel button').forEach((b) => b.setAttribute('aria-pressed', String(s[b.dataset.k] === b.dataset.v)))
+  }
+  const mock = document.querySelector('.mock')
+  mock.querySelector(':scope > button').addEventListener('click', (e) => {
+    mock.classList.toggle('open')
+    e.currentTarget.setAttribute('aria-expanded', String(mock.classList.contains('open')))
+  })
+  mock.querySelector('.panel').addEventListener('click', (e) => {
+    const b = e.target.closest('button')
+    if (!b) return
+    const s = { ...read(), [b.dataset.k]: b.dataset.v }
+    if (b.dataset.k[0] === 'c') s.view = 'consent'
+    if (b.dataset.k[0] === 'l') s.view = 'settings'
+    write(s)
+  })
+  addEventListener('hashchange', start)
+  start()
+</script>
+</body>
+</html>

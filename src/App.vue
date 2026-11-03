@@ -12,6 +12,7 @@ import PasswordForm from '@/components/PasswordForm.vue'
 import SignupForm from '@/components/SignupForm.vue'
 import ForgotForm from '@/components/ForgotForm.vue'
 import ConfirmEmail from '@/components/ConfirmEmail.vue'
+import ConnectPage from '@/components/ConnectPage.vue'
 import EmailStatus from '@/components/EmailStatus.vue'
 import SyncStatus from '@/components/SyncStatus.vue'
 import ImportPrompt from '@/components/ImportPrompt.vue'
@@ -56,6 +57,15 @@ function confirmToken(): string | null {
   return /^#\/confirm\/([A-Za-z0-9_-]+)$/.exec(location.hash)?.[1] ?? null
 }
 const confirmLink = ref(confirmToken())
+/**
+ * The connect screen's address (`#/connect/<id>`, from the API's `/api/oauth/authorize`): the
+ * pending request's id, else null. A link route like the confirm link: it shows signed in or out,
+ * and a sign-out doesn't drop it, so a person arriving from Claude never loses the request (F10).
+ */
+function connectRequest(): string | null {
+  return /^#\/connect\/([A-Za-z0-9_-]+)$/.exec(location.hash)?.[1] ?? null
+}
+const connectId = ref(connectRequest())
 
 /**
  * The page the hash asks for: Settings at `#/settings`, Ask at `#/ask`, an item's page at
@@ -87,6 +97,7 @@ const shown = computed<Page>(() =>
 function onHash(): void {
   link.value = linkToken()
   confirmLink.value = confirmToken()
+  connectId.value = connectRequest()
   signup.value = isSignup()
   forgot.value = isForgot()
   if (isItemHash(location.hash) && !parseItemHash(location.hash)) dropHash()
@@ -159,6 +170,10 @@ function closeConfirm(): void {
   forgetToken()
   confirmLink.value = null
 }
+function closeConnect(): void {
+  forgetToken()
+  connectId.value = null
+}
 function closeSignup(): void {
   history.replaceState(null, '', location.pathname + location.search)
   signup.value = false
@@ -186,6 +201,7 @@ const screens = computed(
     session.status === 'signed-in' &&
     !link.value &&
     !confirmLink.value &&
+    !connectId.value &&
     shown.value === 'planner' &&
     !store.configMode,
 )
@@ -256,8 +272,15 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <ConnectPage
+    v-if="connectId"
+    :key="connectId"
+    :request-id="connectId"
+    @spent="forgetToken"
+    @leave="closeConnect"
+  />
   <ConfirmEmail
-    v-if="confirmLink"
+    v-else-if="confirmLink"
     :key="confirmLink"
     :token="confirmLink"
     @spent="forgetToken"

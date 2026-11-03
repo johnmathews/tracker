@@ -3,7 +3,8 @@
 > Purpose
 >
 > The API service in `api/`: accounts, sessions, invites, email, the synced data, the read-only
-> insights over it, Ask, the MCP endpoint and its API tokens, the admin CLI and backups. It is
+> insights over it, Ask, the MCP endpoint, its API tokens and OAuth sign-in for Claude, the admin CLI
+> and backups. It is
 > the reference for the endpoints the client calls and for running the service.
 
 ## 1. Overview
@@ -20,7 +21,7 @@ scoped by `user_id`, and no endpoint reads another user's data.
 | `types.py`         | the tracker-type registry, the port of `src/lib/trackerTypes.ts`: sections, types, their fields                       |
 | `item_sections.py` | the item pages' arrangement per type (K66), the port of `src/lib/itemSections.ts`                                     |
 | `validate.py`      | the port of `src/lib/storage.ts` and `src/lib/transfer.ts`, and the write checks REST and MCP share                   |
-| `auth.py`          | password hashing, lockout, sessions, sign-up and its caps, invite, reset and confirmation tokens, personal API tokens |
+| `auth.py`          | password hashing, lockout, sessions, sign-up and its caps, invite, reset and confirmation tokens, personal API tokens, and the one helper that ends tokens and connections together |
 | `outbox.py`        | which emails go out and when: the limits (§4.1), the links, the message                                               |
 | `emails.py`        | the two emails, built to the EmailLayout card, and that card's preview                                                |
 | `mail.py`          | the Resend client, and sending after the response                                                                     |
@@ -30,6 +31,8 @@ scoped by `user_id`, and no endpoint reads another user's data.
 | `edits.py`         | the MCP write tools' rules: one item, one mark, one item's notes or the daily targets at a time, as the app does      |
 | `app.py`           | the HTTP layer: routes, the write checks, error mapping, and where `/api/mcp` is served (§3.1)                        |
 | `mcp_server.py`    | the MCP endpoint: the SDK server, its token check, and the tools (§3.1)                                               |
+| `oauth.py`         | OAuth connections: clients, consent requests, codes, grants, rotating refresh tokens, access tokens (§3.3)             |
+| `oauth_api.py`     | OAuth's HTTP routes: discovery, authorize, the consent screen's calls, token, revoke, Connections (§3.3)               |
 | `backup.py`        | the daily `VACUUM INTO` copy                                                                                          |
 | `cli.py`           | `tracker-admin`                                                                                                       |
 | `seed.py`          | `tracker-admin seed-demo`: a demo account, three weeks of marks and two items' details, locally                       |
@@ -83,6 +86,11 @@ Every reader keeps these rules:
 | `confirmations`     | `token_hash`                        | `user_id`, `created_at`, `expires_at`, `used_at`: confirm-your-email links                                                                                                                                         |
 | `mail_log`          | `id`                                | `user_id`, `kind` (`confirm` or `reset`), `sent_at`: one row per email attempted (a failed send still counts), for the limits                                                                                      |
 | `api_tokens`        | `token_hash`                        | `user_id`, `name`, `prefix` (unique per user), `scope` (`read` or `write`), `created_at`, `last_used_at`: personal API tokens (§4)                                                                                 |
+| `oauth_requests`    | `id_hash`                           | `client_id`, `client_name`, `client_host`, `redirect_uri`, `code_challenge`, `resource`, `scope`, `state`, `created_at`, `expires_at`: a request waiting for the consent screen. No `user_id`: it exists before anyone signs in (§3.3) |
+| `oauth_grants`      | `id`                                | `user_id`, `client_id`, `client_name`, `client_host`, `scope` (`read` or `write`), `resource`, `created_at`, `expires_at`, `last_used_at`, `refresh_hash`, `prev_refresh_hash`, `grace_until`, `grace_pair`, `generation`: a connection (§3.3) |
+| `oauth_retired`     | `(grant_id, refresh_hash)`          | the hashes of a grant's replaced refresh tokens, kept so a reused one is recognised |
+| `oauth_codes`       | `code_hash`                         | `grant_id`, `client_id`, `redirect_uri`, `code_challenge`, `resource`, `expires_at`, `redeemed_at`: one authorization code |
+| `oauth_access`      | `token_hash`                        | `grant_id`, `created_at`, `expires_at`: an access token |
 | `settings`          | `user_id`                           | `accent`, `daily_pick`, `food_pick` (K57), `item_sections` (JSON or NULL, K66), `goals` (My goals, `''` for none)                                                                                                  |
 | `plans`             | `(user_id, section, week)`          | `items_json`, `rev`                                                                                                                                                                                                |
 | `ticks`             | `(user_id, section, week, item_id)` | `days`, `partial`, `missed`, `solid`, `hatch`: 7-bit masks (bit 0 is Monday); see below                                                                                                                            |
@@ -134,6 +142,8 @@ Version 11 adds `ask_conversations` and `ask_turns`, Ask's history (§3.2). A co
 by its account and its id, so the same id in two accounts, as after one imports the other's file,
 is two conversations.
 
+Version 12 adds OAuth's five tables: `oauth_requests`, `oauth_grants`, `oauth_retired`, `oauth_codes` and `oauth_access` (§3.3). It only adds, so it reshapes no data. Every code and token is stored as its SHA-256 only. `oauth_grants` cascades from its user, and the other three grant tables from the grant, so removing a grant removes its codes, access tokens and retired refresh tokens. Rolling the API back leaves the tables unused.
+
 Migrations are a list in `db.py`, and the version is its length. A step is appended, never
 inserted, and no code or test names its index: `test_db.py` finds each step by its text. When two
 branches each append one, the one that merges second puts its step after the other's and
@@ -148,9 +158,11 @@ carries `Cache-Control: no-store`.
 else, it gets 401 `auth`. The client sends it on every read and write, so a tab left open as one
 person can never touch the data of someone who signed in later in another tab.
 
+**Exceptions to `/api`.** The three OAuth discovery documents sit outside it (§3.3), and nginx and the Vite dev server forward just those paths to the API.
+
 **Writes** (`POST`, `PUT`, `DELETE`) must send `Content-Type: application/json` and an `Origin`
 header equal to `PUBLIC_ORIGIN`; otherwise they get 403 `origin` or 415 `content-type`.
-`/api/mcp` follows its own rules (§3.1). `SameSite=Lax` alone would not stop a request from
+`/api/mcp` follows its own rules (§3.1), and `/api/oauth/token` and `/api/oauth/revoke` theirs (§3.3). `SameSite=Lax` alone would not stop a request from
 another `*.itsa-pizza.com` host, because the browser counts it as same-site. Bodies over 1 MiB
 get 413 `too-large` (6 MiB for `POST /api/import`, so a full account's export goes back in
 whole), counted as they stream in, so a chunked body is cut off at the limit rather than read
@@ -183,7 +195,18 @@ but the same `Content-Type` header.
 | `GET /ask/conversations/{id}`              | session | `{id, title, createdAt, updatedAt, turns: [{question, answer, stop, askedAt}]}`                                       |
 | `DELETE /ask/conversations/{id}`           | session | deletes the conversation and its turns; 204                                                                           |
 | `DELETE /ask/conversations`                | session | deletes every conversation of the account; 204, also when there are none                                              |
-| `POST /mcp`                                | token   | one MCP request, answered as JSON (§3.1)                                                                              |
+| `POST /mcp`                                | token   | one MCP request, answered as JSON (§3.1); a personal or an OAuth token                                                                              |
+| `GET /tokens`                              | session | `{tokens: [{name, prefix, scope, createdAt, lastUsedAt}]}`, the account's personal tokens (§4)                        |
+| `POST /tokens`                             | session | `{name, scope}` → 201 `{token, info}`; the one response that holds the token (§4)                                    |
+| `DELETE /tokens/{prefix}`                  | session | revokes one personal token; 204, or 404 `no-token`                                                                    |
+| `GET /connections`                         | session | `{connections: [...]}`, the apps connected by OAuth (§3.3)                                                            |
+| `DELETE /connections/{id}`                 | session | ends one connection; 204, or 404 `no-connection`                                                                      |
+| `GET /oauth/authorize`                     | no      | Claude's browser arrives here; 302 to `/#/connect/<id>` (§3.3)                                                        |
+| `GET /oauth/requests/{id}`                 | no      | what the consent screen shows (§3.3)                                                                                  |
+| `POST /oauth/requests/{id}/approve`        | no      | `{email, password, write?}` → `{redirectTo}`; the password is the credential (§3.3)                                    |
+| `POST /oauth/requests/{id}/deny`           | no      | `{}` → `{redirectTo}` with `error=access_denied`                                                                      |
+| `POST /oauth/token`                        | no      | Claude's servers: a code or a refresh token for a new pair (§3.3)                                                     |
+| `POST /oauth/revoke`                       | no      | Claude's servers: RFC 7009 revocation (§3.3)                                                                          |
 
 **The account** is `{username}`: the account's email (the field keeps its old name, so older
 tabs and clients work unchanged). While mail is on it also carries `confirmed`, true once the
@@ -318,7 +341,7 @@ turns each are read from a file. A file that fails to parse gets 400 with `json`
 
 ### 3.1 MCP
 
-[mcp.md](mcp.md) says how to mint a token and connect each Claude client.
+[mcp.md](mcp.md) says how to create a token and connect each Claude client.
 
 `POST /api/mcp` serves the Model Context Protocol (MCP) over Streamable HTTP, so an agent such as
 Claude Code can work with the account's data. The official `mcp` SDK (2.3) serves it from
@@ -328,12 +351,24 @@ the endpoint's rules. The tools are listed below.
 - **The URL** is exactly `$PUBLIC_ORIGIN/api/mcp`. The API routes that path itself, so it never
   answers with a redirect. `/api/mcp/` is not the endpoint: it gets REST's guard, and past it a
   307 to the path without the slash.
-- **Auth.** The request sends a personal API token (§4) as `Authorization: Bearer trk_…`, and
-  only there. The route never reads the session cookie, and no REST route accepts a token. A
-  `token` or `access_token` in the query string gets 400 `token-in-url` before anything else is
-  checked, because nginx and uvicorn log query strings. No token, an unknown or revoked one, or a
-  disabled account's token gets 401 with `WWW-Authenticate: Bearer error="invalid_token"`. The
-  header also names a `resource_metadata` URL, which answers 404: the endpoint has no OAuth flow.
+- **Auth.** The request sends a bearer token in `Authorization: Bearer …`, and only there. It is
+  a personal API token (§4, `trk_…`) or an OAuth access token (§3.3, `tka_…`). The route never
+  reads the session cookie, and no REST route accepts a token. A `token` or `access_token` in the
+  query string gets 400 `token-in-url` before anything else is checked, because nginx and uvicorn
+  log query strings. No token, an unknown, expired or revoked one, a token with any other prefix,
+  or a disabled account's token gets 401 with a `WWW-Authenticate: Bearer` header that carries
+  `error="invalid_token"` (when a token was sent) and
+  `resource_metadata="$PUBLIC_ORIGIN/.well-known/oauth-protected-resource/api/mcp"`. That URL is
+  the protected-resource document (§3.3), and it is how a client finds the sign-in.
+- **The verifier** (`Tokens` in `mcp_server.py`) reads the token's prefix and looks it up on a
+  worker thread. `trk_` goes to `auth.token_user`, and the token is for this server. `tka_` goes
+  to `oauth.access_user`, and the token is for the `resource` its grant was approved for; the SDK
+  compares that with this server's `$PUBLIC_ORIGIN/api/mcp` and answers 401 on a mismatch.
+  Expiry is checked on the server clock (`config.clock`), not the wall clock, inside each lookup:
+  an access token ends at the sooner of its hour and its grant's 90 days. If the lookup itself
+  fails (the database, not the token), the answer is 503 `{"error": "busy"}` with
+  `Retry-After: 5`, never a 401, since a 401 tells Claude the connection is gone and it would ask
+  the person to sign in again.
 - **The write guard** (§3) works differently on this path:
   - A request with no `Origin` passes, since an agent is not a browser and sends none.
   - An `Origin` other than `PUBLIC_ORIGIN` still gets 403 `origin`, the MCP spec's defence
@@ -382,8 +417,8 @@ Monday, written YYYY-MM-DD`. It is not a JSON-RPC error. A week so near the year
 the weeks around it can't be counted gets `date: a week or date is out of range`.
 
 **Write tools.** These change John's plans, marks and daily targets as the app does. Each needs a
-`write` token. A `read` token gets a tool error that says the token is read-only and how to mint
-one with `--write`. The rules live in `edits.py`, over `data.put_plan`'s rules, `data.set_tick`,
+`write` token or connection. A `read` one gets a tool error, "this connection is read-only", which
+tells the person to create a write token in Settings › Connections or to reconnect and allow changes. The rules live in `edits.py`, over `data.put_plan`'s rules, `data.set_tick`,
 `data.put_settings` and, for a note, `data.set_notes_locked` (`put_details`' rules), so REST's
 endpoints and limits are unchanged.
 
@@ -572,6 +607,148 @@ writes. Each call runs on a worker thread with its own connection. An `InsightsE
 to Claude as an error result naming the field. A result over 20 KB of JSON goes back as an error
 too, telling Claude to ask for less, rather than cut mid-JSON.
 
+### 3.3 OAuth and connections
+
+OAuth lets claude.ai and Claude Code connect to `/api/mcp` by URL, with the person signing in
+once. The MCP SDK stays the resource server (§3.1). The authorization server is the API's own
+(`oauth.py` holds the rules, `oauth_api.py` the routes), because the SDK's provider interface has
+no client ID metadata documents and no `none` client authentication (P31). Every URL below is built
+from `PUBLIC_ORIGIN`, never from the request's `Host`. The issuer is that origin exactly, with no
+trailing slash, and the resource is `$PUBLIC_ORIGIN/api/mcp`.
+
+**Discovery.** Three `GET` routes answer JSON with no sign-in. They sit outside `/api`, and nginx
+forwards exactly these paths to the API; any other `/.well-known/` path is a 404 there
+([deployment.md](deployment.md) §2).
+
+| Path                                                 | Answers                                                                                                                                                                                                                                                                                                  |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/.well-known/oauth-protected-resource/api/mcp`      | RFC 9728: `resource`, `authorization_servers` (the origin), `scopes_supported` (`read`, `write`), `bearer_methods_supported` (`header`). The 401 from `/api/mcp` names this URL.                                                                                                                         |
+| `/.well-known/oauth-protected-resource`              | the same document, for a client that asks at the root                                                                                                                                                                                                                                                    |
+| `/.well-known/oauth-authorization-server`            | RFC 8414: `issuer`, the `authorization_endpoint`, `token_endpoint` and `revocation_endpoint` under `/api/oauth/`, `response_types_supported: ["code"]`, grant types `authorization_code` and `refresh_token`, `code_challenge_methods_supported: ["S256"]`, `none` for client authentication, `client_id_metadata_document_supported: true` and `authorization_response_iss_parameter_supported: true`. No registration endpoint. |
+
+**Clients are client ID metadata documents (CIMD).** There is no Dynamic Client Registration and no
+pre-registered client ID (P32). A `client_id` is an `https://` URL, such as
+`https://claude.ai/oauth/mcp-oauth-client-metadata` (claude.ai) or Claude Code's document on the
+same host. The API accepts one only when:
+
+- its host is in `OAUTH_CLIENT_HOSTS` (§6), matched exactly: no subdomain, port, user, query,
+  fragment or dot segment, and at most 255 characters;
+- the document fetches within 5 seconds, with no redirect followed, answers 200 and is at most 5
+  KiB of JSON;
+- the document's `client_id` equals the URL, `token_endpoint_auth_method` is `none`,
+  `redirect_uris` holds at least one `https://` or plain-`http` loopback address (any other
+  entry, such as `javascript:`, is dropped), `grant_types` (if present) includes
+  `authorization_code` and `response_types` (if present) includes `code`;
+- the `redirect_uri` of the request is in `redirect_uris`, or is a plain-`http` loopback address
+  (`localhost`, `127.0.0.1`, `::1`) that matches a registered loopback one in host, path and query on
+  any port (RFC 8252, for Claude Code's local callback).
+
+The document's `client_name` (1 to 64 printable characters; else the host) is stored with the
+grant, so Settings can say "Claude · claude.ai". Good documents are cached in memory for an hour
+(32 at most); a refusal is never cached.
+
+**`GET /api/oauth/authorize`** is where Claude sends the person's browser. A request whose
+client or redirect cannot be checked gets a 400 text page and is never redirected to. After
+that, an error goes back to the client's `redirect_uri` as a 302 with `error`, `state` and `iss`:
+`invalid_request` (a repeated parameter; a missing or malformed PKCE challenge, which must be
+`S256` and 43 to 128 characters from the unreserved set; a `state` over 1024 characters or not
+printable), `unsupported_response_type` (anything but `code`), `invalid_target` (a `resource`
+other than ours), `invalid_scope` (a `scope` of anything but `read` and `write`) and
+`temporarily_unavailable` (1,000 requests are already pending). A good request is held server-side
+for 10 minutes under a random id, and the browser gets a 302 to `$PUBLIC_ORIGIN/#/connect/<id>`
+(P35). The `scope` asked is only shown on that screen; the person's choice decides the grant.
+
+**The consent screen's calls.** The app route `#/connect/<id>` shows signed in and signed out,
+and survives a sign-out. These calls all answer with `Cache-Control: no-store`.
+
+- `GET /api/oauth/requests/{id}` → `{clientName, clientHost, redirectHost, scope, expiresAt}`
+  (`scope` is `"read"`, `"write"`, `"read write"` or null). It needs no session: the id, which
+  only the browser sent here holds, is the credential. 404 `no-request` when the id is unknown or
+  past its 10 minutes.
+- `POST /api/oauth/requests/{id}/approve` with `{email, password, write?}` → 200 `{redirectTo}`,
+  the client's redirect with `code`, `state` and `iss`. It follows REST's write guard (§3). The
+  password is asked even when the person is signed in, goes through the same hasher, lockout and
+  `busy` queue as a login (§4), and creates no session or cookie (P34). `write` must be a boolean
+  and defaults to false, so the grant is `read` unless the box was ticked. Errors: 400 `invalid`
+  (a missing or mistyped field), 404 `no-request`, 401 `invalid` (a wrong email or password; it
+  counts towards the lockout), 423 `locked` with `retryAfter` and `Retry-After`, 503 `busy` with
+  `retryAfter: 1`, 403 `disabled` (only when the account is turned off between the password
+  check and the approval; before it, the password check answers 401 `invalid`), and 409
+  `too-many` when the account already holds 10
+  connections (the request is kept for another try).
+- `POST /api/oauth/requests/{id}/deny` with `{}` → 200 `{redirectTo}`, the client's redirect with
+  `error=access_denied`, `state` and `iss`. The body must be JSON, even empty, or the write guard
+  answers 415.
+
+**`POST /api/oauth/token`** and **`POST /api/oauth/revoke`** are for Claude's servers. They take
+`application/x-www-form-urlencoded` and send no `Origin` and no cookie, so `guard` applies
+`form_refusal` instead of REST's write rules: POST only (405), nothing in the query string
+(400, since a URL lands in logs), an `Origin` that is absent or equal to `PUBLIC_ORIGIN` (403),
+the form content type (400), and a body of at most 8 KiB (413, counted as it streams) with at most
+16 fields and none repeated. Their errors are OAuth's (RFC 6749 §5.2): `{"error": …,
+"error_description"?}`, with `Cache-Control: no-store` and `Pragma: no-cache`.
+
+- `grant_type=authorization_code` needs `client_id`, `code`, `redirect_uri` and `code_verifier`.
+  The code is bound to the client, the redirect, the PKCE challenge and the resource. Redeeming
+  it a second time, within its 60 seconds and with the same client, redirect, resource and
+  verifier, ends the whole connection; a second try that fails any of those ends nothing.
+- `grant_type=refresh_token` needs `client_id` and `refresh_token`. Each refresh rotates both
+  tokens. For 60 seconds the replaced refresh token still gets the same new pair, so a client
+  that retried after a lost reply is not cut off: the new pair is kept for those 60 seconds,
+  sealed with the replaced token, and the next sweep clears that copy once they are over. After
+  that the old token is retired, and presenting it ends the connection. A token that matches nothing ends nothing, so a guess cannot cut a person
+  off.
+- Success is 200 `{access_token, token_type: "Bearer", expires_in, refresh_token, scope}`, with
+  `scope` as `"read"` or `"read write"`. A `resource` sent must equal ours, else 400
+  `invalid_target`.
+- Failures: 400 `invalid_request` (a missing field, a bad form), 400 `unsupported_grant_type`, 401
+  `invalid_client` (no `client_id`; this API has no client secrets), 400 `invalid_grant` (a wrong
+  or spent code, verifier, redirect or client, an ended or expired connection; the description
+  names why only when the connection ended), and 503 `temporarily_unavailable` with
+  `Retry-After: 1` when the write lock stayed busy.
+- `/revoke` takes `token` and `client_id` and answers 200 `{}` for any well-formed request. An
+  access token ends itself; the current refresh token ends its connection. A grant id alone ends
+  nothing.
+
+**Connections in Settings.** `GET /api/connections` (session) →
+`{connections: [{id, clientName, clientHost, scope, createdAt, lastUsedAt, expiresAt, isNew}]}`,
+newest first. `scope` is `"read"` or `"write"`, `lastUsedAt` is null until first use, and
+`isNew` is true for 24 hours after approval, on the server's clock. An approval whose code was
+never redeemed is not listed. `DELETE /api/connections/{id}` (session, REST's write guard) → 204,
+or 404 `no-connection` for an unknown id or another account's; the connection's tokens stop
+working at once.
+
+**Lifetimes and caps** (P33, P36):
+
+| What                                   | Value                                                                       |
+| -------------------------------------- | --------------------------------------------------------------------------- |
+| A connection                           | 90 days from approval, however much it is used; the person reconnects after |
+| An access token (`tka_`)               | 1 hour, never past its connection                                           |
+| An authorization code (`tkc_`)         | 60 seconds, single use                                                      |
+| A replaced refresh token's grace       | 60 seconds                                                                  |
+| A pending request                      | 10 minutes                                                                  |
+| Personal tokens per account            | 20; the 21st gets 409 `too-many` (§4)                                       |
+| Connections per account                | 10; an approval beyond it gets 409 `too-many`                               |
+| Pending requests, all accounts         | 1,000; `/authorize` then answers `temporarily_unavailable`                  |
+
+Access tokens are `tka_` and 43 random characters. A refresh token is `tkr_<grant id>.<43
+characters>`, so a wrong secret can be logged against its connection. A code is `tkc_` and 43
+characters. All are stored as SHA-256 hashes. Expired rows are swept when a request is created, when one is
+approved and when connections are listed.
+
+**Ending a connection.** Removing it in Settings, a client's revoke, reusing a spent code or a
+retired refresh token, its 90 days, a password reset, `tracker-admin disable` and
+`tracker-admin revoke-sessions` all end it. The last three go through `auth.end_credentials`,
+which deletes the account's personal tokens and connections in the same transaction as the rest
+of the change (P37). `revoke-sessions` prints how many connections it ended.
+
+**Logging.** Nothing here logs a token, a code, a password or a request id. The API logs
+`oauth authorize from <host>: waiting for consent`, `oauth grant <id> approved for user <n> by
+<client_id>`, refusals with a reason (`oauth authorize … refused: …`, `oauth <grant type>
+refused: …`), a connection's end with its reason (`ended: expired`, `revoked by its client`,
+`used twice`, `ended in Settings`), and, at most once a minute per connection, a refresh with a
+wrong secret.
+
 ## 4. Accounts and sessions
 
 - **Sign-up.** `POST /auth/signup` with `{email, password}` creates an account and signs it in.
@@ -622,15 +799,26 @@ too, telling Claude to ask for less, rather than cut mid-JSON.
   refresh moves the expiry forward and re-sends the cookie. Logout ends one session.
   `tracker-admin revoke-sessions <email>` and a reset end them all. A disabled user's sessions stop
   working at once.
-- **API tokens** let a program act as the account, for the MCP endpoint.
-  `tracker-admin token create <email> --name <name>` prints one once: `trk_` and 43 random
-  URL-safe characters. The database keeps only its SHA-256 hash and its `prefix`, the 8
-  characters after `trk_`, which names the token without revealing it. A token has the
-  `read` scope, or `write` with `--write`. Tokens do not expire, and `last_used_at` moves at most
-  once a day. `token revoke` ends one; `revoke-sessions`, a reset (from `tracker-admin` or by
-  email) and `disable` end them all. A disabled account cannot mint one, and its tokens stop
-  working at once. No REST route accepts a token, and nothing logs one: the CLI prints it to its
-  own output only.
+- **API tokens** let a program act as the account, for the MCP endpoint. A person creates one in
+  Settings › Connections (below), and an admin with `tracker-admin token create <email> --name
+  <name>`. Either way it is `trk_` and 43 random URL-safe characters, shown once. The database
+  keeps only its SHA-256 hash and its `prefix`, the 8 characters after `trk_`, which names the
+  token without revealing it. A token has the `read` scope, or `write`. A name is 1 to 64
+  printable characters once trimmed. Tokens do not expire, and `last_used_at` moves at most once
+  a day. Removing one in Settings or `token revoke` ends it; `revoke-sessions`, a reset (from
+  `tracker-admin` or by email) and `disable` end them all. A disabled account cannot create one,
+  and its tokens stop working at once. No REST route accepts a token, and nothing logs one: the
+  CLI prints it to its own output only.
+  - `GET /api/tokens` → `{tokens: [{name, prefix, scope, createdAt, lastUsedAt}]}`, oldest first;
+    never a hash or a token. `prefix` is the 8 characters, without `trk_`.
+  - `POST /api/tokens` with `{name, scope}` (`scope` is `read` or `write`) → 201
+    `{token, info}`, where `info` has the list's shape. This is the one response that holds the
+    token. 400 `invalid` for a missing or mistyped field or any other scope; 400 `token-name` for
+    a name outside 1 to 64 printable characters; 409 `too-many` at 20 tokens (P36). The count and
+    the insert share one write transaction, so two requests cannot both take the last place. The
+    CLI is not limited.
+  - `DELETE /api/tokens/{prefix}` → 204, or 404 `no-token` for a prefix that is unknown or
+    another account's. The prefix is the 8 characters, with or without `trk_`.
 
 ### 4.1 Email
 
@@ -675,9 +863,9 @@ resets are `tracker-admin`'s, as before.
 docker compose exec fitness-api tracker-admin invite alice@example.com   # prints the invite link
 docker compose exec fitness-api tracker-admin reset alice@example.com    # prints a reset link
 docker compose exec fitness-api tracker-admin users            # email, created, disabled, sessions, tokens
-docker compose exec fitness-api tracker-admin disable alice@example.com  # blocks login, ends sessions and tokens
+docker compose exec fitness-api tracker-admin disable alice@example.com  # blocks login, ends sessions, tokens and connections
 docker compose exec fitness-api tracker-admin enable alice@example.com
-docker compose exec fitness-api tracker-admin revoke-sessions alice@example.com  # ends sessions and tokens
+docker compose exec fitness-api tracker-admin revoke-sessions alice@example.com  # ends sessions, tokens and connections
 docker compose exec fitness-api tracker-admin token create alice@example.com --name laptop  # a read token, printed once
 docker compose exec fitness-api tracker-admin token create alice@example.com --name agent --write  # read and write
 docker compose exec fitness-api tracker-admin token list alice@example.com  # name, prefix, scope, created, last used
@@ -719,6 +907,7 @@ details for 2 items.", the marks depending on the day of the week), or "Nothing 
 | `ASK_MODEL`         | `claude-sonnet-5-5`   | the Claude model Ask uses                                                 |
 | `ASK_PER_DAY`       | `30`                  | questions per account in any rolling 24 hours; 1 or more                  |
 | `ASK_PER_DAY_TOTAL` | `300`                 | questions across all accounts in any rolling 24 hours; 1 or more          |
+| `OAUTH_CLIENT_HOSTS` | `claude.ai,claude.com` | the hosts whose client metadata documents may name an OAuth client (§3.3): host names separated by commas, matched exactly. A bad value stops the API at startup |
 
 **Logging.** The API's own lines go to stderr at info and above (`docker logs fitness-api`), once
 each, as `INFO:  tracker_api.<module> …`. They don't also go on to the root logger, which the MCP
@@ -774,9 +963,18 @@ Reviewed and kept on purpose, for a small service with open sign-up (D9 in
   be trusted. `tracker-admin reset` clears it.
 - **Sessions have no absolute lifetime.** A session used at least every 90 days lasts
   indefinitely. Logout, `revoke-sessions`, a reset and `disable` all end it.
-- **API tokens have no lifetime at all.** A token works until something revokes it:
-  `token revoke`, `revoke-sessions`, a reset or `disable`. `token list` shows when each was last
-  used, to the day, so a forgotten one is easy to spot and revoke.
+- **Personal API tokens have no lifetime at all.** A token works until something revokes it:
+  removing it in Settings, `token revoke`, `revoke-sessions`, a reset or `disable`. Settings and
+  `token list` show when each was last used, to the day, so a forgotten one is easy to spot and
+  revoke. A claude.ai or Claude Code connection, by contrast, ends after 90 days (§3.3).
+- **A pending connection request's id is in the access logs.** `/api/oauth/authorize` sends the
+  browser to `/#/connect/<id>`, and the consent screen fetches `/api/oauth/requests/<id>`, so nginx
+  logs the id. It is good for 10 minutes and for one approval, and approving still needs the
+  account's password, so a leaked id alone lets nobody connect. The API's own logs never hold it.
+- **Anyone can start a connection request.** `/api/oauth/authorize` needs no sign-in, so a
+  stranger can fill the 1,000 pending slots for 10 minutes at a time; real requests then get
+  `temporarily_unavailable` until they expire. Nothing else is harmed. The request fetches a
+  client document only from an allow-listed host, so it is no open fetcher.
 - **Ask sends a person's data to Anthropic.** A question goes to Anthropic's API with the
   conversation so far, the person's My goals note, and whatever the tools read for it: the plans,
   marks, item names, notes and goals of the weeks Claude asks about. The logs hold none of it
@@ -910,6 +1108,11 @@ Tests sit in `api/tests/`:
   test checks a REST route too, so an exemption wider than `/api/mcp` fails. Then every tool:
   the parity cases through `week_summary`, the read tools' defaults and refusals (a week at the
   calendar's end included), a read token refused on writes, and each write's result.
+- `test_oauth.py`, `test_oauth_api.py`, `test_tokens_api.py`: OAuth's storage and rules (clients and
+  redirects, codes, rotation and its grace, reuse, expiry, the caps, sweeping, ending credentials
+  together), then its routes (discovery, authorize and each of its errors, the consent calls, the
+  token and revoke guard, Connections) and the personal-token routes. `test_mcp.py` also covers the
+  verifier's prefix dispatch, expiry on the clock, the grant's resource and the 503.
 - `test_edits.py`: the plan edits behind the write tools: copying a carried week first, the ids
   the server makes, each field's bounds, replaying a conflict, the quota, and marks per section.
 - `test_validate.py`: the write checks REST and MCP share: week keys, plan bodies, item ids, days,

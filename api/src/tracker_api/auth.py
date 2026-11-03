@@ -42,6 +42,8 @@ TOKEN_PREFIX = "trk_"  # noqa: S105 (a marker that says what the string is, not 
 #: How many characters after `trk_` the database keeps, to name a token without revealing it.
 PREFIX_CHARS = 8
 MAX_TOKEN_NAME = 64
+#: Live personal tokens one user may hold through the API. The admin CLI mints without a limit.
+MAX_TOKENS = 20
 # `trk_` and `secrets.token_urlsafe(32)`: 43 characters of the URL-safe alphabet.
 _TOKEN_RE = re.compile(r"trk_[A-Za-z0-9_-]{43}")
 
@@ -269,13 +271,24 @@ def _user_id(conn: sqlite3.Connection, username: str) -> int:
     return int(row["id"])
 
 
-def revoke_sessions(conn: sqlite3.Connection, username: str) -> tuple[int, int]:
-    """End every session of the user and revoke their API tokens; returns how many of each."""
+def end_credentials(conn: sqlite3.Connection, user_id: int) -> tuple[int, int]:
+    """Revoke every personal token and end every OAuth connection of the user; returns how many
+    of each. A connection's codes, access tokens and retired refresh tokens go with it (the
+    tables cascade). Callers run it inside their own transaction, beside what else they change,
+    so a failure ends nothing (D7)."""
+    tokens = conn.execute("DELETE FROM api_tokens WHERE user_id = ?", (user_id,)).rowcount
+    grants = conn.execute("DELETE FROM oauth_grants WHERE user_id = ?", (user_id,)).rowcount
+    return tokens, grants
+
+
+def revoke_sessions(conn: sqlite3.Connection, username: str) -> tuple[int, int, int]:
+    """End every session of the user, revoke their API tokens and end their OAuth connections;
+    returns how many sessions, tokens and connections."""
     uid = _user_id(conn, username)
     with transaction(conn):
         sessions = conn.execute("DELETE FROM sessions WHERE user_id = ?", (uid,)).rowcount
-        tokens = conn.execute("DELETE FROM api_tokens WHERE user_id = ?", (uid,)).rowcount
-    return sessions, tokens
+        tokens, connections = end_credentials(conn, uid)
+    return sessions, tokens, connections
 
 
 def set_disabled(conn: sqlite3.Connection, username: str, disabled: bool) -> None:
@@ -284,16 +297,23 @@ def set_disabled(conn: sqlite3.Connection, username: str, disabled: bool) -> Non
         conn.execute("UPDATE users SET disabled = ? WHERE id = ?", (int(disabled), uid))
         if disabled:
             conn.execute("DELETE FROM sessions WHERE user_id = ?", (uid,))
-            conn.execute("DELETE FROM api_tokens WHERE user_id = ?", (uid,))
+            end_credentials(conn, uid)
 
 
 def create_token(
-    conn: sqlite3.Connection, config: Config, username: str, name: str, scope: TokenScope
+    conn: sqlite3.Connection,
+    config: Config,
+    username: str,
+    name: str,
+    scope: TokenScope,
+    limit: int | None = None,
 ) -> str:
     """A new personal API token for the user, returned this once: only its hash is kept.
 
     AuthError `token-name` for a name that is not 1 to 64 printable characters once trimmed,
-    `no-user`, or `disabled`, since a disabled account's tokens would not work."""
+    `no-user`, or `disabled`, since a disabled account's tokens would not work. With a `limit`,
+    `too-many-tokens` when the user already holds that many; the count and the insert share one
+    write transaction, so two requests cannot both take the last place."""
     name = name.strip()
     if not 1 <= len(name) <= MAX_TOKEN_NAME or not name.isprintable():
         raise AuthError("token-name")
@@ -305,6 +325,12 @@ def create_token(
             raise AuthError("no-user")
         if user["disabled"]:
             raise AuthError("disabled")
+        if limit is not None:
+            held = conn.execute(
+                "SELECT COUNT(*) FROM api_tokens WHERE user_id = ?", (user["id"],)
+            ).fetchone()[0]
+            if held >= limit:
+                raise AuthError("too-many-tokens")
         # Drawn again on the rare prefix the account already has, so a prefix names one token.
         while True:
             token = TOKEN_PREFIX + secrets.token_urlsafe(32)
@@ -486,7 +512,7 @@ def redeem(conn: sqlite3.Connection, config: Config, token: str, password: str) 
             )
         # A reset is how an owner takes a stolen account back, so it ends every credential.
         conn.execute("DELETE FROM sessions WHERE user_id = ?", (uid,))
-        conn.execute("DELETE FROM api_tokens WHERE user_id = ?", (uid,))
+        end_credentials(conn, uid)
         return uid
 
 

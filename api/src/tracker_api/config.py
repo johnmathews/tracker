@@ -13,6 +13,9 @@ ORIGIN_RE = re.compile(r"https?://[^/\s]+")
 # `planner@example.com`, or a display name before it: `Tracker <planner@example.com>`.
 SENDER_RE = re.compile(r"(?:[^<>@]+ <[^<>@\s]+@[^<>@\s]+>|[^<>@\s]+@[^<>@\s]+)")
 DEFAULT_TIMEZONE = "Europe/Amsterdam"
+#: The hosts whose client metadata documents may name an OAuth client (oauth.py): Claude's.
+DEFAULT_OAUTH_CLIENT_HOSTS = ("claude.ai", "claude.com")
+HOST_RE = re.compile(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+")
 
 
 def _now() -> int:
@@ -36,6 +39,20 @@ def _zone(env: Mapping[str, str]) -> ZoneInfo:
         raise ValueError(
             f"TIMEZONE must be an IANA time zone such as {DEFAULT_TIMEZONE}, not {raw!r}"
         ) from None
+
+
+def _hosts(env: Mapping[str, str]) -> tuple[str, ...]:
+    """OAUTH_CLIENT_HOSTS: host names, comma-separated, matched exactly (no subdomains)."""
+    raw = env.get("OAUTH_CLIENT_HOSTS")
+    if raw is None:
+        return DEFAULT_OAUTH_CLIENT_HOSTS
+    hosts = tuple(h.strip().lower() for h in raw.split(",") if h.strip())
+    if not hosts or not all(HOST_RE.fullmatch(h) for h in hosts):
+        raise ValueError(
+            f"OAUTH_CLIENT_HOSTS must be host names separated by commas, such as claude.ai,"
+            f" not {raw!r}"
+        )
+    return hosts
 
 
 def _count(env: Mapping[str, str], name: str, default: int, least: int = 0) -> int:
@@ -79,6 +96,8 @@ class Config:
     ask_per_day_total: int = 300
     #: Where today and this week are counted (`today`, `this_week`).
     timezone: ZoneInfo = field(default_factory=lambda: ZoneInfo(DEFAULT_TIMEZONE))
+    #: Where an OAuth client's metadata document may live; exact host names.
+    oauth_client_hosts: tuple[str, ...] = DEFAULT_OAUTH_CLIENT_HOSTS
     #: Unix seconds; injectable so tests can move time.
     clock: Callable[[], int] = field(default=_now)
 
@@ -140,4 +159,5 @@ class Config:
             ask_per_day=_count(env, "ASK_PER_DAY", 30, least=1),
             ask_per_day_total=_count(env, "ASK_PER_DAY_TOTAL", 300, least=1),
             timezone=_zone(env),
+            oauth_client_hosts=_hosts(env),
         )

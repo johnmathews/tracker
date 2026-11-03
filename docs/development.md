@@ -19,7 +19,7 @@
   packages. The design system's scripts (`scripts/check_design_system.py`,
   `scripts/design_preview.py`) need only Python 3's standard library.
 - Running the app needs the API: the README's Getting started shows how. `npm run dev` forwards
-  `/api` to `http://127.0.0.1:8000` (`API_URL` overrides it), so the browser sees one origin as it
+  `/api` and the three OAuth discovery paths to `http://127.0.0.1:8000` (`API_URL` overrides it), so the browser sees one origin as it
   does behind nginx. `scripts/compose-smoke.sh` runs both images together and checks them through
   nginx.
 - The API in `api/` uses Python 3.13 with uv, FastAPI, pytest with coverage, ruff and mypy
@@ -142,6 +142,10 @@ clock is fixed to Wednesday 21 October 2026, so every run sees the same week.
   history drawer open) and the Settings page, and every cell of the folded week stays on screen as the keyboard
   walks it. `callUpBar` in `support.ts` brings the navbar into view before a test presses its
   controls, since on the planner's screens it is out of sight.
+- `connections.spec.ts`: Settings › Connections (creating a token, shown once with Copy, then
+  removed; axe with the banner in both themes; no sideways scroll at 375px) and the consent
+  screen (a wrong password shown on both fields, then Connect returning to the app; axe signed out
+  and with a refusal in both themes; a phone).
 - `notes.spec.ts`: an item's note on one line under the name and chips, and a press opening it
   whole in a popover whose link opens a new tab, focus moving to the link and back to the cell on
   Escape (K43), and a long note opening in a panel that fits the window and scrolls. The mocked
@@ -233,6 +237,8 @@ listed in [api.md](api.md) §10):
   offline, the API's own refusals with `Retry-After`).
 - `src/lib/__tests__/nginx.spec.ts`: reads `nginx.conf`: the CSP is unchanged, and `/api/` proxies
   to `fitness-api:8000` through a variable upstream with the body cap and one `Cache-Control`.
+  Each of the three OAuth discovery paths proxies the same way, any other `/.well-known/` path is
+  a 404, and discovery answers carry `no-store`.
 - `src/lib/__tests__/fakeApi.ts` (a helper, not a spec): an in-memory API installed as `fetch`. It
   keeps plan and details revisions and 409s, identical writes on a stale revision, a cleared
   details document keeping its revision, single-day marks (in the API's three masks,
@@ -353,6 +359,12 @@ listed in [api.md](api.md) §10):
   saved goals are known, a new account), and Export and Import with Ask's history (the server's
   conversations in the file, none or offline, goals that fill empty ones, conversations already
   here left out of the count).
+- `src/components/__tests__/Connections.spec.ts`, `Connect.spec.ts` and
+  `src/lib/__tests__/connections.spec.ts`: Settings › Connections (the address and Copy, the Apps
+  and Tokens lists, the New banner, creating a token and showing it once, Remove after a
+  confirm, the caps and the refusals), the consent screen at `#/connect/<id>` (signed in and
+  out, Read only chosen, a wrong password, the lockout, an expired link, Deny) and the calls and
+  wording behind them, all against the fake API.
 - `src/components/__tests__/App.spec.ts`: the mounted app in jsdom. Covers rendering, the today
   column, stepping a cell through its marks with `aria-pressed` (a food only on and off), the goal stepper and its bounds,
   navigation, confirm-before-remove, print, the visibility and one-minute clock refresh, another

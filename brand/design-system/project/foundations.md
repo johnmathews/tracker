@@ -21,7 +21,9 @@ Four project roles each mean exactly one thing:
 
 The type is set for the gym, not the desk: big enough to read at arm's length from a phone propped on a bench (K19). Nothing is delicate.
 
-**Source Serif 4** for the display date, section titles, the wordmark and notes (italic). **Source Sans 3** for everything else, numbers included, always with `font-variant-numeric: tabular-nums`. Both self-hosted. No monospace.
+**Source Serif 4** for the display date, section titles, the wordmark and notes (italic). **Source Sans 3** for everything else, numbers included, always with `font-variant-numeric: tabular-nums`. Both self-hosted.
+
+**Monospace** (`--font-mono`, the system's own monospace face, nothing downloaded) only for text read character by character and copied: a token and its prefix, the MCP address and the commands in Settings › Connections. Never for numbers, labels or anything else.
 
 | Style | Size | Use |
 | --- | --- | --- |

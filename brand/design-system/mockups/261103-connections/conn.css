@@ -1,0 +1,164 @@
+/*
+  Connections, as a prototype. Two screens:
+  - the consent screen (.cn-auth), drawn as the sign-in screen is: one Panel on the canvas, at
+    most 384px wide, at the system's fixed sizes (AuthCard, TextField, Switch, RadioCard, Button);
+  - the Settings page's new Connections row (.sp, from settings.css), at the page's sizes from u.
+  Colours, fonts and type come from the system's tokens. Proposed values are --candidate-*.
+*/
+
+/* ---------- The consent screen ---------- */
+.cn-auth { position: relative; overflow: auto; box-sizing: border-box; container: cn / size; height: 100%;
+  display: flex; align-items: center; justify-content: center; padding: 48px 16px;
+  background: var(--canvas); color: var(--ink); font-family: var(--font-sans); }
+.cn-auth *, .cn-auth *::before, .cn-auth *::after { box-sizing: border-box; }
+.cn-auth button, .cn-auth input { font: inherit; color: inherit; }
+.cn-auth :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.cn-card { width: 100%; max-width: 384px; margin: auto; padding: 24px; border: 1px solid var(--line); border-radius: var(--radius-lg);
+  background: var(--panel); box-shadow: var(--shadow-overlay); }
+.cn-card .wm { display: block; height: 32px; width: auto; max-width: 100%; margin-bottom: 24px; fill: var(--ink); }
+.cn-card h1 { margin: 0 0 8px; }
+.cn-card p { margin: 0; }
+.cn-intro { color: var(--ink-secondary); margin-bottom: 16px !important; }
+.cn-form { display: flex; flex-direction: column; gap: 16px; }
+
+/* The warning: InlineMessage, caution tone, above everything it warns about. */
+.cn-warn { display: flex; gap: 8px; align-items: flex-start; color: var(--caution-ink); }
+.cn-warn svg, .cn-msg svg { flex: none; width: 16px; height: 16px; margin-top: 4px; }
+.cn-msg { display: flex; gap: 8px; align-items: flex-start; color: var(--error-ink); }
+
+/* Who is asking: a short list, the label in ink-secondary, the value in ink. */
+.cn-who { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 16px; margin: 0; padding: 12px 0;
+  border-block: 1px solid var(--line); }
+.cn-who dt { color: var(--ink-secondary); }
+.cn-who dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+
+/* TextField, as its card. */
+.cn-field { display: flex; flex-direction: column; gap: 4px; }
+.cn-input { width: 100%; height: 44px; padding: 0 12px; border: 1px solid var(--control-border); border-radius: var(--radius-sm);
+  background: var(--panel); font: 400 16px/24px var(--font-sans); }
+.cn-input[aria-invalid="true"] { border-color: var(--error-ink); }
+.cn-input[readonly] { background: var(--tile); }
+.cn-hint { color: var(--ink-secondary); }
+
+/* C1: Switch, as its card, then what each position means. */
+.cn-switch { display: inline-flex; align-items: center; align-self: flex-start; gap: 12px; height: 44px; margin-left: -8px; padding: 0 8px; border: 0;
+  border-radius: var(--radius-md); background: transparent; font: 600 16px/24px var(--font-sans); cursor: pointer; }
+.cn-switch:hover { background: var(--tile); }
+.cn-track { position: relative; flex: none; width: 40px; height: 24px; border: 1px solid var(--control-border); border-radius: var(--radius-full); }
+.cn-thumb { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: var(--radius-full); background: var(--ink-secondary); }
+.cn-switch[aria-checked="true"] .cn-track { background: var(--ink); border-color: var(--ink); }
+.cn-switch[aria-checked="true"] .cn-thumb { left: 19px; background: var(--on-ink); }
+
+/* C2: two RadioCards, Read only picked. */
+.cn-radios { display: grid; gap: 8px; border: 0; margin: 0; padding: 0; }
+.cn-radios legend { padding: 0; margin-bottom: 4px; font-weight: 600; }
+.cn-radio { display: flex; align-items: flex-start; gap: 12px; width: 100%; padding: 12px; border: 1px solid var(--control-border); border-radius: var(--radius-md);
+  background: transparent; text-align: left; cursor: pointer; }
+.cn-radio:hover { background: var(--tile); }
+.cn-radio[aria-checked="true"] { border: 2px solid var(--ink); padding: 11px; }
+.cn-radio .dot { flex: none; display: grid; place-items: center; width: 20px; height: 20px; margin-top: 2px; border: 1px solid var(--control-border); border-radius: var(--radius-full); }
+.cn-radio[aria-checked="true"] .dot { border: 2px solid var(--ink); }
+.cn-radio[aria-checked="true"] .dot::after { content: ""; width: 50%; height: 50%; border-radius: var(--radius-full); background: var(--ink); }
+.cn-radio .what { display: grid; gap: 2px; }
+.cn-radio .what b { font-weight: 600; }
+.cn-radio .what span { color: var(--ink-secondary); }
+
+.cn-btns { display: flex; gap: 12px; margin-top: 8px; }
+.cn-btns .btn { flex: 1; }
+.cn-auth .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 16px; border: 1px solid var(--control-border);
+  border-radius: var(--radius-md); background: transparent; font: 600 16px/24px var(--font-sans); cursor: pointer; }
+.cn-auth .btn:hover { background: var(--tile); }
+.cn-auth .btn.primary { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+.cn-foot { color: var(--ink-secondary); margin-top: 16px !important; }
+.cn-auth a { color: var(--ink); text-underline-offset: 3px; }
+
+/* ---------- Settings › Connections ---------- */
+.sp {
+  /* A token or address is read character by character, so it is set in a monospace face. No
+     mono font is in the system yet; this would be its first. */
+  --candidate-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+.cn-sub { margin: 0; font: 600 var(--candidate-label) / 1.3 var(--font-sans); }
+.cn-group { display: flex; flex-direction: column; gap: calc(var(--u) * 12); }
+.cn-group + .cn-group { margin-top: calc(var(--u) * 8); }
+.cn-lede { margin: 0; font-size: var(--candidate-body); line-height: 1.45; color: var(--ink-secondary); max-width: 62ch; }
+.cn-lede b { color: var(--ink); font-weight: 600; }
+
+/* L1: each app or token is a row: its name and a line of facts, Remove beside them. */
+.cn-list { margin: 0; padding: 0; list-style: none; max-width: calc(var(--u) * 1000); }
+.cn-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: calc(var(--u) * 8) var(--candidate-gap);
+  padding: calc(var(--u) * 14) 0; border-top: 1px solid var(--line); }
+.cn-list li:last-child { border-bottom: 1px solid var(--line); }
+.cn-what { display: grid; gap: calc(var(--u) * 4); min-width: 0; flex: 1 1 calc(var(--u) * 420); }
+.cn-name { font: 600 var(--candidate-body) / 1.3 var(--font-sans); }
+.cn-name .host { font-weight: 400; color: var(--ink-secondary); }
+.cn-facts { font-size: var(--candidate-label); line-height: 1.4; color: var(--ink-secondary); }
+.cn-facts .new { color: var(--ink); font-weight: 600; }
+.cn-code { font-family: var(--candidate-mono); font-size: 0.9em; }
+
+/* The address to paste, and the shown-once token: a tile with the text and Copy. */
+.cn-copy { display: flex; align-items: center; gap: calc(var(--u) * 12); max-width: calc(var(--u) * 820); padding: calc(var(--u) * 6) calc(var(--u) * 6) calc(var(--u) * 6) calc(var(--u) * 16);
+  border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--tile); }
+.cn-copy code { flex: 1; min-width: 0; font-family: var(--candidate-mono); font-size: calc(var(--candidate-label) * 0.95); overflow-wrap: anywhere; }
+.cn-copy .btn { flex: none; background: var(--panel); }
+.cn-copy .btn:hover { background: var(--canvas); }
+
+/* Banner, as its card: a new connection, so a surprise one is seen. */
+.cn-banner { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--u) * 8) calc(var(--u) * 12); max-width: calc(var(--u) * 1000);
+  padding: calc(var(--u) * 8) calc(var(--u) * 8) calc(var(--u) * 8) calc(var(--u) * 16); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--tile); }
+.cn-banner p { flex: 1 1 calc(var(--u) * 360); margin: 0; font-size: var(--candidate-label); line-height: 1.4; }
+.cn-banner p b { font-weight: 600; }
+.cn-banner .btn { background: var(--panel); }
+
+/* The create form and the shown-once token. */
+.cn-create { display: flex; flex-wrap: wrap; align-items: flex-end; gap: calc(var(--u) * 12) var(--candidate-gap); }
+.cn-create .cn-f { display: flex; flex-direction: column; gap: calc(var(--u) * 6); }
+.cn-create label, .cn-create .lbl { font: 600 var(--candidate-label) / 1.3 var(--font-sans); }
+.cn-create input { width: calc(var(--u) * 300); max-width: 100%; height: var(--candidate-control); padding: 0 calc(var(--u) * 14); border: 1px solid var(--control-border);
+  border-radius: var(--radius-sm); background: var(--panel); color: var(--ink); font: 400 var(--candidate-body) / 1.3 var(--font-sans); }
+.sp .btn.primary { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+.cn-shown { display: grid; gap: calc(var(--u) * 12); max-width: calc(var(--u) * 820); }
+.cn-shown .lead { margin: 0; font: 600 var(--candidate-body) / 1.4 var(--font-sans); }
+.cn-msg.sp-size, .cn-ok { font-size: var(--candidate-label); line-height: 1.4; }
+.cn-msg.sp-size svg, .cn-ok svg { width: var(--candidate-icon); height: var(--candidate-icon); margin-top: 0; }
+.cn-ok { display: flex; gap: 8px; align-items: center; color: var(--ink); margin: 0; }
+
+/* Setup notes: how to connect each Claude, one short paragraph each. */
+.cn-how { display: grid; gap: calc(var(--u) * 10); }
+.cn-how p { margin: 0; font-size: var(--candidate-label); line-height: 1.5; color: var(--ink-secondary); max-width: 70ch; }
+.cn-how p b { color: var(--ink); font-weight: 600; }
+
+/* L2: one table for apps and tokens. */
+.cn-table { width: 100%; max-width: calc(var(--u) * 1200); border-collapse: collapse; font-size: var(--candidate-label); }
+.cn-table th { text-align: left; font-weight: 600; color: var(--ink-secondary); padding: calc(var(--u) * 10) calc(var(--u) * 12) calc(var(--u) * 10) 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.cn-table td { padding: calc(var(--u) * 12) calc(var(--u) * 12) calc(var(--u) * 12) 0; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.cn-table td.n { font-weight: 600; }
+.cn-table td.n small { display: block; font-weight: 400; color: var(--ink-secondary); font-size: 1em; }
+.cn-table td:last-child { text-align: right; padding-right: 0; }
+.cn-table .new { font-weight: 600; }
+
+/* The confirm dialog over the page. */
+.cn-scrim { position: absolute; inset: 0; background: var(--scrim); opacity: .4; }
+.cn-dialog { position: absolute; top: calc(var(--u) * 120); left: 50%; transform: translateX(-50%); width: min(calc(var(--u) * 600), calc(100% - 32px));
+  padding: calc(var(--u) * 32); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-overlay); }
+.cn-dialog h2 { margin: 0; font: 600 var(--candidate-h2) / 1.25 var(--font-sans); }
+.cn-dialog p { margin: calc(var(--u) * 8) 0 0; font-size: var(--candidate-body); line-height: 1.45; }
+.cn-dialog .acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: calc(var(--u) * 8); margin-top: calc(var(--u) * 24); }
+
+@container sp ((orientation: portrait) and (width < 1000px)) or (width < 760px) {
+  .cn-what { flex-basis: 100%; }
+  .cn-create input { width: 100%; }
+  .cn-create .cn-f { flex: 1 1 100%; }
+  .cn-copy { flex-wrap: wrap; padding: 10px 10px 10px 14px; }
+  .cn-copy .btn { margin-left: auto; }
+  .cn-dialog { top: 80px; padding: 16px; }
+  /* L2 folds: each row of the table becomes a block. */
+  .cn-table thead { display: none; }
+  .cn-table, .cn-table tbody, .cn-table tr, .cn-table td { display: block; width: 100%; }
+  .cn-table tr { padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .cn-table td { padding: 2px 0; border: 0; text-align: left !important; }
+  .cn-table td[data-h]::before { content: attr(data-h) ": "; color: var(--ink-secondary); }
+  .cn-table td:last-child { padding-top: 8px; }
+}
+
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

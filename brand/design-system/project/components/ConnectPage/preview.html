@@ -1,0 +1,137 @@
+<!-- @dsCard group="Screens" height=1080 subtitle="The connect screen Claude opens: a warning, who is asking, your password again, Read only or Read and change; wrong password and an expired link" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ConnectPage — preview</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: var(--space-6) var(--space-4); background: var(--canvas); color: var(--ink); font-family: var(--font-sans); }
+  .row { display: flex; flex-wrap: wrap; gap: var(--space-8); align-items: flex-start; }
+  .cell { flex: 0 1 384px; min-width: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+  .state { margin: 0; color: var(--ink-secondary); }
+
+  /* AuthCard: one Panel on the canvas, at most 384px wide. */
+  .card { width: 100%; max-width: 384px; padding: var(--space-6); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--panel); box-shadow: var(--shadow-overlay); }
+  .wm { display: block; margin: 0 0 var(--space-6); font: 600 32px/36px var(--font-serif); }
+  .card h1 { margin: 0 0 var(--space-2); }
+  .card p { margin: 0; }
+  .intro { color: var(--ink-secondary); }
+  form { display: flex; flex-direction: column; gap: var(--space-4); margin-top: var(--space-4); }
+
+  /* InlineMessage: caution for the warning, error for a refusal. */
+  .msg { display: flex; gap: var(--space-2); align-items: flex-start; }
+  .msg svg { flex: none; width: 16px; height: 16px; margin-top: 3px; }
+  .msg.caution { color: var(--caution-ink); }
+  .msg.error { color: var(--error-ink); }
+
+  /* Who is asking: the terms in ink-secondary, the values in weight 600, between two rules. */
+  .who { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-1) var(--space-4); margin: 0; padding: var(--space-3) 0; border-block: 1px solid var(--line); }
+  .who dt { color: var(--ink-secondary); }
+  .who dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+
+  /* TextField. */
+  .field { display: flex; flex-direction: column; gap: var(--space-1); }
+  .field input { width: 100%; height: 44px; padding: 0 var(--space-3); border: 1px solid var(--control-border); border-radius: var(--radius-sm); background: var(--panel); color: var(--ink); font: 400 18px/26px var(--font-sans); }
+  .field input[aria-invalid="true"] { border-color: var(--error-ink); }
+  .hint { color: var(--ink-secondary); }
+
+  /* RadioCard with a line each. */
+  .choices { display: flex; flex-direction: column; gap: var(--space-2); }
+  .choice { display: flex; align-items: flex-start; gap: var(--space-3); min-height: 76px; padding: var(--space-3); border: 1px solid var(--control-border); border-radius: var(--radius-md);
+            background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+  .choice:hover { background: var(--tile); }
+  .choice[aria-checked="true"] { border: 2px solid var(--ink); padding: calc(var(--space-3) - 1px); }
+  .choice:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .dot { flex: none; display: grid; place-items: center; width: 20px; height: 20px; margin-top: 3px; border: 1px solid var(--control-border); border-radius: var(--radius-full); }
+  .choice[aria-checked="true"] .dot { border: 2px solid var(--ink); }
+  .choice[aria-checked="true"] .dot::after { content: ""; width: 10px; height: 10px; border-radius: var(--radius-full); background: var(--ink); }
+  .what { display: flex; flex-direction: column; gap: 2px; }
+  .what .body { font-weight: 600; }
+  .what .caption { color: var(--ink-secondary); }
+
+  /* Button: secondary and primary, md 44px, side by side. */
+  .btns { display: flex; gap: var(--space-3); margin-top: var(--space-2); }
+  .btn { flex: 1; display: inline-flex; align-items: center; justify-content: center; height: 44px; padding: 0 var(--space-4); border: 1px solid var(--control-border); border-radius: var(--radius-md);
+         background: transparent; color: var(--ink); font: 600 18px/26px var(--font-sans); cursor: pointer; }
+  .btn:hover { background: var(--tile); }
+  .btn.primary { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
+  .btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .foot { margin-top: var(--space-4) !important; color: var(--ink-secondary); }
+  a { color: var(--ink); text-underline-offset: 3px; }
+</style>
+</head>
+<body>
+<div class="row">
+  <div class="cell"><p class="caption state">Signed in, from claude.ai</p>
+    <section class="card" aria-labelledby="t1">
+      <span class="wm" aria-hidden="true">Tracker</span>
+      <h1 class="title-1" id="t1">Connect Claude</h1>
+      <p class="caption msg caution" role="status"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><span>Only continue if you just asked Claude to connect to your tracker. If you didn’t, choose Cancel.</span></p>
+      <form onsubmit="return false">
+        <dl class="who body"><dt>Asking</dt><dd>Claude, from claude.ai</dd><dt>Then back to</dt><dd>claude.ai</dd></dl>
+        <div class="field"><label class="label" for="e1">Email</label><input id="e1" value="sam@example.com" autocomplete="username"></div>
+        <div class="field"><label class="label" for="p1">Password</label><input id="p1" type="password" autocomplete="current-password" aria-describedby="h1"><p class="caption hint" id="h1">You’re signed in, but connecting an app asks for your password again.</p></div>
+        <div class="field"><span class="label" id="r1">What Claude can do</span>
+          <div class="choices" role="radiogroup" aria-labelledby="r1">
+            <button type="button" role="radio" class="choice" aria-checked="true" tabindex="0" aria-labelledby="r1a" aria-describedby="r1ah"><span class="dot" aria-hidden="true"></span><span class="what"><span class="body" id="r1a">Read only</span><span class="caption" id="r1ah">See your plans, marks and notes.</span></span></button>
+            <button type="button" role="radio" class="choice" aria-checked="false" tabindex="-1" aria-labelledby="r1b" aria-describedby="r1bh"><span class="dot" aria-hidden="true"></span><span class="what"><span class="body" id="r1b">Read and change</span><span class="caption" id="r1bh">Also mark days, and add and edit items.</span></span></button>
+          </div></div>
+        <div class="btns"><button type="button" class="btn">Cancel</button><button type="button" class="btn primary">Connect</button></div>
+      </form>
+      <p class="caption foot">The connection lasts 90 days. You can remove it sooner in Settings › Connections.</p>
+    </section>
+  </div>
+
+  <div class="cell"><p class="caption state">Signed out, from Claude Code: a wrong password</p>
+    <section class="card" aria-labelledby="t2">
+      <span class="wm" aria-hidden="true">Tracker</span>
+      <h1 class="title-1" id="t2">Connect Claude Code</h1>
+      <p class="caption msg caution" role="status"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><span>Only continue if you just asked Claude Code to connect to your tracker. If you didn’t, choose Cancel.</span></p>
+      <form onsubmit="return false">
+        <dl class="who body"><dt>Asking</dt><dd>Claude Code, from claude.ai</dd><dt>Then back to</dt><dd>this computer (localhost)</dd></dl>
+        <div class="field"><label class="label" for="e2">Email</label><input id="e2" value="sam@example.com" aria-invalid="true" aria-describedby="m2" autocomplete="username"></div>
+        <div class="field"><label class="label" for="p2">Password</label><input id="p2" type="password" value="xxxxxxxxxxxx" aria-invalid="true" aria-describedby="m2" autocomplete="current-password"></div>
+        <p class="caption msg error" id="m2" role="alert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg><span>Wrong email or password. Check them and try again.</span></p>
+        <div class="field"><span class="label" id="r2">What Claude Code can do</span>
+          <div class="choices" role="radiogroup" aria-labelledby="r2">
+            <button type="button" role="radio" class="choice" aria-checked="true" tabindex="0" aria-labelledby="r2a" aria-describedby="r2ah"><span class="dot" aria-hidden="true"></span><span class="what"><span class="body" id="r2a">Read only</span><span class="caption" id="r2ah">See your plans, marks and notes.</span></span></button>
+            <button type="button" role="radio" class="choice" aria-checked="false" tabindex="-1" aria-labelledby="r2b" aria-describedby="r2bh"><span class="dot" aria-hidden="true"></span><span class="what"><span class="body" id="r2b">Read and change</span><span class="caption" id="r2bh">Also mark days, and add and edit items.</span></span></button>
+          </div></div>
+        <div class="btns"><button type="button" class="btn">Cancel</button><button type="button" class="btn primary" aria-busy="true">Connecting…</button></div>
+      </form>
+      <p class="caption foot">The connection lasts 90 days. You can remove it sooner in Settings › Connections.</p>
+    </section>
+  </div>
+
+  <div class="cell"><p class="caption state">An expired or used link</p>
+    <section class="card" aria-labelledby="t3">
+      <span class="wm" aria-hidden="true">Tracker</span>
+      <h1 class="title-1" id="t3">This link has expired</h1>
+      <p class="body intro">It was already used, or it’s more than ten minutes old. Go back to the app and connect again.</p>
+      <p class="body" style="margin-top: var(--space-6)"><a href="#">Go to the week</a></p>
+    </section>
+  </div>
+</div>
+<script>
+(() => {
+  // RadioCard: pressing a row chooses it; arrow keys move to the next or previous row and choose it.
+  const choose = (row) => {
+    const rows = [...row.parentElement.querySelectorAll('[role="radio"]')]
+    rows.forEach((r) => { r.setAttribute('aria-checked', String(r === row)); r.tabIndex = r === row ? 0 : -1 })
+  }
+  document.addEventListener('click', (e) => { const row = e.target.closest('[role="radio"]'); if (row) choose(row) })
+  document.addEventListener('keydown', (e) => {
+    const row = e.target.closest('[role="radio"]')
+    const d = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key]
+    if (!row || !d) return
+    e.preventDefault()
+    const rows = [...row.parentElement.querySelectorAll('[role="radio"]')]
+    const next = rows[(rows.indexOf(row) + d + rows.length) % rows.length]
+    choose(next)
+    next.focus()
+  })
+})()
+</script>
+</body>
+</html>
