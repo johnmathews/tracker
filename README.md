@@ -86,9 +86,10 @@
   it once you sign in: **Add to my account** merges it in, **Not mine** stops the question for you
   on that browser, **Later** asks next time. A log in another browser or profile can be moved with
   Export there and Import… here.
-- **Ask an agent.** An AI agent such as Claude Code can connect to the API's MCP endpoint
-  (`/api/mcp`) with a personal token from `tracker-admin token create`. It reads how your weeks are
-  going, as the app shows them, and with a write token it can edit plans and marks.
+- **Ask an agent.** claude.ai and Claude Code connect to the API's MCP endpoint (`/api/mcp`) by
+  URL and an OAuth sign-in. Claude Code, Claude Desktop and scripts can use a personal token
+  instead, which you create in Settings › Connections. The agent reads how your weeks are going,
+  as the app shows them, and with write access it can edit plans and marks.
   [docs/mcp.md](docs/mcp.md) says how to connect.
 
 ## 2. Getting started
@@ -126,7 +127,7 @@ It runs only against a local stack, and never overwrites a mark or a note. The d
 `api/.data` (git-ignored), so accounts and data survive restarts, rebuilds and branch switches;
 deleting that folder, or `git clean -x`, starts over.
 
-Vite forwards `/api` to `http://127.0.0.1:8000` (set `API_URL` to change it). Open the invite link
+Vite forwards `/api` and the three OAuth discovery paths ([docs/api.md](docs/api.md) §3.3) to `http://127.0.0.1:8000` (set `API_URL` to change it). Open the invite link
 from the dev server's own address: the API checks the `Origin` of every write, so
 `http://127.0.0.1:5173` and `http://localhost:5173` are different origins.
 
@@ -219,9 +220,9 @@ end to end.
 | ------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
 | [docs/architecture.md](docs/architecture.md)                                   | Components, stores, storage format, design decisions                 |
 | [docs/development.md](docs/development.md)                                     | Toolchain, scripts, conventions, tests                               |
-| [docs/deployment.md](docs/deployment.md)                                       | Docker images, nginx, CI, GHCR publishing, sign-up, turning on email |
+| [docs/deployment.md](docs/deployment.md)                                       | Docker images, nginx, CI, GHCR publishing, sign-up, turning on email, Cloudflare for Claude |
 | [docs/api.md](docs/api.md)                                                     | The API service: endpoints, accounts, email, CLI, backups            |
-| [docs/mcp.md](docs/mcp.md)                                                     | Connecting an agent over MCP: tokens, clients, example questions     |
+| [docs/mcp.md](docs/mcp.md)                                                     | Connecting an agent over MCP: OAuth, tokens, clients, example questions     |
 | [docs/brand.md](docs/brand.md)                                                 | The brand, the design system and how to change them                  |
 | [docs/decisions.md](docs/decisions.md)                                         | Why accounts, sync and the design system are built the way they are  |
 | [docs/specs/2026-10-24-brand-design.md](docs/specs/2026-10-24-brand-design.md) | The approved brand spec (Notebook): intent, rules and calls K1–K8    |

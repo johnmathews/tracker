@@ -65,6 +65,19 @@ The API has a second client besides the app: agents that connect over MCP (`mcp_
 tools read through `insights.py` and write through `edits.py`, so they follow the same rules as the
 app. [api.md](api.md) §3.1 describes the endpoint and [mcp.md](mcp.md) how to connect an agent.
 
+An agent signs in one of two ways. A personal token (`trk_…`) is created in Settings ›
+Connections and sent as a header. Or claude.ai and Claude Code connect by URL with OAuth, which
+the API serves itself in two modules: `oauth.py` holds the rules (clients, pending requests,
+codes, connections, rotating refresh tokens, access tokens) and knows nothing about HTTP, and
+`oauth_api.py` holds the routes ([api.md](api.md) §3.3). `mcp_server.py` checks a bearer token by
+its prefix, so the same endpoint takes both. The one place the browser app meets OAuth is the
+consent screen: Claude sends the person's browser to `/api/oauth/authorize`, which answers a 302
+to the app at `#/connect/<id>` (`ConnectPage.vue`). The page approves or denies through the API
+and then leaves for the address the API gives, Claude's callback. The app's calls, for that page and for
+Settings › Connections, are in `src/lib/connections.ts`. The OAuth discovery documents
+live outside `/api/` (`/.well-known/…`), so nginx and the Vite dev server forward those three
+paths to the API as well ([deployment.md](deployment.md) §2).
+
 Every screen is built from the primitives in `src/components/ui/` (§6.3), which follow the design
 system's cards ([brand.md](brand.md)). `TrackerGrid` and `TrackerRow` (on the `DayMark`, `Chip`
 and `IconButton` primitives) take props, emit events, and serve both sections.
@@ -74,7 +87,7 @@ page. `TrackerRow` asks the
 once the row has gone. `ExerciseGrid` and `DietSection` wire them to their store. `EditExerciseDialog` (which also adds an exercise when given none, K54) takes its field
 state and input cleaning through `useExerciseForm` (`src/composables/exerciseForm.ts`) and the
 `PerSideToggle` segmented control. `src/lib/problems.ts` turns a sign-in, sign-up, link or
-sign-out refusal into a sentence for the forms; `src/composables/importSummary.ts` says what an import would add,
+sign-out refusal into a sentence for the forms, and `describeConnectProblem` does the same for the consent screen; `src/composables/importSummary.ts` says what an import would add,
 for Settings → Import… and the first-login prompt.
 
 ```
@@ -95,10 +108,15 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 │                       Print… and Full screen (useFullscreen, where the browser has one); full
 │                       width, sized by main.css's --bar-* (K47, K49, K50); on the planner's
 │                       screens out of sight until wanted (useBarReveal, §6.6)
+├── ConnectPage.vue     an OAuth consent link (#/connect/<id>, K73), signed in or out: who is
+│                       asking, email and password, Read only or Read and change, Cancel and
+│                       Connect; then leaves for Claude's callback
 ├── SettingsPage.vue    the SettingsPage card, at #/settings: Back to the week, then Appearance
-│                       (Marks, then Theme, K59), Your goals (My goals, saved when typing
-│                       pauses), Your data (Export and Import…, see §4) and Account (who is
-│                       signed in, Sign out)
+│   │                   (Marks, then Theme, K59), Your goals (My goals, saved when typing
+│   │                   pauses), Your data (Export and Import…, see §4), Connections and
+│   │                   Account (who is signed in, Sign out)
+│   └── ConnectionsSection.vue   the Connections row (K74): the MCP address with Copy and how to
+│                       connect Claude, the Apps connected by OAuth, and the personal Tokens
 ├── AskPage.vue         #/ask (K67–K71): the SidePanel with the HistoryList, and beside it Back
 │                       to the week, the Transcript and the question box with the QuotaChip;
 │                       deleting asks in a ConfirmDialog of its own
@@ -680,7 +698,8 @@ component's own.
 
 The other cards are composed in the screens: Header in `AppNavbar.vue`, Panel in `AuthCard.vue`
 and `ImportPrompt.vue`, WeekGrid in `TrackerGrid.vue` and `TrackerRow.vue`, PlannerScreen in
-`ExerciseGrid.vue` and `DietSection.vue` (the class lists in `src/lib/screens.ts`). Icons are `@lucide/vue` at a 1.5px stroke, `aria-hidden` beside words. A
+`ExerciseGrid.vue` and `DietSection.vue` (the class lists in `src/lib/screens.ts`), SettingsPage in
+`SettingsPage.vue`, ConnectionsSection in `ConnectionsSection.vue`, ConnectPage in `ConnectPage.vue`. Icons are `@lucide/vue` at a 1.5px stroke, `aria-hidden` beside words. A
 primitive's colour transitions last 120ms at most, stop under `prefers-reduced-motion`, and name
 the properties they animate, so the focus ring never fades in.
 
@@ -836,7 +855,10 @@ while mail is on; the session store keeps it, and `EmailStatus` shows the confir
 is false, with "Send it again" (`POST /api/auth/confirm/resend`). A confirm link,
 `#/confirm/<token>`, opens `ConfirmEmail` whether or not anyone is signed in, ahead of every other
 screen; it posts the token, clears the fragment once used or dead, and, when the link was for the
-signed-in user, ends the banner. A mailed reset link is the same `#/reset/<token>` as before. Signing out ends the server
+signed-in user, ends the banner. A connect link, `#/connect/<id>`, works the same way for
+`ConnectPage`: it shows signed in or out, comes ahead of every other screen, and survives a
+sign-out, so the person arriving from Claude never loses the request. The page never creates a
+session: approving takes the account's email and password, even when signed in. A mailed reset link is the same `#/reset/<token>` as before. Signing out ends the server
 session, then deletes the user's cache and outbox from the device. It is refused while offline: the
 cookie is HttpOnly, so only the server can end it.
 

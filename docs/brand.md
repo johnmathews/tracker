@@ -19,7 +19,7 @@ are in the [brand design](specs/2026-10-24-brand-design.md), and the rulings in
 
 The design system is a claude.ai Design System artifact:
 <https://claude.ai/artifact/9pkE17ugXFGGyBirapyCgH>. It holds the brand book, the tokens in a light
-and a dark theme, 38 components with live previews and guidelines (Basics, Forms, Overlays, Planner,
+and a dark theme, 40 components with live previews and guidelines (Basics, Forms, Overlays, Planner,
 Feedback, Screens, Ask), the cover and the assets. The artifact is private to its owner until it is shared, so
 other readers work from the source below. Agents designing for Tracker read its README
 first.
@@ -57,7 +57,7 @@ Four project roles each mean one thing, and nothing else may use them:
 | `pen`         | Great: a day's mark, a day that met the daily pick (its name, underlined), and a met week's count in Recent weeks (underlined, K64) | Links, buttons, decoration |
 | `pen-partial` | Partly done: a day's mark                                                                                                           | Over the pick, warnings    |
 | `pen-missed`  | Tried and couldn't: a day's mark                                                                                                    | Errors                     |
-| `caution-ink` | A caution, always with words; nothing on the planner uses it (K28)                                                                  | Errors                     |
+| `caution-ink` | A caution, always with words; nothing on the planner uses it (K28). The consent screen's warning does (K73)                                                                  | Errors                     |
 
 The primary action is `ink`, not a brand colour (K8): one colour for "act", the pens for "done".
 Outside the day's mark, no meaning rests on colour alone: a met day's name and a met week's count
@@ -94,8 +94,13 @@ nothing in the app changes it; it is kept so older data and exports round-trip u
 
 The type is set for the gym, not the desk (K19): big enough to read at arm's length, never
 delicate. Source Serif 4 sets the display date, section titles, the wordmark and notes (italic).
-Source Sans 3 sets everything else, numbers included, with tabular figures (K4: no monospace). Both are
+Source Sans 3 sets everything else, numbers included, with tabular figures (K4). Both are
 self-hosted from the Fontsource variable packages, because the CSP allows fonts only from `'self'`.
+
+One narrow exception (K75): the system's own monospace stack, `--font-mono`, sets text that is read
+character by character and copied. That is a token and its prefix, the MCP address and the commands
+in Settings › Connections, and nothing else: never numbers, labels or prose. It is not downloaded, so the
+CSP is unchanged.
 
 | Class        | Size and weight                     | Use                                                                            |
 | ------------ | ----------------------------------- | ------------------------------------------------------------------------------ |
