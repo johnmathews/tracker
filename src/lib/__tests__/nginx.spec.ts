@@ -37,4 +37,35 @@ describe('nginx.conf', () => {
   it('marks API responses no-store', () => {
     expect(conf).toMatch(/~\^\/api\/\s+"no-store";/)
   })
+
+  // OAuth discovery (RFC 9728, RFC 8414): the API serves the JSON, and these paths sit outside /api/,
+  // so without their own locations they fall through to the SPA and return index.html.
+  describe.each([
+    '/.well-known/oauth-protected-resource/api/mcp',
+    '/.well-known/oauth-protected-resource',
+    '/.well-known/oauth-authorization-server',
+  ])('discovery path %s', (path) => {
+    it('proxies to the API container, as /api/ does', () => {
+      const loc = block(`location = ${path} {`)
+      expect(loc).toContain('resolver 127.0.0.11 valid=10s ipv6=off;')
+      expect(loc).toContain('set $api http://fitness-api:8000;')
+      expect(loc).toContain('proxy_pass $api;')
+      expect(loc).toContain('proxy_connect_timeout 3s;')
+      expect(loc).toContain('proxy_http_version 1.1;')
+      expect(loc).toContain('proxy_set_header Host $host;')
+      expect(loc).toContain('proxy_hide_header Cache-Control;')
+      // add_header here would drop the server-level security headers.
+      expect(loc).not.toContain('add_header')
+    })
+  })
+
+  it('answers any other /.well-known/ path with 404, not the SPA', () => {
+    const wk = block('location ^~ /.well-known/ {')
+    expect(wk).toContain('return 404;')
+    expect(wk).not.toContain('add_header')
+  })
+
+  it('marks /.well-known/ responses no-store', () => {
+    expect(conf).toMatch(/~\^\/\\\.well-known\/\s+"no-store";/)
+  })
 })

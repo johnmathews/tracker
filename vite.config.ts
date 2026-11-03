@@ -6,6 +6,16 @@ import tailwindcss from '@tailwindcss/vite'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import { APP_NAME } from './src/lib/app.ts'
 
+const apiUrl = process.env.API_URL ?? 'http://127.0.0.1:8000'
+const apiProxy = Object.fromEntries(
+  [
+    '/api',
+    '/.well-known/oauth-protected-resource/api/mcp',
+    '/.well-known/oauth-protected-resource',
+    '/.well-known/oauth-authorization-server',
+  ].map((path) => [path, apiUrl]),
+)
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
@@ -30,6 +40,7 @@ export default defineConfig({
   },
   // In development the API runs separately (docs/development.md); the browser still sees one
   // origin, as it does behind nginx. The API's PUBLIC_ORIGIN must be the dev server's origin.
-  server: { proxy: { '/api': process.env.API_URL ?? 'http://127.0.0.1:8000' } },
-  preview: { proxy: { '/api': process.env.API_URL ?? 'http://127.0.0.1:8000' } },
+  // The OAuth discovery documents (/.well-known/...) are the API's too; nginx proxies the same paths.
+  server: { proxy: apiProxy },
+  preview: { proxy: apiProxy },
 })
