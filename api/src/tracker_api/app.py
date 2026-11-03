@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.routing import Route
 
-from . import ask, auth, data, outbox
+from . import ask, auth, data, oauth, oauth_api, outbox
 from .backup import BackupThread
 from .config import Config
 from .db import connect, migrate
@@ -67,6 +67,11 @@ AUTH_STATUS = {
     "too-soon": 429,
     "confirmed": 409,
     "no-email": 409,
+    "token-name": 400,
+    "no-token": 404,
+    "disabled": 403,
+    "no-request": 404,
+    "no-connection": 404,
 }
 
 
@@ -99,9 +104,11 @@ def create_app(
     run_backups: bool = True,
     mailer: Mailer | None = None,
     ask_client: AsyncAnthropic | None = None,
+    fetch: oauth.Fetch = oauth.fetch_document,
 ) -> FastAPI:
     """The API. Mail goes through `mailer`, by default Resend's when the config turns mail on;
-    Ask goes through `ask_client`, by default one made with the config's Anthropic key."""
+    Ask goes through `ask_client`, by default one made with the config's Anthropic key. OAuth
+    clients' metadata documents are fetched with `fetch`."""
     if not config.mail_enabled:
         mailer = None
     elif mailer is None:
@@ -169,8 +176,13 @@ def create_app(
     async def guard(
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
-        is_mcp = request.scope["path"] == MCP_PATH
-        refusal = mcp_refusal(request) if is_mcp else rest_refusal(request)
+        path = request.scope["path"]
+        if path == MCP_PATH:
+            refusal = mcp_refusal(request)
+        elif path in oauth_api.FORM_PATHS:
+            refusal = oauth_api.form_refusal(request, config.public_origin)
+        else:
+            refusal = rest_refusal(request)
         if refusal is not None:
             return refusal
         response = await call_next(request)
@@ -345,6 +357,50 @@ def create_app(
     @app.get("/api/auth/me")
     def me(user: User, conn: Conn) -> dict[str, Any]:
         return account(conn, user.id)
+
+    def token_json(info: auth.TokenInfo) -> dict[str, Any]:
+        """A token as the Connections list shows it: never its hash or the token itself."""
+        return {
+            "name": info.name,
+            "prefix": info.prefix,
+            "scope": info.scope,
+            "createdAt": info.created_at,
+            "lastUsedAt": info.last_used_at,
+        }
+
+    @app.get("/api/tokens")
+    def tokens(user: User, conn: Conn) -> dict[str, Any]:
+        return {"tokens": [token_json(t) for t in auth.list_tokens(conn, user.username)]}
+
+    @app.post("/api/tokens", status_code=201)
+    def create_token(body: Body, user: User, conn: Conn) -> dict[str, Any]:
+        name, given = strings(body, "name", "scope")
+        scope: auth.TokenScope
+        if given == "read":
+            scope = "read"
+        elif given == "write":
+            scope = "write"
+        else:
+            raise ApiError(400, "invalid")
+        try:
+            token = auth.create_token(
+                conn, config, user.username, name, scope, limit=auth.MAX_TOKENS
+            )
+        except auth.AuthError as e:
+            if e.code == "too-many-tokens":
+                raise ApiError(409, "too-many") from None
+            raise refused(e) from None
+        # The one response that carries the token; only its hash is stored.
+        prefix = token[len(auth.TOKEN_PREFIX) :][: auth.PREFIX_CHARS]
+        info = next(t for t in auth.list_tokens(conn, user.username) if t.prefix == prefix)
+        return {"token": token, "info": token_json(info)}
+
+    @app.delete("/api/tokens/{prefix}", status_code=204)
+    def delete_token(prefix: str, user: User, conn: Conn) -> None:
+        try:
+            auth.revoke_token(conn, user.username, prefix)
+        except auth.AuthError as e:
+            raise refused(e) from None
 
     @app.get("/api/auth/options")
     def options() -> dict[str, bool]:
@@ -543,6 +599,15 @@ def create_app(
     @app.delete("/api/ask/conversations", status_code=204)
     def delete_conversations(user: User, conn: Conn) -> None:
         data.delete_conversations(conn, user.id)
+
+    oauth_api.register(
+        app,
+        config,
+        oauth.ClientResolver(config.oauth_client_hosts, config.clock, fetch),
+        oauth_api.Routing(
+            conn=get_conn, user=current_user, body=json_object, fail=ApiError, refused=refused
+        ),
+    )
 
     # The exact path: a Mount would answer `/api/mcp` with a 307 to `/api/mcp/`, whose Location
     # says http:// behind nginx. The SDK app routes the same path, so it gets the request as it

@@ -5,6 +5,8 @@ request is stateless: one JSON-RPC message in, one JSON response out, with the t
 again each time. Tools are registered in `_add_tools`. A tool finds its account with `caller()`,
 and opens the database with `connection(config)`."""
 
+import json
+import logging
 import sqlite3
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -21,15 +23,18 @@ from mcp.server.auth.settings import AuthSettings
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp_types import ToolAnnotations
-from pydantic import AnyHttpUrl, Field
+from pydantic import Field
 from starlette.applications import Starlette
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from . import auth, edits, insights
+from . import auth, edits, insights, oauth
 from .config import Config
 from .db import connect
 from .validate import Mark, Section
 
 MCP_PATH = "/api/mcp"
+
+log = logging.getLogger(__name__)
 
 #: What each token scope may do. A write token may also read.
 SCOPES: dict[auth.TokenScope, list[str]] = {"read": ["read"], "write": ["read", "write"]}
@@ -48,17 +53,59 @@ REMOVING = ToolAnnotations(
     read_only_hint=False, destructive_hint=True, idempotent_hint=False, open_world_hint=False
 )
 NEEDS_WRITE = (
-    "scope: this token is read-only; mint one with --write "
-    "(tracker-admin token create <email> --name <name> --write) to change plans and marks"
+    "scope: this connection is read-only. "
+    "To change plans and marks, create a write token in Settings › Connections, "  # noqa: RUF001
+    "or reconnect and allow changes."
 )
 #: A week or date so near the calendar's end that a week around it can't be counted.
 OUT_OF_RANGE = "date: a week or date is out of range; use one between 2000 and 2999"
 
 
 class TrackerAccess(AccessToken):
-    """A verified personal API token, carrying the account it acts as."""
+    """A verified token, personal or OAuth, carrying the account it acts as."""
 
     user: auth.TokenUser
+
+
+class VerifierUnavailable(Exception):
+    """The token could not be checked: the database failed, not the token. `Unavailable` turns
+    it into a 503, since a 401 would tell Claude the connection is gone."""
+
+
+class Unavailable:
+    """Answers 503 `busy` when the token verifier fails. Added with `add_middleware`, so it sits
+    inside the SDK app's error handling and outside its authentication, which calls the
+    verifier (family-finances 8910878)."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        started = False
+
+        async def watch(message: Message) -> None:
+            nonlocal started
+            started = started or message["type"] == "http.response.start"
+            await send(message)
+
+        try:
+            await self.app(scope, receive, watch)
+        except VerifierUnavailable:
+            if started:  # pragma: no cover (the verifier runs before any response)
+                raise
+            body = json.dumps({"error": "busy"}).encode()
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 503,
+                    "headers": [
+                        (b"content-type", b"application/json"),
+                        (b"content-length", str(len(body)).encode()),
+                        (b"retry-after", b"5"),
+                    ],
+                }
+            )
+            await send({"type": "http.response.body", "body": body})
 
 
 @contextmanager
@@ -72,28 +119,51 @@ def connection(config: Config) -> Iterator[sqlite3.Connection]:
 
 
 class Tokens(TokenVerifier):
-    """Looks a bearer token up with `auth.token_user`, on a worker thread, as REST's sync routes
-    do: the lookup may wait for SQLite's write lock."""
+    """Looks a bearer token up by its prefix (D8), on a worker thread, as REST's sync routes do:
+    the lookup may wait for SQLite's write lock.
+
+    - `trk_`, a personal token: `auth.token_user`, for this server's own resource.
+    - `tka_`, an OAuth access token: `oauth.access_user`, for the resource its grant was issued
+      for, which the SDK then compares with this server's (F5).
+    - Anything else is no token: a 401.
+
+    `expires_at` stays None, so the SDK's wall-clock check never runs: both lookups end a token
+    on `config.clock` themselves (F9). A lookup that fails raises VerifierUnavailable, a 503."""
 
     def __init__(self, config: Config, resource: str) -> None:
         self.config = config
         self.resource = resource
 
-    def _lookup(self, token: str) -> auth.TokenUser | None:
+    def _lookup(self, token: str) -> tuple[auth.TokenUser, str] | None:
         with connection(self.config) as conn:
-            return auth.token_user(conn, self.config, token)
+            if token.startswith(auth.TOKEN_PREFIX):
+                user = auth.token_user(conn, self.config, token)
+                return None if user is None else (user, self.resource)
+            if token.startswith(oauth.ACCESS_PREFIX):
+                access = oauth.access_user(conn, self.config, token)
+                if access is None:
+                    return None
+                user = auth.TokenUser(access.user_id, access.username, access.scope)
+                return user, access.resource
+            return None
 
     async def verify_token(self, token: str) -> TrackerAccess | None:
-        user = await anyio.to_thread.run_sync(self._lookup, token)
-        if user is None:
+        try:
+            found = await anyio.to_thread.run_sync(self._lookup, token)
+        except Exception as e:
+            log.exception("the MCP token check failed")  # the traceback holds no token
+            raise VerifierUnavailable from e
+        if found is None:
             return None
+        user, resource = found
         # The hash stands in for the token, so no repr of this object can leak it.
         return TrackerAccess(
             token=auth.token_hash(token),
             client_id=f"user-{user.user_id}",
             subject=str(user.user_id),
             scopes=SCOPES[user.scope],
-            resource=self.resource,
+            expires_at=None,
+            resource=resource,
             user=user,
         )
 
@@ -125,10 +195,16 @@ def build_mcp(config: Config, max_body: int) -> McpEndpoint:
         instructions="A weekly training tracker: exercise and food plans, and the days marked "
         "against them.",
         token_verifier=Tokens(config, resource),
-        auth=AuthSettings(
-            issuer_url=AnyHttpUrl(origin),
-            resource_server_url=AnyHttpUrl(resource),
-            validate_token_resource=True,
+        # Strings, not AnyHttpUrl(...): that adds a slash to a bare origin, and the issuer must
+        # match the authorization server's metadata exactly (F8). The 401's `resource_metadata`
+        # is built from `resource_server_url`:
+        # {origin}/.well-known/oauth-protected-resource/api/mcp.
+        auth=AuthSettings.model_validate(
+            {
+                "issuer_url": origin,
+                "resource_server_url": resource,
+                "validate_token_resource": True,
+            }
         ),
         # The SDK calls logging.basicConfig at this level. WARNING is Python's own default, so the
         # API logs what it did before, and no per-request INFO line from the SDK.
@@ -147,6 +223,7 @@ def build_mcp(config: Config, max_body: int) -> McpEndpoint:
             allowed_origins=[origin],
         ),
     )
+    app.add_middleware(Unavailable)
     return McpEndpoint(server, app)
 
 

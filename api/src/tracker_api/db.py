@@ -222,6 +222,72 @@ MIGRATIONS = [
         CHECK (stop IN ('end_turn', 'max_tokens') OR answer = '')
     ) STRICT, WITHOUT ROWID;
     """,
+    # OAuth connections (oauth.py). Every code and token is stored as its SHA-256 only. A pending
+    # request comes before anyone signs in, so it has no user; everything else hangs off a grant,
+    # which hangs off its user. `grace_pair` is the newest access and refresh secrets sealed
+    # under the refresh token they replaced, for a racing twin within the grace. Only adds tables.
+    """
+    CREATE TABLE oauth_requests (
+        id_hash TEXT PRIMARY KEY,
+        client_id TEXT NOT NULL,
+        client_name TEXT NOT NULL,
+        client_host TEXT NOT NULL,
+        redirect_uri TEXT NOT NULL,
+        code_challenge TEXT NOT NULL,
+        resource TEXT NOT NULL,
+        scope TEXT,
+        state TEXT,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX oauth_requests_by_time ON oauth_requests (expires_at);
+
+    CREATE TABLE oauth_grants (
+        id TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+        client_id TEXT NOT NULL,
+        client_name TEXT NOT NULL,
+        client_host TEXT NOT NULL,
+        scope TEXT NOT NULL CHECK (scope IN ('read', 'write')),
+        resource TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        last_used_at INTEGER,
+        refresh_hash TEXT UNIQUE,
+        prev_refresh_hash TEXT,
+        grace_until INTEGER,
+        grace_pair BLOB,
+        generation INTEGER NOT NULL DEFAULT 0 CHECK (generation >= 0)
+    ) STRICT;
+    CREATE INDEX oauth_grants_by_user ON oauth_grants (user_id);
+    CREATE INDEX oauth_grants_by_time ON oauth_grants (expires_at);
+
+    CREATE TABLE oauth_retired (
+        grant_id TEXT NOT NULL REFERENCES oauth_grants (id) ON DELETE CASCADE,
+        refresh_hash TEXT NOT NULL,
+        PRIMARY KEY (grant_id, refresh_hash)
+    ) STRICT, WITHOUT ROWID;
+
+    CREATE TABLE oauth_codes (
+        code_hash TEXT PRIMARY KEY,
+        grant_id TEXT NOT NULL REFERENCES oauth_grants (id) ON DELETE CASCADE,
+        client_id TEXT NOT NULL,
+        redirect_uri TEXT NOT NULL,
+        code_challenge TEXT NOT NULL,
+        resource TEXT NOT NULL,
+        expires_at INTEGER NOT NULL,
+        redeemed_at INTEGER
+    ) STRICT;
+    CREATE INDEX oauth_codes_by_grant ON oauth_codes (grant_id);
+
+    CREATE TABLE oauth_access (
+        token_hash TEXT PRIMARY KEY,
+        grant_id TEXT NOT NULL REFERENCES oauth_grants (id) ON DELETE CASCADE,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX oauth_access_by_grant ON oauth_access (grant_id);
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

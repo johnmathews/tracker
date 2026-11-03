@@ -649,7 +649,8 @@ def test_a_read_token_cannot_write(
 ) -> None:
     text = write_error(agent, token, name, WRITE_CALLS[name])
     assert "read-only" in text
-    assert "--write" in text
+    assert "Settings › Connections" in text  # noqa: RUF001
+    assert "tracker-admin" not in text
     assert rows(conn) == (0, 0, 0)
 
 
@@ -775,7 +776,18 @@ def test_a_week_at_the_calendars_end_is_refused_by_name(
     assert OUT_OF_RANGE in tool_error(agent, token, arguments["name"], **arguments["arguments"])
 
 
-def test_the_resource_metadata_url_answers_404(agent: TestClient, uid: int) -> None:
+def test_the_resource_metadata_url_answers_the_protected_resource_document(
+    agent: TestClient, uid: int
+) -> None:
+    """It answered 404 before OAuth (F1); now it is the document claude.ai starts sign-in from."""
     header = call(agent, "initialize", INITIALIZE).headers["www-authenticate"]
     url = header.split('resource_metadata="', 1)[1].split('"', 1)[0]
-    assert agent.get(url).status_code == 404
+    assert url == f"{ORIGIN}/.well-known/oauth-protected-resource/api/mcp"
+    r = agent.get(url)
+    assert r.status_code == 200
+    assert r.json() == {
+        "resource": f"{ORIGIN}{MCP_PATH}",
+        "authorization_servers": [ORIGIN],
+        "scopes_supported": ["read", "write"],
+        "bearer_methods_supported": ["header"],
+    }

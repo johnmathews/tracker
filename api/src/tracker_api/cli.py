@@ -56,9 +56,9 @@ def _parser() -> argparse.ArgumentParser:
     for name, text in [
         ("invite", "print a single-use sign-up link for a new account's email (valid 7 days)"),
         ("reset", "print a password-reset link for an account (valid 24 hours)"),
-        ("disable", "block an account's logins and end its sessions and API tokens"),
+        ("disable", "block an account's logins and end its sessions, tokens and connections"),
         ("enable", "allow a disabled account to log in again"),
-        ("revoke-sessions", "sign an account out everywhere and revoke its API tokens"),
+        ("revoke-sessions", "sign an account out everywhere and end its tokens and connections"),
     ]:
         # `username`: the account's name, its email (or, for an account from before invites
         # took an email, the username it was invited with).
@@ -163,10 +163,11 @@ def _run(args: argparse.Namespace, config: Config, conn: sqlite3.Connection) -> 
                 print("Nothing to add: the demo weeks are already there.")
             print(f"Sign in at {config.public_origin}/")
         case "revoke-sessions":
-            sessions, tokens = auth.revoke_sessions(conn, args.username)
+            sessions, tokens, connections = auth.revoke_sessions(conn, args.username)
+            ended = f" and {_plural(connections, 'connection')}" if connections else ""
             print(
                 f"Ended {_plural(sessions, 'session')} and revoked {_plural(tokens, 'token')}"
-                f" for {args.username}."
+                f"{ended} for {args.username}."
             )
         case "token":
             _token(args, config, conn)

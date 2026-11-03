@@ -32,14 +32,148 @@ SECTIONS_STEP = "ADD COLUMN item_sections"
 GOALS_STEP = "ADD COLUMN goals"
 ASK_LOG_STEP = "CREATE TABLE ask_log"
 ASK_HISTORY_STEP = "CREATE TABLE ask_conversations"
+OAUTH_STEP = "CREATE TABLE oauth_grants"
 
 
 def test_steps_are_numbered_as_the_docs_say() -> None:
     """Schema 6 adds API tokens, 7 item details, 8 the item pages' arrangement, 9 My goals,
-    10 Ask's caps and 11 Ask's history (docs/api.md §2)."""
-    assert SCHEMA_VERSION == 11
-    steps = (TOKENS_STEP, DETAILS_STEP, SECTIONS_STEP, GOALS_STEP, ASK_LOG_STEP, ASK_HISTORY_STEP)
-    assert [_step_of(m) + 1 for m in steps] == [6, 7, 8, 9, 10, 11]
+    10 Ask's caps, 11 Ask's history and 12 OAuth connections (docs/api.md §2)."""
+    assert SCHEMA_VERSION == 12
+    steps = (
+        TOKENS_STEP,
+        DETAILS_STEP,
+        SECTIONS_STEP,
+        GOALS_STEP,
+        ASK_LOG_STEP,
+        ASK_HISTORY_STEP,
+        OAUTH_STEP,
+    )
+    assert [_step_of(m) + 1 for m in steps] == [6, 7, 8, 9, 10, 11, 12]
+
+
+OAUTH_TABLES = ("oauth_requests", "oauth_grants", "oauth_retired", "oauth_codes", "oauth_access")
+
+
+def test_oauth_migration_keeps_every_row_of_a_populated_database(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A database at schema 11 with accounts, sessions, tokens, plans and Ask history keeps every
+    row through step 12, which only adds the OAuth tables, empty."""
+    from tracker_api import db
+
+    c = connect(tmp_path / "f.db")
+    monkeypatch.setattr(db, "MIGRATIONS", db.MIGRATIONS[: _step_of(OAUTH_STEP)])
+    db.migrate(c)
+    monkeypatch.undo()
+    assert c.execute("PRAGMA user_version").fetchone()[0] == 11
+    c.executescript(
+        """
+        INSERT INTO users (id, username, password_hash, created_at, email_confirmed_at, disabled)
+            VALUES (1, 'a@example.com', 'h', 0, 5, 0), (2, 'john', 'h2', 1, NULL, 1);
+        INSERT INTO sessions (token_hash, user_id, created_at, last_seen, expires_at)
+            VALUES ('s1', 1, 0, 0, 99), ('s2', 2, 0, 0, 99);
+        INSERT INTO api_tokens VALUES ('t1', 1, 'laptop', 'abcdefgh', 'write', 3, 4),
+            ('t2', 2, 'agent', 'ijklmnop', 'read', 5, NULL);
+        INSERT INTO settings (user_id, accent, daily_pick, food_pick, item_sections, goals)
+            VALUES (1, '#30d158', 3, 4, NULL, 'Run a 10k');
+        INSERT INTO plans (user_id, section, week, items_json, rev)
+            VALUES (1, 'exercise', '2026-10-19', '[{"id":"pu","name":"Push-ups"}]', 3);
+        INSERT INTO ticks (user_id, section, week, item_id, days, partial, missed, solid, hatch)
+            VALUES (1, 'exercise', '2026-10-19', 'pu', 7, 2, 4, 1, 2);
+        INSERT INTO item_details VALUES (1, 'exercise', 'pu', '{"notes":"slow"}', 2);
+        INSERT INTO ask_log (user_id, asked_at) VALUES (1, 10);
+        INSERT INTO ask_conversations VALUES (1, 'c1', 'How was my week?', 10, 20);
+        INSERT INTO ask_turns VALUES (1, 'c1', 0, 'How was it?', 'Fine.', 'end_turn', 10);
+        """
+    )
+    tables = [r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type = 'table'")]
+    assert not set(OAUTH_TABLES) & set(tables)
+
+    def snapshot() -> dict[str, list[tuple[object, ...]]]:
+        return {
+            t: sorted(tuple(r) for r in c.execute(f"SELECT * FROM {t}"))  # noqa: S608
+            for t in tables
+        }
+
+    before = snapshot()
+    assert sum(len(rows) for rows in before.values()) == 13
+    db.migrate(c)
+    assert c.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION == 12
+    assert snapshot() == before
+    for table in OAUTH_TABLES:
+        assert c.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0  # noqa: S608
+    c.close()
+
+
+def test_oauth_tables_hold_hashes_and_go_with_their_user(conn: sqlite3.Connection) -> None:
+    """Every OAuth row but a pending request hangs off a grant, which hangs off a user; deleting
+    either takes the rest. A grant's scope is one of two, as a token's is."""
+    columns = {
+        t: [r["name"] for r in conn.execute(f"PRAGMA table_info({t})")] for t in OAUTH_TABLES
+    }
+    assert columns == {
+        "oauth_requests": [
+            "id_hash",
+            "client_id",
+            "client_name",
+            "client_host",
+            "redirect_uri",
+            "code_challenge",
+            "resource",
+            "scope",
+            "state",
+            "created_at",
+            "expires_at",
+        ],
+        "oauth_grants": [
+            "id",
+            "user_id",
+            "client_id",
+            "client_name",
+            "client_host",
+            "scope",
+            "resource",
+            "created_at",
+            "expires_at",
+            "last_used_at",
+            "refresh_hash",
+            "prev_refresh_hash",
+            "grace_until",
+            "grace_pair",
+            "generation",
+        ],
+        "oauth_retired": ["grant_id", "refresh_hash"],
+        "oauth_codes": [
+            "code_hash",
+            "grant_id",
+            "client_id",
+            "redirect_uri",
+            "code_challenge",
+            "resource",
+            "expires_at",
+            "redeemed_at",
+        ],
+        "oauth_access": ["token_hash", "grant_id", "created_at", "expires_at"],
+    }
+    conn.execute(
+        "INSERT INTO users (id, username, password_hash, created_at) VALUES (1, 'a', 'h', 0)"
+    )
+    grant = (
+        "INSERT INTO oauth_grants (id, user_id, client_id, client_name, client_host, scope,"
+        " resource, created_at, expires_at) VALUES (?, ?, 'c', 'n', 'h', ?, 'r', 0, 9)"
+    )
+    for bad in [("g", 2, "read"), ("g", 1, "admin")]:
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(grant, bad)
+    conn.execute(grant, ("g", 1, "read"))
+    conn.execute("INSERT INTO oauth_retired VALUES ('g', 'r1')")
+    conn.execute("INSERT INTO oauth_codes VALUES ('c', 'g', 'c', 'u', 'x', 'r', 9, NULL)")
+    conn.execute("INSERT INTO oauth_access VALUES ('a', 'g', 0, 9)")
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute("INSERT INTO oauth_access VALUES ('b', 'nope', 0, 9)")
+    conn.execute("DELETE FROM users WHERE id = 1")
+    for table in ("oauth_grants", "oauth_retired", "oauth_codes", "oauth_access"):
+        assert conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0  # noqa: S608
 
 
 def before_details(path: Path, monkeypatch: pytest.MonkeyPatch) -> sqlite3.Connection:
