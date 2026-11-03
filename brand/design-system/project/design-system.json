@@ -197,9 +197,9 @@
   ],
   "lastChange": {
     "by": "John Mathews",
-    "at": "2026-11-02T06:59:01Z",
+    "at": "2026-11-03T18:23:50Z",
     "via": "Claude Code",
-    "note": "The Ask page (K67-K72): five new cards, Transcript, AnswerProgress, QuotaChip, SidePanel and HistoryList; voice.md's Ask section (a plain verdict, notes quoted back as advice, and streaks, scores and rankings allowed in answers)."
+    "note": "Connections (K73-K78): two new cards, ConnectPage (the consent screen Claude sends you to) and ConnectionsSection (Settings › Connections); a --font-mono token for tokens and addresses only; RadioCard's optional one-line description; notes in Banner, InlineMessage, SettingsPage and foundations."
   },
   "layout": "files",
   "libraries": [],
