@@ -220,39 +220,51 @@ minute and leaves nothing running.
 ## 5. Connecting Claude (OAuth and Cloudflare)
 
 claude.ai and Claude Code connect to `https://tracker.itsa-pizza.com/api/mcp` with an OAuth
-sign-in ([mcp.md](mcp.md) §4, [api.md](api.md) §3.3). Anthropic's servers make the requests that
-discover the sign-in, fetch the tokens and call the tools, so Cloudflare must let them through.
-The person's own browser, which loads the consent page, needs no exception.
+sign-in ([mcp.md](mcp.md) §4, [api.md](api.md) §3.3). Two paths must be open:
+
+- **In:** Anthropic's servers make the requests that discover the sign-in, fetch the tokens and
+  call the tools, so Cloudflare must let them through (§5.1). The person's own browser, which loads
+  the consent page, needs no exception.
+- **Out:** to check the asking app, the API fetches its client metadata document from
+  `https://claude.ai/oauth/…`, so the API's egress proxy must allow `claude.ai:443` and
+  `claude.com:443` (§5.3).
+
+Both were set up on 2026-11-03, and claude.ai and Claude Code then connected (§5.4).
 
 ### 5.1 What to change in Cloudflare
 
-Without a change, Cloudflare refuses these requests at the edge. A client that is not a browser
-gets `403` with the body `error code: 1010` (a browser-integrity block on the client's signature),
-and the API logs nothing, because the request never reaches it. A `403` with that body is
-Cloudflare's, not the tracker's. Measured on this host on 2026-11-02: Python's default user agent
-got 1010 on `/api/mcp` and on `/.well-known/oauth-authorization-server`.
+Without a change, Cloudflare can refuse these requests at the edge. A client that is not a browser
+can get `403` with the body `error code: 1010` (a browser-integrity block on the client's
+signature), and the API logs nothing, because the request never reaches it. A `403` with that body
+is Cloudflare's, not the tracker's. Measured on this host on 2026-11-02: Python's default user
+agent got 1010 on `/api/mcp` and on `/.well-known/oauth-authorization-server`.
 
-Anthropic's servers call out from `160.79.104.0/21` (Anthropic's outbound range; check it
-again if connections stop working). Make one of these
-changes on the `itsa-pizza.com` zone. The first is preferred.
+Anthropic publishes two outbound ranges, `160.79.104.0/21` and `153.61.208.0/20`
+([IP addresses](https://platform.claude.com/docs/en/api/ip-addresses); check them again if
+connections stop working). The rule in use since 2026-11-03 is a **custom rule that skips Browser
+Integrity Check**, for the tracker's host and paths only:
 
-1. **An IP Access rule (preferred).** In Security › WAF › Tools, add an IP Access Rule for
-   `160.79.104.0/21` with the action **Allow**, for this zone. An Allow rule skips Browser
-   Integrity Check and also **Bot Fight Mode**. If the zone has Bot Fight Mode on, a WAF skip rule
-   cannot let Anthropic through, because Bot Fight Mode cannot be skipped by one. This rule covers
-   every path on the zone, so it also covers the other apps on `itsa-pizza.com` for that range,
-   which is acceptable for one published range of one company's servers.
-2. **A WAF custom rule that skips Browser Integrity Check.** In Security › WAF › Custom rules, add
-   a rule ordered first, with the action **Skip**, skipping Browser Integrity Check, and this
-   expression:
+1. In the dashboard for `itsa-pizza.com`, go to **Security › Security rules › Create rule › Custom
+   rules**.
+2. Name it, for example `Claude → Tracker MCP (Anthropic outbound)`, choose **Edit expression**
+   and paste:
 
    ```text
-   (ip.src in {160.79.104.0/21}) and (starts_with(http.request.uri.path, "/api/mcp") or starts_with(http.request.uri.path, "/.well-known/") or starts_with(http.request.uri.path, "/api/oauth/"))
+   (http.host eq "tracker.itsa-pizza.com") and (ip.src in {160.79.104.0/21 153.61.208.0/20}) and (starts_with(http.request.uri.path, "/api/mcp") or starts_with(http.request.uri.path, "/.well-known/") or starts_with(http.request.uri.path, "/api/oauth/"))
    ```
 
-   Family-finances has a rule like this that matches `/mcp` only. That does not cover the tracker,
-   whose endpoint is `/api/mcp`, so copy the expression above rather than reusing finances' rule.
-   If Bot Fight Mode is on, use the Allow rule instead.
+3. Set the action to **Skip** and tick **Browser Integrity Check** (and **All Super Bot Fight Mode
+   rules**, where the plan shows it). Deploy. Its place in the list does not matter while no other
+   rule matches these requests.
+
+This works only while the zone's **Bot Fight Mode** is off (Security › Settings, filter Bot
+traffic); it is off. Bot Fight Mode cannot be skipped by a custom rule. If it is ever turned on,
+add an **IP access rule** with the action **Allow** for each range instead (Security › Security
+rules › Create rule › IP access rules); Cloudflare offers that option only once the zone has one
+IP access rule, so the first may need the API.
+
+Family-finances has a rule like this that matches `/mcp` only, and only the first range. It does not
+cover the tracker, whose endpoint is `/api/mcp`.
 
 Cloudflare does not need a rule for `/api/oauth/authorize`: the person's browser opens it.
 
@@ -281,10 +293,9 @@ The fourth prints `HTTP/2 401` and a `www-authenticate` header with
 A 502 means the API is down. A `1010` or a Cloudflare HTML page means the edge still blocks.
 
 The API needs no setting for this. `OAUTH_CLIENT_HOSTS` defaults to `claude.ai,claude.com`
-([api.md](api.md) §6), and the API must be able to fetch documents from `https://claude.ai`
-(outbound HTTPS from the container).
+([api.md](api.md) §6); the API must be able to reach those hosts (§5.3).
 
-**The first real connect.** After the deploy and the check:
+**Connecting.** After the deploy and the check:
 
 1. **claude.ai.** In Settings › Connectors, choose Add custom connector, paste
    `https://tracker.itsa-pizza.com/api/mcp` with nothing under advanced settings, and choose
@@ -307,3 +318,36 @@ its reason: `oauth authorize refused a client: …` (the client could not be che
 (the code, verifier, redirect or client did not match). Nothing in these lines holds a token, a
 code, a password or a request id. If none of the first line appears, the request did not reach the
 API, so look at Cloudflare. A Cloudflare block never reaches the API's log.
+`oauth authorize refused a client: unreachable` means the API could not fetch the client's document:
+look at the egress proxy (§5.3).
+
+### 5.3 The API's way out
+
+The production API has no route to the internet of its own. On the home server it sits on an
+internal network and goes out through `fitness-mail-proxy`, a Squid container that tunnels HTTPS
+to a short allow-list of hosts and refuses everything else (the home-server repo,
+`documentation/infra_vm.md`, "Tracker"). For the sign-in, that list must hold `claude.ai:443`
+and `claude.com:443`, the hosts in `OAUTH_CLIENT_HOSTS`; they were added on 2026-11-03
+(home-server #333). Without them the consent page says the request "did not come from an app the
+tracker can check (unreachable)", and `docker logs fitness-mail-proxy` shows
+`TCP_DENIED/403 CONNECT claude.ai:443`. Adding a host to `OAUTH_CLIENT_HOSTS` needs the same
+change in the proxy.
+
+To check the fetch from inside the container, use the app's own code:
+
+```sh
+docker exec fitness-api python -c "from tracker_api import oauth; print(oauth.fetch_document('https://claude.ai/oauth/mcp-oauth-client-metadata').status)"
+```
+
+It prints `200`. A bare `urllib.request.urlopen` of the same URL gets `403` from claude.ai,
+whose edge refuses Python's default user agent; the app sends its own (`tracker-oauth/1`).
+
+### 5.4 The first real connect (2026-11-03)
+
+Both clients connected in the evening of 2026-11-03, after the deploy, the Cloudflare rule (§5.1)
+and the proxy change (§5.3). The API log showed, for each, `authorize` → `oauth grant … approved
+for user 1 by https://claude.ai/oauth/mcp-oauth-client-metadata` (claude.ai) or
+`…/claude-code-client-metadata` (Claude Code, with a `http://localhost:<port>/callback` redirect) →
+`POST /api/oauth/token` 200 → `POST /api/mcp` 200. Neither tried Dynamic Client Registration
+(P32). A second sign-in from Claude Code revoked its first grant through `/api/oauth/revoke`, as a
+client replacing its token should.

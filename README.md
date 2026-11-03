@@ -220,7 +220,7 @@ end to end.
 | ------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
 | [docs/architecture.md](docs/architecture.md)                                   | Components, stores, storage format, design decisions                 |
 | [docs/development.md](docs/development.md)                                     | Toolchain, scripts, conventions, tests                               |
-| [docs/deployment.md](docs/deployment.md)                                       | Docker images, nginx, CI, GHCR publishing, sign-up, turning on email, Cloudflare for Claude |
+| [docs/deployment.md](docs/deployment.md)                                       | Docker images, nginx, CI, GHCR publishing, sign-up, turning on email, Cloudflare and the egress proxy for Claude |
 | [docs/api.md](docs/api.md)                                                     | The API service: endpoints, accounts, email, CLI, backups            |
 | [docs/mcp.md](docs/mcp.md)                                                     | Connecting an agent over MCP: OAuth, tokens, clients, example questions     |
 | [docs/brand.md](docs/brand.md)                                                 | The brand, the design system and how to change them                  |
