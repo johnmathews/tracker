@@ -1,0 +1,132 @@
+/*
+  The Settings page, as a prototype. One frame (.sp) is one screen; every size comes from the
+  frame's own box (container units), like the planner: u is 1 on a 1280×800 screen, held between
+  0.75 and 1.6; n is 1 on a phone. Colours, fonts and type from the system's tokens; the proposed
+  sizes are --candidate-*.
+*/
+.sp { position: relative; overflow: hidden; box-sizing: border-box; container: sp / size;
+  background: var(--canvas); color: var(--ink); font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
+.sp *, .sp *::before, .sp *::after { box-sizing: border-box; }
+.sp button { font: inherit; color: inherit; }
+.sp :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.sp-scroll { position: absolute; inset: 0; overflow-y: auto;
+  --u: clamp(0.75px, min(calc(100cqw / 1280), calc(100cqh / 800)), 1.6px);
+  --n: clamp(1px, calc(100cqw / 600), 1.4px);
+  /* The proposal (A and B). */
+  --candidate-pad-x: calc(var(--u) * 48);
+  --candidate-title: max(30px, calc(var(--u) * 40));
+  --candidate-h2: max(22px, calc(var(--u) * 27));
+  --candidate-label: max(16px, calc(var(--u) * 19));
+  --candidate-body: max(18px, calc(var(--u) * 19));
+  --candidate-control: max(44px, calc(var(--u) * 60));
+  --candidate-icon: max(20px, calc(var(--u) * 26));
+  --candidate-mark: max(48px, calc(var(--u) * 60));
+  --candidate-name-col: calc(var(--u) * 320);
+  --candidate-gap: calc(var(--u) * 16);
+  --candidate-sec-y: calc(var(--u) * 32);
+}
+
+/* The bar on the Settings page: the wordmark alone (K44, K47). */
+.sp-bar { padding: calc(var(--u) * 14) var(--candidate-pad-x); border-bottom: 1px solid var(--line); }
+.sp-bar .wm { display: block; height: max(26px, calc(var(--u) * 32)); width: auto; fill: var(--ink); }
+
+/* ---- A and B: the shared proposal. ---- */
+.sp-page { padding: calc(var(--u) * 28) var(--candidate-pad-x) calc(var(--u) * 64); }
+.sp-back { display: inline-flex; align-items: center; gap: calc(var(--u) * 6); color: var(--ink); font-size: var(--candidate-body); line-height: 1.4;
+  text-decoration: underline; text-underline-offset: 4px; }
+.sp-back svg { width: var(--candidate-icon); height: var(--candidate-icon); }
+.sp-title { margin: calc(var(--u) * 12) 0 calc(var(--u) * 20); font: 600 var(--candidate-title) / 1.15 var(--font-serif); }
+.sp-sec h2 { margin: 0; font: 600 var(--candidate-h2) / 1.25 var(--font-sans); }
+.sp-body { display: flex; flex-direction: column; gap: calc(var(--u) * 28); }
+.sp-field { display: flex; flex-direction: column; gap: calc(var(--u) * 12); }
+.sp-inline { flex-direction: row; align-items: center; gap: var(--candidate-gap); }
+.sp-label { font: 600 var(--candidate-label) / 1.3 var(--font-sans); }
+.sp-lede { margin: 0; font-size: var(--candidate-body); line-height: 1.45; color: var(--ink-secondary); max-width: 60ch; }
+.sp-lede .who { color: var(--ink); font-weight: 600; }
+
+/* SegmentedControl, Stepper and Button at the page's size: the same shapes and tokens as their cards. */
+.sp .seg { display: inline-flex; align-self: flex-start; border: 1px solid var(--control-border); border-radius: var(--radius-md); }
+.sp .seg button { height: calc(var(--candidate-control) - 2px); padding: 0 calc(var(--u) * 24); border: 0; border-radius: var(--radius-sm);
+  background: transparent; font-weight: 600; font-size: var(--candidate-label); cursor: pointer; }
+.sp .seg button:hover { background: var(--tile); }
+.sp .seg button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
+.sp .stepper { display: inline-flex; align-items: stretch; height: var(--candidate-control); border: 1px solid var(--control-border); border-radius: var(--radius-md); }
+.sp .stepper button { display: grid; place-items: center; width: var(--candidate-control); padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; cursor: pointer; }
+.sp .stepper button:hover { background: var(--tile); }
+.sp .stepper svg { width: var(--candidate-icon); height: var(--candidate-icon); }
+.sp .stepper .value { display: grid; place-items: center; min-width: calc(var(--candidate-control) * 1.1); font-weight: 600; font-size: calc(var(--candidate-label) * 1.25); }
+.sp .btns { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 12); }
+.sp .btn { display: inline-flex; align-items: center; gap: calc(var(--u) * 10); height: var(--candidate-control); padding: 0 calc(var(--u) * 22);
+  border: 1px solid var(--control-border); border-radius: var(--radius-md); background: transparent; font-weight: 600; font-size: var(--candidate-label); cursor: pointer; }
+.sp .btn:hover { background: var(--tile); }
+.sp .btn svg { width: var(--candidate-icon); height: var(--candidate-icon); }
+
+/* RadioCard: a dot, the name and the set's three marks. */
+.sp .choices { display: grid; gap: calc(var(--u) * 12); }
+.sp .choice { display: flex; align-items: center; gap: calc(var(--u) * 14); padding: calc(var(--u) * 12) calc(var(--u) * 16);
+  border: 1px solid var(--control-border); border-radius: var(--radius-md); background: transparent; text-align: left; cursor: pointer; }
+.sp .choice:hover { background: var(--tile); }
+.sp .choice[aria-checked="true"] { border: 2px solid var(--ink); padding: calc(var(--u) * 12 - 1px) calc(var(--u) * 16 - 1px); }
+.sp .choice .name { flex: 1; min-width: 0; font-size: var(--candidate-body); line-height: 1.3; }
+.sp .choice[aria-checked="true"] .name { font-weight: 600; }
+.sp .picture { display: flex; gap: calc(var(--u) * 10); }
+.sp .dot { flex: none; display: grid; place-items: center; width: calc(var(--candidate-icon) * 0.9); height: calc(var(--candidate-icon) * 0.9);
+  border: 1px solid var(--control-border); border-radius: var(--radius-full); }
+.sp .choice[aria-checked="true"] .dot { border: 2px solid var(--ink); }
+.sp .choice[aria-checked="true"] .dot::after { content: ""; width: 50%; height: 50%; border-radius: var(--radius-full); background: var(--ink); }
+.sp .smark { width: var(--candidate-mark); height: var(--candidate-mark); display: grid; place-items: center; flex: none; }
+.sp .smark svg { width: 94%; height: 94%; overflow: visible; }
+.sp .smark .box { stroke: var(--control-border); }
+.sp .smark[data-mark="great"] { color: var(--pen); }
+.sp .smark[data-mark="partial"] { color: var(--pen-partial); }
+.sp .smark[data-mark="missed"] { color: var(--pen-missed); }
+.sp .smark .paper { color: var(--canvas); }
+
+/* A: rows like the week. Full width on the page's margins; each section a row, its heading in a
+   left column as wide as the week's names (320u), its settings to the right; hairlines between
+   rows like the grid's. The mark sets are tiles, three to a row, the name over the marks. */
+.sp[data-layout="a"] .sp-sec { display: grid; grid-template-columns: var(--candidate-name-col) minmax(0, 1fr); align-items: start;
+  padding: var(--candidate-sec-y) 0; border-top: 1px solid var(--line); }
+.sp[data-layout="a"] .sp-sec h2 { padding-top: calc(var(--u) * 4); }
+.sp[data-layout="a"] .sp-title { margin-bottom: calc(var(--u) * 28); }
+.sp[data-layout="a"] .choices { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.sp[data-layout="a"] .choice { flex-wrap: wrap; row-gap: calc(var(--u) * 12); }
+.sp[data-layout="a"] .choice .picture { width: 100%; padding-left: calc(var(--candidate-icon) * 0.9 + var(--u) * 14); }
+
+/* B: one wider column, centred, at the same sizes. */
+.sp[data-layout="b"] .sp-page { max-width: calc(var(--u) * 880 + 2 * var(--candidate-pad-x)); margin: 0 auto; }
+.sp[data-layout="b"] .sp-sec { display: flex; flex-direction: column; gap: calc(var(--u) * 20); padding: var(--candidate-sec-y) 0; border-top: 1px solid var(--line); }
+
+/* Folded (a phone, an iPad held upright): one column for both, sizes on n. */
+@container sp ((orientation: portrait) and (width < 1000px)) or (width < 760px) {
+  .sp-scroll { --candidate-pad-x: calc(var(--n) * 16); --candidate-title: calc(var(--n) * 30); --candidate-h2: calc(var(--n) * 22);
+    --candidate-label: calc(var(--n) * 16); --candidate-body: calc(var(--n) * 18); --candidate-control: 48px; --candidate-icon: 22px;
+    --candidate-mark: calc(var(--n) * 48); --u: 1px; }
+  .sp[data-layout] .sp-sec { display: flex; flex-direction: column; gap: 16px; padding: 24px 0; }
+  .sp[data-layout] .choices { grid-template-columns: minmax(0, 1fr); }
+  .sp[data-layout] .choice { flex-wrap: nowrap; }
+  .sp[data-layout] .choice .picture { width: auto; padding-left: 0; }
+  .sp-bar .wm { height: 26px; }
+}
+
+/* ---- Now: as shipped, one 576px column at the system's fixed sizes. ---- */
+.sp[data-layout="now"] .sp-scroll { --u: 1px; --candidate-pad-x: 24px; --candidate-title: 44px; --candidate-h2: 22px; --candidate-label: 16px;
+  --candidate-body: 16px; --candidate-control: 44px; --candidate-icon: 20px; --candidate-mark: 64px; --candidate-sec-y: 32px; }
+.sp[data-layout="now"] .sp-bar .wm { height: 32px; }
+.sp[data-layout="now"] .sp-page { max-width: 576px; margin: 0 auto; padding: 24px 0 48px; }
+.sp[data-layout="now"] .sp-title { margin: 16px 0 0; }
+.sp[data-layout="now"] .sp-sec { display: flex; flex-direction: column; gap: 16px; margin-top: 32px; }
+.sp[data-layout="now"] .sp-sec + .sp-sec { border-top: 1px solid var(--line); padding-top: 32px; }
+.sp[data-layout="now"] .sp-body { gap: 16px; }
+.sp[data-layout="now"] .sp-field { gap: 8px; }
+.sp[data-layout="now"] .seg button { padding: 0 16px; font-size: 14px; }
+.sp[data-layout="now"] .btn { padding: 0 12px; font-size: 16px; }
+.sp[data-layout="now"] .choice { min-height: 76px; padding: 4px 12px; }
+.sp[data-layout="now"] .choice[aria-checked="true"] { padding: 3px 11px; }
+.sp[data-layout="now"] .choice .name { font-size: 16px; }
+
+/* Round 2 (K53): a section's text and its buttons share a row, as the Stepper sits beside its label. */
+.sp-row { display: flex; flex-wrap: wrap; align-items: center; column-gap: calc(var(--u) * 28); row-gap: 12px; }
+.sp-row .sp-lede { max-width: 34ch; }
+.sp[data-layout="now"] .sp-row { display: block; }
+.sp[data-layout="now"] .sp-row .btns { margin-top: 16px; }

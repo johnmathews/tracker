@@ -95,4 +95,39 @@ describe('RadioCard', () => {
       ]),
     )
   })
+
+  it('gives an option a line saying what it means, named by its name and described by the line', () => {
+    const wrapper = mount(RadioCard, {
+      attachTo: document.body,
+      props: {
+        label: 'What Claude can do',
+        options: [
+          { value: 'read', label: 'Read only', hint: 'See your plans, marks and notes.' },
+          { value: 'write', label: 'Read and change', hint: 'Also mark days.' },
+        ],
+        modelValue: 'read',
+      },
+    })
+    const row = wrapper.findAll('[role="radio"]')[0]!
+    const name = row.get('[data-slot="radio-card-name"]')
+    const hint = row.get('[data-slot="radio-card-hint"]')
+    expect(name.text()).toBe('Read only')
+    expect(name.classes()).toContain('font-semibold')
+    expect(hint.text()).toBe('See your plans, marks and notes.')
+    expect(hint.classes()).toEqual(expect.arrayContaining(['caption', 'text-ink-secondary']))
+    expect(row.attributes('aria-labelledby')).toBe(name.attributes('id'))
+    expect(row.attributes('aria-describedby')).toBe(hint.attributes('id'))
+    // The dot sits beside the name, not the middle of the two lines.
+    expect(row.classes()).toContain('items-start')
+    wrapper.unmount()
+  })
+
+  it('leaves a row without a line as it was', () => {
+    const wrapper = mountCard('ticks', false)
+    const row = wrapper.findAll('[role="radio"]')[0]!
+    expect(row.find('[data-slot="radio-card-hint"]').exists()).toBe(false)
+    expect(row.attributes('aria-describedby')).toBeUndefined()
+    expect(row.classes()).not.toContain('items-start')
+    wrapper.unmount()
+  })
 })

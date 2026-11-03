@@ -50,6 +50,7 @@
   --radius-full: 999px;
   --font-serif: "Source Serif 4 Variable", "Source Serif 4", Georgia, serif;
   --font-sans: "Source Sans 3 Variable", "Source Sans 3", -apple-system, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 .display { font-family: var(--font-serif); font-size: 44px; line-height: 48px; font-weight: 600; letter-spacing: 0; }
 .title-1 { font-family: var(--font-serif); font-size: 30px; line-height: 36px; font-weight: 600; letter-spacing: 0; }

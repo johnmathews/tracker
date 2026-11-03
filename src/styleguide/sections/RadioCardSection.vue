@@ -15,8 +15,15 @@ const MARKS = [
   { value: 'stamped-faces', label: 'Stamped faces' },
 ]
 
+// The connect screen's access (ConnectPage.vue), in its copy.
+const ACCESS = [
+  { value: 'read', label: 'Read only', hint: 'See your plans, marks and notes.' },
+  { value: 'write', label: 'Read and change', hint: 'Also mark days, and add and edit items.' },
+]
+
 const chosen = ref('ticks')
 const focus = ref('squiggles')
+const access = ref('read')
 </script>
 
 <!-- The card's states (components/RadioCard/preview.html). Hover any unchosen row for the tile;
@@ -38,6 +45,15 @@ const focus = ref('squiggles')
         v-model="focus"
         label="Marks"
         :options="MARKS.slice(0, 3)"
+      />
+    </StateExample>
+    <StateExample state="With a line each: an app’s access on the connect screen">
+      <RadioCard
+        id="sg-radio-card-access"
+        v-model="access"
+        label="What Claude can do"
+        :options="ACCESS"
+        class="max-w-sm"
       />
     </StateExample>
   </ExampleGroup>

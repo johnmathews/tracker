@@ -1,0 +1,206 @@
+<title>Connections: claude.ai sign-in and your tokens</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="settings.css">
+<link rel="stylesheet" href="conn.css">
+<!--
+  A mockup (design-system skill, references/mockups.md). Two questions: how the screen that
+  claude.ai sends you to asks for access, and how Settings lists your connections and tokens. The
+  sign-in screen's card, the Settings page's frame and its other rows stay as they are. The page is
+  live: conn.js draws both screens (settings.css and icons.js are the shipped Settings frame, copied
+  from 261101-ask-page); conn.css adds what is new. try.html shows them full size.
+-->
+<style>
+  body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font-sans); }
+  .mockup-page {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: var(--space-8, 32px) var(--space-16, 64px);
+    max-width: 1200px; margin: 0 auto; display: grid; gap: var(--space-12, 48px);
+  }
+  .mockup-head { display: grid; gap: var(--space-2, 8px); max-width: 70ch; }
+  .mockup-head h1, .option h2 { margin: 0; text-wrap: balance; }
+  .mockup-head p, .option p { margin: 0; }
+  .mockup-meta { color: var(--ink-secondary); }
+  .option { display: grid; gap: var(--space-4, 16px); }
+  .option-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2, 8px) var(--space-3, 12px); }
+  .option-tag { color: var(--ink-secondary); }
+  .option[data-recommended] .option-tag::after { content: " · Recommended"; color: var(--ink); }
+  .panes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--space-4, 16px); }
+  .pane { min-width: 0; background: var(--canvas); color: var(--ink); border: 1px solid var(--line);
+          border-radius: var(--radius-lg, 10px); padding: var(--space-4, 16px); overflow-x: auto; }
+  .pane-label { color: var(--ink-secondary); margin: 0 0 var(--space-3, 12px); }
+  .measures { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); }
+  .measures li { border: 1px solid var(--line); border-radius: var(--radius-sm, 4px); padding: 2px var(--space-2, 8px); font-variant-numeric: tabular-nums; }
+  .measures li[data-pass="no"] { border-color: currentColor; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .try { margin: 0; }
+  .try a, .mockup-head a { color: var(--ink); font-weight: 600; text-underline-offset: 3px; }
+  .question { display: grid; gap: var(--space-8, 32px); }
+  .question > header { display: grid; gap: var(--space-2, 8px); max-width: 70ch; }
+  .question > header h2, .question > header p { margin: 0; }
+  .notes { margin: 0; padding-left: 1.2em; display: grid; gap: var(--space-1, 4px); }
+  .device { position: relative; width: 100%; }
+  .device > div { position: absolute; top: 0; left: 0; transform-origin: 0 0; border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden; }
+  .device.phone > div { border-radius: 28px; border-width: 2px; }
+  .phones { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+  .phones .device { max-width: 260px; }
+  .states { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: var(--space-4); }
+  .states figure { margin: 0; display: grid; gap: var(--space-2); }
+  .states figcaption { color: var(--ink-secondary); }
+  ol.asks { margin: 0; padding-left: 1.4em; display: grid; gap: var(--space-2); max-width: 70ch; }
+</style>
+
+<main class="mockup-page">
+  <header class="mockup-head">
+    <p class="caption mockup-meta">Mockup · 2026-11-03 · Tracker</p>
+    <h1 class="title-1">Connections: claude.ai sign-in and your tokens</h1>
+    <p class="body">Two new things. When you add the tracker in Claude by its address, Claude sends you to a tracker page that asks for your password and what Claude may do. And Settings gets a Connections row, where you see what’s connected, remove it, and create tokens for Claude Code and scripts. The sign-in card, the Settings frame and its other rows stay as they are.</p>
+    <ul class="notes body">
+      <li>Everything is drawn in the system’s tokens and components (the sign-in card, TextField, Switch, RadioCard, SegmentedControl, Banner, ConfirmDialog). The one new value is a monospace face for tokens and addresses.</li>
+      <li>Every frame can be pressed: Create token, Remove, the access switch, Connect when signed out.</li>
+    </ul>
+    <p class="body"><strong>Decided 2026-11-03:</strong> C2 (two choices on the consent screen), L1 (two lists in Settings), monospace for tokens and the address, and New with its banner. The token form keeps the SegmentedControl.</p>
+    <p class="try body"><a href="try.html#consent-c1-in">Try it full size</a>. The switch at the bottom left changes the screen, the option, the state and the theme.</p>
+  </header>
+
+  <section class="question" aria-labelledby="q1">
+    <header><h2 class="title-2" id="q1">1. The consent screen (decided: C2)</h2>
+      <p class="body">Claude opens it in your browser. It’s the sign-in card: the warning first, then who is asking and where you go back to, then Email and Password. It asks for your password even when you’re signed in, so a link someone else sent can’t connect your account with one click. Connecting doesn’t sign you in to the tracker. Access starts as read only. The options differ only in how you choose access.</p></header>
+
+    <section class="option" id="c1" data-recommended aria-labelledby="c1-h">
+      <div class="option-head"><h2 class="title-2" id="c1-h">C1. A switch: “Allow changes”, off</h2><span class="label option-tag">Option C1</span></div>
+      <p class="body">One Switch, off, with a line under it saying what Claude can do in its current position. The card stays short. Recommended: read only is the safe answer, and one control says that it’s the default.</p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · signed in</p><div class="device" data-w="1280" data-h="900" data-view="consent" data-opt="c1" data-state="in"></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · signed in, changes allowed</p><div class="device" data-w="1280" data-h="900" data-view="consent" data-opt="c1" data-state="in" data-write></div></div>
+      </div>
+      <p class="try body"><a href="try.html#consent-c1-in">Try C1 full size</a></p>
+    </section>
+
+    <section class="option" id="c2" aria-labelledby="c2-h">
+      <div class="option-head"><h2 class="title-2" id="c2-h">C2. Two choices: Read only, or Read and change</h2><span class="label option-tag">Option C2</span></div>
+      <p class="body">Two RadioCards, as the mark sets are chosen in Settings, each with one line on what it allows. Read only is picked. Both answers are in view, at the cost of a taller card.</p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · signed in</p><div class="device" data-w="1280" data-h="980" data-view="consent" data-opt="c2" data-state="in"></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · signed in</p><div class="device" data-w="1280" data-h="980" data-view="consent" data-opt="c2" data-state="in"></div></div>
+      </div>
+      <p class="try body"><a href="try.html#consent-c2-in">Try C2 full size</a></p>
+    </section>
+
+    <section class="option" aria-labelledby="cs-h">
+      <div class="option-head"><h2 class="title-2" id="cs-h">The other states, in C1</h2><span class="label option-tag">Same in C2</span></div>
+      <div class="states">
+        <figure><div class="pane" data-theme="light"><div class="phones"><div class="device phone" data-w="390" data-h="900" data-view="consent" data-opt="c1" data-state="out"></div></div></div><figcaption class="caption">On a phone, signed out: the same card, Email empty.</figcaption></figure>
+        <figure><div class="pane" data-theme="dark"><div class="phones"><div class="device phone" data-w="390" data-h="960" data-view="consent" data-opt="c1" data-state="wrong"></div></div></div><figcaption class="caption">Wrong password: both fields marked, the message under them. Five wrong tries lock it as sign-in does.</figcaption></figure>
+        <figure><div class="pane" data-theme="light"><div class="device" data-w="1280" data-h="900" data-view="consent" data-opt="c1" data-state="code"></div></div><figcaption class="caption">From Claude Code: it goes back to this computer.</figcaption></figure>
+        <figure><div class="pane" data-theme="dark"><div class="device" data-w="1280" data-h="700" data-view="consent" data-opt="c1" data-state="expired"></div></div><figcaption class="caption">An old or used link: no form, and how to start again.</figcaption></figure>
+      </div>
+      <ul class="measures caption">
+        <li data-fg="var(--caution-ink)" data-bg="var(--panel)" data-min="4.5">The warning: caution ink on the card</li>
+        <li data-fg="var(--ink-secondary)" data-bg="var(--panel)" data-min="4.5">“Asking”, “Then back to”, the hints</li>
+        <li data-fg="var(--error-ink)" data-bg="var(--panel)" data-min="4.5">Wrong password</li>
+      </ul>
+    </section>
+  </section>
+
+  <section class="question" aria-labelledby="q2">
+    <header><h2 class="title-2" id="q2">2. Settings › Connections (decided: L1)</h2>
+      <p class="body">A new row between Your data and Account. At its top: the address to paste into Claude, with Copy, and two lines on how to connect claude.ai and Claude Code. Then what’s connected. An app (signed in from Claude) lasts 90 days; a token works until you remove it. Each can be removed, after a confirm. A new token is shown once, with Copy. A connection made in the last day is marked New, with a banner, so one you didn’t make is easy to see.</p></header>
+
+    <section class="option" id="l1" data-recommended aria-labelledby="l1-h">
+      <div class="option-head"><h2 class="title-2" id="l1-h">L1. Two lists: Apps, then Tokens</h2><span class="label option-tag">Option L1</span></div>
+      <p class="body">Each app or token is a row: its name, a line of facts under it, and Remove beside it, with hairlines between, like the rest of Settings. Create token sits under the tokens. Recommended: it reads like Settings, folds to a phone without change, and each list says what it’s for.</p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · 1440×1100</p><div class="device" data-w="1440" data-h="1180" data-view="settings" data-opt="l1" data-state="list"></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · 1280×1100, a new connection</p><div class="device" data-w="1280" data-h="1260" data-view="settings" data-opt="l1" data-state="new"></div></div>
+      </div>
+      <p class="try body"><a href="try.html#settings-l1-list">Try L1 full size</a></p>
+    </section>
+
+    <section class="option" id="l2" aria-labelledby="l2-h">
+      <div class="option-head"><h2 class="title-2" id="l2-h">L2. One table</h2><span class="label option-tag">Option L2</span></div>
+      <p class="body">Apps and tokens together in one table: Name, Kind, Access, Since, Last used, Ends. Easier to compare at a glance on a wide screen; on a phone each row becomes a block of labelled lines.</p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · 1440×1000</p><div class="device" data-w="1440" data-h="1000" data-view="settings" data-opt="l2" data-state="list"></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · phone</p><div class="phones"><div class="device phone" data-w="390" data-h="1700" data-view="settings" data-opt="l2" data-state="list"></div></div></div>
+      </div>
+      <p class="try body"><a href="try.html#settings-l2-list">Try L2 full size</a></p>
+    </section>
+
+    <section class="option" aria-labelledby="ls-h">
+      <div class="option-head"><h2 class="title-2" id="ls-h">The other states, in L1</h2><span class="label option-tag">Same in L2</span></div>
+      <div class="states">
+        <figure><div class="pane" data-theme="light"><div class="device" data-w="1280" data-h="1100" data-view="settings" data-opt="l1" data-state="create"></div></div><figcaption class="caption">Create token: a name and its access, Read only first.</figcaption></figure>
+        <figure><div class="pane" data-theme="dark"><div class="device" data-w="1280" data-h="1260" data-view="settings" data-opt="l1" data-state="shown"></div></div><figcaption class="caption">The new token, shown once, with Copy and how to use it.</figcaption></figure>
+        <figure><div class="pane" data-theme="light"><div class="device" data-w="1280" data-h="1100" data-view="settings" data-opt="l1" data-state="toomany"></div></div><figcaption class="caption">Twenty tokens already: what to do instead.</figcaption></figure>
+        <figure><div class="pane" data-theme="dark"><div class="device" data-w="1280" data-h="1100" data-view="settings" data-opt="l1" data-state="confirm"></div></div><figcaption class="caption">Remove asks first.</figcaption></figure>
+        <figure><div class="pane" data-theme="light"><div class="device" data-w="1280" data-h="860" data-view="settings" data-opt="l1" data-state="empty"></div></div><figcaption class="caption">Nothing connected yet.</figcaption></figure>
+        <figure><div class="pane" data-theme="dark"><div class="phones"><div class="device phone" data-w="390" data-h="1900" data-view="settings" data-opt="l1" data-state="list"></div></div></div><figcaption class="caption">L1 on a phone.</figcaption></figure>
+      </div>
+      <ul class="measures caption">
+        <li data-fg="var(--ink)" data-bg="var(--tile)" data-min="4.5">The address and the token on their tile</li>
+        <li data-fg="var(--ink-secondary)" data-bg="var(--canvas)" data-min="4.5">The facts under each row</li>
+        <li data-fg="var(--ink)" data-bg="var(--panel)" data-min="4.5">Copy on the tile</li>
+      </ul>
+    </section>
+  </section>
+
+  <section class="question" aria-labelledby="q3">
+    <header><h2 class="title-2" id="q3">3. And three short ones</h2></header>
+    <ol class="asks body">
+      <li><strong>The token’s access control.</strong> Create token uses the SegmentedControl, as Theme does (Read only | Read and change), whichever consent option you pick. Or should it use the same control as the consent screen?</li>
+      <li><strong>Monospace for tokens and the address.</strong> Recommended: the system font’s monospace (SF Mono on a Mac), only for those strings. The alternative is the sans, which makes <code>l</code>, <code>I</code> and <code>1</code> hard to tell apart in a token.</li>
+      <li><strong>“New” for a day.</strong> A connection made in the last 24 hours is marked New, with the banner on top until you dismiss it. Keep it, or drop the banner and keep only the mark?</li>
+    </ol>
+  </section>
+</main>
+
+<script src="icons.js"></script>
+<script src="conn.js"></script>
+<script>
+  for (const device of document.querySelectorAll('.device')) {
+    const w = Number(device.dataset.w), h = Number(device.dataset.h)
+    const screen = document.createElement('div')
+    screen.style.width = w + 'px'
+    screen.style.height = h + 'px'
+    device.append(screen)
+    const fit = () => {
+      const s = Math.min(1, device.clientWidth / w)
+      screen.style.transform = `scale(${s})`
+      device.style.height = Math.ceil(h * s) + 'px'
+    }
+    new ResizeObserver(fit).observe(device)
+    fit()
+    const o = { opt: device.dataset.opt, state: device.dataset.state, write: 'write' in device.dataset }
+    if (device.dataset.view === 'consent') CN.consent(screen, o)
+    else CN.settings(screen, o)
+  }
+
+  // Measures: WCAG contrast of each pairing in both themes.
+  (() => {
+    const rgb = (value, scope, theme) => {
+      const probe = document.createElement('span')
+      probe.dataset.theme = theme
+      probe.style.color = value
+      scope.append(probe)
+      const parts = getComputedStyle(probe).color.match(/[\d.]+/g).map(Number)
+      probe.remove()
+      return parts.slice(0, 3)
+    }
+    const lum = ([r, g, b]) => [r, g, b]
+      .map((c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4 })
+      .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0)
+    const ratio = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05) }
+    for (const li of document.querySelectorAll('.measures li[data-fg]')) {
+      const scope = li.closest('.option') || document.body
+      const min = Number(li.dataset.min || 0)
+      const results = ['light', 'dark'].map((theme) => {
+        const r = ratio(rgb(li.dataset.fg, scope, theme), rgb(li.dataset.bg, scope, theme))
+        return { theme, r, ok: !min || r >= min }
+      })
+      li.dataset.pass = results.every((x) => x.ok) ? 'yes' : 'no'
+      li.append(`: ${results.map((x) => `${x.theme} ${x.r.toFixed(1)}:1${x.ok ? '' : ' (below ' + min + ':1)'}`).join(', ')}`)
+    }
+  })()
+</script>

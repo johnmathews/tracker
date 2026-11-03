@@ -4,7 +4,8 @@
  * revision succeeding, single-day ticks, settings, sessions, invite links, with `mail` on email
  * confirmation and reset requests, and with `ask` on Ask's questions, caps and conversation
  * history (§3.2). Controls let a test go offline, fail a request, hold replies back to provoke
- * races, and script or drive an answer's stream.
+ * races, and script or drive an answer's stream. It also keeps personal tokens, connected apps and
+ * pending OAuth requests (Settings › Connections and the consent screen).
  */
 import {
   normaliseDetails,
@@ -42,6 +43,41 @@ export type Account = {
   settings: Settings | null
   /** Ask's history, the one updated last first, as `GET /api/ask/conversations` lists it. */
   conversations: Conversation[]
+  /** Personal tokens, newest first, and the apps connected by OAuth (Settings › Connections). */
+  tokens: FakeToken[]
+  connections: FakeConnection[]
+}
+
+/** A personal token as `GET /api/tokens` lists it; the fake also keeps its plaintext. */
+export type FakeToken = {
+  name: string
+  prefix: string
+  scope: 'read' | 'write'
+  createdAt: number
+  lastUsedAt: number | null
+}
+
+/** An app connected by OAuth, as `GET /api/connections` lists it. */
+export type FakeConnection = {
+  id: string
+  clientName: string
+  clientHost: string
+  scope: 'read' | 'write'
+  createdAt: number
+  lastUsedAt: number | null
+  expiresAt: number
+  isNew: boolean
+}
+
+/** A pending OAuth request, waiting on the consent screen (`#/connect/<id>`). */
+export type FakeRequest = {
+  clientName: string
+  clientHost: string
+  redirectHost: string
+  scope: string | null
+  expiresAt: number
+  redirectUri: string
+  state: string
 }
 
 export const PASSWORD = 'correct horse battery'
@@ -89,6 +125,8 @@ function emptyAccount(password: string): Account {
     missed: { exercise: {}, diet: {} },
     settings: null,
     conversations: [],
+    tokens: [],
+    connections: [],
   }
 }
 
@@ -136,6 +174,11 @@ export class FakeApi {
   askLimit = 30
   /** Seconds until a question is free again, sent with 429 `too-many`. */
   askRetryAfter = 3600
+  /** Pending OAuth requests by id, as `/api/oauth/authorize` leaves them. */
+  oauthRequests = new Map<string, FakeRequest>()
+  /** The most personal tokens and live connections one account may hold (D6). */
+  maxTokens = 20
+  maxConnections = 10
   private askScripts: (string[] | ReadableStream<Uint8Array>)[] = []
   private ids = 0
   calls: { method: string; path: string; body: unknown; expectedUser?: string }[] = []
@@ -143,6 +186,8 @@ export class FakeApi {
   private held: (() => void)[] | null = null
   private stalled: { method: string; path: string }[] = []
   private delayed: { method: string; path: string; until: Promise<void> }[] = []
+  /** Whether the request being routed said it was JSON, as the API's REST guard requires. */
+  private json = false
 
   addUser(name: string, password = PASSWORD): Account {
     const account = emptyAccount(password)
@@ -221,6 +266,22 @@ export class FakeApi {
     return conversation
   }
 
+  /** A pending request from claude.ai, as the consent screen reads it, with these changes. */
+  addRequest(id: string, r: Partial<FakeRequest> = {}): FakeRequest {
+    const request: FakeRequest = {
+      clientName: 'Claude',
+      clientHost: 'claude.ai',
+      redirectHost: 'claude.ai',
+      scope: null,
+      expiresAt: Math.floor(Date.now() / 1000) + 600,
+      redirectUri: 'https://claude.ai/api/mcp/auth_callback',
+      state: 'st',
+      ...r,
+    }
+    this.oauthRequests.set(id, request)
+    return request
+  }
+
   /** The calls made, as `METHOD /path`, optionally only those starting with a prefix. */
   paths(prefix = ''): string[] {
     return this.calls.map((c) => `${c.method} ${c.path}`).filter((p) => p.includes(prefix))
@@ -255,6 +316,7 @@ export class FakeApi {
     const headers = new Headers(init.headers)
     const expectedUser = headers.get('X-Expected-User') ?? undefined
     this.calls.push({ method, path, body, expectedUser })
+    this.json = headers.get('Content-Type') === 'application/json'
     if (this.stalled.some((s) => s.method === method && path.startsWith(s.path))) {
       return new Promise<Response>(() => {})
     }
@@ -344,6 +406,7 @@ export class FakeApi {
       this.signedIn = null
       return new Response(null, { status: 204 })
     }
+    if (path.startsWith('/oauth/')) return this.routeOAuth(method, path, body)
     const user = this.signedIn
     const a = user ? this.accounts.get(user) : undefined
     if (!a) return error(401, 'auth')
@@ -361,6 +424,11 @@ export class FakeApi {
     if (method === 'GET' && path === '/state') return Response.json(this.state(user!))
     if (method === 'GET' && path === '/export') return Response.json(this.exportFile(a))
     if (method === 'POST' && path === '/import') return this.import(a, body)
+    if (path === '/tokens' || path.startsWith('/tokens/'))
+      return this.routeTokens(a, method, path, body)
+    if (path === '/connections' || path.startsWith('/connections/')) {
+      return this.routeConnections(a, method, path)
+    }
     if (path === '/ask' || path.startsWith('/ask/')) return this.routeAsk(a, method, path, body)
     if (method === 'PUT' && path === '/settings') {
       // As the API: a client that sends no foodPick (K57) or itemSections (K66) keeps the saved
@@ -418,6 +486,103 @@ export class FakeApi {
       setBit(a.partial[s], week, id, bit, mark === 'partial')
       setBit(a.missed[s], week, id, bit, mark === 'missed')
       return Response.json({ days: marksOf(a, s, week, id) })
+    }
+    return error(404, 'not-found')
+  }
+
+  /**
+   * The consent screen's calls (docs/api.md): no session needed. A write without the JSON content
+   * type is refused 415, as the REST guard refuses it, so a bodiless deny shows up in a test.
+   */
+  private routeOAuth(method: string, path: string, body: Record<string, unknown>): Response {
+    const error = (status: number, code: string, extra: object = {}) =>
+      Response.json({ error: code, ...extra }, { status })
+    const m = /^\/oauth\/requests\/([A-Za-z0-9_-]+)(\/approve|\/deny)?$/.exec(path)
+    if (!m) return error(404, 'not-found')
+    if (method !== 'GET' && !this.json) return error(415, 'unsupported')
+    const id = m[1]!
+    const found = this.oauthRequests.get(id)
+    const now = Math.floor(Date.now() / 1000)
+    if (!found || found.expiresAt <= now) return error(404, 'no-request')
+    const back = (params: Record<string, string>) =>
+      `${found.redirectUri}?${new URLSearchParams({ ...params, state: found.state, iss: 'http://localhost:3000' })}`
+    if (method === 'GET' && !m[2]) {
+      const { clientName, clientHost, redirectHost, scope, expiresAt } = found
+      return Response.json({ clientName, clientHost, redirectHost, scope, expiresAt })
+    }
+    if (method === 'POST' && m[2] === '/deny') {
+      this.oauthRequests.delete(id)
+      return Response.json({ redirectTo: back({ error: 'access_denied' }) })
+    }
+    if (method === 'POST' && m[2] === '/approve') {
+      const { email, password, write = false } = body
+      if (typeof email !== 'string' || typeof password !== 'string' || typeof write !== 'boolean') {
+        return error(400, 'invalid')
+      }
+      const name = email.trim()
+      const a = this.accounts.get(name)
+      if (!a || a.password !== password) return error(401, 'invalid')
+      if (a.connections.length >= this.maxConnections) return error(409, 'too-many')
+      this.oauthRequests.delete(id)
+      a.connections.unshift({
+        id: `g${++this.ids}`,
+        clientName: found.clientName,
+        clientHost: found.clientHost,
+        scope: write ? 'write' : 'read',
+        createdAt: now,
+        lastUsedAt: null,
+        expiresAt: now + 90 * 24 * 3600,
+        isNew: true,
+      })
+      return Response.json({ redirectTo: back({ code: `code${this.ids}` }) })
+    }
+    return error(405, 'method')
+  }
+
+  /** Personal tokens (W2): list, create (shown once), and remove by prefix. */
+  private routeTokens(a: Account, method: string, path: string, body: Record<string, unknown>) {
+    const error = (status: number, code: string) => Response.json({ error: code }, { status })
+    if (path === '/tokens' && method === 'GET') return Response.json({ tokens: a.tokens })
+    if (path === '/tokens' && method === 'POST') {
+      const name = typeof body.name === 'string' ? body.name.trim() : ''
+      if (!name || name.length > 64) return error(400, 'token-name')
+      if (body.scope !== 'read' && body.scope !== 'write') return error(400, 'invalid')
+      if (a.tokens.length >= this.maxTokens) return error(409, 'too-many')
+      const n = ++this.ids
+      const prefix = `Tk${String(n).padStart(6, '0')}`
+      const token = `trk_${prefix}${'x'.repeat(35)}`
+      const info: FakeToken = {
+        name,
+        prefix,
+        scope: body.scope,
+        createdAt: Math.floor(Date.now() / 1000),
+        lastUsedAt: null,
+      }
+      a.tokens.unshift(info)
+      return Response.json({ token, info }, { status: 201 })
+    }
+    const m = /^\/tokens\/([^/]+)$/.exec(path)
+    if (m && method === 'DELETE') {
+      const prefix = decodeURIComponent(m[1]!)
+      if (!a.tokens.some((t) => t.prefix === prefix)) return error(404, 'no-token')
+      a.tokens = a.tokens.filter((t) => t.prefix !== prefix)
+      return new Response(null, { status: 204 })
+    }
+    return error(404, 'not-found')
+  }
+
+  /** Apps connected by OAuth (W4): list, and remove one. */
+  private routeConnections(a: Account, method: string, path: string) {
+    const error = (status: number, code: string) => Response.json({ error: code }, { status })
+    if (path === '/connections' && method === 'GET') {
+      return Response.json({ connections: a.connections })
+    }
+    const m = /^\/connections\/([^/]+)$/.exec(path)
+    if (m && method === 'DELETE') {
+      const id = decodeURIComponent(m[1]!)
+      if (!a.connections.some((c) => c.id === id)) return error(404, 'no-connection')
+      a.connections = a.connections.filter((c) => c.id !== id)
+      return new Response(null, { status: 204 })
     }
     return error(404, 'not-found')
   }

@@ -36,6 +36,7 @@ import { RadioCard } from '@/components/ui/radio-card'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { TextArea } from '@/components/ui/text-area'
 import { TextLink } from '@/components/ui/text-link'
+import ConnectionsSection from '@/components/ConnectionsSection.vue'
 
 const THEME_NAMES: Record<Theme, string> = { system: 'System', light: 'Light', dark: 'Dark' }
 const THEME_OPTIONS = THEMES.map((t) => ({ value: t, label: THEME_NAMES[t] }))
@@ -77,7 +78,13 @@ const session = useSessionStore()
 const sync = useSyncStore()
 const heading = useTemplateRef<HTMLHeadingElement>('heading')
 const signOutButton = useTemplateRef<InstanceType<typeof Button>>('signOutButton')
-const ids = { look: useId(), goals: useId(), data: useId(), account: useId() }
+const ids = {
+  look: useId(),
+  goals: useId(),
+  data: useId(),
+  connections: useId(),
+  account: useId(),
+}
 
 // Arriving here moves focus to the page's heading, so a screen reader starts at the top.
 onMounted(() => heading.value!.focus())
@@ -250,7 +257,7 @@ async function confirmSignOut(): Promise<void> {
 <!--
   The Settings page (brand/design-system/project/components/SettingsPage), at #/settings, with no
   Header (K52): a link back to the week, the heading, then Appearance (Marks, then Theme, K59),
-  Your goals (the Ask mockup's row), Your data and Account. The daily targets are set in Edit
+  Your goals (the Ask mockup's row), Your data, Connections (ConnectionsSection) and Account. The daily targets are set in Edit
   plan (K56). Full width in rows like the week (K51): each section's
   heading in the week's name column, its settings beside it, a line rule above each row, controls
   beside their words (K53). Settings take effect at once; there is no Save. Your goals saves when
@@ -369,6 +376,16 @@ async function confirmSignOut(): Promise<void> {
           {{ notice.text }}
         </InlineMessage>
       </div>
+    </section>
+
+    <section
+      :aria-labelledby="ids.connections"
+      class="grid grid-cols-[var(--grid-name-w)_minmax(0,1fr)] items-start border-t border-line py-(--set-sec-y) folded:flex folded:flex-col folded:items-stretch folded:gap-4"
+    >
+      <h2 :id="ids.connections" class="title-2 text-(length:--set-h2) leading-tight text-ink">
+        Connections
+      </h2>
+      <ConnectionsSection />
     </section>
 
     <section

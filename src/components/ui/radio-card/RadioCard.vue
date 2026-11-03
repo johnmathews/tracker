@@ -4,7 +4,8 @@ import { RadioGroupIndicator, RadioGroupItem, RadioGroupRoot } from 'reka-ui'
 import { cn } from '@/lib/utils'
 import { radioCardVariants, radioDotVariants, radioPictureVariants } from '.'
 
-type Option = { value: string; label: string }
+/** `hint`: a line saying what the option means, in place of a picture ("See your plans…"). */
+type Option = { value: string; label: string; hint?: string }
 
 const props = defineProps<{
   /** The visible label above the list ("Marks"); it names the radiogroup. */
@@ -53,12 +54,34 @@ function onValue(value: unknown): void {
         :key="option.value"
         :value="option.value"
         data-slot="radio-card-option"
-        :class="radioCardVariants()"
+        :class="radioCardVariants({ hint: !!option.hint })"
+        :aria-labelledby="option.hint ? `${labelId}-${option.value}` : undefined"
+        :aria-describedby="option.hint ? `${labelId}-${option.value}-hint` : undefined"
       >
-        <span data-slot="radio-card-dot" aria-hidden="true" :class="radioDotVariants()">
+        <span
+          data-slot="radio-card-dot"
+          aria-hidden="true"
+          :class="radioDotVariants({ hint: !!option.hint })"
+        >
           <RadioGroupIndicator class="size-2.5 rounded-full bg-ink" />
         </span>
-        <span data-slot="radio-card-name" class="body min-w-0 flex-1">{{ option.label }}</span>
+        <span v-if="option.hint" class="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span
+            :id="`${labelId}-${option.value}`"
+            data-slot="radio-card-name"
+            class="body font-semibold"
+            >{{ option.label }}</span
+          >
+          <span
+            :id="`${labelId}-${option.value}-hint`"
+            data-slot="radio-card-hint"
+            class="caption text-ink-secondary"
+            >{{ option.hint }}</span
+          >
+        </span>
+        <span v-else data-slot="radio-card-name" class="body min-w-0 flex-1">{{
+          option.label
+        }}</span>
         <span
           v-if="$slots.picture"
           data-slot="radio-card-picture"
