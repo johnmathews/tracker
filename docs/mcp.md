@@ -2,10 +2,10 @@
 
 > Purpose
 >
-> How to connect your own Claude to the tracker's MCP server: what the server offers, how to sign
-> in from claude.ai and Claude Code, how to create a token for clients that use one, and what to do
-> when a call fails. The endpoint's rules and every tool argument are in [api.md](api.md) §3.1, and
-> the sign-in's in §3.3.
+> How to connect your own Claude or ChatGPT to the tracker's MCP server: what the server offers, how
+> to sign in from claude.ai, Claude Code and ChatGPT, how to create a token for clients that use
+> one, and what to do when a call fails. The endpoint's rules and every tool argument are in
+> [api.md](api.md) §3.1, and the sign-in's in §3.3.
 
 ## 1. What the server offers
 
@@ -43,8 +43,8 @@ the whole note, so read it with `item_history` before writing it back.
 
 ## 2. Two ways to connect
 
-**Sign in with OAuth** (claude.ai and Claude Code). You paste the address and Claude opens a
-tracker page where you sign in and choose what Claude may do. Nothing is copied by hand. The
+**Sign in with OAuth** (claude.ai, Claude Code and ChatGPT). You paste the address and the app opens
+a tracker page where you sign in and choose what the app may do. Nothing is copied by hand. The
 connection lasts 90 days, then you connect again. You can remove it earlier in Settings.
 
 **Use a token** (Claude Code, Claude Desktop and scripts). You create a token in Settings and give
@@ -202,6 +202,41 @@ environment instead: set the header argument to `Authorization:${TRACKER_MCP_AUT
 <https://github.com/geelen/mcp-remote>. The npm page, <https://www.npmjs.com/package/mcp-remote>,
 returned 403 when checked.
 
+### 4.4 ChatGPT (web)
+
+ChatGPT connects by URL and asks you to sign in, as claude.ai does. You need no token, client ID
+or secret: the tracker reads ChatGPT's own client document from `chatgpt.com`.
+
+1. In ChatGPT on the web, open **Plugins** (`https://chatgpt.com/plugins`), choose **+** and then
+   **Add custom MCP server**.
+2. Enter a name, such as `Tracker`, and paste `https://<public host>/api/mcp` as the URL.
+3. For authentication, choose **OAuth**. Leave the advanced OAuth settings as ChatGPT finds them:
+   the client registration is the client ID metadata document, and the callback URL is
+   `https://chatgpt.com/connector_platform_oauth_redirect`. Leave the scopes as discovered
+   (`read`); the access is chosen on the tracker's page.
+4. Accept the risk warning and choose **Create as a plugin**. Connecting opens the tracker's page,
+   which names ChatGPT, from chatgpt.com. Sign in and choose what ChatGPT may do, as in §4.1.
+5. Start a new chat, type `@`, choose the tracker and ask a question (§5).
+
+The connection appears under **Apps** in Settings › Connections as "ChatGPT · chatgpt.com" and
+ends, lasts and is removed as in §4.1.
+
+What OpenAI says about it, from its auth guide
+(<https://developers.openai.com/plugins/build/auth>, read 2026-11-04) and its connect guide
+(<https://developers.openai.com/plugins/deploy/connect-chatgpt>):
+
+- Custom MCP servers work in ChatGPT on the web, not in the phone app. The desktop app's **MCPs**
+  tab is for the coding agent and is a different thing.
+- Which plans can add one is set by OpenAI and by a workspace's admins. OpenAI's help article
+  (<https://help.openai.com/en/articles/12584461>, as read on 2026-11-03 for family-finances)
+  names Business and Enterprise/Edu with write tools and Pro with read tools only, and does not
+  name Plus. If **Add custom MCP server** is missing, the account's plan or workspace does not
+  offer it.
+- Everything a tool returns goes to OpenAI. On Free, Plus and Pro, OpenAI may train on the
+  conversation unless **Improve the model for everyone** is off in ChatGPT's data controls.
+
+If ChatGPT says it cannot connect, see §6.
+
 ## 5. Trying it
 
 After connecting, ask a question that needs the log:
@@ -224,25 +259,25 @@ items with their notes, a day's mark, or the two daily targets. To undo a change
 
 ## 6. Troubleshooting
 
-| Symptom                                 | Cause and fix                                                                                                                                                                                                                                       |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 401                                     | The token is wrong, revoked or belongs to a disabled account, or the OAuth connection has ended or passed its 90 days. Remove the token or connection in Settings and make a new one.                                                              |
-| 400 `token-in-url`                      | The URL carries a `token` or `access_token`. Move the token to the `Authorization` header.                                                                                                                                                          |
-| 403 `origin`                            | The request has an `Origin` header, as a browser page sends. Connect from an agent.                                                                                                                                                                 |
-| 421                                     | The `Host` is not the public host. Change the URL from the LAN address to `https://<public host>/api/mcp`.                                                                                                                                          |
-| "this connection is read-only"          | A write tool needs a write token or a Read and change connection. Create a write token in Settings › Connections, or remove the connection and connect again with Read and change.                                                                  |
-| 413 `too-large`                         | The request body is over 1 MiB.                                                                                                                                                                                                                     |
-| 400 "Invalid Content-Type header"       | The `Content-Type` is not `application/json`. MCP clients send it; a hand-made `curl` must too.                                                                                                                                                     |
-| `quota` in a tool error                 | The account is full (5 MiB). Remove old plans or marks in the app, then retry.                                                                                                                                                                      |
-| 405                                     | The client sent a GET or a `DELETE`. The server accepts POST only, so use a client that supports it.                                                                                                                                                |
-| 503 `busy`                              | The server could not check the token because its database was busy or failing. This is not a bad token. Retry in a few seconds; the API log has the error.                                                                                         |
-| claude.ai or Claude Code cannot connect | Cloudflare may block the sign-in requests before the tracker sees them. From outside your network, `curl -i https://<public host>/.well-known/oauth-authorization-server` must answer JSON, not a Cloudflare error page ([deployment.md](deployment.md) §5). claude.ai keeps its copy of these documents about 5 minutes. |
-| "error code: 1010" from `curl`          | Cloudflare refused a client that is not a browser. Anthropic's servers need the custom rule in [deployment.md](deployment.md) §5.1.                                                                                                                 |
-| The consent page says "did not come from an app the tracker can check (unreachable)" | The API could not fetch the asking app's document from claude.ai: its egress proxy must allow `claude.ai:443` and `claude.com:443` ([deployment.md](deployment.md) §5.3). |
-| A page says the app can't be checked    | The sign-in link did not come from Claude: the app's host is not on the tracker's list (`OAUTH_CLIENT_HOSTS`, default `claude.ai` and `claude.com`), its metadata could not be fetched, or its redirect is not one it registered. Start again from Claude. |
-| "This link has expired"                 | The page was open more than 10 minutes, or was already used. Start the connection again from Claude.                                                                                                                                                |
-| The page says the password is wrong     | Enter the account's email and password. Five wrong passwords in 15 minutes lock the account for 15 minutes, as at sign-in.                                                                                                                          |
-| "You have ten connections"              | An account can hold 10 connections. Remove one in Settings › Connections, then connect again.                                                                                                                                                       |
-| "You have 20 tokens"                    | An account can hold 20 tokens. Remove one in Settings › Connections, then create the new one.                                                                                                                                                      |
+| Symptom                                                                              | Cause and fix                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 401                                                                                  | The token is wrong, revoked or belongs to a disabled account, or the OAuth connection has ended or passed its 90 days. Remove the token or connection in Settings and make a new one.                                                                                                                                     |
+| 400 `token-in-url`                                                                   | The URL carries a `token` or `access_token`. Move the token to the `Authorization` header.                                                                                                                                                                                                                                |
+| 403 `origin`                                                                         | The request has an `Origin` header, as a browser page sends. Connect from an agent.                                                                                                                                                                                                                                       |
+| 421                                                                                  | The `Host` is not the public host. Change the URL from the LAN address to `https://<public host>/api/mcp`.                                                                                                                                                                                                                |
+| "this connection is read-only"                                                       | A write tool needs a write token or a Read and change connection. Create a write token in Settings › Connections, or remove the connection and connect again with Read and change.                                                                                                                                        |
+| 413 `too-large`                                                                      | The request body is over 1 MiB.                                                                                                                                                                                                                                                                                           |
+| 400 "Invalid Content-Type header"                                                    | The `Content-Type` is not `application/json`. MCP clients send it; a hand-made `curl` must too.                                                                                                                                                                                                                           |
+| `quota` in a tool error                                                              | The account is full (5 MiB). Remove old plans or marks in the app, then retry.                                                                                                                                                                                                                                            |
+| 405                                                                                  | The client sent a GET or a `DELETE`. The server accepts POST only, so use a client that supports it.                                                                                                                                                                                                                      |
+| 503 `busy`                                                                           | The server could not check the token because its database was busy or failing. This is not a bad token. Retry in a few seconds; the API log has the error.                                                                                                                                                                |
+| claude.ai, Claude Code or ChatGPT cannot connect                                     | Cloudflare may block the sign-in requests before the tracker sees them. From outside your network, `curl -i https://<public host>/.well-known/oauth-authorization-server` must answer JSON, not a Cloudflare error page ([deployment.md](deployment.md) §5). claude.ai keeps its copy of these documents about 5 minutes. |
+| "error code: 1010" from `curl`                                                       | Cloudflare refused a client that is not a browser. Anthropic's servers need the custom rule in [deployment.md](deployment.md) §5.1, and OpenAI's need it too if Cloudflare's Security Events show them challenged (§5.2).                                                                                                 |
+| The consent page says "did not come from an app the tracker can check (unreachable)" | The API could not fetch the asking app's document: its egress proxy must allow `claude.ai:443`, `claude.com:443` and `chatgpt.com:443` ([deployment.md](deployment.md) §5.3).                                                                                                                                             |
+| A page says the app can't be checked                                                 | The sign-in link did not come from Claude or ChatGPT: the app's host is not on the tracker's list (`OAUTH_CLIENT_HOSTS`, default `claude.ai`, `claude.com` and `chatgpt.com`), its metadata could not be fetched, or its redirect is not one it registered. Start again from the app.                                     |
+| "This link has expired"                                                              | The page was open more than 10 minutes, or was already used. Start the connection again from the app.                                                                                                                                                                                                                     |
+| The page says the password is wrong                                                  | Enter the account's email and password. Five wrong passwords in 15 minutes lock the account for 15 minutes, as at sign-in.                                                                                                                                                                                                |
+| "You have ten connections"                                                           | An account can hold 10 connections. Remove one in Settings › Connections, then connect again.                                                                                                                                                                                                                             |
+| "You have 20 tokens"                                                                 | An account can hold 20 tokens. Remove one in Settings › Connections, then create the new one.                                                                                                                                                                                                                             |
 
 If a call still fails, run the `whoami` tool first. It separates a bad connection from a bad call.

@@ -87,13 +87,14 @@
 <div class="cell"><p class="caption state">Listed, with an app connected just now</p>
 <section class="row" aria-labelledby="c1"><h2 id="c1">Connections</h2><div class="col">
   <div aria-live="polite"><div class="banner"><p><b>Claude was connected just now</b>, with read and change. If that wasn’t you, remove it and change your password.</p><div class="btns"><button type="button" class="btn">Remove</button><button type="button" class="btn">Dismiss</button></div></div></div>
-  <p class="lede">Let Claude read your weeks and, if you allow it, mark days and edit your plans.</p>
+  <p class="lede">Let Claude or ChatGPT read your weeks and, if you allow it, mark days and edit your plans.</p>
   <div class="copy"><code>https://tracker.itsa-pizza.com/api/mcp</code><button type="button" class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>Copy</button></div>
   <div class="how">
     <p><b>Claude (claude.ai, desktop and phone):</b> in Claude’s Settings › Connectors, choose Add custom connector and paste this address. Claude opens this page to ask for your password.</p>
     <p><b>Claude Code:</b> run <code>claude mcp add --transport http tracker https://tracker.itsa-pizza.com/api/mcp</code>, then <code>/mcp</code> to sign in. Or use a token below.</p>
+    <p><b>ChatGPT (on the web):</b> in ChatGPT’s Plugins, choose + then Add custom MCP server, paste this address and choose OAuth. ChatGPT opens this page to ask for your password.</p>
   </div>
-  <div class="group"><h3 id="a1">Apps</h3><p class="lede">Connected by signing in from Claude. Each lasts 90 days.</p>
+  <div class="group"><h3 id="a1">Apps</h3><p class="lede">Connected by signing in from Claude or ChatGPT. Each lasts 90 days.</p>
     <ul aria-labelledby="a1">
       <li><div class="what"><span class="name">Claude <span class="host">· claude.ai</span></span><span class="facts"><span class="new">New</span> · Read and change · connected 3 Nov at 14:02 · last used today at 14:05 · ends 1 Feb</span></div><button type="button" class="btn" aria-label="Remove Claude">Remove</button></li>
       <li><div class="what"><span class="name">Claude Code <span class="host">· claude.ai</span></span><span class="facts">Read only · connected 28 Oct at 09:12 · last used yesterday · ends 26 Jan</span></div><button type="button" class="btn" aria-label="Remove Claude Code">Remove</button></li>
@@ -136,7 +137,7 @@
 
 <div class="cell"><p class="caption state">Nothing connected yet</p>
 <section class="row" aria-labelledby="c4"><h2 id="c4">Connections</h2><div class="col">
-  <div class="group"><h3>Apps</h3><p class="lede">Connected by signing in from Claude. Each lasts 90 days.</p><p class="lede">No apps are connected.</p></div>
+  <div class="group"><h3>Apps</h3><p class="lede">Connected by signing in from Claude or ChatGPT. Each lasts 90 days.</p><p class="lede">No apps are connected.</p></div>
   <div class="group"><h3>Tokens</h3><p class="lede">For Claude Code, Claude Desktop and scripts. A token works until you remove it.</p><p class="lede">No tokens yet.</p>
     <div class="btns"><button type="button" class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Create token</button></div></div>
 </div></section>

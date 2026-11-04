@@ -14,7 +14,7 @@ ORIGIN_RE = re.compile(r"https?://[^/\s]+")
 SENDER_RE = re.compile(r"(?:[^<>@]+ <[^<>@\s]+@[^<>@\s]+>|[^<>@\s]+@[^<>@\s]+)")
 DEFAULT_TIMEZONE = "Europe/Amsterdam"
 #: The hosts whose client metadata documents may name an OAuth client (oauth.py): Claude's.
-DEFAULT_OAUTH_CLIENT_HOSTS = ("claude.ai", "claude.com")
+DEFAULT_OAUTH_CLIENT_HOSTS = ("claude.ai", "claude.com", "chatgpt.com")
 HOST_RE = re.compile(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+")
 
 

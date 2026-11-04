@@ -250,7 +250,7 @@ async function confirmRemove(): Promise<void> {
 
 <!--
   Settings' Connections row (brand/design-system/project/components/ConnectionsSection, L1): the
-  new-connection Banner, the address to give Claude with how to connect each Claude, then the apps
+  new-connection Banner, the address to give an app with how to connect each one, then the apps
   connected by signing in and the personal tokens, each a row with a line of facts and Remove.
   A new token is shown once. Sizes are the Settings page's (`--set-*`, `u`).
 -->
@@ -274,7 +274,7 @@ async function confirmRemove(): Promise<void> {
     </div>
 
     <p class="body max-w-[62ch] text-(length:--set-text) leading-[1.45] text-ink-secondary">
-      Let Claude read your weeks and, if you allow it, mark days and edit your plans.
+      Let Claude or ChatGPT read your weeks and, if you allow it, mark days and edit your plans.
     </p>
 
     <div class="grid gap-[calc(var(--u)*10)]" data-testid="connect-how">
@@ -310,6 +310,12 @@ async function confirmRemove(): Promise<void> {
           >claude mcp add --transport http tracker {{ address }}</code
         >, then <code class="font-mono text-[0.9em]">/mcp</code> to sign in. Or use a token below.
       </p>
+      <p
+        class="max-w-[70ch] text-(length:--set-label) leading-normal text-ink-secondary [&_b]:font-semibold [&_b]:text-ink"
+      >
+        <b>ChatGPT (on the web):</b> in ChatGPT’s Plugins, choose + then Add custom MCP server,
+        paste this address and choose OAuth. ChatGPT opens this page to ask for your password.
+      </p>
     </div>
     <span aria-live="polite" class="sr-only" data-testid="copy-status">{{
       copied ? 'Copied.' : ''
@@ -335,7 +341,7 @@ async function confirmRemove(): Promise<void> {
         Apps
       </h3>
       <p class="max-w-[62ch] text-(length:--set-text) leading-[1.45] text-ink-secondary">
-        Connected by signing in from Claude. Each lasts 90 days.
+        Connected by signing in from Claude or ChatGPT. Each lasts 90 days.
       </p>
       <template v-if="connections">
         <ul

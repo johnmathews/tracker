@@ -139,7 +139,7 @@ describe('Settings › Connections', () => {
     ).toEqual(['Apps', 'Tokens'])
   })
 
-  it('gives the address to paste, with Copy, and how to connect each Claude', async () => {
+  it('gives the address to paste, with Copy, and how to connect each app', async () => {
     await openSettings()
     const address = `${location.origin}/api/mcp`
     expect(section().get('[data-testid="mcp-address"]').text()).toBe(address)
@@ -150,6 +150,7 @@ describe('Settings › Connections', () => {
     const how = section().get('[data-testid="connect-how"]').text()
     expect(how).toContain('in Claude’s Settings › Connectors, choose Add custom connector')
     expect(how).toContain(`claude mcp add --transport http tracker ${address}`)
+    expect(how).toContain('in ChatGPT’s Plugins, choose + then Add custom MCP server')
     expect(section().get('[data-testid="connect-how"] code').classes()).toContain('font-mono')
   })
 

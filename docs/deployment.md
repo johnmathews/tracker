@@ -217,19 +217,20 @@ whole path through nginx:
 CI runs it on every pull request (the `compose` job in `docker.yml`); locally it takes about a
 minute and leaves nothing running.
 
-## 5. Connecting Claude (OAuth and Cloudflare)
+## 5. Connecting Claude and ChatGPT (OAuth and Cloudflare)
 
-claude.ai and Claude Code connect to `https://tracker.itsa-pizza.com/api/mcp` with an OAuth
-sign-in ([mcp.md](mcp.md) §4, [api.md](api.md) §3.3). Two paths must be open:
+claude.ai, Claude Code and ChatGPT connect to `https://tracker.itsa-pizza.com/api/mcp` with an
+OAuth sign-in ([mcp.md](mcp.md) §4, [api.md](api.md) §3.3). Two paths must be open:
 
-- **In:** Anthropic's servers make the requests that discover the sign-in, fetch the tokens and
+- **In:** Anthropic's and OpenAI's servers make the requests that discover the sign-in, fetch the tokens and
   call the tools, so Cloudflare must let them through (§5.1). The person's own browser, which loads
   the consent page, needs no exception.
 - **Out:** to check the asking app, the API fetches its client metadata document from
-  `https://claude.ai/oauth/…`, so the API's egress proxy must allow `claude.ai:443` and
-  `claude.com:443` (§5.3).
+  `https://claude.ai/oauth/…` or `https://chatgpt.com/oauth/client.json`, so the API's egress
+  proxy must allow `claude.ai:443`, `claude.com:443` and `chatgpt.com:443` (§5.3).
 
-Both were set up on 2026-11-03, and claude.ai and Claude Code then connected (§5.4).
+Both were set up for Claude on 2026-11-03, and claude.ai and Claude Code then connected (§5.4).
+ChatGPT's needs are in §5.5.
 
 ### 5.1 What to change in Cloudflare
 
@@ -292,7 +293,8 @@ The fourth prints `HTTP/2 401` and a `www-authenticate` header with
 `resource_metadata="https://tracker.itsa-pizza.com/.well-known/oauth-protected-resource/api/mcp"`.
 A 502 means the API is down. A `1010` or a Cloudflare HTML page means the edge still blocks.
 
-The API needs no setting for this. `OAUTH_CLIENT_HOSTS` defaults to `claude.ai,claude.com`
+The API needs no setting for this. `OAUTH_CLIENT_HOSTS` defaults to
+`claude.ai,claude.com,chatgpt.com`
 ([api.md](api.md) §6); the API must be able to reach those hosts (§5.3).
 
 **Connecting.** After the deploy and the check:
@@ -326,9 +328,9 @@ look at the egress proxy (§5.3).
 The production API has no route to the internet of its own. On the home server it sits on an
 internal network and goes out through `fitness-mail-proxy`, a Squid container that tunnels HTTPS
 to a short allow-list of hosts and refuses everything else (the home-server repo,
-`documentation/infra_vm.md`, "Tracker"). For the sign-in, that list must hold `claude.ai:443`
-and `claude.com:443`, the hosts in `OAUTH_CLIENT_HOSTS`; they were added on 2026-11-03
-(home-server #333). Without them the consent page says the request "did not come from an app the
+`documentation/infra_vm.md`, "Tracker"). For the sign-in, that list must hold `claude.ai:443`,
+`claude.com:443` and `chatgpt.com:443`, the hosts in `OAUTH_CLIENT_HOSTS`. The first two were
+added on 2026-11-03 (home-server #333); `chatgpt.com` on 2026-11-04 (§5.5). Without them the consent page says the request "did not come from an app the
 tracker can check (unreachable)", and `docker logs fitness-mail-proxy` shows
 `TCP_DENIED/403 CONNECT claude.ai:443`. Adding a host to `OAUTH_CLIENT_HOSTS` needs the same
 change in the proxy.
@@ -351,3 +353,23 @@ for user 1 by https://claude.ai/oauth/mcp-oauth-client-metadata` (claude.ai) or
 `POST /api/oauth/token` 200 → `POST /api/mcp` 200. Neither tried Dynamic Client Registration
 (P32). A second sign-in from Claude Code revoked its first grant through `/api/oauth/revoke`, as a
 client replacing its token should.
+
+### 5.5 ChatGPT
+
+ChatGPT names itself by the document `https://chatgpt.com/oauth/client.json`, so it needs no
+client ID or secret ([mcp.md](mcp.md) §4.4). The tracker's metadata already meets OpenAI's
+issuer conditions (an issuer with no trailing slash, the same one in the protected resource
+document, and `iss` on every authorization response), so ChatGPT uses its stable redirect,
+`https://chatgpt.com/connector_platform_oauth_redirect`.
+
+- **Out:** the egress proxy must allow `chatgpt.com:443` (§5.3). Check it as in §5.3 with
+  `https://chatgpt.com/oauth/client.json`; it prints `200`.
+- **In:** OpenAI's servers call `/.well-known/`, `/api/oauth/token` and `/api/mcp`. Whether
+  Browser Integrity Check challenges them is not measured, so the first connect is tried with no
+  Cloudflare change, as family-finances decided for its own (its ADR-0049 §2 item 6). If ChatGPT
+  then cannot connect and **Security › Events** shows OpenAI's addresses challenged on those
+  paths, give the §5.1 rule OpenAI's ranges. They are published at
+  <https://openai.com/chatgpt-connectors.json> (288 prefixes on 2026-10-27, and they change), too
+  many to paste into an expression, so put them in a Cloudflare IP list and add
+  `or (ip.src in $<list name>)` beside the Anthropic ranges. A stale list fails closed: ChatGPT is
+  challenged and no one else gains anything.

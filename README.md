@@ -86,8 +86,8 @@
   it once you sign in: **Add to my account** merges it in, **Not mine** stops the question for you
   on that browser, **Later** asks next time. A log in another browser or profile can be moved with
   Export there and Import… here.
-- **Ask an agent.** claude.ai and Claude Code connect to the API's MCP endpoint (`/api/mcp`) by
-  URL and an OAuth sign-in. Claude Code, Claude Desktop and scripts can use a personal token
+- **Ask an agent.** claude.ai, Claude Code and ChatGPT (on the web) connect to the API's MCP
+  endpoint (`/api/mcp`) by URL and an OAuth sign-in. Claude Code, Claude Desktop and scripts can use a personal token
   instead, which you create in Settings › Connections. The agent reads how your weeks are going,
   as the app shows them, and with write access it can edit plans and marks.
   [docs/mcp.md](docs/mcp.md) says how to connect.
@@ -220,7 +220,7 @@ end to end.
 | ------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
 | [docs/architecture.md](docs/architecture.md)                                   | Components, stores, storage format, design decisions                 |
 | [docs/development.md](docs/development.md)                                     | Toolchain, scripts, conventions, tests                               |
-| [docs/deployment.md](docs/deployment.md)                                       | Docker images, nginx, CI, GHCR publishing, sign-up, turning on email, Cloudflare and the egress proxy for Claude |
+| [docs/deployment.md](docs/deployment.md)                                       | Docker images, nginx, CI, GHCR publishing, sign-up, turning on email, Cloudflare and the egress proxy for Claude and ChatGPT |
 | [docs/api.md](docs/api.md)                                                     | The API service: endpoints, accounts, email, CLI, backups            |
 | [docs/mcp.md](docs/mcp.md)                                                     | Connecting an agent over MCP: OAuth, tokens, clients, example questions     |
 | [docs/brand.md](docs/brand.md)                                                 | The brand, the design system and how to change them                  |
