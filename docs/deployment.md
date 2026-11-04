@@ -373,3 +373,11 @@ document, and `iss` on every authorization response), so ChatGPT uses its stable
   many to paste into an expression, so put them in a Cloudflare IP list and add
   `or (ip.src in $<list name>)` beside the Anthropic ranges. A stale list fails closed: ChatGPT is
   challenged and no one else gains anything.
+
+**The first real connect (2026-11-04).** ChatGPT connected after the deploy and the proxy change,
+with no Cloudflare change. The API log showed `oauth authorize from chatgpt.com: waiting for
+consent`, with `scope=read+write` and the stable redirect in the request, then `oauth grant …
+approved for user 1 by https://chatgpt.com/oauth/client.json`, `POST /api/oauth/token` 200 and
+`POST /api/mcp` 200. ChatGPT asks for every scope it discovers, so the consent page alone decides
+its access. When the plugin was removed in ChatGPT, it revoked its grant through
+`/api/oauth/revoke` (`ended: revoked by its client`); adding it again made a new grant.

@@ -350,15 +350,24 @@ def test_claude_code_connects_with_a_loopback_redirect_on_any_port(
     assert result(whoami(claude, r.json()["access_token"]))["isError"] is False
 
 
+@pytest.mark.parametrize(
+    ("write", "granted", "access"), [(True, "read write", "write"), (False, "read", "read")]
+)
 def test_chatgpt_connects_without_a_secret_and_gets_the_access_chosen(
-    browser: TestClient, claude: TestClient, uid: int, stub: StubFetch
+    browser: TestClient,
+    claude: TestClient,
+    uid: int,
+    stub: StubFetch,
+    write: bool,
+    granted: str,
+    access: str,
 ) -> None:
-    """ChatGPT asks for the discovered `read`; the consent screen's choice decides, so ticking
-    write gives it write. Its token requests carry no secret, as the `none` method it shares
-    with this server."""
+    """ChatGPT asks for every discovered scope, `read write` (seen live on 2026-11-04); the
+    consent screen's choice decides what it gets. Its token requests carry no secret, as the
+    `none` method it shares with this server."""
     verifier, challenge = pkce()
     r = authorize(
-        browser, challenge, client_id=CHATGPT, redirect_uri=CHATGPT_REDIRECT, scope="read"
+        browser, challenge, client_id=CHATGPT, redirect_uri=CHATGPT_REDIRECT, scope="read write"
     )
     rid = request_id(r)
     assert stub.calls == [CHATGPT]
@@ -368,15 +377,15 @@ def test_chatgpt_connects_without_a_secret_and_gets_the_access_chosen(
         "chatgpt.com",
         "chatgpt.com",
     )
-    redirect_to = approve(browser, rid, write=True).json()["redirectTo"]
+    redirect_to = approve(browser, rid, write=write).json()["redirectTo"]
     assert redirect_to.startswith(CHATGPT_REDIRECT + "?")
     back = query_of(redirect_to)
     assert back["iss"] == [ORIGIN]
     r = redeem(claude, back["code"][0], verifier, client_id=CHATGPT, redirect_uri=CHATGPT_REDIRECT)
     assert r.status_code == 200, r.text
     tokens = r.json()
-    assert tokens["scope"] == "read write"
-    assert result(whoami(claude, tokens["access_token"]))["structuredContent"]["scope"] == "write"
+    assert tokens["scope"] == granted
+    assert result(whoami(claude, tokens["access_token"]))["structuredContent"]["scope"] == access
     r = refresh(claude, tokens["refresh_token"], client_id=CHATGPT)
     assert r.status_code == 200, r.text
     # A code or refresh token is bound to ChatGPT: Claude cannot spend it.
@@ -386,7 +395,7 @@ def test_chatgpt_connects_without_a_secret_and_gets_the_access_chosen(
     assert (row["clientName"], row["clientHost"], row["scope"]) == (
         "ChatGPT",
         "chatgpt.com",
-        "write",
+        access,
     )
 
 
