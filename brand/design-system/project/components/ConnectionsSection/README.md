@@ -1,4 +1,4 @@
-Settings' Connections row: the address to give Claude with how to connect claude.ai and Claude Code, then the apps connected by signing in and the tokens you made, each with a line of facts and Remove.
+Settings' Connections row: the address to give an app with how to connect claude.ai, Claude Code and ChatGPT, then the apps connected by signing in and the tokens you made, each with a line of facts and Remove.
 
 ## Use
 
