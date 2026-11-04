@@ -1,5 +1,5 @@
-"""OAuth connections for claude.ai and Claude Code: clients, consent requests, codes, refresh
-rotation with reuse detection, access tokens, and how a connection ends (docs/api.md §4).
+"""OAuth connections for claude.ai, Claude Code and ChatGPT: clients, consent requests, codes,
+refresh rotation with reuse detection, access tokens, and how a connection ends (docs/api.md §4).
 
 The HTTP surface is `oauth_api.py`; this module knows nothing about requests. It ports
 family-finances' `oauth.py` without its household-key sealing or its pre-registered client:
@@ -89,8 +89,9 @@ class ClientRefused(Exception):
     """A client or redirect this server will not deal with. W4 answers 400 and never redirects.
 
     `reason`: `client-id` (not an https URL on an allowed host), `unreachable`, `status` (not
-    200), `too-large`, `document` (not a JSON object), `client-id-mismatch`, `auth` (its
-    `token_endpoint_auth_method` is not `none`), `redirect-uris`, `grant-types`,
+    200), `too-large`, `document` (not a JSON object), `client-id-mismatch`, `auth` (it cannot
+    sign in without a secret: neither its `token_endpoint_auth_method` nor its
+    `token_endpoint_auth_methods_supported` is or holds `none`), `redirect-uris`, `grant-types`,
     `response-types`, or `redirect` (not one of its registered redirects)."""
 
     def __init__(self, reason: str) -> None:
@@ -243,6 +244,19 @@ def _strings(value: object) -> list[str] | None:
     return None
 
 
+def _can_use_none(document: dict[str, object]) -> bool:
+    """Whether the client can sign in as a public client: no secret, PKCE only, the one method
+    this server accepts. RFC 7591's singular `token_endpoint_auth_method` says so when it is
+    `none`. A document may also list every method it can use in
+    `token_endpoint_auth_methods_supported` (MCP SEP-3149), and the singular is then only a
+    preference: ChatGPT's prefers `private_key_jwt` and lists `none` too. A list that holds
+    `none` is enough; a list that is not a list of strings is refused."""
+    if document.get("token_endpoint_auth_method") == "none":
+        return True
+    listed = _strings(document.get("token_endpoint_auth_methods_supported"))
+    return listed is not None and "none" in listed
+
+
 def _client_from(client_id: str, host: str, fetched: Fetched) -> Client:
     if fetched.status != 200:
         raise ClientRefused("status")
@@ -256,8 +270,7 @@ def _client_from(client_id: str, host: str, fetched: Fetched) -> Client:
         raise ClientRefused("document")
     if document.get("client_id") != client_id:
         raise ClientRefused("client-id-mismatch")
-    # A public client: no secret, PKCE only. `token_endpoint_auth_method` is singular in RFC 7591.
-    if document.get("token_endpoint_auth_method") != "none":
+    if not _can_use_none(document):
         raise ClientRefused("auth")
     # Only https, or http to this computer (RFC 8252): the consent screen sends the browser to the
     # redirect, so a `javascript:` or `data:` entry must never be one.

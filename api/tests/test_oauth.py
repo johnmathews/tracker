@@ -56,6 +56,26 @@ CLAUDE_CODE_DOC: dict[str, Any] = {
     "response_types": ["code"],
     "token_endpoint_auth_method": "none",
 }
+# The document ChatGPT publishes, as fetched on 2026-11-04. Its singular method is a preference;
+# the plural list is what it can use (OpenAI's auth guide, "Client registration").
+CHATGPT = "https://chatgpt.com/oauth/client.json"
+CHATGPT_REDIRECT = "https://chatgpt.com/connector_platform_oauth_redirect"
+CHATGPT_DOC: dict[str, Any] = {
+    "client_id": CHATGPT,
+    "client_uri": "https://chatgpt.com/",
+    "redirect_uris": [CHATGPT_REDIRECT],
+    "token_endpoint_auth_method": "private_key_jwt",
+    "token_endpoint_auth_methods_supported": ["none", "private_key_jwt"],
+    "grant_types": ["authorization_code", "refresh_token"],
+    "response_types": ["code"],
+    "client_name": "ChatGPT",
+    "logo_uri": "https://persistent.oaistatic.com/sonic/misc/openai-logo.png",
+    "token_endpoint_auth_signing_alg": "RS256",
+    "jwks_uri": "https://chatgpt.com/oauth/jwks.json",
+}
+
+#: Claude's document with ChatGPT's preference: whether it is a public client rests on its list.
+CLAUDE_AI_PREFERS_JWT = CLAUDE_AI_DOC | {"token_endpoint_auth_method": "private_key_jwt"}
 
 
 def doc(body: dict[str, Any], status: int = 200) -> Fetched:
@@ -68,6 +88,7 @@ class StubFetch:
     def __init__(self) -> None:
         self.docs: dict[str, Fetched] = {CLAUDE_AI: doc(CLAUDE_AI_DOC)}
         self.docs[CLAUDE_CODE] = doc(CLAUDE_CODE_DOC)
+        self.docs[CHATGPT] = doc(CHATGPT_DOC)
         self.calls: list[str] = []
 
     def __call__(self, url: str) -> Fetched:
@@ -884,6 +905,37 @@ def test_claude_ai_and_claude_code_resolve(resolver: oauth.ClientResolver) -> No
     assert (code.name, code.host) == ("Claude Code", "claude.ai")
 
 
+def test_chatgpt_resolves_as_a_public_client(resolver: oauth.ClientResolver) -> None:
+    """Its singular method is `private_key_jwt`, but its list holds `none`, the one method this
+    server accepts, so it signs in without a secret like Claude does."""
+    chatgpt = resolver.resolve(CHATGPT)
+    assert (chatgpt.client_id, chatgpt.name, chatgpt.host) == (CHATGPT, "ChatGPT", "chatgpt.com")
+    assert chatgpt.redirect_uris == (CHATGPT_REDIRECT,)
+    assert oauth.redirect_allowed(chatgpt, CHATGPT_REDIRECT)
+    assert not oauth.redirect_allowed(chatgpt, "https://chatgpt.com/connector/oauth/abc")
+
+
+@pytest.mark.parametrize(
+    "methods",
+    [
+        {"token_endpoint_auth_method": "none"},
+        {"token_endpoint_auth_method": "none", "token_endpoint_auth_methods_supported": ["none"]},
+        {"token_endpoint_auth_methods_supported": ["none"]},
+        {"token_endpoint_auth_methods_supported": ["private_key_jwt", "none"]},
+        {
+            "token_endpoint_auth_method": "client_secret_basic",
+            "token_endpoint_auth_methods_supported": ["client_secret_basic", "none"],
+        },
+    ],
+)
+def test_a_document_that_can_use_none_is_a_public_client(
+    resolver: oauth.ClientResolver, stub: StubFetch, methods: dict[str, Any]
+) -> None:
+    body = {k: v for k, v in CHATGPT_DOC.items() if not k.startswith("token_endpoint_auth_method")}
+    stub.docs[CHATGPT] = doc(body | methods)
+    assert resolver.resolve(CHATGPT).name == "ChatGPT"
+
+
 @pytest.mark.parametrize(
     "client_id",
     [
@@ -927,9 +979,9 @@ def test_the_allowed_hosts_are_a_setting(config: Config, stub: StubFetch) -> Non
 
 
 def test_config_reads_the_allowed_hosts(config: Config) -> None:
-    assert config.oauth_client_hosts == ("claude.ai", "claude.com")
+    assert config.oauth_client_hosts == ("claude.ai", "claude.com", "chatgpt.com")
     env = {"PUBLIC_ORIGIN": ORIGIN}
-    assert Config.from_env(env).oauth_client_hosts == ("claude.ai", "claude.com")
+    assert Config.from_env(env).oauth_client_hosts == ("claude.ai", "claude.com", "chatgpt.com")
     parsed = Config.from_env(env | {"OAUTH_CLIENT_HOSTS": " Claude.ai , example.org ,"})
     assert parsed.oauth_client_hosts == ("claude.ai", "example.org")
     for bad in ("claude.ai/x", "https://claude.ai", "*.claude.ai", " , "):
@@ -960,6 +1012,21 @@ def test_config_reads_the_allowed_hosts(config: Config) -> None:
                 | {"token_endpoint_auth_methods": ["none"]}
                 | {"token_endpoint_auth_method": None}
             ),
+            "auth",
+        ),
+        (doc(CLAUDE_AI_DOC | {"token_endpoint_auth_method": "private_key_jwt"}), "auth"),
+        (
+            doc(
+                CLAUDE_AI_DOC
+                | {"token_endpoint_auth_method": "private_key_jwt"}
+                | {"token_endpoint_auth_methods_supported": ["private_key_jwt"]}
+            ),
+            "auth",
+        ),
+        (doc(CLAUDE_AI_PREFERS_JWT | {"token_endpoint_auth_methods_supported": []}), "auth"),
+        (doc(CLAUDE_AI_PREFERS_JWT | {"token_endpoint_auth_methods_supported": "none"}), "auth"),
+        (
+            doc(CLAUDE_AI_PREFERS_JWT | {"token_endpoint_auth_methods_supported": [None, "none"]}),
             "auth",
         ),
         (doc(CLAUDE_AI_DOC | {"redirect_uris": []}), "redirect-uris"),

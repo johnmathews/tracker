@@ -628,15 +628,18 @@ forwards exactly these paths to the API; any other `/.well-known/` path is a 404
 
 **Clients are client ID metadata documents (CIMD).** There is no Dynamic Client Registration and no
 pre-registered client ID (P32). A `client_id` is an `https://` URL, such as
-`https://claude.ai/oauth/mcp-oauth-client-metadata` (claude.ai) or Claude Code's document on the
-same host. The API accepts one only when:
+`https://claude.ai/oauth/mcp-oauth-client-metadata` (claude.ai), Claude Code's document on the
+same host, or `https://chatgpt.com/oauth/client.json` (ChatGPT). The API accepts one only when:
 
 - its host is in `OAUTH_CLIENT_HOSTS` (§6), matched exactly: no subdomain, port, user, query,
   fragment or dot segment, and at most 255 characters;
 - the document fetches within 5 seconds, with no redirect followed, answers 200 and is at most 5
   KiB of JSON;
-- the document's `client_id` equals the URL, `token_endpoint_auth_method` is `none`,
-  `redirect_uris` holds at least one `https://` or plain-`http` loopback address (any other
+- the document's `client_id` equals the URL; the client can sign in without a secret, because
+  its `token_endpoint_auth_method` is `none` or its `token_endpoint_auth_methods_supported` list
+  holds `none` (ChatGPT's prefers `private_key_jwt` and lists `none` too: MCP SEP-3149, where the
+  list is what the client can use and the singular only a preference);
+- `redirect_uris` holds at least one `https://` or plain-`http` loopback address (any other
   entry, such as `javascript:`, is dropped), `grant_types` (if present) includes
   `authorization_code` and `response_types` (if present) includes `code`;
 - the `redirect_uri` of the request is in `redirect_uris`, or is a plain-`http` loopback address
@@ -907,7 +910,7 @@ details for 2 items.", the marks depending on the day of the week), or "Nothing 
 | `ASK_MODEL`         | `claude-sonnet-5-5`   | the Claude model Ask uses                                                 |
 | `ASK_PER_DAY`       | `30`                  | questions per account in any rolling 24 hours; 1 or more                  |
 | `ASK_PER_DAY_TOTAL` | `300`                 | questions across all accounts in any rolling 24 hours; 1 or more          |
-| `OAUTH_CLIENT_HOSTS` | `claude.ai,claude.com` | the hosts whose client metadata documents may name an OAuth client (§3.3): host names separated by commas, matched exactly. A bad value stops the API at startup |
+| `OAUTH_CLIENT_HOSTS` | `claude.ai,claude.com,chatgpt.com` | the hosts whose client metadata documents may name an OAuth client (§3.3): host names separated by commas, matched exactly. A bad value stops the API at startup |
 
 **Logging.** The API's own lines go to stderr at info and above (`docker logs fitness-api`), once
 each, as `INFO:  tracker_api.<module> …`. They don't also go on to the root logger, which the MCP
