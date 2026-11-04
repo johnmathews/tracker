@@ -212,14 +212,19 @@ or secret: the tracker reads ChatGPT's own client document from `chatgpt.com`.
 2. Enter a name, such as `Tracker`, and paste `https://<public host>/api/mcp` as the URL.
 3. For authentication, choose **OAuth**. Leave the advanced OAuth settings as ChatGPT finds them:
    the client registration is the client ID metadata document, and the callback URL is
-   `https://chatgpt.com/connector_platform_oauth_redirect`. Leave the scopes as discovered
-   (`read`); the access is chosen on the tracker's page.
+   `https://chatgpt.com/connector_platform_oauth_redirect`. Leave the scopes as discovered.
+   ChatGPT asks for both, `read write`; the access is chosen on the tracker's page.
 4. Accept the risk warning and choose **Create as a plugin**. Connecting opens the tracker's page,
    which names ChatGPT, from chatgpt.com. Sign in and choose what ChatGPT may do, as in §4.1.
 5. Start a new chat, type `@`, choose the tracker and ask a question (§5).
 
 The connection appears under **Apps** in Settings › Connections as "ChatGPT · chatgpt.com" and
 ends, lasts and is removed as in §4.1.
+
+To change ChatGPT from read only to read and change, remove the plugin in ChatGPT, add it again
+(steps 1 to 4), and choose **Read and change** on the tracker's page. Removing the plugin also
+ends its connection in the tracker: ChatGPT revokes it, so it leaves the **Apps** list. If it is
+still listed, choose **Remove** there.
 
 What OpenAI says about it, from its auth guide
 (<https://developers.openai.com/plugins/build/auth>, read 2026-11-04) and its connect guide
