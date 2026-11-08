@@ -226,7 +226,8 @@ export async function callUpBar(page: Page): Promise<void> {
   const height = page.viewportSize()?.height ?? 800
   await page.mouse.move(4, height / 2)
   await page.mouse.down()
-  await page.locator('[data-testid="edit-plan-button"][aria-pressed="true"]').waitFor()
+  // Edit plan is on once the bar ends with "Done" (K82).
+  await page.locator('[data-slot="bar-action"][data-testid="edit-plan-button"]').waitFor()
   await page.mouse.up()
   await settle(page)
 }

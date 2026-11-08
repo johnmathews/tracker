@@ -305,13 +305,14 @@ describe('the planner grids (W10)', () => {
       }
     })
 
-    it('stops on the skip link, the Header, then each grid once, with the arrows between', () => {
+    it('stops on the skip link, Edit plan, the Header, then each grid once, with the arrows between', () => {
       mountApp()
       expect(tabStops().map(name)).toEqual([
         'Skip to today',
+        // Out of sight until it has focus (K82): the keyboard's way to Edit plan.
+        'Edit plan',
         'Previous week',
         'Next week',
-        'Edit plan',
         'Settings',
         'Print…',
         'Push-ups, Friday 23 October, today',

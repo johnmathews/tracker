@@ -1648,8 +1648,11 @@ describe('config mode and weekly plans', () => {
 
   it('hides every editing control in normal mode but still ticks cells', async () => {
     mountApp()
+    // Off Edit plan, the bar's Edit plan is the keyboard's hidden button (K82), not a toggle.
     const toggle = wrapper.get('[data-testid="edit-plan-button"]')
-    expect(toggle.attributes('aria-pressed')).toBe('false')
+    expect(toggle.text()).toBe('Edit plan')
+    expect(toggle.classes()).toContain('sr-only')
+    expect(toggle.attributes('aria-pressed')).toBeUndefined()
     expect(wrapper.find('button[aria-label^="Edit Squats"]').exists()).toBe(false)
     expect(wrapper.find('button[aria-label^="Remove"]').exists()).toBe(false)
     expect(wrapper.find('button[aria-label^="Raise"]').exists()).toBe(false)
@@ -1663,7 +1666,10 @@ describe('config mode and weekly plans', () => {
     expect(rowCells('Squats')[0]!.attributes('aria-pressed')).toBe('true')
 
     await toggle.trigger('click')
-    expect(toggle.attributes('aria-pressed')).toBe('true')
+    // In Edit plan it is "Done", the last action, in the ink fill.
+    const done = wrapper.get('[data-testid="edit-plan-button"]')
+    expect(done.text()).toBe('Done')
+    expect(done.attributes('data-slot')).toBe('bar-action')
     expect(wrapper.find('button[aria-label="Edit Squats"]').exists()).toBe(true)
     expect(wrapper.find('button[aria-label="Remove Fish"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="add-food"]').exists()).toBe(true)

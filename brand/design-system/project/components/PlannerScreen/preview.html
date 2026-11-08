@@ -122,7 +122,7 @@
 
 /* ---- The bar: the Header card, out of sight until it is wanted. ---- */
 .fs .bar { position: absolute; z-index: 20; top: 0; left: 0; right: 0;
-  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px 16px;
+  display: flex; justify-content: space-between; align-items: center; gap: 8px 16px;
   min-height: 56px; padding: 4px var(--candidate-pad); background: var(--canvas); border-bottom: 1px solid var(--line);
   box-shadow: var(--shadow-overlay); transform: translateY(-105%); visibility: hidden; }
 @media (prefers-reduced-motion: no-preference) { .fs .bar { transition: transform 160ms ease-out, visibility 160ms; } }
@@ -142,7 +142,7 @@
    the actions as BarActions (a Lucide icon over its name). */
 .fs .bar { padding: calc(var(--u) * 14) calc(var(--u) * 48); }
 .fs .bar .wordmark, .fs .bar .start svg { height: max(26px, calc(var(--u) * 32)); width: auto; }
-.fs .bar .week-label { min-width: 6.5em; font-size: max(20px, calc(var(--u) * 26)); line-height: 1.25; }
+.fs .bar .week-label { min-width: 6.5em; font: 600 max(30px, calc(var(--u) * 40)) / 1.1 var(--font-serif); } /* K81: the page's title */
 .fs .bar .week .icon-btn { width: max(48px, calc(var(--u) * 60)); height: max(48px, calc(var(--u) * 60)); }
 .fs .bar .week .icon-btn svg { width: max(28px, calc(var(--u) * 32)); height: max(28px, calc(var(--u) * 32)); }
 .fs .bar .end { align-items: stretch; gap: calc(var(--u) * 8); }
@@ -152,7 +152,8 @@
 .fs .ba svg { width: max(26px, calc(var(--u) * 32)); height: max(26px, calc(var(--u) * 32)); }
 .fs .ba span { font: 600 max(16px, calc(var(--u) * 17)) / 1.3 var(--font-sans); white-space: nowrap; }
 .fs .ba:hover { background: var(--tile); }
-.fs .ba[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
+.fs .ba.done { display: none; background: var(--ink); color: var(--on-ink); } /* K82: Done, only in Edit plan */
+.fs[data-bar="docked"] .ba.done { display: inline-flex; }
 .fs .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border: 0;
   border-radius: var(--radius-md); background: transparent; color: var(--ink); cursor: pointer; }
 .fs .icon-btn svg { width: 20px; height: 20px; }
@@ -387,18 +388,19 @@ window.FP_ART = {"box": "M6.5 4.8C12.5 4.3 23.5 4.6 30.2 4.9C31.4 5 31.6 6.1 31.
   }
 
   // The bar as built (K47–K50): BarActions, a Lucide icon over its name, at the week's size.
-  const PENCIL = '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>'
+  const CHECK = '<path d="M20 6 9 17l-5-5"/>'
   const tile = (label, glyph, attrs = '') => `<button class="ba" type="button"${attrs}>${glyph}<span>${label}</span></button>`
   function bar(state) {
     if (state.nav === 'side') return sidebar()
     const week = `<nav class="week" aria-label="Week"><button class="icon-btn" type="button" aria-label="Previous week">${icon('m15 18-6-6 6-6')}</button><span class="week-label">${WEEK}</span><button class="icon-btn" type="button" aria-label="Next week">${icon('m9 18 6-6-6-6')}</button></nav>`
-    const edit = tile('Edit plan', `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PENCIL}</svg>`, ' aria-pressed="false"')
+    // No wordmark and no Edit plan button (K81, K82): the week first, and Done in Edit plan.
+    const done = tile('Done', `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${CHECK}</svg>`, ' data-done').replace('class="ba"', 'class="ba done"')
     const gear = tile('Settings', ART.gear)
     const full = canFullscreen() ? tile('Full screen', icon(ICONS.fullscreen), ' data-action="fullscreen"') : ''
     if (state.layout === 'narrow') {
-      return `<header class="bar"><span class="start"></span>${week}<span class="end">${edit}${gear}${full}</span></header>`
+      return `<header class="bar">${week}<span class="end">${gear}${full}${done}</span></header>`
     }
-    return `<header class="bar"><span class="start">${ART.wordmark}</span>${week}<span class="end">${edit}${gear}${tile('Print…', icon(ICONS.print))}${full}</span></header>`
+    return `<header class="bar">${week}<span class="end">${gear}${tile('Print…', icon(ICONS.print))}${full}${done}</span></header>`
   }
 
   function render(state) {
@@ -429,7 +431,6 @@ window.FP_ART = {"box": "M6.5 4.8C12.5 4.3 23.5 4.6 30.2 4.9C31.4 5 31.6 6.1 31.
     // Edit plan (K80): the bar docked above the page, Edit plan pressed.
     const syncDock = () => {
       const docked = el.dataset.bar === 'docked'
-      el.querySelector('.bar [aria-pressed]')?.setAttribute('aria-pressed', String(docked))
       if (docked) el.style.setProperty('--docked-bar', `${el.querySelector('.bar').offsetHeight}px`)
     }
     const dock = (on) => { if (on) el.dataset.bar = 'docked'; else delete el.dataset.bar; syncDock() }
@@ -501,7 +502,7 @@ window.FP_ART = {"box": "M6.5 4.8C12.5 4.3 23.5 4.6 30.2 4.9C31.4 5 31.6 6.1 31.
 
     el.addEventListener('click', (e) => {
       if (e.target.closest('.grab')) { dock(true); return }
-      if (e.target.closest('.bar [aria-pressed]')) { dock(el.dataset.bar !== 'docked'); return }
+      if (e.target.closest('.bar .done')) { dock(false); return }
       if (e.target.closest('[data-action="fullscreen"]')) {
         if (document.fullscreenElement) document.exitFullscreen?.()
         else el.requestFullscreen?.().catch(() => {})

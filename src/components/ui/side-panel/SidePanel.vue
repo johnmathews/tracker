@@ -104,7 +104,7 @@ const BODY =
 
 <!--
   A full-height panel beside the page (brand/design-system/project/components/SidePanel), S1. Docked,
-  it is 300u wide (260px at least) on `panel` with the line on its right, and hides to a 64u strip,
+  it is 300u wide (260px at least; a page may set `--side-panel-w`, as Ask does, K83) on `panel` with the line on its right, and hides to a 64u strip,
   the width changing over 200ms (at once under reduced motion); each side scrolls on its own.
   Docked, it is a <section> named by `label`: a region, which may sit inside the page's <main>,
   where an <aside> may not. Folded, it is a drawer from the left over the scrim, built on Reka's Dialog like the Dialog card:
@@ -120,7 +120,7 @@ const BODY =
         folded
           ? 'grid-cols-[minmax(0,1fr)]'
           : open
-            ? 'grid-cols-[max(260px,calc(var(--u)*300))_minmax(0,1fr)]'
+            ? 'grid-cols-[var(--side-panel-w,max(260px,calc(var(--u)*300)))_minmax(0,1fr)]'
             : 'grid-cols-[max(56px,calc(var(--u)*64))_minmax(0,1fr)]',
         props.class,
       )

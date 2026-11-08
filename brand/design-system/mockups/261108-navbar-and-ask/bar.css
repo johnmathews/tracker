@@ -1,0 +1,73 @@
+/*
+  The bar in Edit plan, as a prototype: one frame (.nb) is one screen's width, and every size comes
+  from the frame's own box, like the app (u is 1 on a 1280-wide screen; n on a phone). The shipped
+  sizes are the --bar-* values of src/styles/main.css; what is proposed is --candidate-*.
+*/
+.nb { container: nb / inline-size; background: var(--canvas); color: var(--ink); font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums; border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden; }
+.nb *, .nb *::before, .nb *::after { box-sizing: border-box; }
+.nb button { font: inherit; color: inherit; }
+.nb :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.nb-in { --u: clamp(0.5px, calc(100cqw / 1280), 1.6px); --n: 1px;
+  --bar-pad-y: calc(var(--u) * 14); --pad-x: calc(var(--u) * 48);
+  --bar-arrow: max(28px, calc(var(--u) * 32)); --bar-arrow-box: max(48px, calc(var(--u) * 60));
+  --bar-icon: max(26px, calc(var(--u) * 32)); --bar-name: max(16px, calc(var(--u) * 17)); --bar-gap: calc(var(--u) * 8);
+  --fs-title: max(30px, calc(var(--u) * 40));
+  /* A: the week as the page's title, the serif of the section titles at their size. */
+  --candidate-week-font: 600 var(--fs-title) / 1.1 var(--font-serif);
+}
+.nb[data-week="b"] .nb-in { /* B: the bar's own sans, heavier and larger than now (26u, 600). */
+  --candidate-week-font: 700 max(24px, calc(var(--u) * 30)) / 1.15 var(--font-sans); }
+
+/* The bar: the week first, at the left; the actions at the right. No wordmark, no Edit plan. */
+.nb-bar { position: relative; display: flex; align-items: center; justify-content: space-between; gap: calc(var(--u) * 16);
+  padding: var(--bar-pad-y) var(--pad-x); border-bottom: 1px solid var(--line); }
+.nb-week { display: flex; align-items: center; gap: calc(var(--u) * 4); min-width: 0; }
+.nb-arrow { display: grid; place-items: center; width: var(--bar-arrow-box); height: var(--bar-arrow-box); border: 0; border-radius: var(--radius-md);
+  background: transparent; cursor: pointer; flex: none; }
+.nb-arrow:hover { background: var(--tile); }
+.nb-arrow svg { width: var(--bar-arrow); height: var(--bar-arrow); }
+.nb-label { margin: 0; padding: 0 calc(var(--u) * 6); font: var(--candidate-week-font); white-space: nowrap; letter-spacing: -0.005em; }
+.nb-actions { display: flex; align-items: stretch; gap: var(--bar-gap); }
+.nb-act { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--u) * 6);
+  min-width: max(76px, calc(var(--u) * 96)); min-height: 44px; padding: calc(var(--u) * 10) calc(var(--u) * 12);
+  border: 0; border-radius: var(--radius-md); background: transparent; cursor: pointer; }
+.nb-act:hover { background: var(--tile); }
+.nb-act svg { width: var(--bar-icon); height: var(--bar-icon); flex: none; }
+.nb-act .name { font: 600 var(--bar-name) / 1.3 var(--font-sans); white-space: nowrap; }
+.nb-act[data-done] { background: var(--ink); color: var(--on-ink); }
+.nb-act[data-done]:hover { background: var(--ink); }
+
+/* The Edit plan page under the bar, as it is: the title line and the days. */
+.nb-page { padding: calc(var(--u) * 28) var(--pad-x) calc(var(--u) * 20); }
+.nb-title { display: flex; align-items: center; gap: calc(var(--u) * 48); }
+.nb-title h2 { margin: 0; font: 600 var(--fs-title) / 1.1 var(--font-serif); }
+.nb-step { display: inline-flex; align-items: center; gap: calc(var(--u) * 26); height: max(40px, calc(var(--u) * 50)); padding: 0 calc(var(--u) * 18);
+  border: 1px solid var(--control-border); border-radius: var(--radius-md); font: 600 max(15px, calc(var(--u) * 18)) / 1 var(--font-sans); }
+.nb-days { display: grid; grid-template-columns: calc(var(--u) * 480) repeat(7, minmax(0, 1fr)); margin-top: calc(var(--u) * 28);
+  padding-bottom: calc(var(--u) * 12); border-bottom: 1px solid var(--ink); font: 600 max(16px, calc(var(--u) * 26)) / 1.2 var(--font-sans); }
+.nb-days span { text-align: center; }
+
+/* K1: "Done editing" stays out of sight until Tab reaches it, like "Skip to today": then it shows
+   over the start of the bar with the focus ring. */
+.nb-skip { position: absolute; left: calc(var(--u) * 8); top: calc(var(--u) * 6); z-index: 2; display: none;
+  padding: calc(var(--u) * 8) calc(var(--u) * 12); border-radius: var(--radius-md); background: var(--panel); color: var(--ink);
+  font: 600 var(--bar-name) / 1.3 var(--font-sans); text-decoration: underline; text-underline-offset: 4px; box-shadow: var(--shadow-overlay);
+  outline: 2px solid var(--focus); outline-offset: 2px; }
+.nb[data-focus] .nb-skip { display: block; }
+
+/* Folded: the week takes the first row, centred; the actions share the second. */
+@container nb (width < 760px) {
+  .nb-in { --u: 1px; --pad-x: 12px; --bar-pad-y: 8px; --bar-arrow: 26px; --bar-arrow-box: 48px; --bar-icon: 26px; --bar-name: 16px; --bar-gap: 6px;
+    --fs-title: 30px; --candidate-week-font: 600 26px / 1.1 var(--font-serif); }
+  .nb[data-week="b"] .nb-in { --candidate-week-font: 700 22px / 1.15 var(--font-sans); }
+  .nb-bar { flex-direction: column; align-items: stretch; gap: 6px; padding-bottom: 10px; }
+  .nb-week { justify-content: center; }
+  .nb-actions { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; }
+  .nb-act { min-width: 0; padding: 8px 4px; gap: 4px; }
+  .nb-page { padding: 20px 16px 12px; }
+  .nb-title { gap: 16px; } .nb-title h2 { font-size: 30px; }
+  .nb-step { height: 40px; font-size: 15px; gap: 14px; padding: 0 12px; }
+  .nb-days { grid-template-columns: repeat(7, minmax(0, 1fr)); font-size: 15px; margin-top: 16px; }
+  .nb-days .nb-name { display: none; }
+}

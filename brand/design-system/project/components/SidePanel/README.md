@@ -2,7 +2,7 @@ A full-height panel beside the page that hides to a strip of icons, and becomes 
 
 ## Use
 
-- **S1, John's pick (2026-11-01).** The panel runs the full height of the screen on a `panel` fill, 300u wide and never under 260px, with a 1px `line` on its right edge. The page sits beside it. Each side scrolls on its own.
+- **S1, John's pick (2026-11-01).** The panel runs the full height of the screen on a `panel` fill, 300u wide and never under 260px (a page may set `--side-panel-w`: Ask's is max(210px, 230u), K83), with a 1px `line` on its right edge. The page sits beside it. Each side scrolls on its own.
 - **The head:** the title ("History") at the Settings page's section-heading size (27u, weight 600), and a 44px IconButton with Lucide `panel-left`, "Hide history". 20u above, 12u at the right and 8u below, 20u at the left.
 - **The body:** whatever the page puts there (HistoryList on Ask), 12u in from each side, 16u above the bottom, its parts 12u apart.
 - **Hidden:** a strip 64u wide (never under 56px), the `line` kept. It holds "Show history" (`panel-left`), then the page's own icons (on Ask, "New conversation"), 8px apart, 20u from the top. The width changes over 200ms, and at once under reduced motion.

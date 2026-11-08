@@ -110,7 +110,8 @@ test('a long press opens Edit plan with the bar above the week, and marks no day
 }) => {
   await openApp(page)
   const bar = page.locator('[data-slot="bar"]')
-  const editPlan = page.getByTestId('edit-plan-button')
+  // "Done" shows in the bar only in Edit plan (K82).
+  const done = page.getByRole('button', { name: 'Done', exact: true })
   // The first day with no mark yet, held by its place so the locator stays on it once marked.
   const cells = page.locator('[data-slot="day-mark-button"]')
   const free = await cells.evaluateAll((els) =>
@@ -122,7 +123,7 @@ test('a long press opens Edit plan with the bar above the week, and marks no day
   const box = (await cell.boundingBox())!
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
   await page.mouse.down()
-  await expect(editPlan).toHaveAttribute('aria-pressed', 'true')
+  await expect(done).toBeVisible()
   await page.mouse.up()
   expect(await page.evaluate(() => window.getSelection()?.toString() ?? '')).toBe('')
   // The bar is in the page, not over it: the week starts below it.
@@ -133,7 +134,7 @@ test('a long press opens Edit plan with the bar above the week, and marks no day
   // A second long press, in the margin, goes back to the week; the day held is still unmarked.
   await page.mouse.move(4, 400)
   await page.mouse.down()
-  await expect(editPlan).toHaveAttribute('aria-pressed', 'false')
+  await expect(done).toHaveCount(0)
   await page.mouse.up()
   await expect(cell).toHaveAttribute('aria-pressed', 'false')
   // A tap on it, after, marks it as before.

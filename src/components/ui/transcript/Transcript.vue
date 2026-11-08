@@ -6,7 +6,7 @@ import { answer } from '@/lib/markdown'
 import { AnswerProgress } from '@/components/ui/answer-progress'
 import { Button } from '@/components/ui/button'
 import { InlineMessage } from '@/components/ui/inline-message'
-import { withCaret, type TranscriptTurn } from '.'
+import { withCaret, type TranscriptTurn, type TranscriptView } from '.'
 
 const props = withDefaults(
   defineProps<{
@@ -15,8 +15,10 @@ const props = withDefaults(
     progressLabel?: string
     /** The log's accessible name. */
     label?: string
+    /** Rows (layout A, the default) or a conversation (K84). */
+    view?: TranscriptView
   }>(),
-  { progressLabel: undefined, label: 'Conversation' },
+  { progressLabel: undefined, label: 'Conversation', view: 'document' },
 )
 
 const emit = defineEmits<{
@@ -35,6 +37,24 @@ function waiting(turn: TranscriptTurn): boolean {
   return turn.state === 'streaming' && turn.answer === ''
 }
 
+/**
+ * A turn, its question and the question's text, by view (Transcript card). Document: a row, the
+ * question in a 240u left column (180u on Ask, `--ask-q-col`), the answer to its right, a hairline
+ * opening each row. Conversation: one column, the question in a `tile` at the right, the answer
+ * under it, no hairlines.
+ */
+const TURN = {
+  document:
+    'grid grid-cols-[var(--ask-q-col,calc(var(--u)*240))_minmax(0,1fr)] items-start gap-x-[calc(var(--u)*24)] border-t border-line py-[calc(var(--u)*28)] folded:grid-cols-[minmax(0,1fr)] folded:gap-y-2.5 folded:py-5',
+  conversation: 'grid gap-[calc(var(--u)*14)] py-[calc(var(--u)*21)] folded:gap-2.5 folded:py-4',
+} as const
+const QUESTION = {
+  document:
+    'label pt-[calc(var(--u)*2)] text-(length:--set-label) leading-[1.4] wrap-anywhere text-ink',
+  conversation:
+    'body justify-self-end max-w-[85%] rounded-lg bg-tile px-[calc(var(--u)*16)] py-[calc(var(--u)*12)] text-(length:--set-text) leading-[1.45] wrap-anywhere text-ink folded:max-w-[92%]',
+} as const
+
 /** The answer's text from the Transcript card: the page's body size at a reading measure. */
 const ANSWER = [
   'min-w-0 text-(length:--set-text) leading-[1.55] wrap-break-word text-ink',
@@ -49,33 +69,37 @@ const ANSWER = [
 </script>
 
 <!--
-  The conversation on the Ask page (brand/design-system/project/components/Transcript), layout A:
-  a row per turn, the question in the left column and the answer at a reading measure to its
-  right, a hairline opening each row. Folded, the question sits over its answer. One polite log;
-  a streaming answer is aria-busy, so a screen reader reads it whole rather than piece by piece.
+  The conversation on the Ask page (brand/design-system/project/components/Transcript), in one of
+  two views (K84). Document (layout A): a row per turn, the question in the left column and the
+  answer at a reading measure to its right, a hairline opening each row; folded, the question sits
+  over its answer. Conversation: one column, each question in a tile at the right and its answer
+  under it. One polite log; a streaming answer is aria-busy, so a screen reader reads it whole
+  rather than piece by piece.
 -->
 <template>
-  <div data-slot="transcript" role="log" aria-live="polite" :aria-label="label">
+  <div
+    data-slot="transcript"
+    :data-view="props.view"
+    role="log"
+    aria-live="polite"
+    :aria-label="label"
+  >
     <article
       v-for="(turn, i) in props.turns"
       :key="turn.id ?? i"
       data-slot="transcript-turn"
       :data-state="turn.state"
       :aria-labelledby="`${base}-q${i}`"
-      class="grid grid-cols-[calc(var(--u)*240)_minmax(0,1fr)] items-start gap-x-[calc(var(--u)*24)] border-t border-line py-[calc(var(--u)*28)] folded:grid-cols-[minmax(0,1fr)] folded:gap-y-2.5 folded:py-5"
+      :class="TURN[props.view]"
     >
-      <p
-        :id="`${base}-q${i}`"
-        data-slot="transcript-question"
-        class="label pt-[calc(var(--u)*2)] text-(length:--set-label) leading-[1.4] wrap-anywhere text-ink"
-      >
+      <p :id="`${base}-q${i}`" data-slot="transcript-question" :class="QUESTION[props.view]">
         {{ turn.question }}
       </p>
       <div class="min-w-0">
         <p
           v-if="turn.read"
           data-slot="transcript-read"
-          class="caption mb-[calc(var(--u)*10)] text-[max(16px,calc(var(--u)*16))] leading-[1.4] text-ink-secondary"
+          class="caption mb-[calc(var(--u)*10)] text-(length:--set-caption) leading-[1.4] text-ink-secondary"
         >
           {{ turn.read }}
         </p>

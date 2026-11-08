@@ -48,7 +48,9 @@
   to week. A week you haven't changed carries over the latest earlier week's plan; it gets its own
   copy the first time you change it or mark a cell. So a change to this week also reaches the weeks
   after it that you haven't changed yet.
-- `‹` / `›` move between weeks for both sections; past weeks persist. **Print…** produces a
+- The bar starts with the week, as the page's title, and `‹` / `›` beside it move between weeks
+  for both sections; past weeks persist. In Edit plan the bar ends with **Done**, which goes back
+  to the week; from the keyboard, the second Tab stop is a hidden **Edit plan**. **Print…** produces a
   sheet in the light theme's colours on white paper.
 - **One screen per section.** The week fills the screen, and the bar stays out of sight. A long press
   anywhere (or the handle at the top centre) opens Edit plan, with the bar above the page. Scrolling brings Food,
@@ -66,7 +68,10 @@
   much, quote your goals and notes back, and count streaks. Each account may ask 30 questions in
   any 24 hours by default; a chip under the box says how many are left. **History**, a panel down the left
   (a drawer on a phone), keeps every conversation on the server, synced across devices and in the
-  export: pick one to carry on, start a **New conversation**, or delete one or all. Ask shows in
+  export: pick one to carry on, start a **New conversation**, or delete one or all. A **View**
+  switch shows the conversation as a **Document** (each question beside its answer; the default)
+  or a **Conversation** (your questions in tiles on the right), and each device keeps its choice.
+  Ask shows in
   the bar only where the API has an Anthropic key (`docs/api.md` §3.2). Answers come from an AI
   and can be wrong, and aren't medical advice.
 - **Accounts and sync.** Anyone can **Create an account** from the sign-in screen with an email and

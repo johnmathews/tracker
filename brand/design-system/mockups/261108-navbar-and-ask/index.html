@@ -1,0 +1,273 @@
+<title>A bar led by the week, and a smaller Ask page with two views</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="settings.css">
+<link rel="stylesheet" href="ask.css">
+<link rel="stylesheet" href="side.css">
+<link rel="stylesheet" href="bar.css">
+<!--
+  A mockup (design-system skill, references/mockups.md). Four questions: the week's type in a bar
+  with no wordmark and no Edit plan button; how the keyboard leaves Edit plan without that button;
+  the Ask page's size; and what its Document view looks like beside the Conversation view. The
+  week grid, the bar's other actions and the Ask page's states stay as they are.
+  bar.js draws the bar in Edit plan; ask.js draws the Ask page live on the shipped Settings frame
+  (settings.css, ask.css and side.css, from the 261101-ask-page mockup). New values are
+  --candidate-*.
+-->
+<style>
+  body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font-sans); }
+  .mockup-page {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: var(--space-8, 32px) var(--space-16, 64px);
+    max-width: 1200px; margin: 0 auto; display: grid; gap: var(--space-12, 48px);
+  }
+  .mockup-head { display: grid; gap: var(--space-2, 8px); max-width: 70ch; }
+  .mockup-head h1, .option h2 { margin: 0; text-wrap: balance; }
+  .mockup-head p, .option p { margin: 0; }
+  .mockup-meta { color: var(--ink-secondary); }
+  .option { display: grid; gap: var(--space-4, 16px); }
+  .option-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2, 8px) var(--space-3, 12px); }
+  .option-tag { color: var(--ink-secondary); }
+  .option[data-recommended] .option-tag::after { content: " · Recommended"; color: var(--ink); }
+  .panes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--space-4, 16px); }
+  .pane { min-width: 0; background: var(--canvas); color: var(--ink); border: 1px solid var(--line);
+          border-radius: var(--radius-lg, 10px); padding: var(--space-4, 16px); overflow-x: auto; }
+  .pane-label { color: var(--ink-secondary); margin: 0 0 var(--space-3, 12px); }
+  .measures { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); }
+  .measures li { border: 1px solid var(--line); border-radius: var(--radius-sm, 4px); padding: 2px var(--space-2, 8px); font-variant-numeric: tabular-nums; }
+  .measures li[data-pass="no"] { border-color: currentColor; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .question { display: grid; gap: var(--space-8, 32px); }
+  .question > header { display: grid; gap: var(--space-2, 8px); max-width: 70ch; }
+  .question > header h2, .question > header p { margin: 0; }
+  .notes { margin: 0; padding-left: 1.2em; display: grid; gap: var(--space-1, 4px); max-width: 70ch; }
+  .device { position: relative; width: 100%; }
+  .device > div { position: absolute; top: 0; left: 0; transform-origin: 0 0; border: 1px solid var(--line); border-radius: var(--radius-lg); }
+  .device.phone > div { border-radius: 28px; border-width: 2px; }
+  .phones { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+  .phones .device { max-width: 260px; }
+  .bar-phone { max-width: 390px; }
+  .panes.one { grid-template-columns: minmax(0, 1fr); }
+  .stack { display: grid; gap: var(--space-3, 12px); align-content: start; }
+</style>
+
+<main class="mockup-page">
+  <header class="mockup-head">
+    <p class="caption mockup-meta">Mockup · 2026-11-08 · Tracker</p>
+    <h1 class="title-1">A bar led by the week, and a smaller Ask page with two views</h1>
+    <p class="body">A long press already opens Edit plan, so the bar and Edit plan are now one thing. The bar drops its Edit plan button and the wordmark, and the week moves to the start as the page’s title. The Ask page gets smaller, reads its intro at a normal width, loses the “Ask” beside the question box, and offers a Document view (the default) and a Conversation view. The week grid, the bar’s other actions and Ask’s states stay as they are.</p>
+    <p class="body">Four questions. Each picture is live: press the arrows, switch the Ask views.</p>
+  </header>
+
+  <!-- ===================== 1. The week's type ===================== -->
+  <section class="question" aria-labelledby="q1">
+    <header>
+      <h2 class="title-2" id="q1">1. The week, as the page’s title</h2>
+      <p class="body">Both options: no wordmark, no Edit plan button, and the week picker first at the left, its arrows around it. “This week” (when another week is on screen) moves to the start of the actions. On a phone the bar is unchanged apart from losing Edit plan.</p>
+    </header>
+
+    <section class="option" id="a" data-recommended aria-labelledby="a-h">
+      <div class="option-head">
+        <h2 class="title-2" id="a-h">A. The serif, like “Exercises”</h2>
+        <span class="label option-tag">Option A</span>
+      </div>
+      <p class="body">The week in the title face at the section titles’ size: serif, 600, max(30px, 40u). It reads as the page’s title, and matches the titles under it.</p>
+      <div class="panes">
+        <div class="pane stack" data-theme="light"><p class="label pane-label">Light · 1280 wide</p><div data-nb data-week="a"></div><p class="label pane-label">Another week on screen</p><div data-nb data-week="a" data-other></div></div>
+        <div class="pane stack" data-theme="dark"><p class="label pane-label">Dark · 1280 wide</p><div data-nb data-week="a"></div><p class="label pane-label">Phone</p><div class="bar-phone" data-nb data-week="a" data-phone></div></div>
+      </div>
+      <ul class="measures caption">
+        <li data-fg="var(--ink)" data-bg="var(--canvas)" data-min="4.5">The week on the canvas</li>
+      </ul>
+    </section>
+
+    <section class="option" id="b" aria-labelledby="b-h">
+      <div class="option-head">
+        <h2 class="title-2" id="b-h">B. The bar’s sans, bolder</h2>
+        <span class="label option-tag">Option B</span>
+      </div>
+      <p class="body">The week stays in the sans it uses now, at 700 instead of 600 and max(24px, 30u) instead of 26u. Bolder, but still part of the bar rather than a title.</p>
+      <div class="panes">
+        <div class="pane stack" data-theme="light"><p class="label pane-label">Light · 1280 wide</p><div data-nb data-week="b"></div></div>
+        <div class="pane stack" data-theme="dark"><p class="label pane-label">Dark · phone</p><div class="bar-phone" data-nb data-week="b" data-phone></div></div>
+      </div>
+    </section>
+  </section>
+
+  <!-- ===================== 2. The keyboard and Edit plan ===================== -->
+  <section class="question" aria-labelledby="q2">
+    <header>
+      <h2 class="title-2" id="q2">2. How the keyboard leaves Edit plan</h2>
+      <p class="body">A long press and the handle need a pointer or a finger. Without the Edit plan button, a keyboard could no longer leave Edit plan, nor reach it from the week. Tab into the bar on the week would still slide it over the screen, as now.</p>
+    </header>
+
+    <section class="option" id="k1" data-recommended aria-labelledby="k1-h">
+      <div class="option-head">
+        <h2 class="title-2" id="k1-h">K1. A hidden toggle, like “Skip to today”</h2>
+        <span class="label option-tag">Option K1</span>
+      </div>
+      <p class="body">The second Tab stop, after “Skip to today”, out of sight until it has focus: “Edit plan” on the week, “Done editing” in Edit plan. Nothing shows for a mouse or a finger. Screen readers hear it as a toggle.</p>
+      <div class="panes">
+        <div class="pane stack" data-theme="light"><p class="label pane-label">Light · Edit plan, Tab pressed twice</p><div data-nb data-week="a" data-focus></div></div>
+        <div class="pane stack" data-theme="dark"><p class="label pane-label">Dark · Edit plan, Tab pressed twice</p><div data-nb data-week="a" data-focus></div></div>
+      </div>
+    </section>
+
+    <section class="option" id="k2" aria-labelledby="k2-h">
+      <div class="option-head">
+        <h2 class="title-2" id="k2-h">K2. A “Done” button at the end of the bar</h2>
+        <span class="label option-tag">Option K2</span>
+      </div>
+      <p class="body">Edit plan ends its actions with “Done”, in the ink fill the Edit plan button had. It is a way out for everyone, but it brings a button back to the bar. The keyboard still reaches Edit plan from the week by the K1 toggle.</p>
+      <div class="panes">
+        <div class="pane stack" data-theme="light"><p class="label pane-label">Light · Edit plan</p><div data-nb data-week="a" data-done></div></div>
+        <div class="pane stack" data-theme="dark"><p class="label pane-label">Dark · phone</p><div class="bar-phone" data-nb data-week="a" data-done data-phone></div></div>
+      </div>
+      <ul class="measures caption">
+        <li data-fg="var(--on-ink)" data-bg="var(--ink)" data-min="4.5">“Done” on its fill</li>
+      </ul>
+    </section>
+  </section>
+
+  <!-- ===================== 3. Ask's size ===================== -->
+  <section class="question" aria-labelledby="q3">
+    <header>
+      <h2 class="title-2" id="q3">3. The Ask page’s size</h2>
+      <p class="body">Ask uses the Settings page’s sizes now, which never go below 18px text and 44px controls. That is why it looks right only at 70% zoom. Both options shrink the type, the history and the spacing with it; tap targets keep the 44px floor. Shown with Document as rows (4, D1), the intro at its new width, and no “Ask” beside the box.</p>
+    </header>
+
+    <section class="option" id="s2" data-recommended aria-labelledby="s2-h">
+      <div class="option-head">
+        <h2 class="title-2" id="s2-h">S2. About 70%, as at your zoom</h2>
+        <span class="label option-tag">Option S2</span>
+      </div>
+      <p class="body">Text max(14px, 14u), labels the same, the page title max(24px, 28u), controls 44px, the history 230u wide. On a phone, text 15px.</p>
+      <div class="panes one">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · 1280×800, empty</p><div class="device" data-w="1280" data-h="800" data-layout="a" data-state="nogoals" data-scale="70"></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · 1280×800, answering</p><div class="device" data-w="1280" data-h="800" data-layout="a" data-state="chat" data-scale="70"></div></div>
+      </div>
+    </section>
+
+    <section class="option" id="s1" aria-labelledby="s1-h">
+      <div class="option-head">
+        <h2 class="title-2" id="s1-h">S1. About 80%</h2>
+        <span class="label option-tag">Option S1</span>
+      </div>
+      <p class="body">Text max(15px, 16u), the page title max(26px, 32u), controls 44px, the history 260u wide. On a phone, text 16px.</p>
+      <div class="panes one">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · 1280×800, empty</p><div class="device" data-w="1280" data-h="800" data-layout="a" data-state="nogoals" data-scale="80"></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · 1280×800, answering</p><div class="device" data-w="1280" data-h="800" data-layout="a" data-state="chat" data-scale="80"></div></div>
+      </div>
+    </section>
+
+    <div class="panes">
+      <div class="pane" data-theme="light"><p class="label pane-label">For comparison · today’s sizes</p><div class="device" data-w="1280" data-h="800" data-layout="a" data-state="nogoals" data-scale="100" data-now></div></div>
+    </div>
+  </section>
+
+  <!-- ===================== 4. The two views ===================== -->
+  <section class="question" aria-labelledby="q4">
+    <header>
+      <h2 class="title-2" id="q4">4. Document and Conversation</h2>
+      <p class="body">A switch at the end of the title line chooses the view: Document, the default, or Conversation. Each device remembers the choice. Conversation is one reading column, each question in a tile on the right, the answer under it (the 1 November mockup’s B). The question is what Document looks like. Shown at S2.</p>
+    </header>
+
+    <section class="option" id="d1" data-recommended aria-labelledby="d1-h">
+      <div class="option-head">
+        <h2 class="title-2" id="d1-h">D1. Rows, as now</h2>
+        <span class="label option-tag">Option D1</span>
+      </div>
+      <p class="body">The page you have: each question in a left column, its answer to the right, hairlines between. Only the “Ask” beside the box goes.</p>
+      <div class="panes one">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · Document</p><div class="device" data-w="1280" data-h="800" data-layout="a" data-doc="a" data-state="cap" data-scale="70"></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · Conversation</p><div class="device" data-w="1280" data-h="800" data-layout="b" data-doc="a" data-state="cap" data-scale="70"></div></div>
+      </div>
+    </section>
+
+    <section class="option" id="d2" aria-labelledby="d2-h">
+      <div class="option-head">
+        <h2 class="title-2" id="d2-h">D2. Headings over answers</h2>
+        <span class="label option-tag">Option D2</span>
+      </div>
+      <p class="body">Each question is a heading, its answer under it at one reading width (900u), like a report. Further from the Conversation view than D1.</p>
+      <div class="panes one">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · Document</p><div class="device" data-w="1280" data-h="800" data-layout="d" data-doc="d" data-state="cap" data-scale="70"></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · phone, Document</p><div class="phones"><div class="device phone" data-w="390" data-h="900" data-layout="d" data-doc="d" data-state="cap" data-scale="70" data-closed></div></div></div>
+      </div>
+    </section>
+
+    <ul class="notes body">
+      <li>The switch is a SegmentedControl named “View”, at the page’s control size.</li>
+      <li>On a phone it sits under the title.</li>
+      <li>Both views read the same conversation; switching keeps your place.</li>
+    </ul>
+  </section>
+</main>
+
+<script src="icons.js"></script>
+<script src="ask.js"></script>
+<script src="bar.js"></script>
+<script>
+  // The bar draws at its real width (1280, or a 390 phone) and is scaled to fit its pane.
+  for (const el of document.querySelectorAll('[data-nb]')) {
+    const phone = 'phone' in el.dataset
+    const w = phone ? 390 : 1280
+    el.style.position = 'relative'
+    const screen = document.createElement('div')
+    screen.style.cssText = `width:${w}px;position:absolute;top:0;left:0;transform-origin:0 0`
+    el.append(screen)
+    NB.mount(screen, { week: el.dataset.week, other: 'other' in el.dataset, done: 'done' in el.dataset, focus: 'focus' in el.dataset, phone })
+    const fit = () => {
+      const k = Math.min(1, el.clientWidth / w)
+      screen.style.transform = `scale(${k})`
+      el.style.height = Math.ceil(screen.offsetHeight * k) + 'px'
+    }
+    new ResizeObserver(fit).observe(el)
+    fit()
+  }
+  for (const device of document.querySelectorAll('.device')) {
+    const w = Number(device.dataset.w), h = Number(device.dataset.h)
+    const screen = document.createElement('div')
+    screen.style.width = w + 'px'
+    screen.style.height = h + 'px'
+    device.append(screen)
+    const fit = () => {
+      const s = Math.min(1, device.clientWidth / w)
+      screen.style.transform = `scale(${s})`
+      device.style.height = Math.ceil(h * s) + 'px'
+    }
+    new ResizeObserver(fit).observe(device)
+    fit()
+    AP.mount(screen, { layout: device.dataset.layout, doc: device.dataset.doc, state: device.dataset.state, scale: device.dataset.scale,
+      history: 's1', panel: 'closed' in device.dataset ? 'closed' : 'open' })
+  }
+
+  // Measures: for each <li data-fg data-bg data-min>, the WCAG contrast of the two colours in each
+  // theme, resolved inside the option (so --candidate-* values apply), written after the label.
+  (() => {
+    const rgb = (value, scope, theme) => {
+      const probe = document.createElement('span')
+      probe.dataset.theme = theme
+      probe.style.color = value
+      scope.append(probe)
+      const parts = getComputedStyle(probe).color.match(/[\d.]+/g).map(Number)
+      probe.remove()
+      return parts.slice(0, 3)
+    }
+    const lum = ([r, g, b]) => [r, g, b]
+      .map((c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4 })
+      .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0)
+    const ratio = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05) }
+    for (const li of document.querySelectorAll('.measures li[data-fg]')) {
+      const scope = li.closest('.option') || document.body
+      const min = Number(li.dataset.min || 0)
+      const results = ['light', 'dark'].map((theme) => {
+        const r = ratio(rgb(li.dataset.fg, scope, theme), rgb(li.dataset.bg, scope, theme))
+        return { theme, r, ok: !min || r >= min }
+      })
+      li.dataset.pass = results.every((x) => x.ok) ? 'yes' : 'no'
+      li.append(`: ${results.map((x) => `${x.theme} ${x.r.toFixed(1)}:1${x.ok ? '' : ' (below ' + min + ':1)'}`).join(', ')}`)
+    }
+  })()
+</script>

@@ -1,4 +1,4 @@
-<!-- @dsCard group="Ask" height=1180 subtitle="The conversation in rows like Settings: the question on the left, the answer at a reading measure" -->
+<!-- @dsCard group="Ask" height=1640 subtitle="Two views: Document, rows like Settings with the question on the left; Conversation, the question in a tile on the right over its answer" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -44,6 +44,12 @@
   .btn:hover, .btn.is-hover { background: var(--tile); }
   .btn:focus-visible, .btn.is-focus { outline: 2px solid var(--focus); outline-offset: 2px; }
 
+  /* Conversation (K84): one centred column, the question in a tile at the right, no hairlines. */
+  .conv { max-width: 760px; margin: 0 auto; }
+  .conv .turn { display: grid; grid-template-columns: minmax(0, 1fr); row-gap: 14px; padding: 21px 0; border: 0; }
+  .conv .q { justify-self: end; max-width: 85%; padding: 12px 16px; border-radius: var(--radius-lg); background: var(--tile); font-weight: 400; }
+  .section-gap { margin-top: var(--space-10, 40px); }
+
   /* Folded: the question over its answer. */
   @media (max-width: 759px) {
     body { padding: var(--space-4); }
@@ -54,7 +60,7 @@
 </style>
 </head>
 <body>
-<p class="caption variant">Done, streaming, waiting, stopped and error</p>
+<p class="caption variant">Document, the default: done, streaming, waiting, stopped and error</p>
 <div role="log" aria-live="polite" aria-label="Conversation">
   <article class="turn" aria-labelledby="q1">
     <p class="q" id="q1">Am I doing enough to meet my goals this month?</p>
@@ -98,5 +104,26 @@
   </article>
 </div>
 <script></script>
+
+<p class="caption variant section-gap">Conversation: done and streaming</p>
+<div class="conv" role="log" aria-live="polite" aria-label="Conversation">
+  <article class="turn" aria-labelledby="c1">
+    <p class="q" id="c1">Am I doing enough to meet my goals this month?</p>
+    <div>
+      <p class="read">Read this week and the three before it, and your goals.</p>
+      <div class="a">
+        <p>Mostly, yes. Over four weeks you met <strong>Push-ups</strong> and <strong>Squats</strong> every week, at four days each. <strong>Pull-ups</strong> met its four days twice; the other two weeks had three.</p>
+      </div>
+    </div>
+  </article>
+  <article class="turn" aria-labelledby="c2">
+    <p class="q" id="c2">Is my diet good enough?</p>
+    <div>
+      <div class="a" aria-busy="true">
+        <p>Fruit and Nuts are on track: five and three days most weeks. <strong>Vegetables</strong> is the gap<span class="caret" aria-hidden="true"></span></p>
+      </div>
+    </div>
+  </article>
+</div>
 </body>
 </html>

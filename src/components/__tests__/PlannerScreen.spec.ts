@@ -24,9 +24,8 @@ function mountApp(): VueWrapper {
 const bar = () => wrapper.get('[data-slot="bar"]')
 const handle = () => wrapper.get('[data-slot="bar-handle"]')
 const finger = { pointerType: 'touch' }
-/** Edit plan is on: its button is pressed, and the bar is the sticky one in the page (K27, K80). */
-const editing = () =>
-  wrapper.get('[data-testid="edit-plan-button"]').attributes('aria-pressed') === 'true'
+/** Edit plan is on: the bar ends with "Done" (K82), and is the sticky one in the page (K27). */
+const editing = () => wrapper.get('[data-testid="edit-plan-button"]').text() === 'Done'
 const screens = () => document.documentElement.classList.contains('planner-screens')
 /** A pointer event at a height on the screen (trigger can't set clientY). */
 async function press(el: Element, type: string, clientY: number): Promise<void> {
@@ -100,6 +99,70 @@ describe('the planner’s screens (K24–K27)', () => {
     expect(screens()).toBe(false)
     expect(bar().classes()).toContain('sticky')
     expect(wrapper.find('[data-slot="bar-handle"]').exists()).toBe(false)
+  })
+
+  it('leads the bar with the week as its title, with no wordmark (K81)', async () => {
+    mountApp()
+    expect(bar().find('[data-slot="brand-mark"], svg[aria-label="Tracker"]').exists()).toBe(false)
+    const row = bar().get('nav[aria-label="Week"]').element.parentElement!
+    expect(row.firstElementChild).toBe(bar().get('nav[aria-label="Week"]').element)
+    const label = bar().get('[data-testid="week-label"]')
+    expect(label.classes()).toContain('title-1')
+    expect(label.classes()).toContain('text-(length:--bar-week)')
+    // Another week on screen: "This week" is the first of the actions.
+    await wrapper.get('button[aria-label="Next week"]').trigger('click')
+    expect(bar().findAll('[data-slot="bar-action"]')[0]!.text()).toBe('This week')
+  })
+
+  it('ends the actions with Full screen where the browser has one, then Done (K49, K82)', async () => {
+    Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: true })
+    Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: null })
+    try {
+      mountApp()
+      const actions = () =>
+        bar()
+          .findAll('[data-slot="bar-action"]')
+          .map((b) => b.text())
+      expect(actions().at(-1)).toBe('Full screen')
+      await wrapper.get('[data-testid="edit-plan-button"]').trigger('click')
+      expect(actions().slice(-2)).toEqual(['Full screen', 'Done'])
+      // Full screen on: the button says how to leave it.
+      Object.defineProperty(document, 'fullscreenElement', {
+        configurable: true,
+        value: document.documentElement,
+      })
+      document.dispatchEvent(new Event('fullscreenchange'))
+      await flushPromises()
+      expect(wrapper.get('[data-testid="fullscreen-button"]').text()).toBe('Exit full screen')
+    } finally {
+      Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: undefined })
+      Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: null })
+    }
+  })
+
+  it('has no Edit plan button: Done leaves Edit plan, and the keyboard’s hidden one enters (K82)', async () => {
+    mountApp()
+    const actions = () =>
+      bar()
+        .findAll('[data-slot="bar-action"]')
+        .map((b) => b.text())
+    expect(actions()).not.toContain('Edit plan')
+    expect(actions()).not.toContain('Done')
+    // The keyboard's way in: after "Skip to today", out of sight until focused.
+    const hidden = wrapper.get('[data-testid="edit-plan-button"]')
+    expect(hidden.element.tagName).toBe('BUTTON')
+    expect(hidden.classes()).toEqual(expect.arrayContaining(['sr-only', 'focus:not-sr-only']))
+    expect(hidden.element.previousElementSibling?.getAttribute('data-testid')).toBe('skip-to-today')
+    await hidden.trigger('click')
+    expect(editing()).toBe(true)
+    // In Edit plan: "Done", last, in the ink fill.
+    expect(actions().at(-1)).toBe('Done')
+    const done = wrapper.get('[data-testid="edit-plan-button"]')
+    expect(done.classes()).toEqual(expect.arrayContaining(['bg-ink', 'text-on-ink']))
+    expect(done.attributes('aria-pressed')).toBeUndefined()
+    await done.trigger('click')
+    expect(editing()).toBe(false)
+    expect(screens()).toBe(true)
   })
 
   it('has no strip along the top edge, and floats the bar only for focus (K79, K80)', () => {

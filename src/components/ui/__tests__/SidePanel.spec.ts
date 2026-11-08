@@ -96,7 +96,8 @@ describe('SidePanel, docked', () => {
     expect(page.find('#first-item').isVisible()).toBe(true)
     expect(page.get('[data-slot="side-panel-strip"]').isVisible()).toBe(false)
     expect(page.get('[data-slot="side-panel"]').classes()).toContain(
-      'grid-cols-[max(260px,calc(var(--u)*300))_minmax(0,1fr)]',
+      // 300u (260px at least) unless the page sets --side-panel-w, as Ask does (K83).
+      'grid-cols-[var(--side-panel-w,max(260px,calc(var(--u)*300)))_minmax(0,1fr)]',
     )
     expect(page.find('main h1').exists()).toBe(true)
   })

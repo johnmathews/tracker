@@ -79,8 +79,8 @@
   --fs-stat-words: max(20px, calc(var(--u) * 22));
   /* The Header and its BarActions (K47): as big as the week below them, on the page's margins. */
   --bar-pad-y: calc(var(--u) * 14);
-  --bar-wordmark: max(26px, calc(var(--u) * 32));
-  --bar-week: max(20px, calc(var(--u) * 26));
+  /* The week, the page's title in the bar (K81): the section titles' size. */
+  --bar-week: var(--fs-title);
   --bar-arrow: max(28px, calc(var(--u) * 32));
   --bar-arrow-box: max(48px, calc(var(--u) * 60));
   --bar-gap: calc(var(--u) * 8);
@@ -100,6 +100,8 @@
   --set-mark: max(48px, calc(var(--u) * 60));
   --set-gap: calc(var(--u) * 28);
   --set-sec-y: calc(var(--u) * 32);
+  /* A caption on these pages: what an answer read, the notes under a box, the history's links. */
+  --set-caption: max(16px, calc(var(--u) * 16));
   /* Edit plan's row buttons (K54): edit after the name, remove in a column of its own. */
   --edit-ib: max(44px, calc(var(--u) * 52));
   --edit-ib-icon: max(20px, calc(var(--u) * 28));
@@ -145,7 +147,7 @@
     --fs-figure: calc(var(--n) * 20);
     --fs-stat: calc(var(--n) * 20);
     --fs-stat-words: calc(var(--n) * 18);
-    --bar-week: calc(var(--n) * 20);
+    --bar-week: calc(var(--n) * 26);
     --bar-arrow: calc(var(--n) * 26);
     --bar-arrow-box: calc(var(--n) * 48);
     --bar-gap: 6px;
@@ -173,6 +175,37 @@
 
 .dark {
   color-scheme: dark;
+}
+
+/*
+ * The Ask page at about 70% of the Settings sizes (K83, the 261108-navbar-and-ask mockup's S2):
+ * text and labels max(14px, 14u), its title max(24px, 28u), the history panel max(210px, 230u)
+ * and the question column 180u. Controls keep their 44px floor. Its controls take these through
+ * the `--set-*` rules below.
+ */
+[data-slot='ask-page'] {
+  --fs-title: max(24px, calc(var(--u) * 28));
+  --set-h2: max(17px, calc(var(--u) * 19));
+  --set-label: max(14px, calc(var(--u) * 14));
+  --set-text: max(14px, calc(var(--u) * 14));
+  --set-control: max(44px, calc(var(--u) * 44));
+  --set-control-pad: calc(var(--u) * 16);
+  --set-icon: max(17px, calc(var(--u) * 18));
+  --set-caption: max(13px, calc(var(--u) * 13));
+  --side-panel-w: max(210px, calc(var(--u) * 230));
+  --ask-q-col: calc(var(--u) * 180);
+}
+@media screen and (orientation: portrait) and (width < 1000px), screen and (width < 760px) {
+  [data-slot='ask-page'] {
+    --fs-title: calc(var(--n) * 24);
+    --set-h2: calc(var(--n) * 18);
+    --set-label: calc(var(--n) * 14);
+    --set-text: calc(var(--n) * 15);
+    --set-control: 44px;
+    --set-control-pad: 14px;
+    --set-icon: 19px;
+    --set-caption: 13px;
+  }
 }
 
 /*
@@ -232,7 +265,7 @@
   )
   [data-slot='text-area']
   > p {
-  font-size: max(16px, calc(var(--u) * 16));
+  font-size: var(--set-caption);
   line-height: 1.35;
 }
 :is(

@@ -1,0 +1,89 @@
+/*
+  Round 3: the history as a side panel that hides and shows. The shell is a two-column grid: the
+  panel, then the conversation, with a 1px vertical line between them. The panel runs the full
+  height of the screen and scrolls on its own, and so does the conversation. Sizes are
+  --candidate-* values; colours are the system's roles (panel, line, tile, ink, ink-secondary,
+  scrim).
+  S1: hidden, it leaves a strip of two icons (show history, new conversation), line kept.
+  S2: hidden, it goes away entirely; its button moves beside "Back to the week".
+*/
+.sp-scroll.side-root { overflow: hidden; --candidate-side: max(260px, calc(var(--u) * 300)); --candidate-strip: max(56px, calc(var(--u) * 64)); }
+.side-shell { position: absolute; inset: 0; display: grid; grid-template-columns: var(--candidate-side) minmax(0, 1fr); }
+.side-shell[data-panel="closed"][data-variant="s1"] { grid-template-columns: var(--candidate-strip) minmax(0, 1fr); }
+.side-shell[data-panel="closed"][data-variant="s2"] { grid-template-columns: 0 minmax(0, 1fr); }
+@media (prefers-reduced-motion: no-preference) { .side-shell { transition: grid-template-columns 200ms ease-out; } }
+.side-main { min-width: 0; overflow-y: auto; }
+.side-main .sp-page { position: relative; }
+.sp[data-layout="a"] .side-main .ask-turn, .sp[data-layout="a"] .side-main .ask-box { grid-template-columns: calc(var(--u) * 240) minmax(0, 1fr); }
+
+/* The panel: its own surface, the line on its right edge. */
+.side { min-width: 0; overflow: hidden; display: flex; flex-direction: column; background: var(--panel); border-right: 1px solid var(--line); }
+.side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: calc(var(--u) * 20) calc(var(--u) * 12) calc(var(--u) * 8) calc(var(--u) * 20); }
+.side-title { margin: 0; font: 600 var(--candidate-h2) / 1.25 var(--font-sans); white-space: nowrap; }
+.side-body { display: flex; flex-direction: column; gap: calc(var(--u) * 12); min-height: 0; flex: 1; padding: 0 calc(var(--u) * 12) calc(var(--u) * 16); }
+.side-new { width: 100%; justify-content: flex-start; }
+.side-scroll { flex: 1; min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: calc(var(--u) * 16); }
+.side-label { margin: 0 0 calc(var(--u) * 4); padding: 0 calc(var(--u) * 8); font: 600 calc(var(--candidate-label) * 0.8) / 1.4 var(--font-sans); color: var(--ink-secondary); }
+.side-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.side-item { position: relative; display: flex; align-items: center; border-radius: var(--radius-md); }
+.side-item:hover, .side-item:focus-within, .side-item[aria-current="true"] { background: var(--tile); }
+.side-open { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: calc(var(--u) * 9) calc(var(--u) * 8);
+  color: var(--ink); text-decoration: none; font-size: var(--candidate-label); line-height: 1.4; border-radius: var(--radius-md); }
+.side-item[aria-current="true"] .side-open { font-weight: 600; }
+/* The bin shows on the open conversation, and on hover or focus; always on a touch screen. */
+.side-del { flex: none; display: grid; place-items: center; width: 36px; height: 36px; margin-right: 2px; border: 0; border-radius: var(--radius-sm);
+  background: transparent; color: var(--ink-secondary); cursor: pointer; opacity: 0; }
+.side-item:hover .side-del, .side-item:focus-within .side-del, .side-item[aria-current="true"] .side-del { opacity: 1; }
+@media (hover: none) { .side-del { opacity: 1; } }
+.side-del:hover { color: var(--ink); background: var(--canvas); }
+.side-del svg { width: 18px; height: 18px; }
+.side-foot { margin: 0; padding-top: calc(var(--u) * 8); border-top: 1px solid var(--line); }
+.side-link { border: 0; background: none; padding: calc(var(--u) * 6) calc(var(--u) * 8); color: var(--ink-secondary); font: inherit;
+  font-size: calc(var(--candidate-label) * 0.85); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.side-link:hover { color: var(--ink); }
+
+/* IconButton at the panel's size. */
+.icon-btn { display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: var(--radius-md);
+  background: transparent; color: var(--ink); cursor: pointer; flex: none; }
+.icon-btn:hover { background: var(--tile); }
+.icon-btn svg { width: 22px; height: 22px; }
+
+/* Open: the head and body show, the strip doesn't. Closed S1: only the strip. */
+.side-strip { display: none; flex-direction: column; align-items: center; gap: 8px; padding-top: calc(var(--u) * 20); }
+.side-shell[data-panel="closed"] .side-head, .side-shell[data-panel="closed"] .side-body { display: none; }
+.side-shell[data-panel="closed"][data-variant="s1"] .side-strip { display: flex; }
+.side-shell[data-panel="closed"][data-variant="s2"] .side { border-right: 0; }
+
+/* The toggle in the conversation: S2 shows it when the panel is closed; on a phone it always
+   opens the drawer. It sits on the line of "Back to the week". */
+.main-toggle { display: none; position: absolute; left: calc(var(--candidate-pad-x) - 8px); top: calc(var(--u) * 22); }
+.side-shell[data-variant="s2"][data-panel="closed"] .main-toggle { display: grid; }
+.side-shell[data-variant="s2"][data-panel="closed"] .sp-back { margin-left: 44px; }
+.side-scrim { display: none; }
+
+/* A phone, an iPad held upright: the panel is a drawer over the page, 85% wide (at most 320px),
+   with the scrim behind it. The toggle in the page opens it; the scrim, Escape, or picking a
+   conversation closes it. */
+@container sp ((orientation: portrait) and (width < 1000px)) or (width < 760px) {
+  .side-shell, .side-shell[data-panel="closed"][data-variant] { grid-template-columns: minmax(0, 1fr); }
+  .side { position: absolute; z-index: 3; inset: 0 auto 0 0; width: min(85%, 320px); box-shadow: var(--shadow-overlay); transform: translateX(-102%); }
+  .side-shell[data-panel="open"] .side { transform: none; }
+  .side-shell[data-panel="closed"] .side-head, .side-shell[data-panel="closed"] .side-body { display: flex; }
+  .side-shell .side-strip, .side-shell[data-panel="closed"][data-variant="s1"] .side-strip { display: none; }
+  .side-scrim { display: block; position: absolute; z-index: 2; inset: 0; background: var(--scrim); opacity: 0; pointer-events: none; }
+  .side-shell[data-panel="open"] .side-scrim { opacity: 0.4; pointer-events: auto; }
+  .side-shell[data-variant] .main-toggle { display: grid; left: 8px; top: 14px; }
+  .side-shell[data-variant] .sp-back { margin-left: 44px; }
+  .side-main .sp-page { padding-top: 20px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  @container sp ((orientation: portrait) and (width < 1000px)) or (width < 760px) { .side { transition: transform 200ms ease-out; } }
+}
+
+/* Titles shrink to an ellipsis so the bin stays inside the panel. */
+.side-scroll, .side-list { grid-template-columns: minmax(0, 1fr); }
+
+/* On a phone the question sits over its answer, as in round 1. */
+@container sp ((orientation: portrait) and (width < 1000px)) or (width < 760px) {
+  .sp[data-layout="a"] .side-main .ask-turn, .sp[data-layout="a"] .side-main .ask-box { grid-template-columns: minmax(0, 1fr); }
+}

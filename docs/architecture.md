@@ -102,12 +102,13 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 ├── LoginForm.vue       email and password; explains refusals; notes an ended
 │                       session; links to #/signup, and to #/forgot where the API sends email
 │   (all five inside AuthCard.vue: a centred Panel with the BrandMark)
-├── AppNavbar.vue       the Header card: Skip to today, BrandMark, This week beside ‹ › and the
-│                       week, then the BarActions Edit plan (a toggle), Ask (to the Ask page,
-│                       only while the API answers questions), Settings (to the Settings page),
-│                       Print… and Full screen (useFullscreen, where the browser has one); full
-│                       width, sized by main.css's --bar-* (K47, K49, K50); on the planner's
-│                       screens out of sight until wanted (useBarReveal, §6.6)
+├── AppNavbar.vue       the Header card: Skip to today and, off Edit plan, a hidden Edit plan
+│                       for the keyboard; ‹ the week › first, as the page's title (K81); then
+│                       the BarActions This week, Ask (only while the API answers questions),
+│                       Settings, Print…, Full screen (useFullscreen, where the browser has
+│                       one) and, in Edit plan, Done (K82); full width, sized by main.css's
+│                       --bar-* (K47, K49); on the planner's screens out of sight until a long
+│                       press or the handle opens Edit plan (useBarReveal, §6.6)
 ├── ConnectPage.vue     an OAuth consent link (#/connect/<id>, K73), signed in or out: who is
 │                       asking, email and password, Read only or Read and change, Cancel and
 │                       Connect; then leaves for Claude's callback
@@ -117,9 +118,10 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 │   │                   Account (who is signed in, Sign out)
 │   └── ConnectionsSection.vue   the Connections row (K74): the MCP address with Copy and how to
 │                       connect Claude, the Apps connected by OAuth, and the personal Tokens
-├── AskPage.vue         #/ask (K67–K71): the SidePanel with the HistoryList, and beside it Back
-│                       to the week, the Transcript and the question box with the QuotaChip;
-│                       deleting asks in a ConfirmDialog of its own
+├── AskPage.vue         #/ask (K67–K71, K83, K84): the SidePanel with the HistoryList, and
+│                       beside it Back to the week, the title with the View switch (Document or
+│                       Conversation, kept per device), the Transcript and the question box with
+│                       the QuotaChip; deleting asks in a ConfirmDialog of its own
 ├── ItemPage.vue        the ItemPage card, at #/item/<section>/<id> (K64, K65): Back to the week
 │   │                   and Arrange sections, the type, the name and its chips; then rows like
 │   │                   Settings: Notes, Details, the week's plan (or the latest, read-only) and
@@ -567,9 +569,10 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
   prints as plain text. The pencil still opens the quick Edit dialog. In the grid the link is the
   name cell's widget, so Enter opens the page in one press, and F2 reaches the cell's other controls
   (§6.5).
-- **Config mode and normal mode.** Normal mode, the default on every load, only marks cells. The
-  "Edit plan" BarAction in the navbar (a toggle button with `aria-pressed`, filled while on; K48)
-  turns on config mode, which shows the
+- **Config mode and normal mode.** Normal mode, the default on every load, only marks cells. A
+  long press, the handle, or the keyboard's hidden "Edit plan" button (K80, K82) turns on config
+  mode (Edit plan), where the bar is in view and ends with "Done", which turns it off. Edit plan
+  shows the
   edit and remove IconButtons, an "Add exercise" and an "Add food" button under the grids, and
   the daily targets centred on each title line, under the bar's week: a Stepper at max(44px, 40u)
   reading "4 per day", its label ("Exercises a day", "Foods a day") for a screen reader only
@@ -609,8 +612,8 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
 - **Print is the light theme on white paper, from either theme** (§6.7).
 - **Narrow screens.** Folded (held upright under 1000px wide, or under 760px wide), the navbar
   puts the week across its first row (by CSS order) and shares its second row equally among the
-  BarActions, This week first when shown; the
-  bar leaves the wordmark out there (no monogram, K44). Below 640px it drops Print…. The markup keeps the desktop order, which is the
+  BarActions, This week first when shown. There is no wordmark on any screen (K81). Below 640px
+  it drops Print…. The markup keeps the desktop order, which is the
   tab order. Held upright under 1000px wide,
   or on any screen under 760px wide, the grids fold (K26): each row's name line spans the seven
   days above its boxes, so nothing scrolls sideways down to 320px. A phone opens on the week, like
@@ -795,8 +798,13 @@ tall or less).
 - **Settings and Ask** are pages of their own (`#/settings`, `#/ask`), outside the screens and with
   no bar (K52): each starts with "Back to the week", and leaving one returns focus to the bar button
   that opened it. Ask fills the window (K67, K70): the SidePanel (`h-dvh`) and the page beside it
-  scroll on their own, the page in Settings' rows and sizes (`data-slot="ask-page"` takes the
-  `--set-*` sizes in main.css), with the question box as the last row. Folded, the panel is a
+  scroll on their own, the page in Settings' rows at about 70% of its sizes (K83:
+  `[data-slot="ask-page"]` in main.css sets smaller `--set-*`, `--set-caption`, `--fs-title`,
+  `--side-panel-w` and `--ask-q-col`), with the question box as the last row, at the page's left
+  edge with nothing beside it. A SegmentedControl named "View" at the end of the title line
+  chooses the Transcript's `view` (K84): Document, the default (rows, layout A), or Conversation
+  (one centred 760u column, questions in tiles at the right); `localStorage`
+  `tracker-ask-view-v1` keeps it per device. Folded, the panel is a
   drawer opened from beside "Back to the week". `#/ask` shows the week while `session.ask` is not
   `true`, and drops the address once it is `false`; signing out on either page drops it too.
 

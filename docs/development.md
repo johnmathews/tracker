@@ -347,7 +347,9 @@ listed in [api.md](api.md) §10):
   device's data, and sign-out refused offline.
 - `src/components/__tests__/Ask.spec.ts`: the Ask page in the mounted app: the bar's Ask button
   only while the API says Ask is on, `#/ask` falling back to the week while it is off or unknown,
-  focus in and out, signing out on it, the empty page with and without goals, an answer streamed
+  focus in and out, signing out on it, the empty page with and without goals, the box named "Ask"
+  with nothing beside it and the intro at 72ch (K83), the View switch (Document first, Conversation
+  remembered per device, an unknown stored value falling back; K84), an answer streamed
   and counted, Return sending (Shift+Return a new line, an input method's Return its own, nothing
   while an answer is written), Stop, a failed answer and Try again, the cap, offline, unsynced
   changes, a full account, and the history panel: grouped by Today, Last week and Earlier,
@@ -421,7 +423,10 @@ listed in [api.md](api.md) §10):
   it's pressed) and confirming an email (the banner, Send it again, too soon, already confirmed,
   the link while signed in).
 - `src/components/__tests__/PlannerScreen.spec.ts`: the planner's screens in the mounted app
-  (K24–K27, K79, K80): the `planner-screens` class and Edit plan's sticky bar, no top-edge strip,
+  (K24–K27, K79–K82): the `planner-screens` class and Edit plan's sticky bar, no top-edge strip,
+  the bar led by the week in `title-1` with no wordmark and "This week" first among the actions,
+  no Edit plan BarAction but "Done" (filled) in Edit plan and the keyboard's hidden "Edit plan"
+  after "Skip to today",
   a long press turning Edit plan on and a second one off (by mouse or finger; not when let go
   early, moved, cancelled, held with another button, or in a field, popover, dialog or the bar),
   the held day cell or button left unpressed, a later click not swallowed, a finger's or pen's

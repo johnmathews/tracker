@@ -165,15 +165,34 @@ describe('Transcript', () => {
   })
 
   it('sets the question in a 240u column beside the SidePanel (S1), a hairline opening the row, and folds', () => {
-    const row = turns(mount(Transcript, { props: { turns: [done] } }))[0]!
+    const wrapper = mount(Transcript, { props: { turns: [done] } })
+    expect(wrapper.get('[data-slot="transcript"]').attributes('data-view')).toBe('document')
+    const row = turns(wrapper)[0]!
     expect(row.classes()).toEqual(
       expect.arrayContaining([
-        'grid-cols-[calc(var(--u)*240)_minmax(0,1fr)]',
+        // 240u unless the page sets --ask-q-col, as Ask does (180u, K83).
+        'grid-cols-[var(--ask-q-col,calc(var(--u)*240))_minmax(0,1fr)]',
         'border-t',
         'border-line',
         'folded:grid-cols-[minmax(0,1fr)]',
       ]),
     )
+  })
+
+  it('in the Conversation view, sets the question in a tile at the right over its answer (K84)', () => {
+    const wrapper = mount(Transcript, { props: { turns: [done], view: 'conversation' } })
+    expect(wrapper.get('[data-slot="transcript"]').attributes('data-view')).toBe('conversation')
+    const row = turns(wrapper)[0]!
+    expect(row.classes()).not.toContain('border-t')
+    expect(row.classes().some((c) => c.startsWith('grid-cols-'))).toBe(false)
+    const question = row.get('[data-slot="transcript-question"]')
+    expect(question.classes()).toEqual(
+      expect.arrayContaining(['justify-self-end', 'bg-tile', 'rounded-lg', 'max-w-[85%]']),
+    )
+    // The answer follows the question, in the same column.
+    expect(
+      question.element.nextElementSibling?.querySelector('[data-slot="transcript-answer"]'),
+    ).not.toBeNull()
   })
 })
 

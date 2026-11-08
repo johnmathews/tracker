@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, useId, useTemplateRef } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { ChevronLeft, PanelLeft, Send, Square, SquarePen } from '@lucide/vue'
 import { ASK_COPY, askAgainNote, unsyncedNote } from '@/lib/ask'
 import { useAskStore } from '@/stores/ask'
 import { usePlannerStore } from '@/stores/planner'
 import { useSyncStore } from '@/stores/sync'
+import { readKey, writeKey } from '@/lib/storage'
 import EmailStatus from '@/components/EmailStatus.vue'
 import SyncStatus from '@/components/SyncStatus.vue'
 import { Button } from '@/components/ui/button'
@@ -13,10 +14,11 @@ import { HistoryList } from '@/components/ui/history-list'
 import { IconButton } from '@/components/ui/icon-button'
 import { InlineMessage } from '@/components/ui/inline-message'
 import { QuotaChip } from '@/components/ui/quota-chip'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 import { SidePanel } from '@/components/ui/side-panel'
 import { TextArea } from '@/components/ui/text-area'
 import { TextLink } from '@/components/ui/text-link'
-import { Transcript } from '@/components/ui/transcript'
+import { Transcript, type TranscriptView } from '@/components/ui/transcript'
 
 /** Questions to start from on an empty page (the mockup's). */
 const STARTS = [
@@ -31,7 +33,29 @@ const sync = useSyncStore()
 const heading = useTemplateRef<HTMLHeadingElement>('heading')
 const panel = useTemplateRef<InstanceType<typeof SidePanel>>('panel')
 const panelOpen = ref(true)
-const boxLabel = useId()
+
+/** The two views (K84): Document, the default, and Conversation; each device keeps its own. */
+const VIEW_KEY = 'tracker-ask-view-v1'
+const VIEWS = [
+  { value: 'document', label: 'Document' },
+  { value: 'conversation', label: 'Conversation' },
+]
+function storedView(): TranscriptView {
+  try {
+    return JSON.parse(readKey(VIEW_KEY) ?? 'null') === 'conversation' ? 'conversation' : 'document'
+  } catch {
+    return 'document'
+  }
+}
+const view = ref<TranscriptView>(storedView())
+watch(view, (value) => writeKey(VIEW_KEY, value))
+/** The SegmentedControl's string, narrowed to a view. */
+const viewChoice = computed({
+  get: () => view.value,
+  set: (value: string) => {
+    view.value = value === 'conversation' ? 'conversation' : 'document'
+  },
+})
 
 // The browser's own word on the connection, and Ask's: either one offline turns the box off.
 const online = ref(navigator.onLine)
@@ -192,7 +216,7 @@ function deleteFocus(): HTMLElement | null {
   controls the Settings page's 60u sizes (main.css).
 -->
 <template>
-  <div data-slot="ask-page" data-testid="ask-page">
+  <div data-slot="ask-page" data-testid="ask-page" :data-view="view">
     <SidePanel ref="panel" v-model:open="panelOpen" storage-key="tracker-ask-panel-v1">
       <template #panel>
         <HistoryList
@@ -209,8 +233,13 @@ function deleteFocus(): HTMLElement | null {
         <IconButton label="New conversation" @click="startNew"><SquarePen /></IconButton>
       </template>
       <template #default="{ folded, open, panelId }">
+        <!-- Conversation reads in one centred column, 760u wide (K84); Document uses the page. -->
         <div
           class="flex flex-col px-(--screen-pad-x) pt-[calc(var(--u)*28)] pb-[calc(var(--u)*64)] folded:pt-5"
+          :class="
+            view === 'conversation' &&
+            'mx-auto w-full max-w-[calc(var(--u)*760+2*var(--screen-pad-x))] folded:max-w-none'
+          "
         >
           <SyncStatus />
           <EmailStatus />
@@ -231,18 +260,29 @@ function deleteFocus(): HTMLElement | null {
               ><ChevronLeft :stroke-width="1.5" aria-hidden="true" />Back to the week</TextLink
             >
           </div>
-          <h1
-            ref="heading"
-            tabindex="-1"
-            class="title-1 mt-[calc(var(--u)*12)] mb-[calc(var(--u)*28)] text-(length:--fs-title) leading-tight text-ink focus:outline-none"
+          <!-- The title line: the heading, and the View switch at its end (K84). -->
+          <div
+            class="mt-[calc(var(--u)*12)] mb-[calc(var(--u)*28)] flex flex-wrap items-center justify-between gap-x-[calc(var(--u)*24)] gap-y-[calc(var(--u)*12)] folded:mb-5"
           >
-            Ask
-          </h1>
+            <h1
+              ref="heading"
+              tabindex="-1"
+              class="title-1 text-(length:--fs-title) leading-tight text-ink focus:outline-none"
+            >
+              Ask
+            </h1>
+            <SegmentedControl
+              v-model="viewChoice"
+              ariaLabel="View"
+              :options="VIEWS"
+              data-testid="ask-view"
+            />
+          </div>
 
           <div
             v-if="ask.turns.length === 0"
             data-testid="ask-empty"
-            class="grid max-w-[70ch] gap-[calc(var(--u)*16)] pb-[calc(var(--u)*28)]"
+            class="grid max-w-[72ch] gap-[calc(var(--u)*16)] pb-[calc(var(--u)*28)] text-(length:--set-text)"
           >
             <p class="body text-(length:--set-text) leading-normal text-ink-secondary">
               Ask about your exercises and food: whether you’re doing enough for your goals, how
@@ -269,7 +309,7 @@ function deleteFocus(): HTMLElement | null {
             </div>
           </div>
 
-          <Transcript :turns="ask.turns" @retry="ask.retry" />
+          <Transcript :turns="ask.turns" :view="view" @retry="ask.retry" />
           <InlineMessage
             v-if="offline"
             tone="info"
@@ -285,18 +325,13 @@ function deleteFocus(): HTMLElement | null {
             >{{ ask.notice }}</InlineMessage
           >
 
+          <!-- The question box, at the page's left edge with nothing beside it (K83). -->
           <form
             data-testid="ask-form"
-            :aria-labelledby="boxLabel"
-            class="grid grid-cols-[calc(var(--u)*240)_minmax(0,1fr)] gap-x-[calc(var(--u)*24)] border-t border-line pt-[calc(var(--u)*28)] folded:grid-cols-[minmax(0,1fr)] folded:pt-5"
+            aria-label="Ask"
+            class="border-t border-line pt-[calc(var(--u)*28)] folded:pt-5"
             @submit.prevent="submit"
           >
-            <p
-              :id="boxLabel"
-              class="title-2 pt-[calc(var(--u)*2)] text-(length:--set-h2) leading-tight text-ink folded:hidden"
-            >
-              Ask
-            </p>
             <div
               class="grid max-w-[calc(var(--u)*900)] min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-[calc(var(--u)*12)] folded:grid-cols-[minmax(0,1fr)]"
             >
@@ -324,12 +359,13 @@ function deleteFocus(): HTMLElement | null {
                 <QuotaChip
                   v-if="ask.remaining !== null && ask.limit !== null"
                   data-testid="ask-quota"
+                  class="text-(length:--set-caption)"
                   :remaining="ask.remaining"
                   :limit="ask.limit"
                 />
                 <p
                   data-testid="ask-note"
-                  class="caption text-[max(16px,calc(var(--u)*16))] leading-[1.4] text-ink-secondary"
+                  class="caption text-(length:--set-caption) leading-[1.4] text-ink-secondary"
                 >
                   {{ note }}
                 </p>

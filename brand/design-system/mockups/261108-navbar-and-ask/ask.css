@@ -1,0 +1,215 @@
+/*
+  The Ask page, as a prototype. It sits on settings.css (the shipped Settings page's frame: .sp,
+  .sp-scroll, u and n, the back link, the serif title, the section rows), so it reads like the
+  page it opens beside. Everything new is a --candidate-* value below; the rest is tokens.
+*/
+.sp-scroll {
+  --candidate-measure: calc(var(--u) * 760);      /* B: the reading column */
+  --candidate-q-col: var(--candidate-name-col);   /* A: the question column, as wide as the week's names */
+  --candidate-turn-y: calc(var(--u) * 28);
+  --candidate-box-h: max(96px, calc(var(--u) * 120));
+}
+
+/* The answer's text: the page's body size, a reading line height, the system's ink. */
+.ask-a { font-size: var(--candidate-body); line-height: 1.55; color: var(--ink); min-width: 0; }
+.ask-a p { margin: 0 0 0.6em; max-width: 68ch; }
+.ask-a p:last-child { margin-bottom: 0; }
+.ask-a ul { margin: 0 0 0.6em; padding-left: 1.2em; max-width: 64ch; }
+.ask-a li { margin: 0.2em 0; }
+.ask-a strong { font-weight: 600; }
+.ask-q { margin: 0; font: 600 var(--candidate-label) / 1.4 var(--font-sans); color: var(--ink); overflow-wrap: anywhere; }
+
+/* What the AI read: one quiet line over the first answer. */
+.ask-read { margin: 0 0 calc(var(--u) * 10); font-size: calc(var(--candidate-label) * 0.85); line-height: 1.4; color: var(--ink-secondary); }
+
+/* AnswerProgress: a pen that writes. Three short strokes in the ink; still under reduced motion. */
+.ask-progress { display: inline-flex; align-items: center; gap: calc(var(--u) * 10); color: var(--ink-secondary);
+  font-size: calc(var(--candidate-label) * 0.9); }
+.ask-progress .pen { display: inline-flex; gap: 4px; }
+.ask-progress .pen i { display: block; width: 10px; height: 3px; border-radius: 2px; background: var(--ink); opacity: 0.35; }
+@media (prefers-reduced-motion: no-preference) {
+  .ask-progress .pen i { animation: ask-write 1.2s ease-in-out infinite; }
+  .ask-progress .pen i:nth-child(2) { animation-delay: 0.2s; }
+  .ask-progress .pen i:nth-child(3) { animation-delay: 0.4s; }
+}
+@keyframes ask-write { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+.ask-caret { display: inline-block; width: 0.5em; height: 1em; vertical-align: -0.12em; background: var(--ink); margin-left: 2px; }
+
+/* The question box: TextArea at the page's size, Send beside it (Stop while answering). */
+.ask-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: calc(var(--u) * 12); align-items: end; }
+.ask-form label { grid-column: 1 / -1; font: 600 var(--candidate-label) / 1.3 var(--font-sans); }
+.ask-form textarea { min-height: var(--candidate-box-h); resize: vertical; padding: calc(var(--u) * 14) calc(var(--u) * 16);
+  border: 1px solid var(--control-border); border-radius: var(--radius-md); background: var(--canvas); color: var(--ink);
+  font: inherit; font-size: var(--candidate-body); line-height: 1.45; }
+.ask-form textarea:disabled { opacity: 0.55; }
+.ask-form .btn.primary { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+.ask-form .btn.primary:hover { background: var(--ink); }
+.ask-form .btn:disabled { opacity: 0.55; cursor: default; }
+.ask-foot { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: calc(var(--u) * 8) calc(var(--u) * 16); align-items: center; justify-content: space-between; }
+
+/* QuotaChip: the Chip at the page's size; the count in words. */
+.quota { display: inline-block; background: var(--tile); color: var(--ink-secondary); border-radius: var(--radius-sm);
+  padding: calc(var(--u) * 2) calc(var(--u) * 10); font: 600 calc(var(--candidate-label) * 0.85) / 1.5 var(--font-sans); white-space: nowrap; }
+.quota[data-left="0"] { color: var(--ink); }
+.ask-note { margin: 0; font-size: calc(var(--candidate-label) * 0.85); line-height: 1.4; color: var(--ink-secondary); }
+
+/* InlineMessage for the error and the offline states: a hairline box with the error ink for errors. */
+.ask-msg { margin: 0; padding: calc(var(--u) * 12) calc(var(--u) * 16); border: 1px solid var(--line); border-radius: var(--radius-md);
+  font-size: var(--candidate-body); line-height: 1.45; }
+.ask-msg[data-kind="error"] { border-color: var(--error-ink); color: var(--error-ink); }
+.ask-msg a { color: inherit; font-weight: 600; text-underline-offset: 3px; }
+
+/* The empty page: what the AI reads, and three questions to start from. */
+.ask-empty { display: grid; gap: calc(var(--u) * 16); max-width: 70ch; }
+.ask-empty p { margin: 0; font-size: var(--candidate-body); line-height: 1.5; color: var(--ink-secondary); }
+.ask-empty p a { color: var(--ink); font-weight: 600; text-underline-offset: 3px; }
+.ask-starts { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 10); }
+.ask-starts .btn { height: auto; min-height: var(--candidate-control); padding: calc(var(--u) * 8) calc(var(--u) * 18); font-weight: 400; text-align: left; }
+
+/* ---- A: rows like Settings. Each turn is a row: the question in the left column, as a section
+   heading sits, the answer to its right; hairlines between, like the week's grid. ---- */
+.sp[data-layout="a"] .ask-turn { display: grid; grid-template-columns: var(--candidate-q-col) minmax(0, 1fr); column-gap: calc(var(--u) * 24);
+  align-items: start; padding: var(--candidate-turn-y) 0; border-top: 1px solid var(--line); }
+.sp[data-layout="a"] .ask-turn .ask-q { padding-top: calc(var(--u) * 2); }
+.sp[data-layout="a"] .ask-box { padding: var(--candidate-turn-y) 0 0; border-top: 1px solid var(--line);
+  display: grid; grid-template-columns: var(--candidate-q-col) minmax(0, 1fr); column-gap: calc(var(--u) * 24); }
+.sp[data-layout="a"] .ask-box > .ask-form { grid-column: 2; max-width: calc(var(--u) * 900); }
+.sp[data-layout="a"] .ask-box > .ask-side { grid-column: 1; padding-top: calc(var(--u) * 2); }
+
+/* ---- B: one reading column, centred. The question is a tile, the answer plain on the canvas. ---- */
+.sp[data-layout="b"] .sp-page { max-width: calc(var(--candidate-measure) + 2 * var(--candidate-pad-x)); margin: 0 auto; }
+.sp[data-layout="b"] .ask-turn { display: grid; gap: calc(var(--u) * 14); padding: calc(var(--candidate-turn-y) * 0.75) 0; }
+.sp[data-layout="b"] .ask-turn .ask-q { justify-self: end; max-width: 85%; padding: calc(var(--u) * 12) calc(var(--u) * 16);
+  background: var(--tile); border-radius: var(--radius-lg); font-weight: 400; font-size: var(--candidate-body); }
+.sp[data-layout="b"] .ask-box { padding-top: var(--candidate-turn-y); border-top: 1px solid var(--line); }
+.sp[data-layout="b"] .ask-box > .ask-side { display: none; }
+
+/* The side line in A's box column: what the box is for. */
+.ask-side { font: 600 var(--candidate-h2) / 1.25 var(--font-sans); margin: 0; }
+
+/* Folded (a phone, an iPad held upright): both become one column; A's question sits over its answer. */
+@container sp ((orientation: portrait) and (width < 1000px)) or (width < 760px) {
+  .sp[data-layout] .ask-turn, .sp[data-layout] .ask-box { display: grid; grid-template-columns: minmax(0, 1fr); row-gap: 10px; padding: 20px 0; }
+  .sp[data-layout] .ask-box > .ask-form { grid-column: 1; }
+  .sp[data-layout] .ask-side { display: none; }
+  .sp[data-layout="b"] .ask-turn .ask-q { max-width: 92%; }
+  .ask-form { grid-template-columns: minmax(0, 1fr); }
+  .ask-form .btn { justify-content: center; }
+}
+
+/* ---- The bar strip, for where the Ask action goes. BarAction at u = 1. ---- */
+.bar-strip { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 24px; border-bottom: 1px solid var(--line);
+  background: var(--canvas); color: var(--ink); font-family: var(--font-sans); }
+.bar-strip .wm { height: 30px; width: auto; fill: var(--ink); }
+.bar-strip .group { display: flex; gap: 8px; }
+.bar-action { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; box-sizing: border-box;
+  min-width: 96px; min-height: 44px; padding: 10px 12px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); cursor: pointer; }
+.bar-action svg { width: 32px; height: 32px; flex: none; }
+.bar-action .name { font: 600 17px/22px var(--font-sans); white-space: nowrap; }
+.bar-action:hover { background: var(--tile); }
+.bar-action[data-new] { outline: 2px dashed var(--control-border); outline-offset: 2px; }
+.bar-folded { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; max-width: 366px; padding: 8px; background: var(--canvas); color: var(--ink); }
+.bar-folded .bar-action { min-width: 0; padding: 8px 4px; gap: 4px; }
+.bar-folded .bar-action svg { width: 26px; height: 26px; }
+.bar-folded .bar-action .name { font-size: 16px; line-height: 20px; }
+
+/* ---- Round 2: History. A list of past conversations: the first question and the day, with
+   delete; New conversation on top. H1 sits in a row of its own above the conversation, in A's
+   row language; H2 is a rail beside the conversation. ---- */
+.sp-scroll { --candidate-rail: calc(var(--u) * 300); }
+.hist { display: grid; gap: calc(var(--u) * 12); min-width: 0; }
+.hist-new { justify-self: start; }
+.hist-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.hist-item { display: flex; align-items: center; gap: calc(var(--u) * 8); border-top: 1px solid var(--line); }
+.hist-item:last-child { border-bottom: 1px solid var(--line); }
+.hist-open { flex: 1; min-width: 0; display: flex; align-items: baseline; justify-content: space-between; gap: calc(var(--u) * 12);
+  padding: calc(var(--u) * 10) calc(var(--u) * 8); color: var(--ink); text-decoration: none; border-radius: var(--radius-sm); }
+.hist-open:hover { background: var(--tile); }
+.hist-item[aria-current="true"] .hist-open { font-weight: 600; box-shadow: inset 3px 0 0 var(--ink); }
+.hist-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--candidate-label); line-height: 1.4; }
+.hist-date { flex: none; color: var(--ink-secondary); font-size: calc(var(--candidate-label) * 0.85); font-weight: 400; }
+.hist-del { flex: none; display: grid; place-items: center; width: max(36px, calc(var(--u) * 44)); height: max(36px, calc(var(--u) * 44));
+  border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink-secondary); cursor: pointer; }
+.hist-del:hover { background: var(--tile); color: var(--ink); }
+.hist-del svg { width: calc(var(--candidate-icon) * 0.85); height: calc(var(--candidate-icon) * 0.85); }
+.hist-foot { margin: 0; font-size: calc(var(--candidate-label) * 0.85); color: var(--ink-secondary); }
+.hist-foot a { color: var(--ink); text-underline-offset: 3px; }
+
+/* H1: a History row, the heading in the question column, the list to its right, two columns. */
+.ask-hist-row { display: grid; grid-template-columns: var(--candidate-q-col) minmax(0, 1fr); column-gap: calc(var(--u) * 24);
+  padding: var(--candidate-turn-y) 0; border-top: 1px solid var(--line); }
+.ask-hist-row .hist { max-width: calc(var(--u) * 900); }
+.ask-hist-row .hist-list { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: calc(var(--u) * 24); }
+.ask-hist-row .hist-item:nth-last-child(2) { border-bottom: 1px solid var(--line); }
+
+/* H2: a rail beside the conversation; the conversation's rows keep A's two columns. */
+.ask-rail-grid { display: grid; grid-template-columns: var(--candidate-rail) minmax(0, 1fr); column-gap: calc(var(--u) * 40); align-items: start; }
+.ask-rail { position: sticky; top: 0; padding-top: var(--candidate-turn-y); }
+.ask-main { min-width: 0; }
+.sp[data-layout="a"] .ask-main .ask-turn, .sp[data-layout="a"] .ask-main .ask-box { grid-template-columns: calc(var(--u) * 220) minmax(0, 1fr); }
+
+@container sp ((orientation: portrait) and (width < 1000px)) or (width < 760px) {
+  .ask-hist-row, .ask-rail-grid { display: grid; grid-template-columns: minmax(0, 1fr); row-gap: 12px; padding: 20px 0; }
+  .ask-hist-row .hist-list { grid-template-columns: minmax(0, 1fr); }
+  .ask-rail { position: static; padding-top: 0; }
+  .sp[data-layout="a"] .ask-main .ask-turn, .sp[data-layout="a"] .ask-main .ask-box { grid-template-columns: minmax(0, 1fr); }
+}
+/* Long titles shrink to an ellipsis inside their column, never past it. */
+.hist-list { grid-template-columns: minmax(0, 1fr); }
+.ask-rail { min-width: 0; display: grid; gap: calc(var(--u) * 12); align-content: start; }
+
+/* ======== Round 2026-11-08: two views, a smaller page, a wider intro, no "Ask" beside the box. ======== */
+
+/* The heading line: the title, and the switch between the two views at its end. */
+.ask-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: calc(var(--u) * 12) calc(var(--u) * 24);
+  margin: calc(var(--u) * 12) 0 calc(var(--u) * 28); }
+.ask-head .sp-title { margin: 0; }
+.sp .ask-view button { padding: 0 calc(var(--u) * 18); }
+
+/* The intro reads at a normal measure: about 72 characters of its own text, not 70 of a smaller one. */
+.ask-empty { font-size: var(--candidate-body); max-width: 72ch; }
+
+/* D2: Document as headings. Each question is a heading over its answer, at one reading measure;
+   a hairline opens each turn. The box sits under the last one, as wide as the box is now. */
+.sp-scroll { --candidate-doc: calc(var(--u) * 900); }
+.sp[data-layout="d"] .ask-log, .sp[data-layout="d"] .ask-box { max-width: var(--candidate-doc); }
+.sp[data-layout="d"] .ask-turn { display: grid; gap: calc(var(--u) * 12); padding: var(--candidate-turn-y) 0; border-top: 1px solid var(--line); }
+.sp[data-layout="d"] .ask-turn .ask-q { font: 600 var(--candidate-h2) / 1.3 var(--font-sans); }
+.sp[data-layout="d"] .ask-box { padding-top: var(--candidate-turn-y); border-top: 1px solid var(--line); }
+
+/* D1 with no "Ask" beside the box: the box stays in the answers' column, under the last answer. */
+.sp[data-layout="a"] .ask-box { grid-template-columns: var(--candidate-q-col) minmax(0, 1fr); }
+
+/* The sizes. S1 is about 80% of now and S2 about 70%; targets keep their 44px floor. Spacing
+   follows u as before. */
+.sp[data-scale="80"] .sp-scroll { --candidate-title: max(26px, calc(var(--u) * 32)); --candidate-h2: max(18px, calc(var(--u) * 22));
+  --candidate-label: max(15px, calc(var(--u) * 16)); --candidate-body: max(15px, calc(var(--u) * 16));
+  --candidate-control: max(44px, calc(var(--u) * 48)); --candidate-icon: max(18px, calc(var(--u) * 21));
+  --candidate-q-col: calc(var(--u) * 200); --candidate-side: max(230px, calc(var(--u) * 260)); --candidate-box-h: max(80px, calc(var(--u) * 96)); }
+.sp[data-scale="70"] .sp-scroll { --candidate-title: max(24px, calc(var(--u) * 28)); --candidate-h2: max(17px, calc(var(--u) * 19));
+  --candidate-label: max(14px, calc(var(--u) * 14)); --candidate-body: max(14px, calc(var(--u) * 14));
+  --candidate-control: max(44px, calc(var(--u) * 44)); --candidate-icon: max(17px, calc(var(--u) * 18));
+  --candidate-q-col: calc(var(--u) * 180); --candidate-side: max(210px, calc(var(--u) * 230)); --candidate-box-h: max(72px, calc(var(--u) * 84)); }
+.sp[data-scale] .side-main .ask-turn, .sp[data-scale] .side-main .ask-box { }
+.sp[data-scale="80"][data-layout="a"] .side-main .ask-turn, .sp[data-scale="80"][data-layout="a"] .side-main .ask-box { grid-template-columns: var(--candidate-q-col) minmax(0, 1fr); }
+.sp[data-scale="70"][data-layout="a"] .side-main .ask-turn, .sp[data-scale="70"][data-layout="a"] .side-main .ask-box { grid-template-columns: var(--candidate-q-col) minmax(0, 1fr); }
+
+@container sp ((orientation: portrait) and (width < 1000px)) or (width < 760px) {
+  .sp[data-layout="d"] .ask-turn { padding: 20px 0; }
+  .sp[data-scale="80"] .sp-scroll { --candidate-title: calc(var(--n) * 26); --candidate-h2: calc(var(--n) * 19); --candidate-label: calc(var(--n) * 15);
+    --candidate-body: calc(var(--n) * 16); --candidate-control: 44px; --candidate-icon: 20px; }
+  .sp[data-scale="70"] .sp-scroll { --candidate-title: calc(var(--n) * 24); --candidate-h2: calc(var(--n) * 18); --candidate-label: calc(var(--n) * 14);
+    --candidate-body: calc(var(--n) * 15); --candidate-control: 44px; --candidate-icon: 19px; }
+  .sp[data-scale][data-layout="a"] .side-main .ask-turn, .sp[data-scale][data-layout="a"] .side-main .ask-box { grid-template-columns: minmax(0, 1fr); }
+  .ask-head { margin-bottom: 20px; }
+}
+
+/* Paragraphs in an answer keep their 0.6em apart, as the Transcript card says. */
+.sp .ask-a p { margin: 0 0 0.6em; }
+.sp .ask-a p:last-child { margin-bottom: 0; }
+
+/* With no "Ask" beside it, the box starts at the page's left edge in every view, under the intro
+   and the back link, and keeps today's 900u width. */
+.sp[data-layout="a"] .ask-box, .sp[data-layout="a"] .side-main .ask-box,
+.sp[data-scale][data-layout="a"] .side-main .ask-box { grid-template-columns: minmax(0, 1fr); }
+.sp[data-layout="a"] .ask-box > .ask-form { grid-column: 1; max-width: calc(var(--u) * 900); }

@@ -54,7 +54,7 @@ const groups = computed(() => groupHistory(props.items, props.now))
       >
         <h3
           :id="`${base}-g${g}`"
-          class="label mb-[calc(var(--u)*4)] px-[calc(var(--u)*8)] text-ink-secondary"
+          class="label mb-[calc(var(--u)*4)] px-[calc(var(--u)*8)] text-(length:--set-caption) text-ink-secondary"
         >
           {{ group.label }}
         </h3>
@@ -99,13 +99,17 @@ const groups = computed(() => groupHistory(props.items, props.now))
     >
       <button
         type="button"
-        class="min-h-11 rounded-sm px-[calc(var(--u)*8)] text-[max(16px,calc(var(--u)*16))] text-ink-secondary underline underline-offset-3 hover:text-ink"
+        class="min-h-11 rounded-sm px-[calc(var(--u)*8)] text-(length:--set-caption) text-ink-secondary underline underline-offset-3 hover:text-ink"
         @click="emit('deleteAll')"
       >
         Delete all conversations
       </button>
     </p>
-    <p v-else data-slot="history-empty" class="caption px-[calc(var(--u)*8)] text-ink-secondary">
+    <p
+      v-else
+      data-slot="history-empty"
+      class="caption px-[calc(var(--u)*8)] text-(length:--set-caption) text-ink-secondary"
+    >
       Past conversations show here.
     </p>
   </div>

@@ -126,13 +126,13 @@ afterEach(() => {
 })
 
 describe('Ask in the bar', () => {
-  it('shows only once the API says Ask is on, just before Settings', async () => {
+  it('shows only once the API says Ask is on, first of the actions, before Settings (K82)', async () => {
     await mountApp()
     const actions = wrapper
       .get('[data-slot="bar"]')
       .findAll('[data-slot="bar-action"]')
       .map((b) => b.text())
-    expect(actions.slice(0, 3)).toEqual(['Edit plan', 'Ask', 'Settings'])
+    expect(actions.slice(0, 2)).toEqual(['Ask', 'Settings'])
     expect(askButton().find('svg').exists()).toBe(true)
   })
 
@@ -237,6 +237,50 @@ describe('the Ask page', () => {
     expect(turns()).toHaveLength(1)
     expect(turns()[0]!.text()).toContain('Is my diet good enough?')
     expect(wrapper.find('[data-testid="ask-empty"]').exists()).toBe(false)
+  })
+
+  it('names the box without an "Ask" beside it, and reads its intro at a normal measure (K83)', async () => {
+    await mountApp({ hash: '#/ask' })
+    const form = wrapper.get('[data-testid="ask-form"]')
+    expect(form.attributes('aria-label')).toBe('Ask')
+    expect(form.attributes('aria-labelledby')).toBeUndefined()
+    expect(form.findAll('p').map((p) => p.text())).not.toContain('Ask')
+    // The intro's measure is in its own text size, so 72ch is 72 of its characters.
+    const intro = wrapper.get('[data-testid="ask-empty"]')
+    expect(intro.classes()).toEqual(
+      expect.arrayContaining(['max-w-[72ch]', 'text-(length:--set-text)']),
+    )
+  })
+
+  it('offers Document and Conversation, Document first, and the device remembers the view (K84)', async () => {
+    await mountApp({ hash: '#/ask' })
+    const view = () => wrapper.get('[data-slot="transcript"]').attributes('data-view')
+    const control = wrapper.get('[data-testid="ask-view"]')
+    expect(control.get('[role="group"]').attributes('aria-label')).toBe('View')
+    const segments = () => control.findAll('button')
+    expect(segments().map((b) => b.text())).toEqual(['Document', 'Conversation'])
+    expect(segments()[0]!.attributes('aria-pressed')).toBe('true')
+    expect(view()).toBe('document')
+    expect(page().attributes('data-view')).toBe('document')
+    await segments()[1]!.trigger('click')
+    await settle()
+    expect(view()).toBe('conversation')
+    expect(page().attributes('data-view')).toBe('conversation')
+    expect(localStorage.getItem('tracker-ask-view-v1')).toBe('"conversation"')
+    // Back to the week and to Ask again: still Conversation.
+    await backToWeek()
+    await openAsk()
+    expect(view()).toBe('conversation')
+    // A stored value it doesn't know falls back to Document.
+    wrapper.unmount()
+    localStorage.setItem('tracker-ask-view-v1', '"sideways"')
+    await mountApp({ hash: '#/ask' })
+    expect(view()).toBe('document')
+    // So does one that isn't JSON at all.
+    wrapper.unmount()
+    localStorage.setItem('tracker-ask-view-v1', 'conversation')
+    await mountApp({ hash: '#/ask' })
+    expect(view()).toBe('document')
   })
 
   it('says when there are no goals yet, and links to them', async () => {

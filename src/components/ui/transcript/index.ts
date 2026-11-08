@@ -1,5 +1,11 @@
 export { default as Transcript } from './Transcript.vue'
 
+/**
+ * How the conversation is laid out (K84): `document`, rows with the question in a left column
+ * (layout A), or `conversation`, one column with each question in a tile on the right.
+ */
+export type TranscriptView = 'document' | 'conversation'
+
 /** One question and its answer on the Ask page (brand/design-system/project/components/Transcript). */
 export interface TranscriptTurn {
   /** Keeps the row stable as turns are added; the index is used when there is none. */
