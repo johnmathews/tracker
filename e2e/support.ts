@@ -218,13 +218,16 @@ export async function openApp(
 }
 
 /**
- * Calls up the bar on the planner's screens (Header card, Out of sight): the pointer at the top
- * edge, as a person with a mouse would. Its controls are out of view until then.
+ * Calls up the bar from the planner's screens (Header card, Out of sight; K79, K80): a long press
+ * with the mouse, in the page's left margin halfway down, where nothing is pressed by it. It
+ * opens Edit plan, where the bar is sticky and in view; its controls are out of view until then.
  */
 export async function callUpBar(page: Page): Promise<void> {
-  const width = page.viewportSize()?.width ?? 1280
-  await page.mouse.move(width / 2, 4)
-  await page.locator('[data-slot="bar"][data-shown="true"]').waitFor()
+  const height = page.viewportSize()?.height ?? 800
+  await page.mouse.move(4, height / 2)
+  await page.mouse.down()
+  await page.locator('[data-testid="edit-plan-button"][aria-pressed="true"]').waitFor()
+  await page.mouse.up()
   await settle(page)
 }
 

@@ -1,12 +1,12 @@
-The app bar: the wordmark on the left, the week navigation at the centre, and the actions on the right, as big and bold as the week below it. On the planner's screens it keeps out of sight until it is wanted.
+The app bar: the wordmark on the left, the week navigation at the centre, and the actions on the right, as big and bold as the week below it. On the planner's screens it keeps out of sight: a long press opens Edit plan, where it is in view.
 
-## Out of sight (K25)
+## Out of sight (K25, K80)
 
-- **On the planner's screens** (PlannerScreen) the bar is hidden above the top edge and slides over the screen when it is wanted, in 160ms (none under `prefers-reduced-motion`). Shown, it keeps its `line` rule and adds `shadow-overlay`, since it lies over the week.
-- **A pointer brings it** at the top edge: an invisible 14px strip along the top of the screen. It hides 500ms after the pointer leaves the bar.
-- **A finger brings it** with the handle: a 40 × 5px pill in `control-border` at the top centre, in an 88 × 44px button named "Show controls". A press shows the bar, and so does pulling the handle down. A press anywhere outside the bar hides it. The handle shows wherever a coarse pointer is present (`any-pointer: coarse`), so an iPad with a trackpad has both.
-- **The keyboard brings it** by focus: the bar shows while focus is inside it, so Tab from the top of the page reaches "Skip to today" and the bar's controls in view. Escape hides it.
-- **Edit plan keeps it in view** (K27), sticky at the top as before: the controls are the point there. The SettingsPage has no bar (K52).
+- **On the planner's screens** (PlannerScreen) the bar is hidden above the top edge. Asked for by a long press or the handle, it does not slide over the week: those open **Edit plan**, where the bar is sticky at the top and the page sits below it, so it never covers anything (K80).
+- **A long press opens Edit plan** (K79, K80), anywhere on the screen: a press held 500ms with a mouse, pen or finger, moving no more than 10px. A second long press, in Edit plan, goes back to the week, as the Edit plan button does. Letting go sooner, moving further or scrolling does not count, and nor does a right click. The click that ends the hold does nothing, so a held day or button is never pressed, and a finger's or pen's hold opens no menu. A press in a field, a popover (an item's notes), a dialog or the bar is never a hold. The screens select no text outside fields, popovers and dialogs, so a hold never highlights a word. There is no mark while holding: the change of screen is the answer. (It replaces a 14px strip along the top edge.)
+- **A finger opens it** with the handle too: a 40 × 5px pill in `control-border` at the top centre, in an 88 × 44px button named "Edit plan". A press opens Edit plan, and so does pulling the handle down. The handle shows wherever a coarse pointer is present (`any-pointer: coarse`), so an iPad with a trackpad has both.
+- **The keyboard floats it** by focus, the one way it lies over the week: the bar slides over the screen in 160ms (none under `prefers-reduced-motion`) while focus is inside it, with its `line` rule and `shadow-overlay`. Tab from the top of the page reaches "Skip to today" and the bar's controls in view. Escape takes focus out and hides it. Moving focus never switches to Edit plan.
+- **Edit plan keeps it in view** (K27), sticky at the top: the controls are the point there. The SettingsPage has no bar (K52).
 
 ## Use
 

@@ -65,9 +65,8 @@ test.describe('the app passes axe', () => {
     test(`week view in Edit plan, desktop, ${theme}`, async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 900 })
       await openApp(page, { theme })
+      // A long press opens Edit plan (K80).
       await callUpBar(page)
-      await page.getByRole('button', { name: 'Edit plan', exact: true }).click()
-      await settle(page)
       await expectNoAxeViolations(page)
     })
 
@@ -152,11 +151,12 @@ test.describe('the app passes axe', () => {
       await expectNoAxeViolations(page)
     })
 
-    test(`the bar called up, desktop, ${theme}`, async ({ page }) => {
+    test(`the bar floated over the screen by focus, desktop, ${theme}`, async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 800 })
       await openApp(page, { theme })
-      await page.mouse.move(640, 4)
-      await expect(page.locator('[data-slot="bar"]')).toHaveAttribute('data-shown', 'true')
+      // Tab reaches "Skip to today", inside the bar, which slides down while focus is in it.
+      await page.keyboard.press('Tab')
+      await expect(page.getByTestId('skip-to-today')).toBeFocused()
       await settle(page)
       await expectNoAxeViolations(page)
     })

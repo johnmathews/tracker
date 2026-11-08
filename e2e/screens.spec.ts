@@ -104,3 +104,39 @@ test('a fling sprints to Food while it is still moving, not after (K45)', async 
     `reached Food ${Math.round(arrivedAt! - endedAt)} ms after the fling ended`,
   ).toBeLessThan(endedAt)
 })
+
+test('a long press opens Edit plan with the bar above the week, and marks no day (K80)', async ({
+  page,
+}) => {
+  await openApp(page)
+  const bar = page.locator('[data-slot="bar"]')
+  const editPlan = page.getByTestId('edit-plan-button')
+  // The first day with no mark yet, held by its place so the locator stays on it once marked.
+  const cells = page.locator('[data-slot="day-mark-button"]')
+  const free = await cells.evaluateAll((els) =>
+    els.findIndex((el) => el.getAttribute('aria-pressed') === 'false'),
+  )
+  expect(free).toBeGreaterThanOrEqual(0)
+  const cell = cells.nth(free)
+  await expect(cell).toHaveAttribute('aria-pressed', 'false')
+  const box = (await cell.boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.down()
+  await expect(editPlan).toHaveAttribute('aria-pressed', 'true')
+  await page.mouse.up()
+  expect(await page.evaluate(() => window.getSelection()?.toString() ?? '')).toBe('')
+  // The bar is in the page, not over it: the week starts below it.
+  await expect(bar).toHaveClass(/sticky/)
+  const barBox = (await bar.boundingBox())!
+  const heading = (await page.locator('#exercises-heading').boundingBox())!
+  expect(heading.y).toBeGreaterThanOrEqual(barBox.y + barBox.height)
+  // A second long press, in the margin, goes back to the week; the day held is still unmarked.
+  await page.mouse.move(4, 400)
+  await page.mouse.down()
+  await expect(editPlan).toHaveAttribute('aria-pressed', 'false')
+  await page.mouse.up()
+  await expect(cell).toHaveAttribute('aria-pressed', 'false')
+  // A tap on it, after, marks it as before.
+  await cell.click()
+  await expect(cell).toHaveAttribute('aria-pressed', 'true')
+})

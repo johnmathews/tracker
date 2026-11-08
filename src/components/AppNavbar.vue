@@ -22,20 +22,23 @@ import { useFullscreen } from '@/composables/fullscreen'
 
 const props = defineProps<{
   /**
-   * On the planner's screens the bar is out of sight until it is wanted (Header card, K25): it
-   * lies over the top of the screen, reached by the top edge, the handle or focus.
+   * On the planner's screens the bar is out of sight (Header card, K25, K80): a long press or
+   * the handle opens Edit plan, where it is in view, and focus floats it over the screen.
    */
   overlay?: boolean
 }>()
 
+const store = usePlannerStore()
 const header = ref<HTMLElement | null>(null)
-const reveal = useBarReveal(
-  header,
-  toRef(() => props.overlay),
-)
+// A long press toggles Edit plan, on the screens and in Edit plan; the handle opens it (K80).
+const reveal = useBarReveal(header, {
+  overlay: toRef(() => props.overlay),
+  holdable: toRef(() => props.overlay || store.configMode),
+  onLongPress: () => store.setConfigMode(!store.configMode),
+  onHandle: () => store.setConfigMode(true),
+})
 const fullscreen = useFullscreen()
 
-const store = usePlannerStore()
 const session = useSessionStore()
 const otherWeek = computed(() => store.weekKey !== store.currentWeekKey)
 
@@ -84,27 +87,21 @@ function skipToToday(): void {
   "Skip to today" comes first in the tab order (F15): hidden until it has focus, then shown over
   the wordmark with the focus ring; it puts focus on today's cell, past the Header.
 
-  With `overlay` (the planner's screens) the bar is fixed above the top edge and slides down over
-  the screen when wanted (Header card, Out of sight): a 14px strip along the top for a pointer
-  that can hover, a handle at the top centre wherever a finger may be, and focus anywhere inside
-  it (so it stays reachable by Tab). It is moved out of view, never hidden, so its controls stay
-  in the Tab order.
+  With `overlay` (the planner's screens) the bar is fixed above the top edge (Header card, Out of
+  sight). A long press anywhere, or the handle at the top centre wherever a finger may be, opens
+  Edit plan (K80), where the bar is sticky and the page sits below it, so it covers nothing; a
+  long press there closes it again. Focus inside the bar slides it down over the screen, so it
+  stays reachable by Tab: it is moved out of view, never hidden.
 -->
 <template>
   <template v-if="overlay">
-    <div
-      aria-hidden="true"
-      class="fixed inset-x-0 top-0 z-20 hidden h-3.5 [@media(any-hover:hover)]:block"
-      data-noprint
-      @pointerenter="reveal.onStripEnter"
-    />
     <!-- The handle (Header card): a 40 × 5px pill in an 88 × 44px target. A raw button, since
-         no primitive draws a handle; it is named, and pressing it toggles the bar. It is for a
-         finger, so it stays out of the Tab order: the keyboard brings the bar by focus. -->
+         no primitive draws a handle; it is named for what it does, opening Edit plan (K80). It
+         is for a finger, so it stays out of the Tab order: the keyboard brings the bar by focus,
+         and the bar's own Edit plan button. -->
     <button
       type="button"
-      aria-label="Show controls"
-      :aria-expanded="reveal.shown.value"
+      aria-label="Edit plan"
       tabindex="-1"
       data-slot="bar-handle"
       class="fixed top-0 left-1/2 z-10 hidden h-11 w-22 -translate-x-1/2 touch-none [@media(any-pointer:coarse)]:block"
@@ -123,15 +120,11 @@ function skipToToday(): void {
     :class="
       overlay
         ? [
-            'fixed inset-x-0 focus-within:translate-y-0 focus-within:shadow-overlay motion-safe:transition-transform motion-safe:duration-160 motion-safe:ease-out',
-            reveal.shown.value ? 'translate-y-0 shadow-overlay' : '-translate-y-[110%]',
+            'fixed inset-x-0 -translate-y-[110%] focus-within:translate-y-0 focus-within:shadow-overlay motion-safe:transition-transform motion-safe:duration-160 motion-safe:ease-out',
           ]
         : 'sticky'
     "
-    :data-shown="overlay ? reveal.shown.value : undefined"
     data-noprint
-    @pointerenter="reveal.onBarEnter"
-    @pointerleave="reveal.onBarLeave"
   >
     <div class="absolute top-1.5 left-2 z-30">
       <!-- not-sr-only zeroes the link's padding, so the span carries it. -->

@@ -775,13 +775,22 @@ tall or less).
   width. Each day cell is a size container that `DayMark fill` fills (86%, up to 128px). Folded,
   each `TrackerRow` sets `--line-row` and `--box-row`, the two grid lines it takes. There is no
   band for today (K36).
-- **The navbar.** `useBarReveal` (`src/composables/barReveal.ts`) shows it from a 14px strip at the
-  top edge (a pointer that can hover), the handle button (wherever a coarse pointer is present;
-  out of the Tab order), and `focus-within`; it hides on leaving, Escape or a press elsewhere. The
-  bar is moved out of view with a transform, never hidden, so its controls stay reachable by Tab.
+- **The navbar.** `useBarReveal` (`src/composables/barReveal.ts`) listens on the document for a
+  long press (K79: 500ms, within 10px, primary button). `AppNavbar` turns it into a toggle of
+  Edit plan, from the screens and from Edit plan alike, and the handle button (wherever a coarse
+  pointer is present; out of the Tab order) into Edit plan on (K80). Edit plan's bar is sticky, so
+  the page sits below it and it covers nothing. The only floating bar left is `focus-within`,
+  which slides the fixed bar over the screens for the keyboard; Escape takes focus out of it. A
+  long press arms a capture-phase `click` guard on `window` that swallows the click ending it, so
+  the held cell or button is not pressed; the guard lapses on the next `pointerdown`, any key, a
+  window `blur` or a hidden page, or 300ms after `pointerup`, since a touch hold may end with no
+  click. A finger's or pen's hold has its `contextmenu` prevented. A press in a field, a popover,
+  `[role="dialog"]` or the bar starts no hold, and `html.planner-screens` turns off text selection
+  and the iOS callout outside fields, popovers and dialogs. The bar is moved out of view with a
+  transform, never hidden, so its controls stay reachable by Tab.
 - **The arrows between the screens** (K42). A chevron IconButton, "Go to Food", at the foot of the
   Exercises screen, and one pointing up, "Back to Exercises", 48px from the top of Food, below the
-  bar's strip and handle. Each sprints to the other screen's top with `sprintToScreen`. A short
+  bar's handle. Each sprints to the other screen's top with `sprintToScreen`. A short
   screen leaves them out.
 - **Settings and Ask** are pages of their own (`#/settings`, `#/ask`), outside the screens and with
   no bar (K52): each starts with "Back to the week", and leaving one returns focus to the bar button

@@ -117,7 +117,7 @@
   color: var(--ink-secondary); cursor: pointer; }
 .fs .cue:hover { background: var(--tile); color: var(--ink); }
 .fs .cue svg { width: 24px; height: 24px; }
-/* On Food the arrow sits 48px from the top, below the bar's strip and handle. */
+/* On Food the arrow sits 48px from the top, below the bar's handle. */
 .fs .cue-up { position: absolute; top: 48px; left: 50%; translate: -50% 0; margin: 0; }
 
 /* ---- The bar: the Header card, out of sight until it is wanted. ---- */
@@ -127,6 +127,11 @@
   box-shadow: var(--shadow-overlay); transform: translateY(-105%); visibility: hidden; }
 @media (prefers-reduced-motion: no-preference) { .fs .bar { transition: transform 160ms ease-out, visibility 160ms; } }
 .fs[data-bar="shown"] .bar, .fs .bar:focus-within { transform: none; visibility: visible; }
+/* Edit plan, from a long press or the handle (K80): the bar sits above the page, which moves down
+   under it, so it covers nothing. Edit plan's own rows are the app's; this shows where the bar goes. */
+.fs[data-bar="docked"] .bar { transform: none; visibility: visible; box-shadow: none; }
+.fs[data-bar="docked"] .scroller { top: var(--docked-bar, 57px); }
+.fs[data-bar="docked"] .grab { display: none; }
 .fs .bar .wordmark { display: block; height: 20px; width: auto; fill: var(--ink); justify-self: start; }
 .fs .bar .wordmark { height: 20px; }
 .fs .bar .start { justify-self: start; }
@@ -162,9 +167,8 @@
 .fs .seg button { height: 42px; padding: 0 16px; border: 0; border-radius: var(--radius-sm); background: transparent; font: 600 14px/20px var(--font-sans); cursor: pointer; }
 .fs .seg button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
 
-/* The pointer's way in: a strip along the top edge (a desktop, a trackpad on an iPad). */
-.fs .hot { position: absolute; z-index: 19; top: 0; left: 0; right: 0; height: 14px; }
-.fs[data-input="touch"] .hot { display: none; }
+/* Every way in: a long press anywhere (K79). A held press selects no text and opens no callout. */
+.fs { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 /* The finger's way in: a handle at the top centre. Press it, or pull it down. */
 .fs .grab { position: absolute; z-index: 19; top: 0; left: 50%; transform: translateX(-50%); display: none;
   width: 88px; height: 28px; padding: 0; border: 0; background: transparent; cursor: pointer; touch-action: none; }
@@ -234,11 +238,11 @@
 </style>
 </head>
 <body>
-<p class="variant label">A 1280×800 desktop, at rest. Move to the top edge for the bar; scroll for Food; press a box to mark it.</p>
+<p class="variant label">A 1280×800 desktop, at rest. Press and hold anywhere for Edit plan and its bar, and again to go back; scroll for Food; press a box to mark it.</p>
 <div class="device" data-w="1280" data-h="800" data-input="mouse"></div>
 <div class="gap"></div>
-<p class="variant label">A 390×844 phone held upright, folded, the bar called up with the handle</p>
-<div class="device phone" data-w="390" data-h="844" data-input="touch" data-bar="shown"></div>
+<p class="variant label">A 390×844 phone held upright, folded, Edit plan opened with the handle: the bar above the week</p>
+<div class="device phone" data-w="390" data-h="844" data-input="touch" data-bar="docked"></div>
 <script>
 // The app's own drawings (src/components/ui/day-mark, the Header card), for the mockup.
 // Generated from the source; not hand-edited.
@@ -248,7 +252,7 @@ window.FP_ART = {"box": "M6.5 4.8C12.5 4.3 23.5 4.6 30.2 4.9C31.4 5 31.6 6.1 31.
 // into el: the bar, then Exercises and Food, a screen each. Options:
 //   option  'a' | 'b' | 'c'   how the bar and the titles behave (the mockup's question 1)
 //   phone   'p1' | 'p2'       a phone held upright: today, or the week narrow (question 2)
-//   input   'mouse' | 'touch' how the bar is reached: the top edge, or the handle
+//   input   'mouse' | 'touch' how Edit plan is reached: a long press, and on touch the handle too
 //   start   'exercises' | 'food'   bar  'shown'   for the stills on the mockup page
 // The week is John's own from his screenshots: 19–25 October, today Sunday, three a day.
 (() => {
@@ -401,7 +405,7 @@ window.FP_ART = {"box": "M6.5 4.8C12.5 4.3 23.5 4.6 30.2 4.9C31.4 5 31.6 6.1 31.
     const ex = state.ex, food = state.food
     const screen = state.layout === 'narrow' ? (state.phone === 'p1' && state.device === 'phone' ? todayScreen : narrowWeek) : wideScreen
     const dots = `<nav class="dots" aria-label="Screens"><button type="button" data-go="exercises" aria-label="Exercises"><span></span></button><button type="button" data-go="food" aria-label="Food"><span></span></button></nav>`
-    state.el.innerHTML = `<div class="hot" aria-hidden="true"></div><button type="button" class="grab" aria-label="Show the menu"><span></span></button>${bar(state)}<div class="scroller">${screen(state, 'exercises', ex)}${screen(state, 'food', food)}</div>${dots}`
+    state.el.innerHTML = `<button type="button" class="grab" aria-label="Show the menu"><span></span></button>${bar(state)}<div class="scroller">${screen(state, 'exercises', ex)}${screen(state, 'food', food)}</div>${dots}`
     syncDots(state)
   }
 
@@ -422,6 +426,13 @@ window.FP_ART = {"box": "M6.5 4.8C12.5 4.3 23.5 4.6 30.2 4.9C31.4 5 31.6 6.1 31.
     el.dataset.input = opts.input || (matchMedia('(hover: none)').matches ? 'touch' : 'mouse')
     let pinned = opts.bar === 'shown'
     if (pinned) el.dataset.bar = 'shown'
+    // Edit plan (K80): the bar docked above the page, Edit plan pressed.
+    const syncDock = () => {
+      const docked = el.dataset.bar === 'docked'
+      el.querySelector('.bar [aria-pressed]')?.setAttribute('aria-pressed', String(docked))
+      if (docked) el.style.setProperty('--docked-bar', `${el.querySelector('.bar').offsetHeight}px`)
+    }
+    const dock = (on) => { if (on) el.dataset.bar = 'docked'; else delete el.dataset.bar; syncDock() }
 
     const measure = () => {
       const w = el.offsetWidth, h = el.offsetHeight
@@ -436,6 +447,7 @@ window.FP_ART = {"box": "M6.5 4.8C12.5 4.3 23.5 4.6 30.2 4.9C31.4 5 31.6 6.1 31.
       state.layout = layout; state.short = short
       el.dataset.layout = layout
       render(state)
+      syncDock()
       if (onFood) go('food', false)
     }
     const go = (section, smooth = true) => {
@@ -443,36 +455,53 @@ window.FP_ART = {"box": "M6.5 4.8C12.5 4.3 23.5 4.6 30.2 4.9C31.4 5 31.6 6.1 31.
       el.querySelector('.scroller').scrollTo({ top: target.offsetTop, behavior: smooth && !matchMedia('(prefers-reduced-motion: reduce)').matches ? 'smooth' : 'auto' })
     }
 
-    // The bar: shown while the pointer is at the top edge or on the bar, or while focus is in it;
-    // on touch, by the handle, and hidden again by a press anywhere else.
-    let hideTimer
+    // The bar: a long press anywhere, or the handle, opens Edit plan with the bar docked above the
+    // page (K80), and another long press goes back. Focus alone floats it over the screen.
+    let hideTimer, hold = null, swallow = false
+    if (opts.bar === 'docked') requestAnimationFrame(() => dock(true))
     const show = () => { clearTimeout(hideTimer); el.dataset.bar = 'shown' }
     const hideSoon = (ms = 500) => {
-      if (state.option === 'c' || pinned) return
+      if (state.option === 'c' || pinned || el.dataset.bar === 'docked') return
       clearTimeout(hideTimer)
       hideTimer = setTimeout(() => { if (!el.querySelector('.bar, .side')?.matches(':focus-within')) delete el.dataset.bar }, ms)
     }
     el.addEventListener('pointerover', (e) => {
       if (e.pointerType === 'touch') return
-      if (e.target.closest('.hot, .bar, .side')) show()
+      if (el.dataset.bar === 'shown' && e.target.closest('.bar, .side')) show()
     })
     el.addEventListener('pointerout', (e) => {
       if (e.pointerType === 'touch') return
-      if (e.target.closest('.hot, .bar, .side') && !e.relatedTarget?.closest?.('.hot, .bar, .side')) { pinned = false; hideSoon() }
+      if (e.target.closest('.bar, .side') && !e.relatedTarget?.closest?.('.bar, .side')) { pinned = false; hideSoon() }
     })
     el.addEventListener('pointerleave', () => { if (pinned) { pinned = false; hideSoon(900) } })
     el.addEventListener('focusout', () => hideSoon(200))
-    el.addEventListener('keydown', (e) => { if (e.key === 'Escape') { pinned = false; delete el.dataset.bar } })
+    el.addEventListener('keydown', (e) => { if (e.key === 'Escape' && el.dataset.bar !== 'docked') { pinned = false; delete el.dataset.bar } })
     let pull
+    // A long press: held 500ms within 10px, the primary button. The click that ends it is
+    // swallowed, so the box held is not marked.
+    const endHold = () => { if (hold) clearTimeout(hold.timer); hold = null }
     el.addEventListener('pointerdown', (e) => {
+      swallow = false
+      endHold()
       if (e.target.closest('.grab')) { pull = e.clientY; return }
-      if ((el.dataset.input === 'touch' || e.target.closest('.scrim')) && !e.target.closest('.bar, .side')) { pinned = false; hideSoon(0) }
+      if (e.target.closest('.bar, .side')) return
+      if (e.button === 0 && e.isPrimary !== false) {
+        hold = { x: e.clientX, y: e.clientY, timer: setTimeout(() => { hold = null; swallow = true; dock(el.dataset.bar !== 'docked') }, 500) }
+      }
+      if (el.dataset.input === 'touch' || el.dataset.bar === 'shown' || e.target.closest('.scrim')) { pinned = false; hideSoon(0) }
     })
-    el.addEventListener('pointermove', (e) => { if (pull != null && e.clientY - pull > 12) { show(); pull = null } })
-    el.addEventListener('pointerup', () => { pull = null })
+    el.addEventListener('pointermove', (e) => {
+      if (pull != null && e.clientY - pull > 12) { dock(true); pull = null }
+      if (hold && Math.hypot(e.clientX - hold.x, e.clientY - hold.y) > 10) endHold()
+    })
+    el.addEventListener('pointerup', () => { pull = null; endHold(); if (swallow) setTimeout(() => { swallow = false }, 300) })
+    el.addEventListener('pointercancel', () => { pull = null; endHold() })
+    el.addEventListener('contextmenu', (e) => { if (e.pointerType === 'touch' || el.dataset.input === 'touch') e.preventDefault() })
+    el.addEventListener('click', (e) => { if (swallow) { swallow = false; e.preventDefault(); e.stopImmediatePropagation() } }, true)
 
     el.addEventListener('click', (e) => {
-      if (e.target.closest('.grab')) { if (el.dataset.bar === 'shown') delete el.dataset.bar; else show(); return }
+      if (e.target.closest('.grab')) { dock(true); return }
+      if (e.target.closest('.bar [aria-pressed]')) { dock(el.dataset.bar !== 'docked'); return }
       if (e.target.closest('[data-action="fullscreen"]')) {
         if (document.fullscreenElement) document.exitFullscreen?.()
         else el.requestFullscreen?.().catch(() => {})
@@ -490,6 +519,7 @@ window.FP_ART = {"box": "M6.5 4.8C12.5 4.3 23.5 4.6 30.2 4.9C31.4 5 31.6 6.1 31.
       row.marks[c] = cycle[(cycle.indexOf(row.marks[c]) + 1) % cycle.length]
       const sc = el.querySelector('.scroller'), top = sc.scrollTop
       render(state)
+      syncDock()
       el.querySelector('.scroller').scrollTop = top
       el.querySelector(`.mark[data-s="${btn.dataset.s}"][data-r="${btn.dataset.r}"][data-c="${c}"]`)?.focus({ preventScroll: true })
     })

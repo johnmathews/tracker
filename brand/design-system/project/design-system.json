@@ -197,9 +197,9 @@
   ],
   "lastChange": {
     "by": "John Mathews",
-    "at": "2026-11-03T18:23:50Z",
+    "at": "2026-11-08T20:59:13Z",
     "via": "Claude Code",
-    "note": "Connections (K73-K78): two new cards, ConnectPage (the consent screen Claude sends you to) and ConnectionsSection (Settings › Connections); a --font-mono token for tokens and addresses only; RadioCard's optional one-line description; notes in Banner, InlineMessage, SettingsPage and foundations."
+    "note": "A long press opens Edit plan (K79, K80): the Header's Out of sight rules lose the top-edge strip and the floating bar for a long press, the handle opens Edit plan, and only focus floats the bar; the PlannerScreen card and its preview follow."
   },
   "layout": "files",
   "libraries": [],

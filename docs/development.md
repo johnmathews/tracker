@@ -420,10 +420,13 @@ listed in [api.md](api.md) §10):
   sends email, the same words whatever the answer, a malformed email, one request however often
   it's pressed) and confirming an email (the banner, Send it again, too soon, already confirmed,
   the link while signed in).
-- `src/components/__tests__/PlannerScreen.spec.ts`: the planner's screens in the mounted app (K24–K27):
-  the `planner-screens` class and Edit plan's sticky bar, the bar from the top edge (a pointer,
-  not a finger), the handle's press and pull, a press elsewhere and Escape hiding it, and the arrows
-  between the screens, named for where they go (K42).
+- `src/components/__tests__/PlannerScreen.spec.ts`: the planner's screens in the mounted app
+  (K24–K27, K79, K80): the `planner-screens` class and Edit plan's sticky bar, no top-edge strip,
+  a long press turning Edit plan on and a second one off (by mouse or finger; not when let go
+  early, moved, cancelled, held with another button, or in a field, popover, dialog or the bar),
+  the held day cell or button left unpressed, a later click not swallowed, a finger's or pen's
+  context menu kept back, the handle's press and pull opening Edit plan, Escape taking focus out
+  of the floating bar, and the arrows between the screens, named for where they go (K42).
 - `src/components/__tests__/DietSection.spec.ts`: the diet section in the mounted app: default
   foods, ticking (totals checked in the store), shared week navigation, add and remove (after
   a confirmation) and the goal set in the Edit food dialog (in config mode), cross-tab sync.

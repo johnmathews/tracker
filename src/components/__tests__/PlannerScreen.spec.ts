@@ -1,12 +1,12 @@
 /**
- * The planner's screens (PlannerScreen and Header cards, K24–K27): the bar out of sight until
- * wanted, the way on to Food, and the ordinary sticky bar in Edit plan, mounted in the real app.
+ * The planner's screens (PlannerScreen and Header cards, K24–K27, K79, K80): the bar out of
+ * sight until a long press opens Edit plan, the way on to Food, and the ordinary sticky bar in Edit plan, mounted in the real app.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import App from '@/App.vue'
-import { HIDE_AFTER_MS } from '@/composables/barReveal'
+import { HOLD_MS } from '@/composables/barReveal'
 import { signedIn } from '@/lib/__tests__/signedIn'
 
 const NOW = new Date(2026, 9, 23, 18, 0)
@@ -22,16 +22,61 @@ function mountApp(): VueWrapper {
 }
 
 const bar = () => wrapper.get('[data-slot="bar"]')
-const shown = () => bar().attributes('data-shown')
 const handle = () => wrapper.get('[data-slot="bar-handle"]')
-/** The strip along the top edge: the first child of the app, before the handle. */
-const strip = () => wrapper.get('div[aria-hidden="true"].fixed')
-const mouse = { pointerType: 'mouse' }
 const finger = { pointerType: 'touch' }
+/** Edit plan is on: its button is pressed, and the bar is the sticky one in the page (K27, K80). */
+const editing = () =>
+  wrapper.get('[data-testid="edit-plan-button"]').attributes('aria-pressed') === 'true'
+const screens = () => document.documentElement.classList.contains('planner-screens')
 /** A pointer event at a height on the screen (trigger can't set clientY). */
 async function press(el: Element, type: string, clientY: number): Promise<void> {
   el.dispatchEvent(new MouseEvent(type, { clientY, bubbles: true }))
   await flushPromises()
+}
+/** The first day cell of the week, a button that toggles its mark on click. */
+const dayCell = () => wrapper.get('[data-slot="day-mark-button"]')
+
+type PointerInit = {
+  x?: number
+  y?: number
+  button?: number
+  pointerType?: string
+  pointerId?: number
+  isPrimary?: boolean
+}
+/** A pointer event anywhere on the page: jsdom has no PointerEvent, so a MouseEvent stands in. */
+function pointer(el: EventTarget, type: string, init: PointerInit = {}): MouseEvent {
+  const ev = new MouseEvent(type, {
+    clientX: init.x ?? 200,
+    clientY: init.y ?? 300,
+    button: init.button ?? 0,
+    bubbles: true,
+    cancelable: true,
+  })
+  Object.defineProperty(ev, 'pointerType', { value: init.pointerType ?? 'mouse' })
+  if (init.pointerId !== undefined)
+    Object.defineProperty(ev, 'pointerId', { value: init.pointerId })
+  if (init.isPrimary !== undefined)
+    Object.defineProperty(ev, 'isPrimary', { value: init.isPrimary })
+  el.dispatchEvent(ev)
+  return ev
+}
+/** Holds a press on `el` for `ms`, and leaves it held. */
+async function hold(el: EventTarget, ms: number, init: PointerInit = {}): Promise<void> {
+  pointer(el, 'pointerdown', init)
+  vi.advanceTimersByTime(ms)
+  await flushPromises()
+}
+/** Lets go of a press: pointerup, then the click the browser sends after it. */
+async function release(el: Element, init: PointerInit = {}): Promise<void> {
+  pointer(el, 'pointerup', init)
+  el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+  await flushPromises()
+}
+/** A whole long press on the page: held, then let go. */
+async function longPress(init: PointerInit = {}): Promise<void> {
+  await hold(document.body, HOLD_MS, init)
+  await release(document.body as unknown as Element, init)
 }
 
 describe('the planner’s screens (K24–K27)', () => {
@@ -49,111 +94,243 @@ describe('the planner’s screens (K24–K27)', () => {
 
   it('marks <html> for the screens, and lifts the mark in Edit plan, where the bar is sticky', async () => {
     mountApp()
-    expect(document.documentElement.classList.contains('planner-screens')).toBe(true)
-    expect(shown()).toBe('false')
+    expect(screens()).toBe(true)
+    expect(bar().classes()).toContain('fixed')
     await wrapper.get('[data-testid="edit-plan-button"]').trigger('click')
-    expect(document.documentElement.classList.contains('planner-screens')).toBe(false)
-    expect(bar().attributes('data-shown')).toBeUndefined()
+    expect(screens()).toBe(false)
+    expect(bar().classes()).toContain('sticky')
     expect(wrapper.find('[data-slot="bar-handle"]').exists()).toBe(false)
   })
 
-  it('brings the bar from the top edge for a pointer, not a finger, and hides it after leaving', async () => {
+  it('has no strip along the top edge, and floats the bar only for focus (K79, K80)', () => {
     mountApp()
-    await strip().trigger('pointerenter', finger)
-    expect(shown()).toBe('false')
-    await strip().trigger('pointerenter', mouse)
-    expect(shown()).toBe('true')
-    // Back on the bar before the delay runs out keeps it.
-    await bar().trigger('pointerleave', mouse)
-    await bar().trigger('pointerenter', mouse)
-    vi.advanceTimersByTime(HIDE_AFTER_MS)
-    await flushPromises()
-    expect(shown()).toBe('true')
-    // A finger leaving does nothing; the pointer leaving hides it after the delay.
-    await bar().trigger('pointerleave', finger)
-    vi.advanceTimersByTime(HIDE_AFTER_MS)
-    await flushPromises()
-    expect(shown()).toBe('true')
-    await bar().trigger('pointerleave', mouse)
-    vi.advanceTimersByTime(HIDE_AFTER_MS)
-    await flushPromises()
-    expect(shown()).toBe('false')
+    expect(wrapper.find('div[aria-hidden="true"].fixed').exists()).toBe(false)
+    expect(bar().classes()).toContain('-translate-y-[110%]')
+    expect(bar().classes()).toContain('focus-within:translate-y-0')
   })
 
-  it('ignores the pointer entering the bar while it is out of sight, and keeps it while focus is inside', async () => {
+  it('turns Edit plan on with a long press, by mouse or finger, and off with another (K80)', async () => {
     mountApp()
-    await bar().trigger('pointerenter', mouse)
-    expect(shown()).toBe('false')
-    await bar().trigger('pointerenter', finger)
-    await strip().trigger('pointerenter', mouse)
-    ;(wrapper.get('[data-testid="settings-button"]').element as HTMLElement).focus()
-    await bar().trigger('pointerleave', mouse)
-    vi.advanceTimersByTime(HIDE_AFTER_MS)
+    await hold(document.body, HOLD_MS - 1)
+    expect(editing()).toBe(false)
+    vi.advanceTimersByTime(1)
     await flushPromises()
-    expect(shown()).toBe('true')
+    expect(editing()).toBe(true)
+    expect(screens()).toBe(false)
+    await release(document.body as unknown as Element)
+    // A press is just a press in Edit plan; a finger held as long turns it off.
+    pointer(document.body, 'pointerdown', finger)
+    pointer(document.body, 'pointerup', finger)
+    vi.advanceTimersByTime(HOLD_MS)
+    await flushPromises()
+    expect(editing()).toBe(true)
+    await longPress(finger)
+    expect(editing()).toBe(false)
+    expect(screens()).toBe(true)
   })
 
-  it('toggles the bar with the handle, and shows it when the handle is pulled down', async () => {
+  it('does not count a press let go, moved, cancelled or made with another button', async () => {
+    mountApp()
+    // Let go early.
+    pointer(document.body, 'pointerdown')
+    vi.advanceTimersByTime(HOLD_MS - 100)
+    pointer(document.body, 'pointerup')
+    vi.advanceTimersByTime(HOLD_MS)
+    await flushPromises()
+    expect(editing()).toBe(false)
+    // Moved a little still counts; moved further does not (a scroll or a swipe).
+    pointer(document.body, 'pointerdown', { x: 200, y: 300 })
+    pointer(document.body, 'pointermove', { x: 206, y: 306 })
+    pointer(document.body, 'pointermove', { x: 200, y: 312 })
+    vi.advanceTimersByTime(HOLD_MS)
+    await flushPromises()
+    expect(editing()).toBe(false)
+    // Cancelled by the browser, as a touch scroll does.
+    pointer(document.body, 'pointerdown', finger)
+    pointer(document.body, 'pointercancel', finger)
+    vi.advanceTimersByTime(HOLD_MS)
+    await flushPromises()
+    expect(editing()).toBe(false)
+    // A right click held.
+    await hold(document.body, HOLD_MS, { button: 2 })
+    expect(editing()).toBe(false)
+    // Within the slop, it counts.
+    pointer(document.body, 'pointerup')
+    pointer(document.body, 'pointerdown', { x: 200, y: 300 })
+    pointer(document.body, 'pointermove', { x: 206, y: 306 })
+    vi.advanceTimersByTime(HOLD_MS)
+    await flushPromises()
+    expect(editing()).toBe(true)
+  })
+
+  it('never marks the day cell that was held, and the next tap marks it', async () => {
+    mountApp()
+    expect(dayCell().attributes('aria-pressed')).toBe('false')
+    await hold(dayCell().element, HOLD_MS)
+    expect(editing()).toBe(true)
+    await release(dayCell().element)
+    // Back to the week, by the Edit plan button, to tap the cell.
+    await wrapper.get('[data-testid="edit-plan-button"]').trigger('click')
+    expect(dayCell().attributes('aria-pressed')).toBe('false')
+    pointer(dayCell().element, 'pointerdown')
+    await release(dayCell().element)
+    expect(dayCell().attributes('aria-pressed')).toBe('true')
+  })
+
+  it('never presses the button held in Edit plan to leave it', async () => {
+    mountApp()
+    await longPress()
+    // Hold an item's edit button: Edit plan goes off, and its dialog never opens.
+    const editPushUps = wrapper.get('button[aria-label="Edit Push-ups"]').element
+    await hold(editPushUps, HOLD_MS)
+    expect(editing()).toBe(false)
+    // Leaving Edit plan takes the button away, so the release lands on what is under the
+    // pointer now: the week. That click is swallowed too.
+    expect(editPushUps.isConnected).toBe(false)
+    const under = dayCell().element
+    await release(under)
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+    expect(under.getAttribute('aria-pressed')).toBe('false')
+  })
+
+  it('swallows only the click that ends the long press, not a later one', async () => {
+    mountApp()
+    // A finger's long press may end with no click at all.
+    await hold(dayCell().element, HOLD_MS, finger)
+    pointer(dayCell().element, 'pointerup', finger)
+    vi.advanceTimersByTime(1000)
+    await flushPromises()
+    // A click with no press first, as Enter on a focused button sends, still goes through.
+    await wrapper.get('[data-testid="edit-plan-button"]').trigger('click')
+    expect(editing()).toBe(false)
+    await dayCell().trigger('click')
+    expect(dayCell().attributes('aria-pressed')).toBe('true')
+  })
+
+  it('keeps the context menu from a finger’s long press, not from a mouse', async () => {
+    mountApp()
+    pointer(document.body, 'pointerdown', finger)
+    const touchMenu = pointer(document.body, 'contextmenu', finger)
+    expect(touchMenu.defaultPrevented).toBe(true)
+    pointer(document.body, 'pointerup', finger)
+    pointer(document.body, 'pointerdown', { button: 2 })
+    const mouseMenu = pointer(document.body, 'contextmenu', { button: 2 })
+    expect(mouseMenu.defaultPrevented).toBe(false)
+    pointer(document.body, 'pointerup', { button: 2 })
+    // Android sends the menu as the hold is reached, or after it: still kept back.
+    await hold(document.body, HOLD_MS, finger)
+    expect(editing()).toBe(true)
+    expect(pointer(document.body, 'contextmenu', finger).defaultPrevented).toBe(true)
+    pointer(document.body, 'pointerup', finger)
+    // A pen's hold is a right click on Windows: its menu is kept back too.
+    pointer(document.body, 'pointerdown', { pointerType: 'pen' })
+    expect(pointer(document.body, 'contextmenu', { pointerType: 'pen' }).defaultPrevented).toBe(
+      true,
+    )
+  })
+
+  it('swallows no click once the window has lost the press, or a key was pressed', async () => {
+    mountApp()
+    // The window loses focus mid-hold, after the hold came: no pointerup arrives.
+    await hold(dayCell().element, HOLD_MS)
+    window.dispatchEvent(new Event('blur'))
+    await wrapper.get('[data-testid="edit-plan-button"]').trigger('click')
+    expect(editing()).toBe(false)
+    // A key pressed after a long press: its click goes through.
+    await hold(document.body, HOLD_MS)
+    expect(editing()).toBe(true)
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+    await wrapper.get('[data-testid="edit-plan-button"]').trigger('click')
+    expect(editing()).toBe(false)
+  })
+
+  it('follows the finger that started the hold, and never a second one', async () => {
+    mountApp()
+    const one = { pointerType: 'touch', pointerId: 1, isPrimary: true }
+    const two = { pointerType: 'touch', pointerId: 2, isPrimary: false }
+    // A second finger is never a hold of its own.
+    await hold(document.body, HOLD_MS, two)
+    expect(editing()).toBe(false)
+    pointer(document.body, 'pointerup', two)
+    // The first finger's hold ignores the second one moving and lifting.
+    pointer(document.body, 'pointerdown', one)
+    pointer(document.body, 'pointermove', { ...two, x: 400, y: 600 })
+    pointer(document.body, 'pointerup', two)
+    vi.advanceTimersByTime(HOLD_MS)
+    await flushPromises()
+    expect(editing()).toBe(true)
+  })
+
+  it('drops a hold when the page is hidden, and keeps it while the page shows', async () => {
+    mountApp()
+    const visibility = vi.spyOn(document, 'visibilityState', 'get')
+    pointer(document.body, 'pointerdown')
+    visibility.mockReturnValue('visible')
+    document.dispatchEvent(new Event('visibilitychange'))
+    visibility.mockReturnValue('hidden')
+    document.dispatchEvent(new Event('visibilitychange'))
+    vi.advanceTimersByTime(HOLD_MS)
+    await flushPromises()
+    expect(editing()).toBe(false)
+  })
+
+  it('takes no press in a field, a popover, a dialog or the bar for a hold', async () => {
+    mountApp()
+    const field = document.createElement('input')
+    const pop = document.createElement('div')
+    pop.dataset.slot = 'popover-content'
+    const dialog = document.createElement('div')
+    dialog.setAttribute('role', 'dialog')
+    document.body.append(field, pop, dialog)
+    for (const el of [field, pop, dialog, bar().element]) {
+      await hold(el, HOLD_MS)
+      expect(editing()).toBe(false)
+      pointer(el, 'pointerup')
+    }
+    // In Edit plan too: holding a field to select its text keeps Edit plan on.
+    await longPress()
+    await hold(field, HOLD_MS)
+    expect(editing()).toBe(true)
+    pointer(field, 'pointerup')
+    field.remove()
+    pop.remove()
+    dialog.remove()
+  })
+
+  it('opens Edit plan with the handle, pressed or pulled down (K80)', async () => {
     mountApp()
     expect(handle().attributes('tabindex')).toBe('-1')
+    expect(handle().attributes('aria-label')).toBe('Edit plan')
     await handle().trigger('click')
-    expect(shown()).toBe('true')
-    expect(handle().attributes('aria-expanded')).toBe('true')
-    await handle().trigger('click')
-    expect(shown()).toBe('false')
+    expect(editing()).toBe(true)
+    // Edit plan has no handle: the bar is in view.
+    expect(wrapper.find('[data-slot="bar-handle"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="edit-plan-button"]').trigger('click')
     await press(handle().element, 'pointerdown', 0)
     await press(handle().element, 'pointermove', 6)
-    expect(shown()).toBe('false')
+    expect(editing()).toBe(false)
     await press(handle().element, 'pointermove', 20)
-    expect(shown()).toBe('true')
-    // A move without a press first does nothing more.
-    await press(handle().element, 'pointermove', 40)
-    expect(shown()).toBe('true')
+    expect(editing()).toBe(true)
   })
 
-  it('hides the bar on a press elsewhere, but not on one inside it', async () => {
+  it('takes focus out of the floating bar on Escape, and leaves Escape alone in Edit plan', async () => {
     mountApp()
-    await handle().trigger('click')
-    document
-      .querySelector('[data-slot="bar"] button')!
-      .dispatchEvent(new Event('pointerdown', { bubbles: true }))
-    vi.advanceTimersByTime(0)
-    await flushPromises()
-    expect(shown()).toBe('true')
-    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }))
-    vi.advanceTimersByTime(0)
-    await flushPromises()
-    expect(shown()).toBe('false')
-    // A press while it is out of sight changes nothing.
-    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }))
-    expect(shown()).toBe('false')
-  })
-
-  it('hides the bar on Escape, taking focus out of it', async () => {
-    mountApp()
-    await handle().trigger('click')
     const settings = wrapper.get('[data-testid="settings-button"]').element as HTMLElement
     settings.focus()
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
-    expect(shown()).toBe('true')
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await flushPromises()
-    expect(shown()).toBe('false')
     expect(document.activeElement).not.toBe(settings)
-    // Escape with focus elsewhere just hides it.
-    await handle().trigger('click')
+    // Escape with focus outside the bar leaves that focus alone; another key does nothing.
+    ;(dayCell().element as HTMLElement).focus()
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }))
+    expect(document.activeElement).toBe(dayCell().element)
+    await wrapper.get('[data-testid="edit-plan-button"]').trigger('click')
+    const edit = wrapper.get('[data-testid="edit-plan-button"]').element as HTMLElement
+    edit.focus()
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await flushPromises()
-    expect(shown()).toBe('false')
-  })
-
-  it('leaves Escape and presses alone in Edit plan', async () => {
-    mountApp()
-    await handle().trigger('click')
-    await wrapper.get('[data-testid="edit-plan-button"]').trigger('click')
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }))
-    expect(bar().attributes('data-shown')).toBeUndefined()
+    expect(editing()).toBe(true)
   })
 
   it('sprints between the screens from the arrows, named for where they go (K42)', async () => {

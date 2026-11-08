@@ -50,8 +50,8 @@
   after it that you haven't changed yet.
 - `‹` / `›` move between weeks for both sections; past weeks persist. **Print…** produces a
   sheet in the light theme's colours on white paper.
-- **One screen per section.** The week fills the screen, and the bar stays out of sight until the
-  pointer reaches the top edge (or the handle at the top centre is pressed). Scrolling brings Food,
+- **One screen per section.** The week fills the screen, and the bar stays out of sight. A long press
+  anywhere (or the handle at the top centre) opens Edit plan, with the bar above the page. Scrolling brings Food,
   which takes the screen in turn: a flick jumps straight to it. An arrow at the foot of Exercises
   and the top of Food leads to the other. Held upright, a phone or an iPad folds the week: each row's name
   above its seven boxes. A day that reaches its daily target turns green.

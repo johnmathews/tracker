@@ -720,6 +720,20 @@
     }
   }
 
+  /* A long press anywhere brings the bar (K79), so on the planner's screens a held press selects
+     no text and opens no iOS callout. A field, a popover (an item's notes) and a dialog still
+     select their own text; a press there is never a hold. */
+  html.planner-screens body {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  html.planner-screens
+    :is(input, textarea, [contenteditable], [data-slot='popover-content'], [role='dialog']) {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
   body {
     @apply bg-canvas font-sans text-ink antialiased;
   }
