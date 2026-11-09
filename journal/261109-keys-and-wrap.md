@@ -59,6 +59,27 @@ John chose both ways.
   - A repro e2e test, wrap down then straight up, failed before the fix. Plain down-then-up and
     wrap-up-then-down already passed.
 
+## Scrolling on and on (K93)
+
+- John: "the bug is still there, i cant keep scrolling up and up, or down and down".
+  - After each sprint, K45 swallowed every wheel event the sprint's way until the wheel had been
+    still for 180ms, and each event restarted that wait.
+  - A repro e2e test with notches 300ms apart landed on Food, Food, Exercises, Exercises: every
+    second push was lost.
+- **The fix** tells a push from momentum the way fullPage.js does: by whether the wheel is speeding
+  up.
+  - `pushing(steps)`: the latest steps (10, or the later half of a shorter run) average at least
+    the last 70.
+  - Momentum only shrinks. A trackpad's new push grows. Mouse notches stay the same size.
+  - Steps more than 200ms apart start a new history.
+  - The first version compared the last 10 with the last 70, which for fewer than 10 steps are the
+    same steps, so it always said "pushing". Hence the later half for short runs.
+- **Tests.** e2e: four notches each way go Food, Exercises, Food, Exercises. A realistic trackpad
+  flick (speeding up, then dying away over 1.5s) moves exactly one screen from Exercises, and one
+  wrap from Food.
+  - The unit tests' momentum was a run of identical steps with the clock jumped forward, which now
+    reads as a push. A `coast()` helper sends a dying step every 16ms instead, as a trackpad does.
+
 ## Tests
 
 - **Unit.** PlannerScreen spec: each key, Esc ordering, the exclusions, and `aria-keyshortcuts`.

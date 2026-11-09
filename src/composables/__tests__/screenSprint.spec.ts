@@ -3,6 +3,7 @@ import { defineComponent, h, nextTick, ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import {
   bandHeight,
+  pushing,
   pageEnd,
   stopSprint,
   wrapAround,
@@ -53,6 +54,18 @@ describe('sprintTarget (K38)', () => {
   })
 })
 
+describe('pushing (K93)', () => {
+  it('tells a push from momentum by the last steps against the ones before', () => {
+    expect(pushing([])).toBe(false)
+    expect(pushing([120])).toBe(true) // a single notch
+    expect(pushing(Array(20).fill(100))).toBe(true) // a mouse wheel: steps the same size
+    expect(pushing([2, 4, 8, 12, 16, 20])).toBe(true) // a finger speeding up
+    const coasting = Array.from({ length: 40 }, (_, i) => Math.round(30 * 0.94 ** i))
+    expect(pushing(coasting)).toBe(false) // momentum dying away
+    expect(pushing([...coasting, ...Array(10).fill(25)])).toBe(true) // a new push over it
+  })
+})
+
 describe('useScreenSprint', () => {
   let scrollTo: ReturnType<typeof vi.fn<(options: ScrollToOptions) => void>>
 
@@ -89,6 +102,24 @@ describe('useScreenSprint', () => {
     )
     mounted.push(wrapper)
     return wrapper
+  }
+
+  /**
+   * A fling's momentum: a wheel step every 16ms for `ms`, from `from` and dying away, as a
+   * trackpad sends it after the finger lifts (K93).
+   */
+  function coast(ms: number, from = 10, way = 1): void {
+    let d = from
+    for (let t = 0; t < ms; t += 16) {
+      vi.advanceTimersByTime(16)
+      wheel(way * Math.max(1, Math.round(d)))
+      d *= 0.9
+    }
+  }
+
+  /** Where the last sprint put the page. */
+  function at_(): number | undefined {
+    return scrollTo.mock.lastCall?.[0].top
   }
 
   function wheel(deltaY = 10): WheelEvent {
@@ -182,8 +213,9 @@ describe('useScreenSprint', () => {
     expect(wheel().defaultPrevented).toBe(false)
     scrollToY(600)
     expect(wheel().defaultPrevented).toBe(true)
-    landed()
-    expect(wheel().defaultPrevented).toBe(true) // the fling's momentum, still arriving
+    coast(SPRINT_MS + 50)
+    expect(at_()).toBe(1300)
+    expect(wheel(1).defaultPrevented).toBe(true) // the fling's momentum, still arriving
     vi.advanceTimersByTime(QUIET_MS)
     expect(wheel().defaultPrevented).toBe(false)
     wrapper.unmount()
@@ -202,8 +234,9 @@ describe('useScreenSprint', () => {
     // Down again: it sprints on to Food, and its momentum is swallowed.
     wheel()
     scrollToY(window.scrollY + 40)
-    expect(landed()).toBe(1300)
-    expect(wheel().defaultPrevented).toBe(true)
+    coast(SPRINT_MS + 50)
+    expect(at_()).toBe(1300)
+    expect(wheel(1).defaultPrevented).toBe(true)
     // The other way, while the wheel is still busy: not held back.
     expect(wheel(-10).defaultPrevented).toBe(false)
     expect(wheel(-10).defaultPrevented).toBe(false)
@@ -302,6 +335,16 @@ describe('useScreenSprint', () => {
     el.getBoundingClientRect = () => ({ height: 80 }) as DOMRect
     document.body.prepend(el)
   }
+
+  it('keeps only the wheel’s last 70 steps, and sprints nowhere for a screen it can’t find', () => {
+    const wrapper = holder()
+    vi.advanceTimersByTime(QUIET_MS)
+    for (let i = 0; i < 80; i++) wheel(1) // far from an end: an ordinary scroll each time
+    expect(scrollTo).not.toHaveBeenCalled()
+    sprintToScreen('no-such-heading')
+    expect(sprinting()).toBe(false)
+    wrapper.unmount()
+  })
 
   it('measures the fixed week only where it is fixed (K88)', () => {
     expect(bandHeight()).toBe(0)
@@ -455,10 +498,38 @@ describe('useScreenSprint', () => {
       const wrapper = holder()
       at(1300)
       wheel(40)
-      expect(landed()).toBe(0)
-      expect(wheel(40).defaultPrevented).toBe(true) // the wrap's own momentum, still swallowed
+      coast(SPRINT_MS + 50, 30)
+      expect(at_()).toBe(0)
+      expect(wheel(1).defaultPrevented).toBe(true) // the wrap's own momentum, still swallowed
       expect(wheel(-40).defaultPrevented).toBe(true) // turned round at the top: wraps back up
       expect(landed()).toBe(1300)
+      wrapper.unmount()
+    })
+
+    it('moves on at once when the wheel pushes on after a sprint, not on momentum (K93)', () => {
+      const wrapper = holder()
+      at(1300)
+      wheel(40)
+      coast(SPRINT_MS + 50, 30)
+      expect(at_()).toBe(0) // wrapped to the top
+      // Still coasting after it: steps shrinking, swallowed.
+      for (const d of [2, 2, 1, 1]) expect(wheel(d).defaultPrevented).toBe(true)
+      expect(copy()).toBeNull()
+      expect(sprinting()).toBe(false)
+      // A new push over the momentum: steps growing again, let through at once.
+      for (const d of [4, 8, 14, 20, 26, 32, 38]) wheel(d)
+      expect(wheel(40).defaultPrevented).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('takes a steady wheel after a landing as scrolling on', () => {
+      const wrapper = holder()
+      at(1300)
+      wheel(100)
+      expect(landed()).toBe(0)
+      // Within the quiet after the wrap, the same size again: a mouse notch, so it is let through.
+      expect(wheel(100).defaultPrevented).toBe(false)
+      expect(copy()).toBeNull() // the page is not at an end the way it went: it just scrolls
       wrapper.unmount()
     })
 

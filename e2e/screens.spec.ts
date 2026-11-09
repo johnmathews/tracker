@@ -268,3 +268,56 @@ test('a wrap turns straight back too: the other way at an end wraps back at once
   await page.waitForTimeout(500)
   expect(await top()).toBe(food)
 })
+
+test('scrolling on keeps going round: each push the same way moves one screen (K93)', async ({
+  page,
+}) => {
+  await openApp(page)
+  await page.mouse.move(640, 400)
+  const top = () => page.evaluate(() => Math.round(window.scrollY))
+  // A mouse wheel's notches, 300ms apart: each sprint has landed, the wheel never paused long.
+  const down: number[] = []
+  for (let i = 0; i < 4; i++) {
+    await page.mouse.wheel(0, 120)
+    await page.waitForTimeout(300)
+    down.push(await top())
+  }
+  const food = down[0]!
+  expect(food).toBeGreaterThan(0)
+  expect(down).toEqual([food, 0, food, 0])
+  const up: number[] = []
+  for (let i = 0; i < 4; i++) {
+    await page.mouse.wheel(0, -120)
+    await page.waitForTimeout(300)
+    up.push(await top())
+  }
+  expect(up).toEqual([food, 0, food, 0])
+})
+
+test('a trackpad flick moves one screen, its momentum never a second (K45, K93)', async ({
+  page,
+}) => {
+  await openApp(page)
+  await page.mouse.move(640, 400)
+  const top = () => page.evaluate(() => Math.round(window.scrollY))
+  // The finger speeds up, lifts, and the momentum dies away over a second and a half.
+  const deltas = [
+    ...[2, 4, 7, 10, 14, 18],
+    ...Array.from({ length: 90 }, (_, i) => Math.max(1, Math.round(18 * 0.96 ** i))),
+  ]
+  for (const d of deltas) {
+    await page.mouse.wheel(0, d)
+    await page.waitForTimeout(16)
+  }
+  await page.waitForTimeout(700)
+  const food = await top()
+  expect(food).toBeGreaterThan(0) // on Food, not wrapped round to Exercises
+  expect(await page.evaluate(() => document.querySelectorAll('[data-wrap-copy]').length)).toBe(0)
+  // The same from Food: one wrap to Exercises, not on to Food again.
+  for (const d of deltas) {
+    await page.mouse.wheel(0, d)
+    await page.waitForTimeout(16)
+  }
+  await page.waitForTimeout(700)
+  expect(await top()).toBe(0)
+})
