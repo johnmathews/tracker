@@ -97,6 +97,31 @@ John chose both ways.
 - **e2e** now flicks light (fading 4% a step) and hard (peaking at 45, fading 1% a step). Each
   moves exactly one screen, three times over, including a wrap.
 
+## Two pushes, two screens (K95)
+
+- K94 was too strict: "if i scroll down twice, i want to move down twice". A second swipe made
+  while the first one still coasted joined its gesture and was swallowed.
+- **`MomentumWatch`** looks inside a spent gesture for a new push:
+  - Momentum only slows. A new trackpad swipe cuts it off, so the steps drop and then grow.
+  - Once the steps fall below 70% of their peak, two steps in a row at least 1.6 times the
+    lowest since, and 6px more, are a push.
+  - One step is not enough, because Chrome merges steps when a frame runs long.
+  - A mouse click after 60ms of silence counts too: 10px or more, or 4px and half as big again.
+    Momentum's last steps (1px, 2px) don't qualify.
+- **A push during a sprint is queued.** On landing, `advance` goes to the next rest position that
+  way, or wraps if at an end.
+- **Playwright's `mouse.wheel` lands about 50ms apart** (measured: 48 to 67ms), not 16. That randomly
+  crossed the 60ms click line and made the e2e flicks move twice. The trackpad-style e2e steps are
+  now dispatched in the page at a true 16ms (`wheelSteps`), and the page scrolls by any step it
+  doesn't take, as a browser would.
+- The first `swipe()` helper made an upward swipe's ramp steps +1, because `Math.max(1, ...)` was
+  applied to the signed value. It now builds sizes, then applies the sign.
+- **e2e:**
+  - Two swipes, the second cutting the first's momentum off at about 330ms, go two screens each
+    way.
+  - Two mouse clicks 80ms apart go two screens.
+  - A hard flick and a light flick still go one.
+
 ## Tests
 
 - **Unit.** PlannerScreen spec: each key, Esc ordering, the exclusions, and `aria-keyshortcuts`.

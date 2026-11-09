@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, nextTick, ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import {
+  CLICK_GAP_MS,
+  MomentumWatch,
   bandHeight,
   pageEnd,
   stopSprint,
@@ -50,6 +52,43 @@ describe('sprintTarget (K38)', () => {
     expect(sprintTarget(540, 800, starts, 1, 32)).toBe(1300)
     expect(sprintTarget(1280, 800, starts, -1, 32)).toBeNull()
     expect(sprintTarget(1260, 800, starts, -1, 32)).toBe(500)
+  })
+})
+
+describe('MomentumWatch (K95)', () => {
+  /** Feeds steps 16ms apart; the index of the first that starts a push, or -1. */
+  function feed(watch: MomentumWatch, steps: number[], gap = 16): number {
+    return steps.findIndex((size) => watch.next(size, gap))
+  }
+
+  it('never takes momentum, rising or falling, for a push', () => {
+    const watch = new MomentumWatch()
+    const ramp = [4, 8, 16, 24, 32, 40]
+    const fade = Array.from({ length: 60 }, (_, i) => Math.max(1, Math.round(40 * 0.97 ** i)))
+    expect(feed(watch, [...ramp, ...fade])).toBe(-1)
+  })
+
+  it('takes a drop and then two steps up for a new swipe, but not one merged step', () => {
+    const watch = new MomentumWatch()
+    feed(watch, [40, 36, 30, 24, 20])
+    expect(feed(watch, [4, 30, 5, 6])).toBe(-1) // a lone big step: the browser merged two
+    expect(feed(watch, [12, 16])).toBe(1)
+  })
+
+  it('takes a click after a silence for a push, but not momentum’s last small steps', () => {
+    const watch = new MomentumWatch()
+    feed(watch, [40, 30, 20, 2, 1])
+    expect(watch.next(2, CLICK_GAP_MS)).toBe(false) // 2px after 1px: a tail, not a click
+    expect(watch.next(4, CLICK_GAP_MS)).toBe(true) // 4px, twice the last
+    expect(watch.next(100, CLICK_GAP_MS)).toBe(true) // a mouse wheel's notch
+    expect(watch.next(100, CLICK_GAP_MS - 1)).toBe(false) // too soon after the last
+  })
+
+  it('starts afresh for each sprint', () => {
+    const watch = new MomentumWatch()
+    feed(watch, [40, 20, 4])
+    watch.reset()
+    expect(feed(watch, [8, 14, 20])).toBe(-1) // a new ramp, not a rise after a drop
   })
 })
 
@@ -499,8 +538,8 @@ describe('useScreenSprint', () => {
       wheel(40)
       coast(SPRINT_MS + 50, 30)
       expect(at_()).toBe(0) // wrapped to the top
-      // The same gesture going on, even growing again: swallowed, no second screen.
-      for (const d of [2, 1, 4, 14, 30, 45]) expect(wheel(d).defaultPrevented).toBe(true)
+      // The same gesture's momentum going on, however long: swallowed, no second screen.
+      for (const d of [2, 2, 1, 1, 1, 1]) expect(wheel(d).defaultPrevented).toBe(true)
       expect(copy()).toBeNull()
       expect(sprinting()).toBe(false)
       wrapper.unmount()
@@ -514,6 +553,49 @@ describe('useScreenSprint', () => {
       // A new notch: let through, and the page is not at the end it goes past, so it scrolls.
       expect(wheel(100).defaultPrevented).toBe(false)
       expect(copy()).toBeNull()
+      wrapper.unmount()
+    })
+
+    it('moves on once more when a push comes while a sprint runs, round the end too (K95)', () => {
+      const wrapper = holder()
+      at(0)
+      wheel()
+      scrollToY(600) // down to Food
+      expect(sprinting()).toBe(true)
+      vi.advanceTimersByTime(CLICK_GAP_MS)
+      expect(wheel(40).defaultPrevented).toBe(true) // a click mid-sprint: held for the landing
+      const stops = () => scrollTo.mock.calls.map((c) => c[0].top)
+      vi.advanceTimersByTime(SPRINT_MS)
+      expect(stops()).toContain(1300) // Food, then at once on, past the end:
+      expect(copy()).not.toBeNull() // the wrap to Exercises is running
+      expect(landed()).toBe(0)
+      wrapper.unmount()
+    })
+
+    it('moves on once more going up, to the screen before (K95)', () => {
+      const wrapper = holder()
+      scrollToY(1300) // at Food, resting
+      vi.advanceTimersByTime(REST_MS + WHEEL_MS)
+      wheel(-10)
+      scrollToY(700) // up across the line: Exercises' end meets the window's foot
+      vi.advanceTimersByTime(CLICK_GAP_MS)
+      wheel(-40)
+      vi.advanceTimersByTime(SPRINT_MS)
+      expect(scrollTo.mock.calls.map((c) => c[0].top)).toContain(500)
+      expect(landed()).toBe(0) // then on to its top
+      wrapper.unmount()
+    })
+
+    it('lets a new swipe through inside the last one’s momentum once the sprint has landed (K95)', () => {
+      const wrapper = holder()
+      at(1300)
+      wheel(40)
+      coast(SPRINT_MS + 50, 40)
+      expect(at_()).toBe(0)
+      // The momentum cut off by a new swipe: steps drop, then grow.
+      for (const d of [2, 1]) expect(wheel(d).defaultPrevented).toBe(true)
+      expect(wheel(8).defaultPrevented).toBe(true)
+      expect(wheel(14).defaultPrevented).toBe(false) // the second step up: a new push
       wrapper.unmount()
     })
 

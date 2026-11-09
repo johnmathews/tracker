@@ -808,9 +808,11 @@ screens is a step (4% of the window, at least 16px) inside it, while it is still
 screen waits until it lifts; a scrollbar drag or the keyboard 120ms after the scroll stops (K38).
 `sprintTarget` picks the place, in the direction of travel, and `sprintTo` moves there in 260ms,
 eased out, setting the position each frame so a fling's momentum can't carry the page past it. A
-wheel gesture (events less than 150ms apart: a swipe and its momentum) moves one screen at most:
-once it has, the rest of it is swallowed (`spent`, K94). The next gesture moves on at once, and a
-wheel the other way stops the sprint and scrolls back (K89). After a resize or rotation, the page
+push moves one screen (K94, K95). Once a wheel gesture (events less than 150ms apart) has moved
+one, it is `spent` and its momentum is swallowed, but `MomentumWatch` still looks for a new push
+in it: steps that fall below 70% of their peak and then rise twice, or a mouse wheel's click after
+60ms of silence. A new push moves on at once, or is `queued` while a sprint runs and moves on
+(`advance`) as it lands. A wheel the other way stops the sprint and scrolls back (K89). After a resize or rotation, the page
 settles on the screen that fills more of the window (K40). It replaced `scroll-snap-type: y mandatory`, which a mouse wheel couldn't
 cross from the end of a tall screen. Four custom variants in main.css carry
 the layout, all screen-only so paper keeps the table: `screen:` (the WeekGrid is a CSS grid),

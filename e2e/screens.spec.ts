@@ -34,6 +34,25 @@ function across(at: Awaited<ReturnType<typeof atRest>>): number | undefined {
   return at.bottoms.find((b) => b > at.band + 1 && b < at.vh - 1)
 }
 
+/**
+ * Wheel steps as a trackpad sends them, `every` ms apart, dispatched in the page: Playwright's own
+ * wheel lands about 50ms apart, slower than any trackpad. Each step the page doesn't take scrolls
+ * it, as the browser would.
+ */
+async function wheelSteps(page: Page, deltas: number[], every = 16): Promise<void> {
+  await page.evaluate(
+    async ({ deltas, every }) => {
+      for (const deltaY of deltas) {
+        const event = new WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true })
+        ;(document.elementFromPoint(640, 400) ?? document.body).dispatchEvent(event)
+        if (!event.defaultPrevented) window.scrollBy(0, deltaY)
+        await new Promise((resolve) => setTimeout(resolve, every))
+      }
+    },
+    { deltas, every },
+  )
+}
+
 /** Wheels `steps` times by `dy`, noting each place the scroll comes to rest. */
 async function wheel(page: Page, steps: number, dy: number) {
   const stops: string[] = []
@@ -107,10 +126,10 @@ test('a fling sprints to Cardio while it is still moving, not after (K45)', asyn
     requestAnimationFrame(watch)
   })
   // A trackpad fling: a wheel step every 16 ms for a second, the momentum dying away.
-  for (let i = 0; i < 60; i++) {
-    await page.mouse.wheel(0, Math.max(3, 12 - Math.floor(i / 6)))
-    await page.waitForTimeout(16)
-  }
+  await wheelSteps(
+    page,
+    Array.from({ length: 60 }, (_, i) => Math.max(3, 12 - Math.floor(i / 6))),
+  )
   const endedAt = await page.evaluate(() => performance.now())
   await page.waitForTimeout(700)
   const arrivedAt = await page.evaluate(
@@ -167,10 +186,7 @@ test('a wheel the other way is never held back: it turns straight round (K45)', 
   await page.mouse.move(640, 400)
   const top = () => page.evaluate(() => Math.round(window.scrollY))
   // Three quick steps down sprint to Cardio; the wheel is still busy when the sprint lands.
-  for (let i = 0; i < 3; i++) {
-    await page.mouse.wheel(0, 120)
-    await page.waitForTimeout(16)
-  }
+  await wheelSteps(page, Array<number>(3).fill(120))
   await page.waitForTimeout(300)
   const cardio = await top()
   expect(cardio).toBeGreaterThan(0)
@@ -237,10 +253,7 @@ test('a fling that reaches the foot of a tall screen stops there, and doesn’t 
     await page.waitForTimeout(700)
   }
   // Steps without a pause, each continuing the last, all the way down and on past the foot.
-  for (let i = 0; i < 120; i++) {
-    await page.mouse.wheel(0, 60)
-    await page.waitForTimeout(16)
-  }
+  await wheelSteps(page, Array<number>(120).fill(60))
   await page.waitForTimeout(700)
   const at = await place(page)
   expect(at.y).toBe(at.max)
@@ -275,17 +288,11 @@ test('a wrap turns straight back too: the other way at an end wraps back at once
   const food = await top()
   expect(food).toBe((await place(page)).max)
   // On down past Food, the wheel still busy as the wrap lands on Exercises…
-  for (let i = 0; i < 3; i++) {
-    await page.mouse.wheel(0, 120)
-    await page.waitForTimeout(16)
-  }
+  await wheelSteps(page, Array<number>(3).fill(120))
   await page.waitForTimeout(300)
   expect(await top()).toBe(0)
   // …then at once up again: back to Food, not swallowed.
-  for (let i = 0; i < 3; i++) {
-    await page.mouse.wheel(0, -120)
-    await page.waitForTimeout(16)
-  }
+  await wheelSteps(page, Array<number>(3).fill(-120))
   await page.waitForTimeout(500)
   expect(await top()).toBe(food)
 })
@@ -328,10 +335,7 @@ for (const [name, peak, fade] of [
       ...Array.from({ length: 90 }, (_, i) => Math.max(1, Math.round(peak * fade ** i))),
     ]
     const flick = async () => {
-      for (const d of deltas) {
-        await page.mouse.wheel(0, d)
-        await page.waitForTimeout(16)
-      }
+      await wheelSteps(page, deltas)
       await page.waitForTimeout(700)
     }
     await flick()
@@ -342,3 +346,39 @@ for (const [name, peak, fade] of [
     expect(await page.evaluate(() => document.querySelectorAll('[data-wrap-copy]').length)).toBe(0)
   })
 }
+
+/** A swipe: the finger speeding up to `peak`, then momentum fading by `fade` a step, `n` steps. */
+function swipe(peak: number, fade: number, n: number): number[] {
+  const size = Math.abs(peak)
+  const way = Math.sign(peak)
+  const ramp = [0.1, 0.2, 0.4, 0.6, 0.8, 1].map((k) => Math.max(1, Math.round(size * k)))
+  const coast = Array.from({ length: n }, (_, i) => Math.max(1, Math.round(size * fade ** i)))
+  return [...ramp, ...coast].map((d) => way * d)
+}
+
+test('two swipes move twice, the second made while the first still coasts (K95)', async ({
+  page,
+}) => {
+  await openApp(page)
+  const [ex, cardio, food] = await rests(page)
+  // The second swipe cuts the first one's momentum off about a third of a second in.
+  await wheelSteps(page, [...swipe(40, 0.98, 15), ...swipe(40, 0.98, 80)])
+  await page.waitForTimeout(700)
+  expect(await page.evaluate(() => Math.round(window.scrollY))).toBe(food)
+  // And back up the same way: two swipes, two screens.
+  await wheelSteps(page, [...swipe(-40, 0.98, 15), ...swipe(-40, 0.98, 80)])
+  await page.waitForTimeout(700)
+  expect(await page.evaluate(() => Math.round(window.scrollY))).toBe(ex)
+  expect(cardio).toBeGreaterThan(ex)
+})
+
+test('two clicks of a mouse wheel, close together, move twice (K95)', async ({ page }) => {
+  await openApp(page)
+  await page.mouse.move(640, 400)
+  const [, , food] = await rests(page)
+  await page.mouse.wheel(0, 100)
+  await page.waitForTimeout(80)
+  await page.mouse.wheel(0, 100)
+  await page.waitForTimeout(900)
+  expect(await page.evaluate(() => Math.round(window.scrollY))).toBe(food)
+})
