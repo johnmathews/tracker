@@ -1675,12 +1675,40 @@ describe('config mode and weekly plans', () => {
     expect(wrapper.find('[data-testid="add-food"]').exists()).toBe(true)
   })
 
+  it('fixes the week above the screens once, as the page’s h1, with a hairline under it once scrolled (K88)', async () => {
+    mountApp()
+    const band = wrapper.get('[data-slot="week-band"]')
+    expect(wrapper.findAll('h1').map((h) => h.text())).toEqual(['19–25 October'])
+    expect(band.get('h1').text()).toBe('19–25 October')
+    // Before the screens, so it is not bound inside the first one.
+    expect(band.element.nextElementSibling?.getAttribute('aria-labelledby')).toBe(
+      'exercises-heading',
+    )
+    expect(band.classes()).toEqual(
+      expect.arrayContaining([
+        'full:sticky',
+        'full:top-0',
+        'full:bg-canvas',
+        'full:text-center',
+        'full:h-(--week-band)',
+        'full:data-under:border-line',
+        'short:sr-only',
+      ]),
+    )
+    expect(band.attributes('data-under')).toBeUndefined()
+    document.documentElement.scrollTop = 200
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 200 })
+    window.dispatchEvent(new Event('scroll'))
+    await vi.waitFor(() => expect(band.attributes('data-under')).toBe('true'))
+    document.documentElement.scrollTop = 0
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 0 })
+    window.dispatchEvent(new Event('scroll'))
+    await vi.waitFor(() => expect(band.attributes('data-under')).toBeUndefined())
+  })
+
   it('sets the daily targets on the title lines, without the week beside them (K56)', async () => {
     mountApp()
-    const weeks = () => wrapper.findAll('[data-slot="section-week"]').map((w) => w.text())
-    expect(weeks()).toEqual(['19–25 October', '19–25 October'])
     await wrapper.get('[data-testid="edit-plan-button"]').trigger('click')
-    expect(weeks()).toEqual([])
     expect(button('Copy plan to next week')).toBeUndefined()
     const header = (id: string) => wrapper.get(`#${id}`).element.closest('header')!
     expect(

@@ -1,0 +1,62 @@
+/*
+  The week's screens with the date fixed at the top. One frame (.fx) is one screen, sized from its
+  own box like the app (u is 1 on a 1280×800 screen). Inside it a scroller holds the date band
+  (sticky) and two screens, Exercises and Food, each the frame's height less the band's, so one
+  screen fills what the band leaves. Scroll snapping stands in for the app's sprint (K38). The
+  shipped sizes are main.css's; new values are --candidate-*.
+*/
+.fx { position: relative; overflow: hidden; box-sizing: border-box; container: fx / size; background: var(--canvas);
+  color: var(--ink); font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
+.fx *, .fx *::before, .fx *::after { box-sizing: border-box; }
+.fx-scroll { position: absolute; inset: 0; overflow-y: auto; overscroll-behavior: contain; scroll-snap-type: y mandatory;
+  scrollbar-width: thin;
+  --u: clamp(0.75px, min(calc(100cqw / 1280), calc(100cqh / 800)), 1.6px);
+  --pad-x: calc(var(--u) * 48); --fs-title: max(30px, calc(var(--u) * 40)); --fs-day: max(20px, calc(var(--u) * 27));
+  --fs-section: max(26px, calc(var(--u) * 32)); --gap-top: calc(var(--u) * 12);
+  --name-w: calc(var(--u) * 320); --box: min(calc(var(--u) * 64), 64px);
+  /* The band: the date's line plus the space above and below it, as the screen's title had it. */
+  --candidate-band-top: calc(var(--u) * 28);
+  --candidate-band-bottom: calc(var(--u) * 20);
+  --candidate-band: calc(var(--candidate-band-top) + var(--fs-title) * 1.1 + var(--candidate-band-bottom)); }
+
+/* The date, fixed: the page's h1, centred, the title serif at --fs-title in ink, on the canvas so
+   the grid passing under it is hidden. */
+.fx-band { position: sticky; top: 0; z-index: 1; height: var(--candidate-band); margin: 0;
+  padding: var(--candidate-band-top) var(--pad-x) var(--candidate-band-bottom); background: var(--canvas);
+  text-align: center; font: 600 var(--fs-title) / 1.1 var(--font-serif); letter-spacing: -0.005em; color: var(--ink);
+  border-bottom: 1px solid transparent; transition: border-color 150ms ease-out; }
+/* F1: a hairline under the band once a screen has moved under it. F2: never a line. */
+.fx[data-f="f1"] .fx-scroll.under .fx-band { border-bottom-color: var(--line); }
+
+.fx-screen { position: relative; height: calc(100cqh - var(--candidate-band)); scroll-snap-align: start; scroll-margin-top: var(--candidate-band);
+  display: flex; flex-direction: column; padding: var(--gap-top) var(--pad-x) calc(var(--u) * 20); }
+/* The way back, centred on the title's line (K42, K88). */
+.fx-up { position: absolute; top: calc(var(--gap-top) + 0.15em); left: 50%; transform: translateX(-50%); color: var(--ink-secondary);
+  font: 400 max(18px, calc(var(--u) * 22)) / 1 var(--font-sans); }
+.fx-sec { margin: 0 0 calc(var(--u) * 16); font: 600 var(--fs-section) / 1.12 var(--font-serif); color: var(--ink); }
+.fx-hint { margin: 0; padding-top: calc(var(--u) * 10); text-align: center; color: var(--ink-secondary);
+  font: 400 max(14px, calc(var(--u) * 15)) / 1.3 var(--font-sans); }
+
+/* As in the app: rows share the height up to 100u each, and a short week sits in the middle. */
+.fx-screen { justify-content: center; }
+.fx-hint { flex: none; }
+.fx-grid { flex: 0 1 auto; min-height: 0; display: grid; grid-template-columns: var(--name-w) repeat(7, minmax(0, 1fr));
+  grid-template-rows: auto; grid-auto-rows: minmax(0, calc(var(--u) * 100)); }
+.fx-head { align-self: end; padding-bottom: calc(var(--u) * 12); border-bottom: 1px solid var(--ink); text-align: center; font: 600 var(--fs-day) / 1.2 var(--font-sans); }
+.fx-head.today { color: var(--pen); text-decoration: underline; text-decoration-thickness: max(2px, calc(var(--u) * 3)); text-underline-offset: 0.22em; }
+.fx-name { display: flex; align-items: center; gap: calc(var(--u) * 10); border-bottom: 1px solid var(--line); font: 600 max(19px, calc(var(--u) * 26)) / 1.2 var(--font-sans); }
+.fx-chip { padding: 1px calc(var(--u) * 8); border-radius: var(--radius-sm); background: var(--tile); color: var(--ink-secondary); font-size: 0.72em; }
+.fx-cell { display: grid; place-items: center; border-bottom: 1px solid var(--line); }
+.fx-box { width: var(--box); height: var(--box); border: max(3px, calc(var(--u) * 4)) solid var(--control-border); border-radius: calc(var(--u) * 6); }
+.fx-box.on { background: var(--pen); border-color: var(--pen); }
+
+/* Folded (a phone held upright): the band at the phone's title size; each row's name above its boxes. */
+@container fx (width < 760px) {
+  .fx-scroll { --u: 1px; --pad-x: 16px; --fs-title: 26px; --fs-day: 16px; --fs-section: 24px; --name-w: 0px; --box: 34px;
+    --candidate-band-top: 30px; --candidate-band-bottom: 8px; --gap-top: 10px; }
+  .fx-screen { justify-content: flex-start; }
+  .fx-grid { flex: none; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-auto-rows: auto; row-gap: 8px; }
+  .fx-name { grid-column: 1 / -1; border: 0; padding-top: 12px; font-size: 17px; }
+  .fx-cell { border: 0; padding-block: 2px; }
+  .fx-corner { display: none; }
+}

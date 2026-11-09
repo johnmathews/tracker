@@ -2,10 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, nextTick, ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import {
+  bandHeight,
+  sprintToScreen,
   QUIET_MS,
   REST_MS,
   SPRINT_MS,
   sprintTarget,
+  sprinting,
   sprintTo,
   useScreenSprint,
 } from '@/composables/screenSprint'
@@ -85,8 +88,8 @@ describe('useScreenSprint', () => {
     return wrapper
   }
 
-  function wheel(): WheelEvent {
-    const event = new WheelEvent('wheel', { deltaY: 10, cancelable: true })
+  function wheel(deltaY = 10): WheelEvent {
+    const event = new WheelEvent('wheel', { deltaY, cancelable: true })
     window.dispatchEvent(event)
     return event
   }
@@ -183,6 +186,37 @@ describe('useScreenSprint', () => {
     wrapper.unmount()
   })
 
+  it('lets a wheel the other way through at once, during a sprint or after it (K89)', () => {
+    const wrapper = holder()
+    wheel()
+    scrollToY(600) // down to Food
+    expect(sprinting()).toBe(true)
+    expect(wheel(-10).defaultPrevented).toBe(false) // turned round mid-sprint
+    expect(sprinting()).toBe(false) // stopped where it was
+    const held = scrollTo.mock.calls.length
+    vi.advanceTimersByTime(SPRINT_MS)
+    expect(scrollTo.mock.calls.length).toBe(held)
+    // Down again: it sprints on to Food, and its momentum is swallowed.
+    wheel()
+    scrollToY(window.scrollY + 40)
+    expect(landed()).toBe(1300)
+    expect(wheel().defaultPrevented).toBe(true)
+    // The other way, while the wheel is still busy: not held back.
+    expect(wheel(-10).defaultPrevented).toBe(false)
+    expect(wheel(-10).defaultPrevented).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('holds back a wheel with no way to it, as it does the sprint’s own way', () => {
+    const wrapper = holder()
+    sprintTo(window.scrollY) // a sprint that goes nowhere: no way to turn back from
+    expect(wheel(0).defaultPrevented).toBe(true)
+    expect(wheel(-10).defaultPrevented).toBe(false)
+    sprintTo(window.scrollY)
+    expect(wheel(10).defaultPrevented).toBe(false)
+    wrapper.unmount()
+  })
+
   it('holds a finger still while a sprint runs', () => {
     const wrapper = holder()
     const move = () => {
@@ -255,5 +289,46 @@ describe('useScreenSprint', () => {
     scrollToY(650)
     vi.advanceTimersByTime(REST_MS)
     expect(scrollTo).not.toHaveBeenCalled()
+  })
+
+  /** The fixed week (K88): `sticky` as on the planner's screens, 80px tall. */
+  function band(position = 'sticky'): void {
+    const el = document.createElement('div')
+    el.dataset.slot = 'week-band'
+    el.style.position = position
+    el.getBoundingClientRect = () => ({ height: 80 }) as DOMRect
+    document.body.prepend(el)
+  }
+
+  it('measures the fixed week only where it is fixed (K88)', () => {
+    expect(bandHeight()).toBe(0)
+    band('static')
+    expect(bandHeight()).toBe(0)
+    document.body.innerHTML = ''
+    band()
+    expect(bandHeight()).toBe(80)
+  })
+
+  it('rests each screen just under the fixed week (K88)', () => {
+    band()
+    const wrapper = holder()
+    wheel()
+    scrollToY(300)
+    scrollToY(540) // Food's top is 640px down the window: past the band, a step in
+    expect(landed()).toBe(1220)
+    vi.advanceTimersByTime(QUIET_MS + 1)
+    wheel()
+    scrollToY(1180) // back up: Exercises' end comes a step into the screens' part
+    expect(landed()).toBe(500) // its end meets the bottom of the window
+    wrapper.unmount()
+  })
+
+  it('sprints an arrow’s screen to just under the fixed week (K42, K88)', () => {
+    band()
+    document
+      .querySelectorAll('[data-planner-screen]')[1]!
+      .setAttribute('aria-labelledby', 'diet-heading')
+    sprintToScreen('diet-heading')
+    expect(landed()).toBe(1220)
   })
 })

@@ -1,0 +1,117 @@
+<title>The week fixed at the top</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="fixed.css">
+<!--
+  A mockup (design-system skill, references/mockups.md). One question: how the date looks once it
+  stays at the top while Exercises and Food scroll under it. fixed.js and fixed.css draw a frame
+  you can scroll; scroll snapping stands in for the app's sprint (K38). No new colours: the band is
+  the canvas, and F1's hairline is the system's line role.
+-->
+<style>
+  body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font-sans); }
+  .mockup-page {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: var(--space-8, 32px) var(--space-16, 64px);
+    max-width: 1200px; margin: 0 auto; display: grid; gap: var(--space-12, 48px);
+  }
+  .mockup-head { display: grid; gap: var(--space-2, 8px); max-width: 70ch; }
+  .mockup-head h1, .option h2 { margin: 0; text-wrap: balance; }
+  .mockup-head p, .option p { margin: 0; }
+  .mockup-meta { color: var(--ink-secondary); }
+  .option { display: grid; gap: var(--space-4, 16px); }
+  .option-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2, 8px) var(--space-3, 12px); }
+  .option-tag { color: var(--ink-secondary); }
+  .option[data-recommended] .option-tag::after { content: " · Recommended"; color: var(--ink); }
+  .panes { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4, 16px); }
+  .pane { min-width: 0; background: var(--canvas); color: var(--ink); border: 1px solid var(--line);
+          border-radius: var(--radius-lg, 10px); padding: var(--space-4, 16px); overflow-x: auto; }
+  .pane-label { color: var(--ink-secondary); margin: 0 0 var(--space-3, 12px); }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .notes { margin: 0; padding-left: 1.2em; display: grid; gap: var(--space-1, 4px); max-width: 70ch; }
+  .device { position: relative; width: 100%; }
+  .device > div { position: absolute; top: 0; left: 0; transform-origin: 0 0; border: 1px solid var(--line); border-radius: var(--radius-lg); }
+  .device.phone > div { border-radius: 28px; border-width: 2px; }
+  .phones { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+  .phones .device { max-width: 260px; }
+</style>
+
+<main class="mockup-page">
+  <header class="mockup-head">
+    <p class="caption mockup-meta">Mockup · 2026-11-09 · Tracker</p>
+    <h1 class="title-1">The week fixed at the top</h1>
+    <p class="body">The date stays at the top centre while you move between Exercises and Food. Only the screens move, and each one fills the space under the date. The date’s look and the section titles stay as they are (K86, K87). Edit plan is unchanged, with the week in its bar.</p>
+    <p class="body">Scroll inside each frame to try it. The question is whether a thin line shows under the date while a screen is passing under it.</p>
+  </header>
+
+  <h2 class="title-2">2. Three trackers: scrolling down twice (round 2)</h2>
+  <section class="option" id="three" aria-labelledby="three-h">
+    <div class="option-head">
+      <h2 class="title-2" id="three-h">A third tracker, Cardio, between Exercises and Food</h2>
+      <span class="label option-tag">With F1, as picked</span>
+    </div>
+    <p class="body">Cardio holds cycling and running, each marked on the days you did it, like an exercise. Scroll down twice: Exercises, then Cardio, then Food, each stopping just under the date. The date never moves. The page jumps one screen at a time, so it never stops with two trackers showing. A screen with only two rows, like Cardio here, still takes the whole space under the date: on a wide screen its rows keep their size and sit in the middle, and on a phone they start at the top.</p>
+    <div class="panes">
+      <div class="pane" data-theme="light"><p class="label pane-label">Light · 1280×800 · scroll it twice</p><div class="device" data-w="1280" data-h="800" data-f="f1" data-three></div></div>
+      <div class="pane" data-theme="dark"><p class="label pane-label">Dark · phone · scroll it twice</p><div class="phones"><div class="device phone" data-w="390" data-h="760" data-f="f1" data-three></div></div></div>
+    </div>
+    <ul class="notes body">
+      <li>The arrows follow the order: Exercises’ arrow goes to Cardio, Cardio has one back to Exercises and one on to Food, and Food’s goes back to Cardio.</li>
+      <li>In the app the date and the scrolling already handle any number of trackers. A third tracker itself is new work: its own plan, marks, Settings and what Ask and the AI connections read.</li>
+    </ul>
+  </section>
+
+  <h2 class="title-2">1. A line under the date (decided: F1)</h2>
+
+  <section class="option" id="f1" data-recommended aria-labelledby="f1-h">
+    <div class="option-head">
+      <h2 class="title-2" id="f1-h">F1. A hairline once a screen moves under the date</h2>
+      <span class="label option-tag">Option F1</span>
+    </div>
+    <p class="body">At the top of Exercises there is no line. Once you scroll, a 1px hairline in the line colour appears under the date, so the screen sliding beneath has a clear edge. On Food it stays.</p>
+    <div class="panes">
+      <div class="pane" data-theme="light"><p class="label pane-label">Light · 1280×800 · scroll it</p><div class="device" data-w="1280" data-h="800" data-f="f1"></div></div>
+      <div class="pane" data-theme="dark"><p class="label pane-label">Dark · phone · top, and on Food</p><div class="phones"><div class="device phone" data-w="390" data-h="760" data-f="f1"></div><div class="device phone" data-w="390" data-h="760" data-f="f1" data-at="food"></div></div></div>
+    </div>
+  </section>
+
+  <section class="option" id="f2" aria-labelledby="f2-h">
+    <div class="option-head">
+      <h2 class="title-2" id="f2-h">F2. No line</h2>
+      <span class="label option-tag">Option F2</span>
+    </div>
+    <p class="body">The date sits on the bare canvas, and a screen slides under it with no edge. Quieter, but mid-scroll a row can look cut off.</p>
+    <div class="panes">
+      <div class="pane" data-theme="light"><p class="label pane-label">Light · 1280×800 · scroll it</p><div class="device" data-w="1280" data-h="800" data-f="f2"></div></div>
+      <div class="pane" data-theme="dark"><p class="label pane-label">Dark · phone · top, and on Food</p><div class="phones"><div class="device phone" data-w="390" data-h="760" data-f="f2"></div><div class="device phone" data-w="390" data-h="760" data-f="f2" data-at="food"></div></div></div>
+    </div>
+  </section>
+
+  <ul class="notes body">
+    <li>The date becomes the page’s one visible heading. Today each screen draws its own copy.</li>
+    <li>Moving between screens works as now: a wheel, a swipe or the arrow sprints to the next screen, which stops just under the date.</li>
+    <li>Messages such as “Couldn’t sync” sit under the date, at the top of Exercises.</li>
+    <li>A phone on its side (540px tall or less) keeps today’s layout, with the section’s name in the grid’s corner and no date, because the date would take a sixth of the height.</li>
+    <li>On paper nothing changes: the week is printed once above the sections.</li>
+  </ul>
+</main>
+
+<script src="fixed.js"></script>
+<script>
+  for (const device of document.querySelectorAll('.device')) {
+    const w = Number(device.dataset.w), h = Number(device.dataset.h)
+    const screen = document.createElement('div')
+    screen.style.width = w + 'px'
+    screen.style.height = h + 'px'
+    device.append(screen)
+    const fit = () => {
+      const s = Math.min(1, device.clientWidth / w)
+      screen.style.transform = `scale(${s})`
+      device.style.height = Math.ceil(h * s) + 'px'
+    }
+    new ResizeObserver(fit).observe(device)
+    fit()
+    FX.mount(screen, { f: device.dataset.f, at: device.dataset.at, three: 'three' in device.dataset })
+  }
+</script>

@@ -165,8 +165,9 @@ clock is fixed to Wednesday 21 October 2026, so every run sees the same week.
 - `screens.spec.ts`: a tall Exercises screen and a tall Food screen (`openApp`'s `moreExercises`
   and `moreFoods`), wheel-scrolled down and back up a notch at a time at 1280×800: the page never
   rests showing part of both, and it reaches Food (K38); a rotation (and back, and a phone on
-  its side) never leaves it resting across two screens (K40); and a short trackpad fling reaches
-  Food before the fling has ended (K45).
+  its side) never leaves it resting across two screens (K40); a short trackpad fling reaches
+  Food before the fling has ended (K45); each resting place is measured from the fixed week's foot
+  (K88); and a wheel turned round straight after a sprint goes straight back, both ways (K89).
 
 CI (`.github/workflows/ci.yml`) runs three jobs on every pull request and every push to `main`.
 `check` runs lint, format, types, unit tests with coverage, the build, the design gate and
@@ -259,8 +260,9 @@ listed in [api.md](api.md) §10):
 - `src/composables/__tests__/screenSprint.spec.ts`: where a scroll goes (`sprintTarget`: nowhere
   inside a screen, on in the direction of travel across a line, to the larger screen with no
   direction, and only past a step when given one) and the composable: a moving scroll sprinting at
-  once, a short one after a pause, a finger waiting to lift, the wheel swallowed during and after,
-  the eased `sprintTo`, a resize, reduced motion and switching off (K38, K40, K45).
+  once, a short one after a pause, a finger waiting to lift, the wheel swallowed during and after
+  but let through the other way, the eased `sprintTo`, a resize, reduced motion, switching off,
+  and the fixed week's height taken off the window (K38, K40, K45, K88, K89).
 - `src/composables/__tests__/fullscreen.spec.ts`: full screen unsupported (an iPhone), entering and
   leaving it, and a refusal leaving the page as it is (K34).
 - `src/styles/__tests__/print.spec.ts`: the print block's literal colours match `tokens.json`'s light

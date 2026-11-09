@@ -76,7 +76,7 @@ watch(
   button under the grid (K54). On screen 56u of space
   sets it apart from Exercises, with no rule. On paper the heading and the grid stay on one page
   (F20): the header avoids a break after it, and the pair avoids a break inside. On the planner's
-  screens it is the second screen, with nothing ruling it off.
+  screens it is the second screen, under the fixed week (K88), with nothing ruling it off.
 -->
 <template>
   <section
@@ -85,11 +85,11 @@ watch(
     data-planner-screen
     aria-labelledby="diet-heading"
   >
-    <!-- The way back (PlannerScreen card, K42): an arrow on the screen's top, below the bar's
-         strip and handle, sprinting to the top of Exercises. -->
+    <!-- The way back (PlannerScreen card, K42): an arrow on the screen's top, on the title's line
+         just under the fixed week (K88), sprinting to the top of Exercises. -->
     <IconButton
       label="Back to Exercises"
-      class="absolute top-12 left-1/2 hidden -translate-x-1/2 text-ink-secondary hover:text-ink full:inline-flex short:hidden"
+      class="absolute top-(--screen-gap-top) left-1/2 hidden -translate-x-1/2 text-ink-secondary hover:text-ink full:inline-flex short:hidden"
       data-noprint
       data-testid="to-exercises"
       @click="sprintToScreen('exercises-heading')"
@@ -99,11 +99,7 @@ watch(
       class="print:break-inside-avoid full:flex full:min-h-0 full:flex-1 full:flex-col folded:flex-none"
       data-print-keep
     >
-      <SectionHeader
-        :title="type.label"
-        heading-id="diet-heading"
-        :week="planner.configMode ? undefined : planner.label"
-      >
+      <SectionHeader :title="type.label" heading-id="diet-heading">
         <template v-if="planner.configMode && planner.dailyGoal" #actions>
           <!-- Centred on the title line (K62), the Stepper alone, reading "− 3 per day +" (K63): its
              label, "Foods a day", is for a screen reader. -->

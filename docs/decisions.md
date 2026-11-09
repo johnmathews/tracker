@@ -412,8 +412,20 @@ of the tracker, like a title". Decided on the mockup
 | ID | Decision | Why |
 | --- | --- | --- |
 | K85 | Settings › Your goals starts with a Switch, "Daily goal", on by default and saved with the account (`dailyGoal`, synced and exported like the targets). Off: Edit plan shows no "N per day" Steppers, no day name turns green (K30, K60), and Ask and the AI connections get no daily target and no met days. The numbers are kept and come back when it is on. One switch for both sections. Option A over B (in Appearance) | John's answers: one switch for both, on every device, and the AI ignoring the targets while off. "daily goal should be in the "your goals" section" |
-| K86 | On the week screens the date is the title: at the top centre of each screen, in the title serif at `--fs-title`, in `ink`. "Exercises" and "Food" become section headings in the sans, 600, max(22px, 27u), over their grids, in Edit plan too (the sans superseded by K87). Edit plan shows no date over its sections: its bar holds the week (K81). Supersedes K54's week beside each title in `ink-secondary`. Option T1 over T2 (a smaller serif) | "notive the date is small and grey next to the tracker title. this is weird ... it is the title, and the tracker type ("exercises" or "food") is more of a section heading" |
+| K86 | On the week screens the date is the title: at the top centre of each screen, in the title serif at `--fs-title`, in `ink`. "Exercises" and "Food" become section headings in the sans, 600, max(22px, 27u), over their grids, in Edit plan too (the sans superseded by K87). Edit plan shows no date over its sections: its bar holds the week (K81). Supersedes K54's week beside each title in `ink-secondary`; each screen's own copy of the week superseded by K88's fixed band. Option T1 over T2 (a smaller serif) | "notive the date is small and grey next to the tracker title. this is weird ... it is the title, and the tracker type ("exercises" or "food") is more of a section heading" |
 | K87 | The section's name is a serif title after all: `title-1` (the serif, 600) at `--fs-section`, max(26px, 32u) (24n folded), a step under the week's 40u, in `ink`. Supersedes K86's sans heading; the week centred as the screen's title stands. Option H1 over H2 (36u, with the week raised to 46u) | John, having seen T1: "lets make the tracker title ("Exercises" in the screeshot) more like a title. it should be a serif font and a bit larger. it should have more visual impact than it does now" |
+
+### 4.20 The week fixed at the top (2026-11-09)
+
+Asked for by John: "when i scroll ... between trackers ... i see the entire page scroll including
+the date. the date (week) stays the same for both trackers and i want it to be fixed and not
+scroll, and i want only the tracker content to scroll". Decided on the mockup
+`brand/design-system/mockups/261109-fixed-week`.
+
+| ID | Decision | Why |
+| --- | --- | --- |
+| K88 | On the planner's screens the week is one band fixed at the top: the page's `h1` (WeekHeader), centred, the title serif at `--fs-title` in `ink`, on the canvas, `--week-band` tall. Exercises and Food move under it, each the window's height less the band, and a sprint rests each screen just under it. Once a screen is under it, a 1px hairline in `line` shows at its foot. The sections no longer repeat the week (K86's copy on each screen goes); Food's way back sits on its title's line. A short screen (a phone on its side) keeps K24's layout with no band, and Edit plan and paper are unchanged. Option F1 over F2 (no line) | The quote above. John picked F1, the recommended option |
+| K89 | A wheel the other way is never held back. During a sprint, and until the wheel is quiet after it, a wheel the same way as the sprint is still swallowed (K45: it is a fling's momentum), but one the other way stops the sprint where it is and scrolls, and the scroll sprints back | Found while trying K88: "if i scroll down i cant immediatly scroll back up, or vice versa". Every new step of the wheel restarted the quiet wait, so a turn back did nothing until the wheel paused. John, after the fix: "that works better" |
 
 ## 5. Accepted risks
 

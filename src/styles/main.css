@@ -65,6 +65,11 @@
   --screen-pad-x: calc(var(--u) * 48);
   --screen-pad-top: calc(var(--u) * 28);
   --screen-pad-bottom: calc(var(--u) * 20);
+  /* The week fixed above the planner's screens (K88): its line, the space above it and below it.
+     Each screen fills the height the band leaves, starting --screen-gap-top under it. */
+  --week-pad-bottom: calc(var(--u) * 12);
+  --week-band: calc(var(--screen-pad-top) + var(--fs-title) * 1.1 + var(--week-pad-bottom) + 1px);
+  --screen-gap-top: calc(var(--u) * 12);
   --grid-name-w: calc(var(--u) * 320);
   --grid-row-min: 76px;
   --grid-row-max: 76px;
@@ -128,10 +133,12 @@
   }
 }
 
-/* A phone on its side: rows of 52px, so five still fit with the title in the corner. */
+/* A phone on its side: rows of 52px, so five still fit with the title in the corner, and no
+   room for the fixed week (K88). */
 @media screen and (orientation: landscape) and (height <= 540px) {
   :root.planner-screens {
     --grid-row-min: 52px;
+    --week-band: 0px;
   }
 }
 
@@ -140,6 +147,8 @@
     --screen-pad-x: calc(var(--n) * 16);
     --screen-pad-top: calc(var(--n) * 34);
     --screen-pad-bottom: 12px;
+    --week-pad-bottom: 8px;
+    --screen-gap-top: 10px;
     --fs-title: calc(var(--n) * 30);
     --fs-section: calc(var(--n) * 24);
     --fs-name: calc(var(--n) * 20);
@@ -748,11 +757,11 @@
     scroll-padding-top: 4.5rem;
   }
 
-  /* The planner's screens: no bar covers the top (K24). The page sprints between them in
-     script (useScreenSprint, K38), not with CSS snapping, which a mouse wheel couldn't cross. */
+  /* The planner's screens: no bar covers the top (K24), only the fixed week (K88). The page
+     sprints between them in script (useScreenSprint, K38), not with CSS snapping, which a mouse wheel couldn't cross. */
   @media screen {
     html.planner-screens {
-      scroll-padding-top: 0;
+      scroll-padding-top: var(--week-band);
     }
   }
 

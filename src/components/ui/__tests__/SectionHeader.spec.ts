@@ -4,7 +4,7 @@ import { SectionHeader } from '@/components/ui/section-header'
 
 function header(hint?: string) {
   return mount(SectionHeader, {
-    props: { title: 'Exercises', hint, headingId: 'exercises-heading', week: '19–25 October' },
+    props: { title: 'Exercises', hint, headingId: 'exercises-heading' },
   })
 }
 
@@ -30,7 +30,7 @@ describe('SectionHeader', () => {
     expect(header().find('[data-slot="section-hint"]').exists()).toBe(false)
   })
 
-  it('sets the week first, centred across the line as the screen’s title, hidden from a screen reader (K86)', () => {
+  it('sets the section on its own line, with no week: the page’s h1 is fixed above (K88)', () => {
     const wrapper = header()
     expect(wrapper.element.tagName).toBe('HEADER')
     expect(wrapper.classes()).toEqual(
@@ -38,28 +38,7 @@ describe('SectionHeader', () => {
     )
     // Actions follow the title rather than being pushed to the far end (K61).
     expect(wrapper.classes()).not.toContain('justify-between')
-    const week = wrapper.get('[data-slot="section-week"]')
-    expect(wrapper.element.firstElementChild).toBe(week.element)
-    expect(week.text()).toBe('19–25 October')
-    expect(week.attributes('aria-hidden')).toBe('true')
-    // The title serif at the title size, in ink, centred, across the whole line; folded too.
-    expect(week.classes()).toEqual(
-      expect.arrayContaining([
-        'title-1',
-        'text-ink',
-        'screen:block',
-        'screen:col-span-full',
-        'screen:text-center',
-        'screen:text-(length:--fs-title)',
-        'folded:basis-full',
-      ]),
-    )
-    expect(week.classes()).not.toContain('text-ink-secondary')
-    expect(week.classes()).not.toContain('folded:hidden')
-  })
-
-  it('shows no week where none is given, as in Edit plan (K81)', () => {
-    const wrapper = mount(SectionHeader, { props: { title: 'Food', headingId: 'food-heading' } })
     expect(wrapper.find('[data-slot="section-week"]').exists()).toBe(false)
+    expect(wrapper.text()).toBe('Exercises')
   })
 })

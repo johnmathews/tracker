@@ -47,6 +47,8 @@ const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce
 let frame = 0
 /** The end of the sprint running now, if one is. */
 let landing: (() => void) | null = null
+/** The way the last sprint went (1 down, -1 up): a wheel's momentum runs on the same way. */
+let heading: 1 | -1 | 0 = 0
 
 /**
  * Move the page to `top` in SPRINT_MS, eased out, at once when motion is reduced (K45). Each frame
@@ -54,6 +56,7 @@ let landing: (() => void) | null = null
  */
 export function sprintTo(top: number, done?: () => void): void {
   stopSprint()
+  heading = top > window.scrollY ? 1 : top < window.scrollY ? -1 : 0
   if (reducedMotion()) {
     window.scrollTo({ top, behavior: 'auto' })
     done?.()
@@ -76,10 +79,20 @@ export function sprintTo(top: number, done?: () => void): void {
   frame = requestAnimationFrame(step)
 }
 
+/**
+ * The height of the week fixed above the screens (K88), or 0 where it isn't fixed (Edit plan, a
+ * short screen). A screen rests just under it, so it is taken off the window's top.
+ */
+export function bandHeight(): number {
+  const band = document.querySelector<HTMLElement>('[data-slot="week-band"]')
+  if (!band || getComputedStyle(band).position !== 'sticky') return 0
+  return band.getBoundingClientRect().height
+}
+
 /** Sprint to the top of the screen labelled by `headingId` (the arrows between screens, K42). */
 export function sprintToScreen(headingId: string): void {
   const screen = document.querySelector(`[aria-labelledby="${headingId}"]`)
-  if (screen) sprintTo(screen.getBoundingClientRect().top + window.scrollY)
+  if (screen) sprintTo(screen.getBoundingClientRect().top + window.scrollY - bandHeight())
 }
 
 /** Stop a running sprint where it is. */
@@ -99,7 +112,7 @@ export function sprinting(): boolean {
  * as soon as the line is a step inside (K45), while it is still moving; a finger on the screen
  * waits until it lifts; anything else (a scrollbar drag, the keyboard) when the page comes to rest.
  * While a sprint runs, and until the wheel is quiet after it, the wheel and a finger can't move
- * the page. A resize or a rotation that leaves the page across a line settles on the screen that
+ * the page, unless the wheel turns the other way (K89). A resize or a rotation that leaves the page across a line settles on the screen that
  * fills more of the window (K40). The screens are the elements matching `[data-planner-screen]`.
  * Scrolling inside a screen is left alone, so a screen with more rows than fit scrolls as usual.
  */
@@ -113,13 +126,24 @@ export function useScreenSprint(enabled: Ref<boolean>) {
   let wheelAt = -Infinity
   let liftAt = -Infinity
 
-  function starts(): number[] {
+  /**
+   * Each screen's top, as the scroll position that rests it just under the fixed week (K88). With
+   * the window less the band as the height, sprintTarget sees only the part the screens move in.
+   */
+  function starts(band: number): number[] {
     const screens = [...document.querySelectorAll<HTMLElement>('[data-planner-screen]')]
-    return screens.map((el) => el.getBoundingClientRect().top + window.scrollY)
+    return screens.map((el) => el.getBoundingClientRect().top + window.scrollY - band)
   }
 
   function go(step: number): boolean {
-    const target = sprintTarget(window.scrollY, window.innerHeight, starts(), direction, step)
+    const band = bandHeight()
+    const target = sprintTarget(
+      window.scrollY,
+      window.innerHeight - band,
+      starts(band),
+      direction,
+      step,
+    )
     if (target === null) return false
     clearTimeout(timer)
     sprintTo(target, () => {
@@ -155,14 +179,26 @@ export function useScreenSprint(enabled: Ref<boolean>) {
     timer = setTimeout(settle, REST_MS)
   }
 
+  /**
+   * During a sprint and until the wheel is quiet after it, the wheel can't move the page: that
+   * swallows a fling's momentum, which runs on the way the sprint went. A wheel the other way is
+   * the person turning round, so it is never held back: it stops the sprint where it is and
+   * scrolls, and the scroll sprints back.
+   */
   function onWheel(event: WheelEvent): void {
     if (!enabled.value) return
     const now = performance.now()
     wheelAt = now
-    if (sprinting() || now < quietUntil) {
-      event.preventDefault()
-      quietUntil = now + QUIET_MS
+    if (!sprinting() && now >= quietUntil) return
+    const way = Math.sign(event.deltaY)
+    if (way !== 0 && way !== heading) {
+      stopSprint()
+      quietUntil = 0
+      last = window.scrollY
+      return
     }
+    event.preventDefault()
+    quietUntil = now + QUIET_MS
   }
 
   function onTouchStart(): void {

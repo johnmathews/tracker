@@ -71,11 +71,10 @@ watch(
 )
 </script>
 
-<!-- The Exercises section (SectionHeader, WeekGrid and PlannerScreen cards): its heading and the
-     week; in Edit plan the heading alone with Exercises a day centred on its line, reading "3 per day" (K56, K62, K63), and
-     the Add exercise button under the grid (K54). On the planner's screens it is
-     the first screen: the slot's messages and the page's h1 at its top, the arrow to Food at its
-     foot. -->
+<!-- The Exercises section (SectionHeader, WeekGrid and PlannerScreen cards): its heading; in Edit
+     plan with Exercises a day centred on its line, reading "3 per day" (K56, K62, K63), and the Add
+     exercise button under the grid (K54). On the planner's screens it is the first screen, under
+     the fixed week (K88): the slot's messages at its top, the arrow to Food at its foot. -->
 <template>
   <section
     aria-labelledby="exercises-heading"
@@ -84,11 +83,7 @@ watch(
     data-planner-screen
   >
     <slot />
-    <SectionHeader
-      :title="type.label"
-      heading-id="exercises-heading"
-      :week="store.configMode ? undefined : store.label"
-    >
+    <SectionHeader :title="type.label" heading-id="exercises-heading">
       <template v-if="store.configMode && store.dailyGoal" #actions>
         <!-- Centred on the title line (K62), the Stepper alone, reading "− 3 per day +" (K63): its
              label, "Exercises a day", is for a screen reader. -->

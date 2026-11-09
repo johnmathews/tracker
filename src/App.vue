@@ -324,13 +324,15 @@ onBeforeUnmount(() => {
           :item-id="item!.id"
         />
       </template>
-      <!-- On the planner the messages sit at the top of the first screen (PlannerScreen card). -->
+      <!-- On the planner the messages sit at the top of the first screen, under the week
+           (PlannerScreen card). -->
       <template v-else-if="sync.loaded">
+        <!-- The week, the page's title: fixed above the screens as they move under it (K88). -->
+        <WeekHeader />
         <ExerciseGrid>
           <SyncStatus />
           <EmailStatus />
           <ImportPrompt v-if="session.user" :key="session.user" :user="session.user" />
-          <WeekHeader />
         </ExerciseGrid>
         <DietSection />
       </template>

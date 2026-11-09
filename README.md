@@ -22,8 +22,9 @@
   one. Each food has a weekly goal, set in its Edit dialog. Defaults are Vegetables (7), Fruit (5),
   Fish (2) and Nuts (3). A day whose marked foods reach **Foods a day** (default two) turns green,
   as an exercise day does.
-- **Normal mode and config mode.** The app opens in normal mode, where you only mark cells. Each
-  screen's title is the week, centred at the top, with "Exercises" or "Food" a step smaller under it.
+- **Normal mode and config mode.** The app opens in normal mode, where you only mark cells. The
+  week stays fixed at the top centre as the page's title, and "Exercises" and "Food" move under it,
+  one screen at a time, each a step smaller under the week.
   A long press anywhere (or the handle at the top centre) turns on config mode, **Edit plan**, for
   changing the plan, with the bar in view; **Done** in the bar, or another long press, goes back:
   - while **Daily goal** is on, a counter centred on each section's title line, reading

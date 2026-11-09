@@ -131,11 +131,12 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 ├── SyncStatus.vue      loading, offline and conflict Banners above the planner
 ├── EmailStatus.vue     "Confirm your email." Banner, with Send it again, until it is confirmed
 ├── ImportPrompt.vue    this browser's log from before accounts, offered once (§7)
-├── WeekHeader.vue      the page's h1, the week ("19–25 October"), visually hidden on screen (each
-│                       SectionHeader shows the week as the screen's title, K86); set in display on paper
-├── ExerciseGrid.vue    the Exercises section: SectionHeader (the week centred as the title, then
-│   │                   the section's heading; in config mode the heading alone, with the
-│   │                   Exercises a day Stepper centred on its line while Daily goal is on, K62, K85)
+├── WeekHeader.vue      the page's h1, the week ("19–25 October"): on the planner's screens a band
+│                       fixed at the top, with a hairline once a screen is under it (K88); visually
+│                       hidden in Edit plan and on a short screen; set in display on paper
+├── ExerciseGrid.vue    the Exercises section: SectionHeader (the section's heading; in config
+│   │                   mode with the Exercises a day Stepper centred on its line while Daily
+│   │                   goal is on, K62, K85)
 │   ├── TrackerGrid.vue a <table> (WeekGrid card): day names, one TrackerRow per item, and
 │   │   │               the days that met the daily pick
 │   │   └── TrackerRow.vue  name (a link to the item's page) and chips on one line, the
@@ -756,14 +757,18 @@ first grid that has today. Tabbing to it brings the navbar into view on the plan
 `App.vue` puts `planner-screens` on `<html>` while the planner shows outside Edit plan (K27). That
 class turns on main.css's `full:` variant. Settings and an item's page are ordinary pages that
 scroll, so neither has it. With it, each section is a screen (`SCREEN` in
-`src/lib/screens.ts`: `min-h-dvh`, a centred column, and `data-planner-screen`) and its grid takes
-the height left (`SCREEN_GRID`). `useScreenSprint` (`src/composables/screenSprint.ts`) keeps the
+`src/lib/screens.ts`: the window's height less the fixed week's `--week-band`, a centred column,
+and `data-planner-screen`) and its grid takes the height left (`SCREEN_GRID`). WeekHeader, before
+the sections, is the fixed week: `sticky` at the top on the canvas, so the screens move under it
+(K88). `bandHeight()` measures it while it is sticky, and the sprint takes it off the window's
+top, so each screen rests just under it. `useScreenSprint` (`src/composables/screenSprint.ts`) keeps the
 page from resting across two screens. A wheel or a fling sprints as soon as the line between two
 screens is a step (4% of the window, at least 16px) inside it, while it is still moving (K45); a finger on the
 screen waits until it lifts; a scrollbar drag or the keyboard 120ms after the scroll stops (K38).
 `sprintTarget` picks the place, in the direction of travel, and `sprintTo` moves there in 260ms,
 eased out, setting the position each frame so a fling's momentum can't carry the page past it. The
-wheel is swallowed until it has been quiet for 180ms after. After a resize or rotation, the page
+wheel is swallowed until it has been quiet for 180ms after, but only the way the sprint went (a
+fling's momentum); a wheel the other way stops the sprint and scrolls back at once (K89). After a resize or rotation, the page
 settles on the screen that fills more of the window (K40). It replaced `scroll-snap-type: y mandatory`, which a mouse wheel couldn't
 cross from the end of a tall screen. Four custom variants in main.css carry
 the layout, all screen-only so paper keeps the table: `screen:` (the WeekGrid is a CSS grid),

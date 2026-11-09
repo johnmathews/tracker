@@ -7,14 +7,25 @@ test.use({ viewport: { width: 1280, height: 800 } })
 // Forty wheel steps, each left to settle.
 test.setTimeout(90_000)
 
-/** Where the sections sit once the scroll has come to rest. */
+/**
+ * Where the sections sit once the scroll has come to rest. `band` is the fixed week's foot (K88):
+ * the screens move in the window below it, and 0 where it isn't fixed (a short screen).
+ */
 async function atRest(page: Page) {
   await page.waitForTimeout(700)
   return page.evaluate(() => {
     const ex = document
       .querySelector('[aria-labelledby="exercises-heading"]')!
       .getBoundingClientRect()
-    return { exBottom: Math.round(ex.bottom), exHeight: Math.round(ex.height), vh: innerHeight }
+    const week = document.querySelector<HTMLElement>('[data-slot="week-band"]')!
+    const band =
+      getComputedStyle(week).position === 'sticky' ? week.getBoundingClientRect().bottom : 0
+    return {
+      exBottom: Math.round(ex.bottom),
+      exHeight: Math.round(ex.height),
+      vh: innerHeight,
+      band: Math.round(band),
+    }
   })
 }
 
@@ -25,10 +36,11 @@ async function wheel(page: Page, steps: number, dy: number) {
   for (let i = 0; i < steps; i++) {
     await page.mouse.wheel(0, dy)
     const at = await atRest(page)
-    // Exercises' foot inside the screen means part of Food shows beneath it.
-    const both = at.exBottom > 1 && at.exBottom < at.vh - 1
+    // Exercises' foot below the fixed week and inside the screen means part of Food shows
+    // beneath it.
+    const both = at.exBottom > at.band + 1 && at.exBottom < at.vh - 1
     if (Math.abs(at.exBottom - at.vh) <= 1) ends.add('exercises-end')
-    if (Math.abs(at.exBottom) <= 1) ends.add('food-start')
+    if (Math.abs(at.exBottom - at.band) <= 1) ends.add('food-start')
     stops.push(
       `${dy > 0 ? 'down' : 'up'} ${i + 1}: Exercises ends at ${at.exBottom} of ${at.vh}${both ? '  <-- both' : ''}`,
     )
@@ -50,7 +62,7 @@ test('a rotation never leaves the page resting across two screens (K40)', async 
     await page.setViewportSize(size)
     const at = await atRest(page)
     expect(
-      at.exBottom > 1 && at.exBottom < at.vh - 1,
+      at.exBottom > at.band + 1 && at.exBottom < at.vh - 1,
       `at ${size.width}×${size.height} Exercises ends at ${at.exBottom} of ${at.vh}`,
     ).toBe(false)
   }
@@ -77,13 +89,15 @@ for (const [name, opts] of [
 test('a fling sprints to Food while it is still moving, not after (K45)', async ({ page }) => {
   await openApp(page)
   await page.mouse.move(640, 400)
-  // The page notes when Food's top reaches the top of the window.
+  // The page notes when Food's top reaches the foot of the fixed week (K88).
   await page.evaluate(() => {
     const w = window as unknown as { arrivedAt: number | null }
     w.arrivedAt = null
     const food = document.querySelector('[aria-labelledby="diet-heading"]')!
+    const band = document.querySelector('[data-slot="week-band"]')!
     const watch = () => {
-      if (Math.abs(food.getBoundingClientRect().top) <= 1) w.arrivedAt = performance.now()
+      const gap = food.getBoundingClientRect().top - band.getBoundingClientRect().bottom
+      if (Math.abs(gap) <= 1) w.arrivedAt = performance.now()
       else requestAnimationFrame(watch)
     }
     requestAnimationFrame(watch)
@@ -140,4 +154,28 @@ test('a long press opens Edit plan with the bar above the week, and marks no day
   // A tap on it, after, marks it as before.
   await cell.click()
   await expect(cell).toHaveAttribute('aria-pressed', 'true')
+})
+
+test('a wheel the other way is never held back: it turns straight round (K45)', async ({
+  page,
+}) => {
+  await openApp(page)
+  await page.mouse.move(640, 400)
+  const top = () => page.evaluate(() => Math.round(window.scrollY))
+  // Three quick steps down sprint to Food; the wheel is still busy when the sprint lands.
+  for (let i = 0; i < 3; i++) {
+    await page.mouse.wheel(0, 120)
+    await page.waitForTimeout(16)
+  }
+  await page.waitForTimeout(300)
+  const food = await top()
+  expect(food).toBeGreaterThan(0)
+  // At once, a step up: it goes back to Exercises rather than being swallowed.
+  await page.mouse.wheel(0, -120)
+  await page.waitForTimeout(500)
+  expect(await top()).toBe(0)
+  // And at once, down again.
+  await page.mouse.wheel(0, 120)
+  await page.waitForTimeout(500)
+  expect(await top()).toBe(food)
 })
