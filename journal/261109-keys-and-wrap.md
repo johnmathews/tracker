@@ -50,6 +50,14 @@ John chose both ways.
     then swallowed the rest of its momentum, so the test never reached the foot. It now steps to
     Food first.
 - A wrap can't be turned round halfway: K89's reversal is off while `wrapping`.
+- **Turning round after a wrap.** John: "it looks like the scrolling bug is back".
+  - A wrap down sprints the way down, so after it lands on Exercises the page still recorded
+    "down". A wheel up at once then hit K89's turn-round, which stopped and let the page scroll.
+    But the page was at its top, so nothing moved, and the rest of that gesture (no 150ms gap)
+    could never start a wrap.
+  - Now turning round counts as a fresh gesture: at an end it starts a wrap at once.
+  - A repro e2e test, wrap down then straight up, failed before the fix. Plain down-then-up and
+    wrap-up-then-down already passed.
 
 ## Tests
 

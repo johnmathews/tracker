@@ -451,6 +451,17 @@ describe('useScreenSprint', () => {
       wrapper.unmount()
     })
 
+    it('wraps straight back when the wheel turns round as a wrap lands (K89)', () => {
+      const wrapper = holder()
+      at(1300)
+      wheel(40)
+      expect(landed()).toBe(0)
+      expect(wheel(40).defaultPrevented).toBe(true) // the wrap's own momentum, still swallowed
+      expect(wheel(-40).defaultPrevented).toBe(true) // turned round at the top: wraps back up
+      expect(landed()).toBe(1300)
+      wrapper.unmount()
+    })
+
     it('counts a wheel in lines, and wraps up from the top', () => {
       const wrapper = holder()
       at(0)

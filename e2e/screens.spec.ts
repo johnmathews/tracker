@@ -243,3 +243,28 @@ test('the week’s keys: E in and out of Edit plan, Esc out, S to Settings (K91)
   await page.keyboard.press('s')
   await expect(page).toHaveURL(/#\/settings$/)
 })
+
+test('a wrap turns straight back too: the other way at an end wraps back at once (K89, K92)', async ({
+  page,
+}) => {
+  await openApp(page)
+  await page.mouse.move(640, 400)
+  const top = () => page.evaluate(() => Math.round(window.scrollY))
+  await page.mouse.wheel(0, 120)
+  await page.waitForTimeout(700)
+  const food = await top()
+  // On down past Food, the wheel still busy as the wrap lands on Exercises…
+  for (let i = 0; i < 3; i++) {
+    await page.mouse.wheel(0, 120)
+    await page.waitForTimeout(16)
+  }
+  await page.waitForTimeout(300)
+  expect(await top()).toBe(0)
+  // …then at once up again: back to Food, not swallowed.
+  for (let i = 0; i < 3; i++) {
+    await page.mouse.wheel(0, -120)
+    await page.waitForTimeout(16)
+  }
+  await page.waitForTimeout(500)
+  expect(await top()).toBe(food)
+})

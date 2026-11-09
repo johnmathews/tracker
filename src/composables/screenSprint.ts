@@ -281,28 +281,30 @@ export function useScreenSprint(enabled: Ref<boolean>) {
     const gap = now - wheelAt
     wheelAt = now
     const way = Math.sign(event.deltaY)
-    if (!sprinting() && now >= quietUntil) {
-      // A new gesture starting at an end, the way past it, wraps once it has gone a step (K92).
-      const end = pageEnd()
-      if (gap >= WHEEL_MS) push = end !== 0 && end === way ? { way: end, sum: 0 } : null
-      if (push && way === push.way && pageEnd() === way) {
+    // Turning round counts as a new gesture, so at an end it can wrap straight back (K89, K92).
+    let fresh = gap >= WHEEL_MS
+    if (sprinting() || now < quietUntil) {
+      if (way === 0 || way === heading || wrapping) {
         event.preventDefault()
-        push.sum += Math.abs(event.deltaY) * (event.deltaMode === 1 ? 16 : 1)
-        if (push.sum >= step()) {
-          push = null
-          wrap(way)
-        }
-      } else push = null
-      return
-    }
-    if (way !== 0 && way !== heading && !wrapping) {
+        quietUntil = now + QUIET_MS
+        return
+      }
       stopSprint()
       quietUntil = 0
       last = window.scrollY
-      return
+      fresh = true
     }
-    event.preventDefault()
-    quietUntil = now + QUIET_MS
+    // A gesture starting at an end, the way past it, wraps once it has gone a step (K92).
+    const end = pageEnd()
+    if (fresh) push = end !== 0 && end === way ? { way: end, sum: 0 } : null
+    if (push && way === push.way && end === way) {
+      event.preventDefault()
+      push.sum += Math.abs(event.deltaY) * (event.deltaMode === 1 ? 16 : 1)
+      if (push.sum >= step()) {
+        push = null
+        wrap(way)
+      }
+    } else push = null
   }
 
   function onTouchStart(event: TouchEvent): void {
