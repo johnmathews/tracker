@@ -1,9 +1,11 @@
 import {
   MARKS,
   MARK_KINDS,
+  NEW_CARDIO_TARGET,
   NEW_EXERCISE_TARGET,
   NEW_FOOD_TARGET,
   markKind,
+  type Cardio,
   type Exercise,
   type Mark,
   type MarkSet,
@@ -14,12 +16,15 @@ import { durationText } from '@/lib/words'
 
 /**
  * Tracker types (docs/architecture.md §1): what kind of thing a section tracks, and what follows
- * from it. A section is the stored name (`exercise`, `diet`: in URLs, the database, the cache and
- * the outbox); its type is an attribute of it. `api/src/tracker_api/types.py` holds the same
+ * from it. A section is the stored name (`exercise`, `cardio`, `diet`: in URLs, the database, the
+ * cache and the outbox); its type is an attribute of it. `api/src/tracker_api/types.py` holds the same
  * registry, and `fixtures/types/registry.json` keeps the two in step.
  */
 
-export type TrackerTypeId = 'exercise' | 'food'
+export type TrackerTypeId = 'exercise' | 'cardio' | 'food'
+
+/** The settings that hold a daily target: how many items a day count as a met day (K30, K57). */
+export type PickKey = Extract<keyof PortableSettings, 'dailyPick' | 'foodPick'>
 
 /** A text field on the item page, by its stored key and the label it shows. */
 export type ItemField = { key: string; label: string }
@@ -36,8 +41,11 @@ export type TrackerType = {
   details: (item: Tracked) => string[]
   /** The item page's fields, in order. */
   fields: readonly ItemField[]
-  /** The setting that holds how many items a day count as a met day (K30, K57). */
-  pickKey: Exclude<keyof PortableSettings, 'accent' | 'itemSections'>
+  /**
+   * The setting that holds how many items a day count as a met day (K30, K57); null for a type
+   * with no daily target, whose days never turn green (cardio, K90).
+   */
+  pickKey: PickKey | null
   /** The weekly goal an added item starts with. */
   newTarget: number
 }
@@ -56,6 +64,17 @@ export const FOOD_CYCLE: readonly Mark[] = MARKS.filter((m) => markKind(m) === '
  */
 export const EXERCISE_KIND_CYCLE: readonly Mark[] = MARK_KINDS
 export const FOOD_KIND_CYCLE: readonly Mark[] = ['great']
+
+/**
+ * The chips under a cardio item's name (K90): its time, "30 min" or "1 min 30 s" as an exercise's,
+ * then its distance, "5 km". None for neither.
+ */
+export function cardioDetails(c: Cardio): string[] {
+  const chips: string[] = []
+  if (c.duration) chips.push(durationText(c.duration))
+  if (c.distance) chips.push(`${c.distance} km`)
+  return chips
+}
 
 /**
  * The chips under an exercise name, in the Chip card's words: "3 × 12" or "3 × 8 each side" with
@@ -91,6 +110,20 @@ export const TRACKER_TYPES: Readonly<Record<TrackerTypeId, TrackerType>> = {
     pickKey: 'dailyPick',
     newTarget: NEW_EXERCISE_TARGET,
   },
+  cardio: {
+    id: 'cardio',
+    label: 'Cardio',
+    itemLabel: 'Cardio',
+    // Marked like an exercise: done well, in part, or tried and missed (K90).
+    cycle: (set) => (set === 'squiggles' ? EXERCISE_CYCLE : EXERCISE_KIND_CYCLE),
+    details: (item) => cardioDetails(item as Cardio),
+    fields: [
+      { key: 'route', label: 'Route' },
+      { key: 'link', label: 'Link' },
+    ],
+    pickKey: null,
+    newTarget: NEW_CARDIO_TARGET,
+  },
   food: {
     id: 'food',
     label: 'Food',
@@ -106,9 +139,13 @@ export const TRACKER_TYPES: Readonly<Record<TrackerTypeId, TrackerType>> = {
   },
 }
 
-/** Each section's type. A second tracker of a type would be a new section here (D1). */
+/**
+ * Each section's type, in the order the week shows them: Exercises, Cardio, Food (K90). A second
+ * tracker of a type would be a new section here (D1).
+ */
 export const SECTIONS = {
   exercise: TRACKER_TYPES.exercise,
+  cardio: TRACKER_TYPES.cardio,
   diet: TRACKER_TYPES.food,
 } as const satisfies Record<string, TrackerType>
 

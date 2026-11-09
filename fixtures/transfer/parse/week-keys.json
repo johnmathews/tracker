@@ -25,6 +25,7 @@
         "log": { "2026-10-19": { "a": ["great", null, null, null, null, null, null] } },
         "details": {}
       },
+      "cardio": { "plans": {}, "log": {}, "details": {} },
       "diet": { "plans": {}, "log": {}, "details": {} },
       "settings": null
     }

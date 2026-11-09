@@ -3,14 +3,13 @@ import { defineComponent, h, nextTick, ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import {
   bandHeight,
-  pushing,
   pageEnd,
   stopSprint,
   wrapAround,
   sprintToScreen,
-  QUIET_MS,
   REST_MS,
   SPRINT_MS,
+  WHEEL_MS,
   sprintTarget,
   sprinting,
   sprintTo,
@@ -51,18 +50,6 @@ describe('sprintTarget (K38)', () => {
     expect(sprintTarget(540, 800, starts, 1, 32)).toBe(1300)
     expect(sprintTarget(1280, 800, starts, -1, 32)).toBeNull()
     expect(sprintTarget(1260, 800, starts, -1, 32)).toBe(500)
-  })
-})
-
-describe('pushing (K93)', () => {
-  it('tells a push from momentum by the last steps against the ones before', () => {
-    expect(pushing([])).toBe(false)
-    expect(pushing([120])).toBe(true) // a single notch
-    expect(pushing(Array(20).fill(100))).toBe(true) // a mouse wheel: steps the same size
-    expect(pushing([2, 4, 8, 12, 16, 20])).toBe(true) // a finger speeding up
-    const coasting = Array.from({ length: 40 }, (_, i) => Math.round(30 * 0.94 ** i))
-    expect(pushing(coasting)).toBe(false) // momentum dying away
-    expect(pushing([...coasting, ...Array(10).fill(25)])).toBe(true) // a new push over it
   })
 })
 
@@ -216,7 +203,7 @@ describe('useScreenSprint', () => {
     coast(SPRINT_MS + 50)
     expect(at_()).toBe(1300)
     expect(wheel(1).defaultPrevented).toBe(true) // the fling's momentum, still arriving
-    vi.advanceTimersByTime(QUIET_MS)
+    vi.advanceTimersByTime(WHEEL_MS)
     expect(wheel().defaultPrevented).toBe(false)
     wrapper.unmount()
   })
@@ -338,7 +325,7 @@ describe('useScreenSprint', () => {
 
   it('keeps only the wheel’s last 70 steps, and sprints nowhere for a screen it can’t find', () => {
     const wrapper = holder()
-    vi.advanceTimersByTime(QUIET_MS)
+    vi.advanceTimersByTime(WHEEL_MS)
     for (let i = 0; i < 80; i++) wheel(1) // far from an end: an ordinary scroll each time
     expect(scrollTo).not.toHaveBeenCalled()
     sprintToScreen('no-such-heading')
@@ -362,7 +349,7 @@ describe('useScreenSprint', () => {
     scrollToY(300)
     scrollToY(540) // Food's top is 640px down the window: past the band, a step in
     expect(landed()).toBe(1220)
-    vi.advanceTimersByTime(QUIET_MS + 1)
+    vi.advanceTimersByTime(WHEEL_MS + 1)
     wheel()
     scrollToY(1180) // back up: Exercises' end comes a step into the screens' part
     expect(landed()).toBe(500) // its end meets the bottom of the window
@@ -506,30 +493,27 @@ describe('useScreenSprint', () => {
       wrapper.unmount()
     })
 
-    it('moves on at once when the wheel pushes on after a sprint, not on momentum (K93)', () => {
+    it('moves one screen a gesture: the rest of it is swallowed, however it runs (K94)', () => {
       const wrapper = holder()
       at(1300)
       wheel(40)
       coast(SPRINT_MS + 50, 30)
       expect(at_()).toBe(0) // wrapped to the top
-      // Still coasting after it: steps shrinking, swallowed.
-      for (const d of [2, 2, 1, 1]) expect(wheel(d).defaultPrevented).toBe(true)
+      // The same gesture going on, even growing again: swallowed, no second screen.
+      for (const d of [2, 1, 4, 14, 30, 45]) expect(wheel(d).defaultPrevented).toBe(true)
       expect(copy()).toBeNull()
       expect(sprinting()).toBe(false)
-      // A new push over the momentum: steps growing again, let through at once.
-      for (const d of [4, 8, 14, 20, 26, 32, 38]) wheel(d)
-      expect(wheel(40).defaultPrevented).toBe(false)
       wrapper.unmount()
     })
 
-    it('takes a steady wheel after a landing as scrolling on', () => {
+    it('takes a new gesture after the wheel was still as the next push (K94)', () => {
       const wrapper = holder()
       at(1300)
       wheel(100)
-      expect(landed()).toBe(0)
-      // Within the quiet after the wrap, the same size again: a mouse notch, so it is let through.
+      expect(landed()).toBe(0) // the wheel was still while it ran
+      // A new notch: let through, and the page is not at the end it goes past, so it scrolls.
       expect(wheel(100).defaultPrevented).toBe(false)
-      expect(copy()).toBeNull() // the page is not at an end the way it went: it just scrolls
+      expect(copy()).toBeNull()
       wrapper.unmount()
     })
 
@@ -548,7 +532,7 @@ describe('useScreenSprint', () => {
       wheel(40) // the gesture starts above the foot
       at(1300)
       expect(wheel(40).defaultPrevented).toBe(false)
-      vi.advanceTimersByTime(QUIET_MS)
+      vi.advanceTimersByTime(WHEEL_MS)
       expect(wheel(-40).defaultPrevented).toBe(false) // up from the foot: an ordinary scroll
       wheel(0)
       expect(copy()).toBeNull()
@@ -564,7 +548,7 @@ describe('useScreenSprint', () => {
       touch('touchstart', 500)
       touch('touchend', 400)
       expect(landed()).toBe(0)
-      vi.advanceTimersByTime(QUIET_MS)
+      vi.advanceTimersByTime(WHEEL_MS)
       at(0)
       touch('touchstart', 400)
       touch('touchend', 500)

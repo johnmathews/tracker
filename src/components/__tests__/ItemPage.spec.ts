@@ -4,9 +4,10 @@ import { mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import ItemPage from '@/components/ItemPage.vue'
 import { usePlannerStore } from '@/stores/planner'
+import { useCardioStore } from '@/stores/cardio'
 import { useDietStore } from '@/stores/diet'
 import { useDetailsStore } from '@/stores/details'
-import type { Exercise, Food } from '@/lib/storage'
+import type { Cardio, Exercise, Food } from '@/lib/storage'
 import type { Section } from '@/lib/trackerTypes'
 
 // Today is Wednesday 21 October 2026: the current week starts on Monday 19 October.
@@ -24,6 +25,8 @@ const PU: Exercise = { id: 'pu', name: 'Push-ups', sets: 3, reps: 12, target: 4,
 const PL: Exercise = { id: 'pl', name: 'Plank', duration: 45, reps: 0, perSide: true, target: 2 }
 const NUTS: Food = { id: 'nuts', name: 'Nuts', target: 5 }
 const FISH: Food = { id: 'fish', name: 'Fish', target: 2 }
+const RUN: Cardio = { id: 'ru', name: 'Running', duration: 1800, distance: 5, target: 3 }
+const RIDE: Cardio = { id: 'cy', name: 'Cycling', duration: 5430, target: 2 }
 
 let wrapper: VueWrapper | undefined
 
@@ -43,6 +46,7 @@ beforeEach(() => {
   }
   const diet = useDietStore()
   diet.plans = { '2026-10-12': [{ ...NUTS }, { ...FISH }], '2026-10-19': [{ ...FISH }] }
+  useCardioStore().plans = { '2026-10-12': [{ ...RIDE }, { ...RUN }], '2026-10-19': [{ ...RUN }] }
   useDetailsStore().adopt({
     exercise: {
       ks: {
@@ -50,6 +54,7 @@ beforeEach(() => {
         fields: { equipment: '16 kg kettlebell' },
       },
     },
+    cardio: { ru: { fields: { route: 'Round the park' } } },
     diet: {},
   })
 })
@@ -443,6 +448,123 @@ describe('this week’s plan', () => {
         .map((l) => l.text()),
     ).toEqual(['A serving', 'Examples'])
     expect(wrapper!.find('[data-testid="item-link-open"]').exists()).toBe(false)
+  })
+})
+
+describe('a cardio item (K90)', () => {
+  const runs = () => useCardioStore().plans['2026-10-19']!
+
+  it('has its type, chips, Minutes and Distance in km, and the goal; Route and Link as details', () => {
+    mountPage('cardio', 'ru')
+    expect(wrapper!.get('[data-testid="item-type"]').text()).toBe('Cardio')
+    expect(wrapper!.findAll('[data-testid="item-chip"]').map((c) => c.text())).toEqual([
+      '30 min',
+      '5 km',
+    ])
+    const plan = section('plan')
+    expect(plan.findAll('label, [data-slot="stepper-label"]').map((l) => l.text())).toEqual([
+      'Minutes',
+      'Distance in km',
+      'Times a week',
+    ])
+    expect(field('minutes').element.value).toBe('30')
+    expect(field('distance').element.value).toBe('5')
+    expect(plan.find('[data-slot="segmented-control"]').exists()).toBe(false)
+    expect(
+      section('details')
+        .findAll('label')
+        .map((l) => l.text()),
+    ).toEqual(['Route', 'Link'])
+    expect(field('route').element.value).toBe('Round the park')
+  })
+
+  it('applies each change to this week’s plan at once, blank leaving an amount out', async () => {
+    mountPage('cardio', 'ru')
+    await type(field('minutes'), '42.5')
+    expect(runs()[0]!.duration).toBe(2550)
+    await type(field('distance'), '7,25')
+    expect(field('distance').element.value).toBe('7.25')
+    expect(runs()[0]!.distance).toBe(7.25)
+    await type(field('minutes'), '')
+    expect(runs()[0]).toEqual({ id: 'ru', name: 'Running', distance: 7.25, target: 3 })
+    await section('plan').get('button[aria-label="More times a week"]').trigger('click')
+    expect(runs()[0]!.target).toBe(4)
+    expect(wrapper!.findAll('[data-testid="item-chip"]').map((c) => c.text())).toEqual(['7.25 km'])
+    // The week before keeps its own plan.
+    expect(useCardioStore().plans['2026-10-12']![1]).toEqual(RUN)
+  })
+
+  it('says when a time or a distance is over its limit, and changes nothing', async () => {
+    mountPage('cardio', 'ru')
+    await type(field('minutes'), '1500')
+    expect(section('plan').text()).toContain(
+      'This is 1,500 minutes. Enter 1,440 or fewer to change the plan.',
+    )
+    expect(field('minutes').attributes('aria-invalid')).toBe('true')
+    await type(field('distance'), '1200')
+    expect(section('plan').text()).toContain(
+      'This is 1,200 km. Enter 1,000 or fewer to change the plan.',
+    )
+    expect(runs()[0]).toEqual(RUN)
+    await type(field('minutes'), '20')
+    expect(runs()[0]).toEqual(RUN)
+    await type(field('distance'), '4')
+    expect(runs()[0]).toEqual({ ...RUN, duration: 1200, distance: 4 })
+  })
+
+  it('reloads its controls when the plan changes from elsewhere', async () => {
+    mountPage('cardio', 'ru')
+    await type(field('minutes'), '5000')
+    useCardioStore().updateCardio('ru', { name: 'Running', duration: 1830 })
+    await nextTick()
+    expect(field('minutes').element.value).toBe('30.5')
+    expect(field('minutes').attributes('aria-invalid')).toBeUndefined()
+    expect(field('distance').element.value).toBe('')
+  })
+
+  it('shows its latest plan as words when it isn’t in the week', () => {
+    mountPage('cardio', 'cy')
+    const dl = section('plan').get('dl')
+    expect(dl.findAll('div').map((d) => [d.get('dt').text(), d.get('dd').text()])).toEqual([
+      ['Minutes', '90.5'],
+      ['Times a week', '2'],
+    ])
+    expect(wrapper!.findAll('[data-testid="item-chip"]').map((c) => c.text())).toEqual([
+      '90 min 30 s',
+    ])
+    useCardioStore().plans['2026-10-12']![0] = {
+      id: 'cy',
+      name: 'Cycling',
+      distance: 40,
+      target: 2,
+    }
+  })
+
+  it('writes only the distance of a latest plan with no time', async () => {
+    useCardioStore().plans['2026-10-12']![0] = {
+      id: 'cy',
+      name: 'Cycling',
+      distance: 40,
+      target: 2,
+    }
+    mountPage('cardio', 'cy')
+    expect(
+      section('plan')
+        .get('dl')
+        .findAll('div')
+        .map((d) => [d.get('dt').text(), d.get('dd').text()]),
+    ).toEqual([
+      ['Distance in km', '40'],
+      ['Times a week', '2'],
+    ])
+  })
+
+  it('names cardio pages in its arranging line', async () => {
+    mountPage('cardio', 'ru')
+    await wrapper!.get('[data-testid="item-arrange"]').trigger('click')
+    expect(wrapper!.get('[data-testid="item-arrange-line"]').text()).toBe(
+      'Choose which sections every cardio page shows, and their order. Changes apply at once.',
+    )
   })
 })
 

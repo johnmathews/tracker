@@ -3,7 +3,7 @@ import { isSection, type Section } from '@/lib/trackerTypes'
 
 /**
  * The item page's address, `#/item/<section>/<id>` (ItemPage card, D5), and the way back from it.
- * The section is a registry section (`exercise`, `diet`); the id is encoded, so any id the API's
+ * The section is a registry section (`exercise`, `cardio`, `diet`); the id is encoded, so any id the API's
  * paths can name fits in one segment.
  */
 

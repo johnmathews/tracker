@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, useId, useTemplateRef, watch } from 'vue'
 import { ChevronLeft, Download, LogOut, Upload } from '@lucide/vue'
 import { usePlannerStore } from '@/stores/planner'
+import { useCardioStore } from '@/stores/cardio'
 import { useDietStore } from '@/stores/diet'
 import { useAskStore } from '@/stores/ask'
 import { useDetailsStore } from '@/stores/details'
@@ -72,6 +73,7 @@ const EXPORT_WITHOUT_HISTORY =
 const GOALS_PAUSE_MS = 600
 
 const store = usePlannerStore()
+const cardio = useCardioStore()
 const diet = useDietStore()
 const ask = useAskStore()
 const details = useDetailsStore()
@@ -161,6 +163,7 @@ async function exportData(): Promise<void> {
   notice.value = null
   const file = buildExport({
     exercise: { plans: store.plans, log: store.log, details: details.docs.exercise },
+    cardio: { plans: cardio.plans, log: cardio.log, details: details.docs.cardio },
     diet: { plans: diet.plans, log: diet.log, details: details.docs.diet },
     settings: {
       accent: store.accent,

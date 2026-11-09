@@ -118,11 +118,11 @@ function chunks(texts: string[]): ReadableStream<Uint8Array> {
 function emptyAccount(password: string): Account {
   return {
     password,
-    plans: { exercise: {}, diet: {} },
-    details: { exercise: {}, diet: {} },
-    ticks: { exercise: {}, diet: {} },
-    partial: { exercise: {}, diet: {} },
-    missed: { exercise: {}, diet: {} },
+    plans: { exercise: {}, cardio: {}, diet: {} },
+    details: { exercise: {}, cardio: {}, diet: {} },
+    ticks: { exercise: {}, cardio: {}, diet: {} },
+    partial: { exercise: {}, cardio: {}, diet: {} },
+    missed: { exercise: {}, cardio: {}, diet: {} },
     settings: null,
     conversations: [],
     tokens: [],
@@ -306,7 +306,12 @@ export class FakeApi {
       revs: Object.fromEntries(Object.entries(a.plans[s]).map(([w, p]) => [w, p.rev])),
       detailRevs: Object.fromEntries(Object.entries(a.details[s]).map(([id, d]) => [id, d.rev])),
     })
-    return { exercise: section('exercise'), diet: section('diet'), settings: a.settings }
+    return {
+      exercise: section('exercise'),
+      cardio: section('cardio'),
+      diet: section('diet'),
+      settings: a.settings,
+    }
   }
 
   fetch = async (input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> => {
@@ -446,7 +451,7 @@ export class FakeApi {
       })
       return Response.json(a.settings)
     }
-    let m = path.match(/^\/plans\/(exercise|diet)\/(\d{4}-\d{2}-\d{2})$/)
+    let m = path.match(/^\/plans\/(exercise|cardio|diet)\/(\d{4}-\d{2}-\d{2})$/)
     if (method === 'PUT' && m) {
       const plans = a.plans[m[1] as Section]
       const current = plans[m[2]!]
@@ -460,7 +465,7 @@ export class FakeApi {
       }
       return error(409, 'conflict', { items: current?.items ?? null, rev })
     }
-    m = path.match(/^\/details\/(exercise|diet)\/([^/]+)$/)
+    m = path.match(/^\/details\/(exercise|cardio|diet)\/([^/]+)$/)
     if (method === 'PUT' && m) {
       const all = a.details[m[1] as Section]
       const id = decodeURIComponent(m[2]!)
@@ -477,7 +482,7 @@ export class FakeApi {
       }
       return error(409, 'conflict', { details: current?.doc ?? null, rev })
     }
-    m = path.match(/^\/ticks\/(exercise|diet)\/(\d{4}-\d{2}-\d{2})\/([^/]+)\/([0-6])$/)
+    m = path.match(/^\/ticks\/(exercise|cardio|diet)\/(\d{4}-\d{2}-\d{2})\/([^/]+)\/([0-6])$/)
     if (method === 'PUT' && m) {
       const [s, week] = [m[1] as Section, m[2]!]
       const id = decodeURIComponent(m[3]!)
@@ -669,6 +674,7 @@ export class FakeApi {
         log: state.exercise.log,
         details: state.exercise.details,
       },
+      cardio: { plans: state.cardio.plans, log: state.cardio.log, details: state.cardio.details },
       diet: { plans: state.diet.plans, log: state.diet.log, details: state.diet.details },
       settings: a.settings,
       conversations: a.conversations,
@@ -685,7 +691,7 @@ export class FakeApi {
     let weeks = 0
     let ticks = 0
     let details = 0
-    for (const section of ['exercise', 'diet'] as const) {
+    for (const section of ['exercise', 'cardio', 'diet'] as const) {
       const incoming = parsed.data[section]
       const existing = this.state(this.signedIn!) as Record<Section, never>
       const added = mergeSummary(existing[section], incoming)

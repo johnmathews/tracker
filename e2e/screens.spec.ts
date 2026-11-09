@@ -1,5 +1,6 @@
 // The planner's screens (PlannerScreen card, K24): with more rows than fit, a section scrolls
-// as usual, but the page never comes to rest showing part of both sections at once.
+// as usual, but the page never comes to rest showing part of two sections at once. There are
+// three: Exercises, Cardio and Food (K90).
 import { expect, test, type Page } from '@playwright/test'
 import { openApp } from './support'
 
@@ -14,19 +15,23 @@ test.setTimeout(90_000)
 async function atRest(page: Page) {
   await page.waitForTimeout(700)
   return page.evaluate(() => {
-    const ex = document
-      .querySelector('[aria-labelledby="exercises-heading"]')!
-      .getBoundingClientRect()
+    const screens = [...document.querySelectorAll('[data-planner-screen]')]
     const week = document.querySelector<HTMLElement>('[data-slot="week-band"]')!
     const band =
       getComputedStyle(week).position === 'sticky' ? week.getBoundingClientRect().bottom : 0
     return {
-      exBottom: Math.round(ex.bottom),
-      exHeight: Math.round(ex.height),
+      // Each screen's foot but the last's: below the fixed week and inside the window, part of
+      // the next screen shows beneath it.
+      bottoms: screens.slice(0, -1).map((s) => Math.round(s.getBoundingClientRect().bottom)),
       vh: innerHeight,
       band: Math.round(band),
     }
   })
+}
+
+/** A screen's foot that rests inside the window, so two screens show; none when at rest. */
+function across(at: Awaited<ReturnType<typeof atRest>>): number | undefined {
+  return at.bottoms.find((b) => b > at.band + 1 && b < at.vh - 1)
 }
 
 /** Wheels `steps` times by `dy`, noting each place the scroll comes to rest. */
@@ -36,13 +41,11 @@ async function wheel(page: Page, steps: number, dy: number) {
   for (let i = 0; i < steps; i++) {
     await page.mouse.wheel(0, dy)
     const at = await atRest(page)
-    // Exercises' foot below the fixed week and inside the screen means part of Food shows
-    // beneath it.
-    const both = at.exBottom > at.band + 1 && at.exBottom < at.vh - 1
-    if (Math.abs(at.exBottom - at.vh) <= 1) ends.add('exercises-end')
-    if (Math.abs(at.exBottom - at.band) <= 1) ends.add('food-start')
+    const both = across(at) !== undefined
+    // A screen's foot at the fixed week's: the next screen starts there.
+    if (at.bottoms.some((b) => Math.abs(b - at.band) <= 1)) ends.add('next-start')
     stops.push(
-      `${dy > 0 ? 'down' : 'up'} ${i + 1}: Exercises ends at ${at.exBottom} of ${at.vh}${both ? '  <-- both' : ''}`,
+      `${dy > 0 ? 'down' : 'up'} ${i + 1}: screens end at ${at.bottoms.join(', ')} of ${at.vh}${both ? '  <-- both' : ''}`,
     )
   }
   return { stops, ends }
@@ -51,7 +54,7 @@ async function wheel(page: Page, steps: number, dy: number) {
 test('a rotation never leaves the page resting across two screens (K40)', async ({ page }) => {
   await openApp(page, { moreExercises: 10 })
   await page.mouse.move(640, 400)
-  // Down into Food, then turn the screen: the layout changes height under the scroll position.
+  // Down past Exercises, then turn the screen: the layout changes height under the scroll position.
   for (let i = 0; i < 12; i++) await page.mouse.wheel(0, 120)
   await atRest(page)
   for (const size of [
@@ -62,14 +65,15 @@ test('a rotation never leaves the page resting across two screens (K40)', async 
     await page.setViewportSize(size)
     const at = await atRest(page)
     expect(
-      at.exBottom > at.band + 1 && at.exBottom < at.vh - 1,
-      `at ${size.width}×${size.height} Exercises ends at ${at.exBottom} of ${at.vh}`,
-    ).toBe(false)
+      across(at),
+      `at ${size.width}×${size.height} screens end at ${at.bottoms.join(', ')} of ${at.vh}`,
+    ).toBeUndefined()
   }
 })
 
 for (const [name, opts] of [
   ['a tall Exercises screen', { moreExercises: 10 }],
+  ['a tall Cardio screen', { moreCardio: 12 }],
   ['a tall Food screen', { moreFoods: 14 }],
 ] as const) {
   test(`${name} scrolls as usual, and never rests beside the other`, async ({ page }) => {
@@ -82,21 +86,21 @@ for (const [name, opts] of [
       stops.filter((s) => s.includes('<--')),
       stops.join('\n'),
     ).toEqual([])
-    expect(down.ends.has('food-start'), stops.join('\n')).toBe(true)
+    expect(down.ends.has('next-start'), stops.join('\n')).toBe(true)
   })
 }
 
-test('a fling sprints to Food while it is still moving, not after (K45)', async ({ page }) => {
+test('a fling sprints to Cardio while it is still moving, not after (K45)', async ({ page }) => {
   await openApp(page)
   await page.mouse.move(640, 400)
-  // The page notes when Food's top reaches the foot of the fixed week (K88).
+  // The page notes when Cardio's top, the next screen (K90), reaches the fixed week's foot (K88).
   await page.evaluate(() => {
     const w = window as unknown as { arrivedAt: number | null }
     w.arrivedAt = null
-    const food = document.querySelector('[aria-labelledby="diet-heading"]')!
+    const cardio = document.querySelector('[aria-labelledby="cardio-heading"]')!
     const band = document.querySelector('[data-slot="week-band"]')!
     const watch = () => {
-      const gap = food.getBoundingClientRect().top - band.getBoundingClientRect().bottom
+      const gap = cardio.getBoundingClientRect().top - band.getBoundingClientRect().bottom
       if (Math.abs(gap) <= 1) w.arrivedAt = performance.now()
       else requestAnimationFrame(watch)
     }
@@ -112,10 +116,10 @@ test('a fling sprints to Food while it is still moving, not after (K45)', async 
   const arrivedAt = await page.evaluate(
     () => (window as unknown as { arrivedAt: number | null }).arrivedAt,
   )
-  expect(arrivedAt, 'the page never reached Food').not.toBeNull()
+  expect(arrivedAt, 'the page never reached Cardio').not.toBeNull()
   expect(
     arrivedAt!,
-    `reached Food ${Math.round(arrivedAt! - endedAt)} ms after the fling ended`,
+    `reached Cardio ${Math.round(arrivedAt! - endedAt)} ms after the fling ended`,
   ).toBeLessThan(endedAt)
 })
 
@@ -162,14 +166,14 @@ test('a wheel the other way is never held back: it turns straight round (K45)', 
   await openApp(page)
   await page.mouse.move(640, 400)
   const top = () => page.evaluate(() => Math.round(window.scrollY))
-  // Three quick steps down sprint to Food; the wheel is still busy when the sprint lands.
+  // Three quick steps down sprint to Cardio; the wheel is still busy when the sprint lands.
   for (let i = 0; i < 3; i++) {
     await page.mouse.wheel(0, 120)
     await page.waitForTimeout(16)
   }
   await page.waitForTimeout(300)
-  const food = await top()
-  expect(food).toBeGreaterThan(0)
+  const cardio = await top()
+  expect(cardio).toBeGreaterThan(0)
   // At once, a step up: it goes back to Exercises rather than being swallowed.
   await page.mouse.wheel(0, -120)
   await page.waitForTimeout(500)
@@ -177,7 +181,7 @@ test('a wheel the other way is never held back: it turns straight round (K45)', 
   // And at once, down again.
   await page.mouse.wheel(0, 120)
   await page.waitForTimeout(500)
-  expect(await top()).toBe(food)
+  expect(await top()).toBe(cardio)
 })
 
 /** The page's scroll position, and its foot. */
@@ -189,19 +193,32 @@ async function place(page: Page) {
   }))
 }
 
+/** Where each screen rests: Exercises at the top, Cardio under the fixed week, Food at the foot. */
+async function rests(page: Page): Promise<number[]> {
+  return page.evaluate(() => {
+    const band = document.querySelector('[data-slot="week-band"]')!.getBoundingClientRect().height
+    return [...document.querySelectorAll('[data-planner-screen]')].map((el) =>
+      Math.round(el.getBoundingClientRect().top + window.scrollY - band),
+    )
+  })
+}
+
 test('the screens wrap round: past the last the first comes up, above the first the last (K92)', async ({
   page,
 }) => {
   await openApp(page)
   await page.mouse.move(640, 400)
-  await page.mouse.wheel(0, 120)
-  await page.waitForTimeout(700)
-  let at = await place(page)
-  expect(at.y).toBe(at.max) // on the last screen, at the page's foot
+  const [, cardio] = await rests(page)
+  for (const expected of [cardio, 'foot'] as const) {
+    await page.mouse.wheel(0, 120)
+    await page.waitForTimeout(700)
+    const at = await place(page)
+    expect(at.y).toBe(expected === 'foot' ? at.max : expected)
+  }
   // On down, past the end: back on the first screen, with no copy left behind.
   await page.mouse.wheel(0, 120)
   await page.waitForTimeout(700)
-  at = await place(page)
+  let at = await place(page)
   expect(at).toEqual({ y: 0, max: at.max, copies: 0 })
   // Up, past the top: the last screen.
   await page.mouse.wheel(0, -120)
@@ -215,8 +232,10 @@ test('a fling that reaches the foot of a tall screen stops there, and doesn’t 
 }) => {
   await openApp(page, { moreFoods: 14 })
   await page.mouse.move(640, 400)
-  await page.mouse.wheel(0, 120) // to Food's top
-  await page.waitForTimeout(700)
+  for (let i = 0; i < 2; i++) {
+    await page.mouse.wheel(0, 120) // to Cardio, then Food's top
+    await page.waitForTimeout(700)
+  }
   // Steps without a pause, each continuing the last, all the way down and on past the foot.
   for (let i = 0; i < 120; i++) {
     await page.mouse.wheel(0, 60)
@@ -250,9 +269,11 @@ test('a wrap turns straight back too: the other way at an end wraps back at once
   await openApp(page)
   await page.mouse.move(640, 400)
   const top = () => page.evaluate(() => Math.round(window.scrollY))
-  await page.mouse.wheel(0, 120)
+  // Up past Exercises: a wrap to Food, the page's foot.
+  await page.mouse.wheel(0, -120)
   await page.waitForTimeout(700)
   const food = await top()
+  expect(food).toBe((await place(page)).max)
   // On down past Food, the wheel still busy as the wrap lands on Exercises…
   for (let i = 0; i < 3; i++) {
     await page.mouse.wheel(0, 120)
@@ -269,55 +290,55 @@ test('a wrap turns straight back too: the other way at an end wraps back at once
   expect(await top()).toBe(food)
 })
 
-test('scrolling on keeps going round: each push the same way moves one screen (K93)', async ({
-  page,
-}) => {
+test('each push the same way moves one screen, and keeps going round (K94)', async ({ page }) => {
   await openApp(page)
   await page.mouse.move(640, 400)
   const top = () => page.evaluate(() => Math.round(window.scrollY))
-  // A mouse wheel's notches, 300ms apart: each sprint has landed, the wheel never paused long.
+  const [ex, cardio, food] = await rests(page)
+  // A mouse wheel's notches, 300ms apart: a gesture each, so a screen each.
   const down: number[] = []
   for (let i = 0; i < 4; i++) {
     await page.mouse.wheel(0, 120)
     await page.waitForTimeout(300)
     down.push(await top())
   }
-  const food = down[0]!
-  expect(food).toBeGreaterThan(0)
-  expect(down).toEqual([food, 0, food, 0])
+  expect(down).toEqual([cardio, food, ex, cardio])
   const up: number[] = []
   for (let i = 0; i < 4; i++) {
     await page.mouse.wheel(0, -120)
     await page.waitForTimeout(300)
     up.push(await top())
   }
-  expect(up).toEqual([food, 0, food, 0])
+  expect(up).toEqual([ex, food, cardio, ex])
 })
 
-test('a trackpad flick moves one screen, its momentum never a second (K45, K93)', async ({
-  page,
-}) => {
-  await openApp(page)
-  await page.mouse.move(640, 400)
-  const top = () => page.evaluate(() => Math.round(window.scrollY))
-  // The finger speeds up, lifts, and the momentum dies away over a second and a half.
-  const deltas = [
-    ...[2, 4, 7, 10, 14, 18],
-    ...Array.from({ length: 90 }, (_, i) => Math.max(1, Math.round(18 * 0.96 ** i))),
-  ]
-  for (const d of deltas) {
-    await page.mouse.wheel(0, d)
-    await page.waitForTimeout(16)
-  }
-  await page.waitForTimeout(700)
-  const food = await top()
-  expect(food).toBeGreaterThan(0) // on Food, not wrapped round to Exercises
-  expect(await page.evaluate(() => document.querySelectorAll('[data-wrap-copy]').length)).toBe(0)
-  // The same from Food: one wrap to Exercises, not on to Food again.
-  for (const d of deltas) {
-    await page.mouse.wheel(0, d)
-    await page.waitForTimeout(16)
-  }
-  await page.waitForTimeout(700)
-  expect(await top()).toBe(0)
-})
+for (const [name, peak, fade] of [
+  ['a light flick', 18, 0.96],
+  ['a hard flick, its momentum fading slowly', 45, 0.99],
+] as const) {
+  test(`${name} moves one screen, its momentum never a second (K45, K94)`, async ({ page }) => {
+    await openApp(page)
+    await page.mouse.move(640, 400)
+    const top = () => page.evaluate(() => Math.round(window.scrollY))
+    const [ex, cardio] = await rests(page)
+    // The finger speeds up, lifts, and the momentum dies away over a second and a half.
+    const ramp = [0.1, 0.2, 0.4, 0.6, 0.8, 1].map((k) => Math.round(peak * k))
+    const deltas = [
+      ...ramp,
+      ...Array.from({ length: 90 }, (_, i) => Math.max(1, Math.round(peak * fade ** i))),
+    ]
+    const flick = async () => {
+      for (const d of deltas) {
+        await page.mouse.wheel(0, d)
+        await page.waitForTimeout(16)
+      }
+      await page.waitForTimeout(700)
+    }
+    await flick()
+    expect(await top()).toBe(cardio)
+    await flick()
+    await flick() // Food, then one wrap to Exercises, not on to Cardio
+    expect(await top()).toBe(ex)
+    expect(await page.evaluate(() => document.querySelectorAll('[data-wrap-copy]').length)).toBe(0)
+  })
+}

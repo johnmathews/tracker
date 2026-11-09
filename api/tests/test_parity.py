@@ -84,7 +84,7 @@ def test_merge_conversations_does_not_alias_its_inputs() -> None:
 def test_sample_export_parses_to_itself() -> None:
     sample = read_fixture("sample/export.json")
     data = parse_export(json.dumps(sample))
-    assert data == {k: sample[k] for k in ("exercise", "diet", "settings")}
+    assert data == {k: sample[k] for k in ("exercise", "cardio", "diet", "settings")}
 
 
 def test_json_numbers_keep_their_type() -> None:

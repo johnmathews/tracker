@@ -1,0 +1,22 @@
+{
+  "description": "With no cardio plans at all, the week shows no cardio: an account from before Cardio has an empty section, and marks for ids no plan holds count for nothing",
+  "section": "cardio",
+  "week": "2026-10-26",
+  "today": "2026-11-04",
+  "dailyTarget": null,
+  "plans": {},
+  "log": {
+    "2026-10-26": {
+      "cy": ["great", null, null, null, null, null, null]
+    }
+  },
+  "expected": {
+    "planWeek": null,
+    "dayCounts": [0, 0, 0, 0, 0, 0, 0],
+    "metDays": [false, false, false, false, false, false, false],
+    "future": [false, false, false, false, false, false, false],
+    "daysMet": null,
+    "goalsMet": 0,
+    "items": []
+  }
+}

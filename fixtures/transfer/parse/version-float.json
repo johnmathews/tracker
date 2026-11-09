@@ -5,6 +5,7 @@
     "ok": true,
     "data": {
       "exercise": { "plans": {}, "log": {}, "details": {} },
+      "cardio": { "plans": {}, "log": {}, "details": {} },
       "diet": { "plans": {}, "log": {}, "details": {} },
       "settings": null
     }

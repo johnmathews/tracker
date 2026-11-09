@@ -3,6 +3,7 @@ import { nextTick } from 'vue'
 import { flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { usePlannerStore } from '@/stores/planner'
+import { useCardioStore } from '@/stores/cardio'
 import { useDietStore } from '@/stores/diet'
 import {
   CACHE_PREFIX,
@@ -24,8 +25,8 @@ import { FakeApi } from '@/lib/__tests__/fakeApi'
 import { USER, cached, emptyState } from '@/lib/__tests__/signedIn'
 
 // The -v3 names (before item details) are moved and lifted in syncDetails.spec.ts.
-const [, V2_CACHE, V1_CACHE] = OLD_CACHE_PREFIXES
-const [, V2_OUTBOX, V1_OUTBOX] = OLD_OUTBOX_PREFIXES
+const [V4_CACHE, , V2_CACHE, V1_CACHE] = OLD_CACHE_PREFIXES
+const [V4_OUTBOX, , V2_OUTBOX, V1_OUTBOX] = OLD_OUTBOX_PREFIXES
 
 const NOW = new Date(2026, 9, 23, 18, 0)
 const WEEK = '2026-10-19'
@@ -52,7 +53,7 @@ async function start(cache?: SyncState) {
   const sync = useSyncStore()
   sync.start(USER, lost)
   await flushPromises()
-  return { sync, planner: usePlannerStore(), diet: useDietStore() }
+  return { sync, planner: usePlannerStore(), cardio: useCardioStore(), diet: useDietStore() }
 }
 
 /** Let a local change reach the watcher, then let the writes it queues finish. */
@@ -145,6 +146,30 @@ describe('sync', () => {
     diet.toggle('veg', 2)
     await settle()
     expect(api.paths('PUT')).toEqual([`PUT /plans/diet/${WEEK}`, `PUT /ticks/diet/${WEEK}/veg/2`])
+  })
+
+  it('sends cardio plans and ticks under the cardio section (K90)', async () => {
+    const { cardio } = await start(emptyState())
+    const id = cardio.addCardio({ name: 'Cycling', duration: 1800 })!
+    await settle()
+    cardio.toggle(id, 2)
+    await settle()
+    expect(api.paths('PUT')).toEqual([
+      `PUT /plans/cardio/${WEEK}`,
+      `PUT /ticks/cardio/${WEEK}/${id}/2`,
+    ])
+    expect(cached().cardio.plans[WEEK]).toEqual([
+      { id, name: 'Cycling', duration: 1800, target: 3 },
+    ])
+    expect(api.accounts.get(USER)!.ticks.cardio[WEEK]).toEqual({ [id]: 0b100 })
+  })
+
+  it('reads a server, or a cache, with no cardio as none (K90)', async () => {
+    const old = emptyState() as Partial<SyncState>
+    delete old.cardio
+    const { cardio } = await start(old as SyncState)
+    expect(cardio.items).toEqual([])
+    expect(cardio.plans).toEqual({})
   })
 
   it('sends settings changes', async () => {
@@ -322,6 +347,20 @@ describe('sync', () => {
     diet.changeTarget('veg', -1)
     await settle()
     expect(diet.foods).toEqual([veg])
+    expect(sync.notice).toBe(CONFLICT_NOTICE)
+  })
+
+  it('takes the server’s copy of a cardio plan the same way', async () => {
+    const run = { id: 'ru', name: 'Running', distance: 5, target: 3 }
+    api.accounts.get(USER)!.plans.cardio[WEEK] = { items: [run], rev: 2 }
+    api.stall('GET', '/state')
+    const cache = emptyState()
+    cache.cardio.plans = { [WEEK]: [run, { id: 'cy', name: 'Cycling', target: 2 }] }
+    cache.cardio.revs = { [WEEK]: 1 }
+    const { sync, cardio } = await start(cache)
+    cardio.changeTarget('ru', -1)
+    await settle()
+    expect(cardio.items).toEqual([run])
     expect(sync.notice).toBe(CONFLICT_NOTICE)
   })
 
@@ -547,6 +586,35 @@ describe('sync', () => {
     await settle()
     expect(planner.markOf('sq', 0)).toBe('great-solid')
     expect(cached().exercise.log[WEEK]!.sq![0]).toBe('great-solid')
+  })
+
+  it('moves the -v4 cache and outbox as they are, details kept and nothing lifted (K90)', async () => {
+    const v4 = {
+      exercise: {
+        plans: { [WEEK]: [SQUATS] },
+        log: { [WEEK]: { sq: ['partial'] } },
+        details: { sq: { notes: 'Knees out' } },
+        revs: { [WEEK]: 3 },
+        detailRevs: { sq: 2 },
+      },
+      diet: { plans: {}, log: {}, details: {}, revs: {}, detailRevs: {} },
+      settings: null,
+    }
+    const plan = { kind: 'plan', section: 'exercise', week: WEEK, id: 'p' }
+    localStorage.setItem(V4_CACHE + USER, JSON.stringify(v4))
+    localStorage.setItem(V4_OUTBOX + USER, JSON.stringify([plan]))
+    api.stall('GET', '/state')
+    const sync = useSyncStore()
+    const planner = usePlannerStore()
+    sync.start(USER, lost)
+    expect(planner.markOf('sq', 0)).toBe('partial')
+    expect(cached().exercise.details).toEqual({ sq: { notes: 'Knees out' } })
+    expect(cached().exercise.revs).toEqual({ [WEEK]: 3 })
+    expect(cached().cardio).toEqual({ plans: {}, log: {}, details: {}, revs: {}, detailRevs: {} })
+    // The plan write moves; no details write is queued, since a -v4 cache holds them already.
+    expect(outbox()).toEqual([plan])
+    expect(localStorage.getItem(V4_CACHE + USER)).toBeNull()
+    expect(localStorage.getItem(V4_OUTBOX + USER)).toBeNull()
   })
 
   it('moves the -v2 cache and outbox, and prefers them to the -v1 ones', async () => {
@@ -872,6 +940,11 @@ describe('importFile', () => {
       log: { [WEEK]: { sq: ['great', 'great', null, null, null, null, null] } },
       details: {},
     },
+    cardio: {
+      plans: { [WEEK]: [{ id: 'ru', name: 'Running', distance: 5, target: 3 }] },
+      log: {},
+      details: {},
+    },
     diet: { plans: {}, log: {}, details: {} },
     settings: { accent: '#0a84ff', dailyPick: 5, foodPick: 4, goals: '' },
   }
@@ -885,7 +958,7 @@ describe('importFile', () => {
     const outcome = await sync.importFile(data)
     expect(outcome).toEqual({
       ok: true,
-      added: { weeks: 1, ticks: 2, details: 0, settings: true, conversations: 0 },
+      added: { weeks: 2, ticks: 2, details: 0, settings: true, conversations: 0 },
     })
     const order = api.paths().filter((p) => !p.startsWith('GET'))
     expect(order.at(-1)).toBe('POST /import')
@@ -894,6 +967,7 @@ describe('importFile', () => {
     expect(planner.exercises.map((e) => e.id)).toContain('pu')
     expect(planner.plans['2026-10-12']).toEqual([SQUATS])
     expect(planner.isDone('pu', 3) && planner.isDone('sq', 0)).toBe(true)
+    expect(useCardioStore().items).toEqual(data.cardio.plans[WEEK])
     expect(planner.accent).toBe('#0a84ff')
   })
 
@@ -1015,6 +1089,7 @@ describe('diff', () => {
   const settings = { accent: '#30d158', dailyPick: 3, foodPick: 2, goals: '' }
   const empty = () => ({
     exercise: { plans: {}, log: {}, details: {} },
+    cardio: { plans: {}, log: {}, details: {} },
     diet: { plans: {}, log: {}, details: {} },
     settings: { ...settings },
   })
@@ -1085,9 +1160,33 @@ describe('normaliseState', () => {
         revs: { [WEEK]: 2 },
         detailRevs: {},
       },
+      // A state from before Cardio (K90) reads as none.
+      cardio: { plans: {}, log: {}, details: {}, revs: {}, detailRevs: {} },
       diet: { plans: {}, log: {}, details: {}, revs: {}, detailRevs: {} },
       settings: null,
     })
+  })
+
+  it('validates a cardio section like stored data (K90)', () => {
+    const state = normaliseState({
+      exercise: {},
+      diet: {},
+      cardio: {
+        plans: { [WEEK]: [{ id: 'cy', name: 'Cycling', duration: 1799.6, distance: 0, reps: 3 }] },
+        log: { [WEEK]: { cy: ['partial-hatch', 'nope'] } },
+        details: { cy: { fields: { route: ' The river ' } } },
+        revs: { [WEEK]: 4 },
+        detailRevs: { cy: 2 },
+      },
+    })!
+    expect(state.cardio).toEqual({
+      plans: { [WEEK]: [{ id: 'cy', name: 'Cycling', duration: 1800, target: 3 }] },
+      log: { [WEEK]: { cy: ['partial-hatch', null, null, null, null, null, null] } },
+      details: { cy: { fields: { route: 'The river' } } },
+      revs: { [WEEK]: 4 },
+      detailRevs: { cy: 2 },
+    })
+    expect(normaliseState({ exercise: {}, diet: {}, cardio: 'nope' })!.cardio.plans).toEqual({})
   })
 
   it('keeps goals only when the settings carry them as text', () => {

@@ -1,5 +1,5 @@
 {
-  "sections": { "exercise": "exercise", "diet": "food" },
+  "sections": { "exercise": "exercise", "cardio": "cardio", "diet": "food" },
   "types": {
     "exercise": {
       "pickKey": "dailyPick",
@@ -7,6 +7,14 @@
       "fields": [
         { "key": "equipment", "label": "Equipment" },
         { "key": "works", "label": "Works" },
+        { "key": "link", "label": "Link" }
+      ]
+    },
+    "cardio": {
+      "pickKey": null,
+      "newTarget": 3,
+      "fields": [
+        { "key": "route", "label": "Route" },
         { "key": "link", "label": "Link" }
       ]
     },

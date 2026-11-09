@@ -294,6 +294,42 @@ MIGRATIONS = [
     ALTER TABLE settings ADD COLUMN daily_goal INTEGER NOT NULL DEFAULT 1
         CHECK (daily_goal IN (0, 1));
     """,
+    # A third tracker, Cardio (K90). Plans and ticks lose the CHECK on their section, as
+    # item_details never had one (F3): the API checks a section against the registry, so the next
+    # tracker needs no rebuild. SQLite can't drop a CHECK, so each table is built again under a new
+    # name with every other column and constraint as it was, filled, and renamed into place.
+    # Nothing references either table, so dropping the old one cascades nowhere.
+    """
+    CREATE TABLE plans_new (
+        user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+        section TEXT NOT NULL,
+        week TEXT NOT NULL,
+        items_json TEXT NOT NULL,
+        rev INTEGER NOT NULL CHECK (rev > 0),
+        PRIMARY KEY (user_id, section, week)
+    ) STRICT, WITHOUT ROWID;
+    INSERT INTO plans_new (user_id, section, week, items_json, rev)
+        SELECT user_id, section, week, items_json, rev FROM plans;
+    DROP TABLE plans;
+    ALTER TABLE plans_new RENAME TO plans;
+
+    CREATE TABLE ticks_new (
+        user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+        section TEXT NOT NULL,
+        week TEXT NOT NULL,
+        item_id TEXT NOT NULL,
+        days INTEGER NOT NULL CHECK (days BETWEEN 0 AND 127),
+        partial INTEGER NOT NULL DEFAULT 0 CHECK (partial BETWEEN 0 AND 127),
+        missed INTEGER NOT NULL DEFAULT 0 CHECK (missed BETWEEN 0 AND 127),
+        solid INTEGER NOT NULL DEFAULT 0 CHECK (solid BETWEEN 0 AND 127),
+        hatch INTEGER NOT NULL DEFAULT 0 CHECK (hatch BETWEEN 0 AND 127),
+        PRIMARY KEY (user_id, section, week, item_id)
+    ) STRICT, WITHOUT ROWID;
+    INSERT INTO ticks_new (user_id, section, week, item_id, days, partial, missed, solid, hatch)
+        SELECT user_id, section, week, item_id, days, partial, missed, solid, hatch FROM ticks;
+    DROP TABLE ticks;
+    ALTER TABLE ticks_new RENAME TO ticks;
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

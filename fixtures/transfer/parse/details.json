@@ -61,6 +61,7 @@
           "ht": { "notes": "<script>alert(1)</script>" }
         }
       },
+      "cardio": { "plans": {}, "log": {}, "details": {} },
       "diet": { "plans": {}, "log": {}, "details": {} },
       "settings": null
     }

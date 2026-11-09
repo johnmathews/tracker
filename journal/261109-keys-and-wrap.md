@@ -80,6 +80,23 @@ John chose both ways.
   - The unit tests' momentum was a run of identical steps with the clock jumped forward, which now
     reads as a push. A `coast()` helper sends a dying step every 16ms instead, as a trackpad does.
 
+## One swipe, one screen (K94)
+
+- K93 didn't survive John's trackpad: "1 swipe can only scroll to the next tracker. at the moment
+  the scroll "momentum" will go through several trackers per scroll".
+  - A hard flick ramps up over about 100ms, then its momentum fades slowly. Against those small
+    ramp steps in the last 70, the slow fade's last 10 still averaged higher, so it read as a
+    push.
+  - The synthetic e2e flick faded at 4% a step, quickly enough to hide this.
+- **The fix drops the guessing.** A gesture is a run of wheel events less than 150ms apart, and it
+  moves one screen at most (`spent`).
+  - Momentum is a steady stream, so it never ends a gesture.
+  - A separate swipe or notch does, so 300ms notches still go Cardio, Food, Exercises, Cardio.
+  - What's lost: a second swipe made *during* the first one's momentum joins that gesture and is
+    swallowed.
+- **e2e** now flicks light (fading 4% a step) and hard (peaking at 45, fading 1% a step). Each
+  moves exactly one screen, three times over, including a wrap.
+
 ## Tests
 
 - **Unit.** PlannerScreen spec: each key, Esc ordering, the exclusions, and `aria-keyshortcuts`.

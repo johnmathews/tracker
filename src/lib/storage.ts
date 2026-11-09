@@ -26,6 +26,21 @@ export type Food = {
 }
 
 /**
+ * A cardio item (K90): cycling, running and the like. It has a time, a distance, both or neither,
+ * and a weekly goal; no daily target.
+ */
+export type Cardio = {
+  id: string
+  name: string
+  /** Seconds in all, as an exercise's `duration`; absent when not set. */
+  duration?: number
+  /** Kilometres, to two decimals; absent when not set. */
+  distance?: number
+  /** Weekly goal in days, 0–7. */
+  target: number
+}
+
+/**
  * An item's details (D2): its notes in markdown (K43) and its text fields by key, one copy for
  * every week. A key is left out when blank, so `{}` is an item with none. The type's field list
  * (src/lib/trackerTypes.ts) names the fields the app shows; other keys are kept, so changing the
@@ -88,6 +103,8 @@ export type PlannerData = { plans: Plans<Exercise>; log: Log }
 
 export type DietData = { plans: Plans<Food>; log: Log }
 
+export type CardioData = { plans: Plans<Cardio>; log: Log }
+
 /**
  * How an Ask turn ended (docs/api.md §3.2): with an answer (`end_turn`, or `max_tokens` cut
  * short), or without one, keeping only its question.
@@ -145,6 +162,10 @@ export const MAX_WEIGHT = 500
 export const MAX_SETS = 20
 export const MAX_DURATION = 3600
 export const NEW_FOOD_TARGET = 3
+export const NEW_CARDIO_TARGET = 3
+/** A cardio item's time in seconds (a day) and its distance in km, as the API's. */
+export const MAX_CARDIO_DURATION = 86_400
+export const MAX_DISTANCE = 1000
 /**
  * A plan item's note's length, in characters (code points, as Python counts them): the notes an
  * export of version 4 or a `-v3` cache carries in its plans (K43), which lift into details.
@@ -195,6 +216,11 @@ export function defaultFoods(): Food[] {
   ]
 }
 
+/** No plan holds cardio until the person adds some: an account from before it shows none (K90). */
+export function defaultCardio(): Cardio[] {
+  return []
+}
+
 export function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n))
 }
@@ -216,12 +242,22 @@ export function parseJson(raw: string | null): unknown {
   }
 }
 
-/** A usable weight in kg, rounded to 2 decimals and capped; `undefined` means "no weight". */
-export function normaliseWeight(v: unknown): number | undefined {
+/** A positive number rounded to 2 decimals and capped at `max`; `undefined` for anything else. */
+function twoPlaces(v: unknown, max: number): number | undefined {
   if (typeof v !== 'number' || !Number.isFinite(v)) return undefined
   // Round before the sign check, so a tiny value like 0.004 can't come out as 0.
-  const kg = Math.round(v * 100) / 100
-  return kg > 0 ? Math.min(MAX_WEIGHT, kg) : undefined
+  const n = Math.round(v * 100) / 100
+  return n > 0 ? Math.min(max, n) : undefined
+}
+
+/** A usable weight in kg, rounded to 2 decimals and capped; `undefined` means "no weight". */
+export function normaliseWeight(v: unknown): number | undefined {
+  return twoPlaces(v, MAX_WEIGHT)
+}
+
+/** A usable distance in km, rounded to 2 decimals and capped, as a weight; `undefined` for none. */
+export function normaliseDistance(v: unknown): number | undefined {
+  return twoPlaces(v, MAX_DISTANCE)
 }
 
 /** Spaces, tabs and line breaks off both ends, as Python's `strip(" \t\n\r")`. */
@@ -390,6 +426,23 @@ export function normaliseFood(v: unknown): Food | null {
     id: v.id,
     name: v.name,
     target: clamp(toInt(v.target, NEW_FOOD_TARGET), MIN_TARGET, MAX_TARGET),
+  }
+}
+
+/**
+ * A cardio item: its time in whole seconds and its distance in km, each only when above zero, and
+ * nothing of an exercise's. As the API's `normalise_cardio`.
+ */
+export function normaliseCardio(v: unknown): Cardio | null {
+  if (!isRecord(v) || typeof v.id !== 'string' || typeof v.name !== 'string') return null
+  const duration = toInt(v.duration, 0)
+  const distance = normaliseDistance(v.distance)
+  return {
+    id: v.id,
+    name: v.name,
+    ...(duration > 0 ? { duration: Math.min(MAX_CARDIO_DURATION, duration) } : {}),
+    ...(distance !== undefined ? { distance } : {}),
+    target: clamp(toInt(v.target, NEW_CARDIO_TARGET), MIN_TARGET, MAX_TARGET),
   }
 }
 

@@ -46,11 +46,17 @@ def load(
     user_id: int,
     *,
     exercise: Mapping[str, Any] | None = None,
+    cardio: Mapping[str, Any] | None = None,
     diet: Mapping[str, Any] | None = None,
     settings: dict[str, Any] | None = None,
 ) -> None:
     """Store plans, marks and item details the way an import does, and settings when given."""
-    data: ExportData = {"exercise": tracked(exercise), "diet": tracked(diet), "settings": None}
+    data: ExportData = {
+        "exercise": tracked(exercise),
+        "cardio": tracked(cardio),
+        "diet": tracked(diet),
+        "settings": None,
+    }
     import_data(conn, user_id, data, quota=QUOTA)
     if settings is not None:
         put_settings(conn, user_id, settings)
@@ -88,9 +94,11 @@ def test_fixture_rules(name: str, case: dict[str, Any]) -> None:
 
     counts = insights.day_counts(items, week_log)
     assert counts == expected["dayCounts"]
-    met = insights.met_days(counts, case["dailyTarget"])
+    # A section with no daily target (cardio, K90) meets no day, as its screen shows none green.
+    target = case["dailyTarget"]
+    met = [False] * 7 if target is None else insights.met_days(counts, target)
     assert met == expected["metDays"]
-    assert sum(met) == expected["daysMet"]
+    assert (None if target is None else sum(met)) == expected["daysMet"]
     assert insights.goals_met(items, week_log) == expected["goalsMet"]
     assert [
         {
@@ -114,6 +122,9 @@ def test_fixture_week_summary(conn: sqlite3.Connection, name: str, case: dict[st
     uid = add_user(conn)
     if section == "exercise":
         load(conn, uid, exercise=case, settings={"dailyPick": case["dailyTarget"]})
+    elif section == "cardio":
+        # Cardio has no daily target, whatever the saved picks say.
+        load(conn, uid, cardio=case, settings={"dailyPick": 1, "foodPick": 1})
     else:
         load(conn, uid, diet=case, settings={"foodPick": case["dailyTarget"]})
     out = insights.week_summary(conn, uid, section, case["week"], date.fromisoformat(case["today"]))
@@ -122,7 +133,9 @@ def test_fixture_week_summary(conn: sqlite3.Connection, name: str, case: dict[st
     assert out["carried"] is (expected["planWeek"] != case["week"])
     assert out["daily_target"] == case["dailyTarget"]
     assert [d["count"] for d in out["days"]] == expected["dayCounts"]
-    assert [d["met"] for d in out["days"]] == expected["metDays"]
+    # The reader says None, not False, for a day with no target to meet (K85, K90).
+    no_target = case["dailyTarget"] is None
+    assert [d["met"] for d in out["days"]] == ([None] * 7 if no_target else expected["metDays"])
     assert [d["future"] for d in out["days"]] == expected["future"]
     assert out["days_met"] == expected["daysMet"]
     assert out["goals_met"] == expected["goalsMet"]
@@ -494,12 +507,20 @@ def test_goals(conn: sqlite3.Connection) -> None:
             },
             "log": {},
         },
+        cardio={
+            "plans": {
+                "2026-10-19": [{"id": "cy", "name": "Cycling", "duration": 1800, "target": 2}]
+            },
+            "log": {},
+        },
         diet={"plans": {"2026-10-26": [{"id": "fish", "name": "Fish", "target": 2}]}, "log": {}},
         settings={"dailyPick": 4, "foodPick": 3, "goals": " Run 5 km by March.\n"},
     )
     assert insights.goals(conn, uid, TODAY) == {
         "week": "2026-10-26",
         "exercise": [{"id": "pu", "name": "Push-ups", "target": 4, "notes": ""}],
+        # A cardio item's session comes in the edit tools' words (K90).
+        "cardio": [{"id": "cy", "name": "Cycling", "target": 2, "seconds": 1800, "notes": ""}],
         "diet": [{"id": "fish", "name": "Fish", "target": 2, "notes": ""}],
         "exercises_a_day": 4,
         "foods_a_day": 3,
@@ -551,6 +572,8 @@ def test_goals_give_no_daily_targets_while_daily_goal_is_off(conn: sqlite3.Conne
             {"id": "a", "name": "A", "target": 2, "notes": ""},
             {"id": "b", "name": "B", "target": 0, "notes": ""},
         ],
+        # No cardio planned: an empty list, not defaults (K90).
+        "cardio": [],
         "diet": [{"id": "fish", "name": "Fish", "target": 2, "notes": ""}],
         "exercises_a_day": None,
         "foods_a_day": None,
@@ -726,3 +749,69 @@ def test_sections_are_exercise_or_diet(conn: sqlite3.Connection) -> None:
     assert e.value.field == "section"
     with pytest.raises(insights.InsightsError, match="section"):
         insights.consistency(conn, uid, bad, 1, TODAY)
+
+
+# --- Cardio (K90) ---------------------------------------------------------------------------------
+
+CARDIO_PLAN = [
+    {"id": "cy", "name": "Cycling", "duration": 1800, "target": 2},
+    {"id": "ru", "name": "Running", "distance": 5, "target": 1},
+]
+
+
+def test_cardio_has_no_items_until_one_is_planned(conn: sqlite3.Connection) -> None:
+    """An account from before Cardio has an empty section, not defaults; nothing to add to it."""
+    assert insights.default_items("cardio") == []
+    uid = add_user(conn)
+    out = insights.week_summary(conn, uid, "cardio", "2026-10-26", TODAY)
+    assert (out["items"], out["plan_week"], out["daily_target"]) == ([], None, None)
+
+
+def test_cardio_has_no_daily_target_whatever_daily_goal_says(conn: sqlite3.Connection) -> None:
+    """Every kind of mark counts towards a cardio item's weekly goal, as an exercise's; no day is
+    met or missed, on or off, so the met-day fields are None."""
+    uid = add_user(conn)
+    load(
+        conn,
+        uid,
+        cardio={
+            "plans": {"2026-10-12": CARDIO_PLAN},
+            "log": {
+                "2026-10-12": {"cy": ["great", None, "missed", *[None] * 4], "ru": days(3)},
+                "2026-10-19": {"cy": ["partial-hatch", *[None] * 6]},
+                "2026-10-26": {"ru": days(0, 1)},
+            },
+        },
+        settings={"dailyPick": 1, "foodPick": 1, "dailyGoal": True},
+    )
+    out = insights.week_summary(conn, uid, "cardio", "2026-10-12", TODAY)
+    assert (out["daily_target"], out["days_met"]) == (None, None)
+    assert {d["met"] for d in out["days"]} == {None}
+    assert [d["count"] for d in out["days"]] == [1, 0, 1, 1, 0, 0, 0]
+    assert [(it["done"], it["missed"], it["goal_met"]) for it in out["items"]] == [
+        (2, 1, True),
+        (1, 0, True),
+    ]
+    steady = insights.consistency(conn, uid, "cardio", 3, TODAY)
+    assert (steady["daily_target"], steady["days_met"], steady["met_day_rate"]) == (
+        None,
+        None,
+        None,
+    )
+    assert steady["met_day_streak"] is None
+    assert (steady["goals"], steady["goals_met"], steady["goal_week_streak"]) == (4, 2, 0)
+    history = insights.item_history(conn, uid, "cardio", "cy", 3, TODAY)
+    assert [w["done"] for w in history["weeks"]] == [2, 1, 0]
+    # Each item's session, in the edit tools' words, only where it has one.
+    assert [{k: it.get(k) for k in ("seconds", "distance_km")} for it in out["items"]] == [
+        {"seconds": 1800, "distance_km": None},
+        {"seconds": None, "distance_km": 5},
+    ]
+    goals = insights.goals(conn, uid, TODAY)
+    assert [it["id"] for it in goals["cardio"]] == ["cy", "ru"]
+    assert goals["cardio"][1]["distance_km"] == 5
+    # An exercise's timed set is not a session: the readers leave it out, as its reps.
+    plank = {"id": "pl", "name": "Plank", "reps": 0, "duration": 45, "target": 3}
+    assert insights.session_of("exercise", plank) == {}
+
+    assert (goals["exercises_a_day"], goals["foods_a_day"]) == (1, 1)

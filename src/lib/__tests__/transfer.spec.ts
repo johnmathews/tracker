@@ -141,6 +141,7 @@ describe('buildExport', () => {
     }
     const file = buildExport({
       exercise,
+      cardio: { plans: {}, log: {}, details: {} },
       diet: { plans: {}, log: {}, details: {} },
       settings: { accent: '#0a84ff', dailyPick: 4, foodPick: 3, goals: 'Run 5 km.' },
       now: new Date('2026-10-24T09:30:00.000Z'),
@@ -150,6 +151,7 @@ describe('buildExport', () => {
       version: 5,
       exportedAt: '2026-10-24T09:30:00.000Z',
       exercise,
+      cardio: { plans: {}, log: {}, details: {} },
       diet: { plans: {}, log: {}, details: {} },
       settings: { accent: '#0a84ff', dailyPick: 4, foodPick: 3, goals: 'Run 5 km.' },
     })
@@ -159,10 +161,12 @@ describe('buildExport', () => {
     const cache = { plans: {}, log: {}, details: {}, revs: { '2026-10-19': 3 }, detailRevs: {} }
     const file = buildExport({
       exercise: cache,
+      cardio: cache,
       diet: cache,
       settings: { accent: '#0a84ff', dailyPick: 4, foodPick: 3, goals: '' },
     })
     expect(file.exercise).toEqual({ plans: {}, log: {}, details: {} })
+    expect(file.cardio).toEqual({ plans: {}, log: {}, details: {} })
     expect(file.diet).toEqual({ plans: {}, log: {}, details: {} })
   })
 
@@ -172,6 +176,7 @@ describe('buildExport', () => {
     }
     const base = {
       exercise: { plans: {}, log: {}, details: {} },
+      cardio: { plans: {}, log: {}, details: {} },
       diet: { plans: {}, log: {}, details: {} },
     }
     const settings = { accent: '#0a84ff', dailyPick: 4, foodPick: 3, goals: '' }
@@ -190,6 +195,13 @@ describe('buildExport', () => {
         plans: { '2026-10-19': [{ id: 'sq', name: 'Squats', sets: 3, reps: 15, target: 4 }] },
         log: { '2026-10-19': { sq: ['great', null, null, null, null, null, 'partial'] } },
         details: { sq: { notes: 'Knees out.', fields: { equipment: 'Kettlebell' } } },
+      },
+      cardio: {
+        plans: {
+          '2026-10-19': [{ id: 'cy', name: 'Cycling', duration: 1800, distance: 12.5, target: 2 }],
+        },
+        log: { '2026-10-19': { cy: [null, 'missed-hatch', null, null, null, null, null] } },
+        details: { cy: { fields: { route: 'Along the river' } } },
       },
       diet: {
         plans: { '2026-10-19': [{ id: 'veg', name: 'Vegetables', target: 7 }] },
@@ -234,6 +246,7 @@ describe('downloadExport', () => {
     })
     const file = buildExport({
       exercise: { plans: {}, log: {}, details: {} },
+      cardio: { plans: {}, log: {}, details: {} },
       diet: { plans: {}, log: {}, details: {} },
       settings: { accent: '#30d158', dailyPick: 3, foodPick: 2, goals: '' },
     })

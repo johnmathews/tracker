@@ -219,7 +219,7 @@ describe('the Ask page', () => {
     await mountApp({ goals: 'Ten pull-ups in a row by March.', hash: '#/ask' })
     const empty = wrapper.get('[data-testid="ask-empty"]')
     expect(empty.text()).toContain(
-      'Ask about your exercises and food: whether you’re doing enough for your goals, how steady the weeks are, what to change. The answer reads your plans and marks for the last eight weeks, and your goals in Settings.',
+      'Ask about your exercises, cardio and food: whether you’re doing enough for your goals, how steady the weeks are, what to change. The answer reads your plans and marks for the last eight weeks, and your goals in Settings.',
     )
     expect(empty.text()).not.toContain('Add your goals')
     expect(empty.findAll('button').map((b) => b.text())).toEqual([

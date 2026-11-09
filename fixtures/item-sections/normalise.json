@@ -72,9 +72,22 @@
       }
     },
     {
+      "name": "cardio has its own arrangement, in the registry's order between exercise and food",
+      "input": {
+        "food": { "order": ["history", "notes", "details", "plan"], "hidden": [] },
+        "cardio": { "order": ["plan", "history", "notes", "details"], "hidden": ["details"] },
+        "exercise": { "order": ["notes", "plan", "details", "history"], "hidden": [] }
+      },
+      "output": {
+        "exercise": { "order": ["notes", "plan", "details", "history"], "hidden": [] },
+        "cardio": { "order": ["plan", "history", "notes", "details"], "hidden": ["details"] },
+        "food": { "order": ["history", "notes", "details", "plan"], "hidden": [] }
+      }
+    },
+    {
       "name": "a type the registry doesn't have drops out",
       "input": {
-        "cardio": { "order": ["history"], "hidden": ["notes"] },
+        "swimming": { "order": ["history"], "hidden": ["notes"] },
         "__proto__": { "order": ["history"], "hidden": [] },
         "diet": { "order": ["history"], "hidden": [] },
         "exercise": { "order": ["history"], "hidden": [] }

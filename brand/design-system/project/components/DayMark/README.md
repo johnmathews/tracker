@@ -36,7 +36,7 @@ One day of one exercise or food: a box drawn as if on a whiteboard, empty or mar
 - **The fixed size:** a 64 × 64px button centred in a 76px square cell, with a 60px drawing. Paper uses it, and so does a mark drawn outside a grid (the Marks setting's rows).
 - **Today:** no band (K36); the mark looks as on any day, and its name says "today".
 - **Note:** a NoteMark (a 10px folded corner in `ink-secondary`) in the cell's top-right corner, flush to the corner. It sits outside the box, never on it.
-- The same DayMark sits in the Exercises and Food grids, in every layout.
+- The same DayMark sits in the Exercises, Cardio and Food grids, in every layout.
 - **Print:** the light theme's colours on white paper, from either theme: the box and the marks keep their light colours (K16). A stamped symbol takes the light `canvas`, since the canvas itself goes transparent. See WeekGrid.
 
 ## States

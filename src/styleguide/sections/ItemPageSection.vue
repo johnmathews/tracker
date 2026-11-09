@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import { usePlannerStore } from '@/stores/planner'
+import { useCardioStore } from '@/stores/cardio'
 import { useDietStore } from '@/stores/diet'
 import { useDetailsStore } from '@/stores/details'
 import ItemPage from '@/components/ItemPage.vue'
@@ -13,6 +14,7 @@ import StateExample from '../parts/StateExample.vue'
 // items (components/ItemPage/preview.html). Today is Wednesday 28 October; nothing is saved.
 setActivePinia(createPinia())
 const planner = usePlannerStore()
+const cardio = useCardioStore()
 const diet = useDietStore()
 const details = useDetailsStore()
 planner.now = new Date(2026, 9, 28, 12)
@@ -41,6 +43,16 @@ planner.log = {
   '2026-09-14': { ks: [G, _, G, _, _, G, _] },
   '2026-09-07': { ks: [_, P, _, _, G, _, _] },
 }
+cardio.plans = {
+  '2026-10-19': [
+    { id: 'ru', name: 'Running', duration: 1800, distance: 5, target: 3 },
+    { id: 'cy', name: 'Cycling', duration: 2700, target: 2 },
+  ],
+}
+cardio.log = {
+  '2026-10-26': { ru: [G, _, P, _, _, _, _] },
+  '2026-10-19': { ru: [G, _, G, _, X, _, G] },
+}
 diet.plans = {
   '2026-10-12': [
     { id: 'nuts', name: 'Nuts', target: 5 },
@@ -63,6 +75,7 @@ details.adopt({
       },
     },
   },
+  cardio: { ru: { fields: { route: 'Round the park, twice' } } },
   diet: { nuts: { fields: { serving: 'A small handful' } } },
 })
 
@@ -73,6 +86,13 @@ const PAGES = [
     state: 'An exercise with notes, opened from this week',
     section: 'exercise',
     item: 'ks',
+  },
+  {
+    id: 'sg-item-page-cardio',
+    label: 'Cardio',
+    state: 'A cardio item with a time and a distance (K90)',
+    section: 'cardio',
+    item: 'ru',
   },
   {
     id: 'sg-item-page-food-no-notes',

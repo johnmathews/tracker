@@ -1,0 +1,64 @@
+{
+  "description": "Cardio (K90) keeps a duration in whole seconds (1799.5 rounds to 1800, anything above 86400 caps at 86400) and a distance in km rounded to 2 places like a weight (21.0975 is 21.1, anything above 1000 caps at 1000). Zero, a negative, a string or a boolean drops either field, and an exercise's sets, reps, weight and per-side drop out. Every kind of mark is kept, as for an exercise, and the type's fields are details like any other.",
+  "input": {
+    "format": "tracker-export",
+    "version": 5,
+    "cardio": {
+      "plans": {
+        "2026-10-19": [
+          { "id": "cy", "name": "Cycling", "duration": 1800, "target": 2 },
+          { "id": "ru", "name": "Running", "distance": 5, "target": 3 },
+          { "id": "a", "name": "A", "duration": 1799.5, "distance": 21.0975, "target": 3 },
+          { "id": "b", "name": "B", "duration": 999999, "distance": 5000, "target": 9 },
+          { "id": "c", "name": "C", "duration": 0, "distance": -3, "target": 3 },
+          {
+            "id": "d",
+            "name": "D",
+            "duration": "60",
+            "distance": true,
+            "sets": 3,
+            "reps": 10,
+            "weight": 5,
+            "perSide": true
+          }
+        ]
+      },
+      "log": {
+        "2026-10-19": {
+          "cy": ["great", "partial", "missed-hatch", null, "great-solid", null, null]
+        }
+      },
+      "details": {
+        "ru": { "fields": { "route": "Round the park", "link": "https://example.com" } }
+      }
+    }
+  },
+  "expected": {
+    "ok": true,
+    "data": {
+      "exercise": { "plans": {}, "log": {}, "details": {} },
+      "cardio": {
+        "plans": {
+          "2026-10-19": [
+            { "id": "cy", "name": "Cycling", "duration": 1800, "target": 2 },
+            { "id": "ru", "name": "Running", "distance": 5, "target": 3 },
+            { "id": "a", "name": "A", "duration": 1800, "distance": 21.1, "target": 3 },
+            { "id": "b", "name": "B", "duration": 86400, "distance": 1000, "target": 7 },
+            { "id": "c", "name": "C", "target": 3 },
+            { "id": "d", "name": "D", "target": 3 }
+          ]
+        },
+        "log": {
+          "2026-10-19": {
+            "cy": ["great", "partial", "missed-hatch", null, "great-solid", null, null]
+          }
+        },
+        "details": {
+          "ru": { "fields": { "route": "Round the park", "link": "https://example.com" } }
+        }
+      },
+      "diet": { "plans": {}, "log": {}, "details": {} },
+      "settings": null
+    }
+  }
+}

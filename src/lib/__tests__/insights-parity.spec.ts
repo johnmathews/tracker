@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { planSource, type Plans } from '@/lib/plans'
 import {
+  defaultCardio,
   defaultExercises,
   defaultFoods,
   markKind,
@@ -13,11 +14,12 @@ import {
   type MarkKind,
 } from '@/lib/storage'
 import { dayCounts, goalMet, goalsMet, metDays, totalFor, type Tracked } from '@/lib/tracker'
-import type { Section } from '@/lib/trackerTypes'
+import { SECTIONS, type Section } from '@/lib/trackerTypes'
 import { usePlannerStore } from '@/stores/planner'
+import { useCardioStore } from '@/stores/cardio'
 import { useDietStore } from '@/stores/diet'
 import { noDetails, useDetailsStore } from '@/stores/details'
-import type { Exercise, Food } from '@/lib/storage'
+import type { Cardio, Exercise, Food } from '@/lib/storage'
 
 // The shared contract with the API's insights module: what a week shows, as the screen shows it.
 // api/tests/test_insights.py runs the same files through tracker_api.insights.
@@ -41,7 +43,8 @@ type InsightsCase = {
   section: Section
   week: string
   today: string
-  dailyTarget: number
+  /** Exercises a day or foods a day; null for a section with none (cardio, K90). */
+  dailyTarget: number | null
   plans: Plans<Tracked>
   log: Log
   /** The section's item details; none when left out. */
@@ -51,7 +54,8 @@ type InsightsCase = {
     dayCounts: number[]
     metDays: boolean[]
     future: boolean[]
-    daysMet: number
+    /** Null with no daily target. */
+    daysMet: number | null
     goalsMet: number
     items: ExpectedItem[]
   }
@@ -61,6 +65,17 @@ const CASES: [string, InsightsCase][] = readdirSync(FIXTURES)
   .filter((f) => f.endsWith('.json'))
   .sort()
   .map((f) => [f, JSON.parse(readFileSync(join(FIXTURES, f), 'utf8')) as InsightsCase])
+
+const DEFAULTS: Record<Section, () => Tracked[]> = {
+  exercise: defaultExercises,
+  cardio: defaultCardio,
+  diet: defaultFoods,
+}
+
+/** The days a target meets: none at all without one (cardio, K90). */
+function metFor(counts: number[], target: number | null): boolean[] {
+  return target === null ? counts.map(() => false) : metDays(counts, target)
+}
 
 /** A local-time date from `YYYY-MM-DD`, at noon so no clock change moves it to another day. */
 function localDate(key: string): Date {
@@ -79,22 +94,21 @@ function expectedItems(c: InsightsCase): Required<ExpectedItem>[] {
 
 describe('insights fixtures', () => {
   it('finds the fixture files', () => {
-    expect(CASES.length).toBeGreaterThanOrEqual(11)
+    expect(CASES.length).toBeGreaterThanOrEqual(13)
   })
 
   // The rules as src/lib holds them: planSource, the defaults, and the tracker helpers.
   it.each(CASES)('%s: the lib rules', (_, c) => {
     const planWeek = planSource(c.plans, c.week)
     expect(planWeek).toBe(c.expected.planWeek)
-    const defaults = c.section === 'exercise' ? defaultExercises() : defaultFoods()
-    const items: Tracked[] = planWeek !== null ? c.plans[planWeek]! : defaults
+    const items: Tracked[] = planWeek !== null ? c.plans[planWeek]! : DEFAULTS[c.section]()
     const week = c.log[c.week] ?? {}
 
     const counts = dayCounts(items, week)
     expect(counts).toEqual(c.expected.dayCounts)
-    const met = metDays(counts, c.dailyTarget)
+    const met = metFor(counts, c.dailyTarget)
     expect(met).toEqual(c.expected.metDays)
-    expect(met.filter(Boolean).length).toBe(c.expected.daysMet)
+    expect(c.dailyTarget === null ? null : met.filter(Boolean).length).toBe(c.expected.daysMet)
     expect(goalsMet(items, week)).toBe(c.expected.goalsMet)
     expect(
       items.map((it) => {
@@ -131,16 +145,19 @@ describe('insights fixtures', () => {
       vi.useFakeTimers({ toFake: ['Date'] })
       vi.setSystemTime(localDate(c.today))
       const planner = usePlannerStore()
+      const cardio = useCardioStore()
       const diet = useDietStore()
       const empty = { plans: {}, log: {} }
       const data = { plans: c.plans, log: c.log }
-      const pick = c.section === 'exercise' ? 'dailyPick' : 'foodPick'
+      // Cardio has no daily target (K90): the settings keep their own.
+      const pick = SECTIONS[c.section].pickKey
       planner.adopt(c.section === 'exercise' ? (data as never) : empty, {
         accent: '#30d158',
         dailyPick: 3,
         foodPick: 2,
-        [pick]: c.dailyTarget,
+        ...(pick ? { [pick]: c.dailyTarget } : {}),
       })
+      if (c.section === 'cardio') cardio.adopt(data as never)
       if (c.section === 'diet') diet.adopt(data as never)
       const details = useDetailsStore()
       details.adopt({ ...noDetails(), [c.section]: c.details ?? {} })
@@ -152,17 +169,19 @@ describe('insights fixtures', () => {
       planner.weekOffset = weeks
       expect(planner.weekKey).toBe(c.week)
 
-      const items: (Exercise | Food)[] = c.section === 'exercise' ? planner.exercises : diet.foods
-      const counts = c.section === 'exercise' ? planner.dayCounts : diet.dayCounts
+      const stores = {
+        exercise: [planner.exercises, planner.dayCounts],
+        cardio: [cardio.items, cardio.dayCounts],
+        diet: [diet.foods, diet.dayCounts],
+      } satisfies Record<Section, [(Exercise | Cardio | Food)[], number[]]>
+      const [items, counts] = stores[c.section]
       expect(items.map((it) => it.id)).toEqual(c.expected.items.map((it) => it.id))
       // The note the row and the item page show is the one insights gives.
       expect(items.map((it) => details.notesOf(c.section, it.id))).toEqual(
         expectedItems(c).map((it) => it.notes),
       )
       expect(counts).toEqual(c.expected.dayCounts)
-      expect(
-        metDays(counts, c.section === 'exercise' ? planner.dailyPick : planner.foodPick),
-      ).toEqual(c.expected.metDays)
+      expect(metFor(counts, pick && planner[pick])).toEqual(c.expected.metDays)
       expect(planner.days.map((d) => d.isFuture)).toEqual(c.expected.future)
     })
   })

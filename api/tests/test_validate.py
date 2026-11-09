@@ -11,6 +11,8 @@ from tracker_api.validate import (
     check_item_id,
     check_plan_body,
     merge_settings,
+    normalise_cardio,
+    normalise_distance,
     normalise_portable,
     parse_export,
     strict_item,
@@ -137,6 +139,37 @@ def test_strict_item_reports_a_missing_id_or_a_non_object() -> None:
     assert strict_item("diet", {"id": "a" * 129, "name": "Row"}).problems == [
         "id must be 1 to 128 characters"
     ]
+
+
+def test_strict_item_keeps_a_cardio_session_and_drops_an_exercises_fields() -> None:
+    """K90: a cardio item has a duration and a distance; sets, reps, weight and per-side drop."""
+    raw = {"id": "cy", "name": " Cycling ", "duration": 1800, "distance": 20.5, "reps": 3}
+    assert strict_item("cardio", raw).item == {
+        "id": "cy",
+        "name": "Cycling",
+        "duration": 1800,
+        "distance": 20.5,
+        "target": 3,
+    }
+
+
+@pytest.mark.parametrize("raw", [None, [], "Cycling", {"id": "cy"}, {"name": "Cycling"}])
+def test_normalise_cardio_drops_an_item_without_an_id_and_a_name(raw: object) -> None:
+    assert normalise_cardio(raw) is None
+
+
+def test_normalise_distance_rounds_and_caps_like_a_weight() -> None:
+    assert [normalise_distance(v) for v in (5, 21.0975, 0.004, 0, -2, 1e400, "5", True)] == [
+        5,
+        21.1,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    ]
+    assert normalise_distance(2e300) == 1000
 
 
 def test_daily_goal_is_kept_only_as_a_boolean() -> None:

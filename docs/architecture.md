@@ -9,30 +9,35 @@
 ## 1. Overview
 
 A Vue 3 SPA with accounts. The API service in `api/` ([api.md](api.md)) holds each user's data, and
-the app syncs with it through the same origin (§7). Three Pinia stores hold what the app shows:
-`planner` (exercise plans, the log, the visible week, settings, the mode), `diet` (food plans and
-their log), which takes its week from `planner`, and `details` (each item's notes and fields, one
+the app syncs with it through the same origin (§7). Four Pinia stores hold what the app shows:
+`planner` (exercise plans, the log, the visible week, settings, the mode), `cardio` (cardio plans
+and their log, K90) and `diet` (food plans and their log), which take their week from `planner`,
+and `details` (each item's notes and fields, one
 copy for every week, §3). Two more run the account: `session` (who is signed in, and whether the API sends email and
 answers questions) and `sync` (the per-user cache, the outbox of unsent writes, and reads). A
-sixth, `ask`, holds the Ask page's conversation and history (§3), read through `request` and
-`stream` in `src/lib/api.ts`; `src/lib/ask.ts` holds the page's words. Both plan stores track
+seventh, `ask`, holds the Ask page's conversation and history (§3), read through `request` and
+`stream` in `src/lib/api.ts`; `src/lib/ask.ts` holds the page's words. The three plan stores track
 the same thing, a mark per day against a weekly goal, through the pure helpers in
 `src/lib/tracker.ts`.
 
 **Tracker types.** `src/lib/trackerTypes.ts` is the registry of tracker types. A section
-(`exercise`, `diet`) is the stored name, in URLs, the database, the cache and the outbox. Its type
-(`exercise`, `food`) is an attribute of it, mapped in `SECTIONS`. Each type gives:
+(`exercise`, `cardio`, `diet`) is the stored name, in URLs, the database, the cache and the outbox.
+Its type (`exercise`, `cardio`, `food`) is an attribute of it, mapped in `SECTIONS`, whose order is
+the week's: Exercises, Cardio, Food (K90). Each type gives:
 
 - the section's heading and the label of one item ("Exercises", "Exercise");
 - the marks a press steps through in each mark set (§6.2);
-- the chips under a name (`exerciseDetails` lives here, and `planner.ts` re-exports it);
-- the item page's fields, by key and label (exercise: Equipment, Works, Link; food: A serving,
-  Examples);
-- the setting that holds its daily target (`dailyPick`, `foodPick`) and a new item's goal.
+- the chips under a name (`exerciseDetails` lives here, and `planner.ts` re-exports it;
+  `cardioDetails` gives a cardio item's time, then its distance: "30 min", "5 km");
+- the item page's fields, by key and label (exercise: Equipment, Works, Link; cardio: Route, Link;
+  food: A serving, Examples);
+- the setting that holds its daily target (`dailyPick`, `foodPick`), or `null` for a type with none
+  (cardio), and a new item's goal.
 
 `api/src/tracker_api/types.py` holds the same registry, and `fixtures/types/registry.json` keeps
 the two in step: `trackerTypes.spec.ts` and `test_types.py` both read it. A second tracker of a type
-would be a new section in `SECTIONS`, with no rename. There is no screen for adding one yet.
+would be a new section in `SECTIONS`, with no rename. There is no screen for adding one: a new
+tracker is code (a store, a section component, the API's normaliser), as Cardio was (K90).
 
 **The item page.** `src/lib/routes.ts` reads and writes the item page's address,
 `#/item/<section>/<id>`, and does its Back (`backToWeek`) and the Link field's site (`webHost`).
@@ -80,13 +85,15 @@ paths to the API as well ([deployment.md](deployment.md) §2).
 
 Every screen is built from the primitives in `src/components/ui/` (§6.3), which follow the design
 system's cards ([brand.md](brand.md)). `TrackerGrid` and `TrackerRow` (on the `DayMark`, `Chip`
-and `IconButton` primitives) take props, emit events, and serve both sections.
+and `IconButton` primitives) take props, emit events, and serve every section.
 `TrackerGrid` runs the grid's keyboard model (`useGridNav`, §6.5) and links each name to its item's
 page. `TrackerRow` asks the
 `ConfirmDialog` (through `useConfirm`, §6.4) before emitting `remove`, and names where focus goes
-once the row has gone. `ExerciseGrid` and `DietSection` wire them to their store. `EditExerciseDialog` (which also adds an exercise when given none, K54) takes its field
+once the row has gone. `ExerciseGrid`, `CardioSection` and `DietSection` wire them to their store. `EditExerciseDialog` (which also adds an exercise when given none, K54) takes its field
 state and input cleaning through `useExerciseForm` (`src/composables/exerciseForm.ts`) and the
-`PerSideToggle` segmented control. `src/lib/problems.ts` turns a sign-in, sign-up, link or
+`PerSideToggle` segmented control. `EditCardioDialog` and the item page take a cardio item's
+Minutes and Distance in km through `useCardioForm` (`src/composables/cardioForm.ts`), which stores
+the minutes as seconds. `src/lib/problems.ts` turns a sign-in, sign-up, link or
 sign-out refusal into a sentence for the forms, and `describeConnectProblem` does the same for the consent screen; `src/composables/importSummary.ts` says what an import would add,
 for Settings → Import… and the first-login prompt.
 
@@ -149,11 +156,17 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 │                           PerSideToggle, weight (kg), Times a week (the goal); then Note (K55),
 │                           the item's notes for every week (the details store);
 │                           Edit exercise, or Add exercise from the button under the grid (K54)
+├── CardioSection.vue   the Cardio section (K90): SectionHeader with no Stepper (no daily
+│   │                   target), kept with its grid; on the screens "Back to Exercises" on its
+│   │                   title line and "Go to Food" at its foot (K42)
+│   ├── TrackerGrid.vue wired to cardio: a time and a distance as chips; no day turns green
+│   └── EditCardioDialog.vue  Dialog: Name; Minutes, Distance in km, Times a week; then Note;
+│                           Edit cardio, or Add cardio from the button under the grid (K54)
 └── DietSection.vue     the Food section: SectionHeader (the week centred as the title, then the
                         heading; in config mode the heading alone, with the Foods a day Stepper
                         centred on its line while Daily goal is on, K62, K85), kept
                         with its grid, whose days that met foods a day turn green (K57); on the
-                        screens, the "Back to Exercises" arrow (K42)
+                        screens, the "Back to Cardio" arrow (K42)
     ├── TrackerGrid.vue wired to diet: no chips
     └── EditFoodDialog.vue  Dialog: Name, Times a week (the goal), then Note (the food's notes
                             for every week); Edit food, or
@@ -162,12 +175,12 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 
 ## 2. Weekly plans
 
-Each week has its own **plan**: the exercises (with sets, reps or a duration, per-side, weight and goal) and the
-foods (with goals). Ticks live in a separate **log**, keyed by week and item id.
+Each week has its own **plan**: the exercises (with sets, reps or a duration, per-side, weight and goal), the
+cardio (with a time, a distance and a goal) and the foods (with goals). Ticks live in a separate **log**, keyed by week and item id.
 
 - **Carry forward.** A week without a plan of its own shows the plan of the latest earlier week that
   has one (`planSource` in `src/lib/plans.ts`); weeks before the first plan show the earliest one,
-  and with no plans at all the stores show the defaults. The API's `insights.py` ports this rule,
+  and with no plans at all the stores show the defaults (none for cardio, K90). The API's `insights.py` ports this rule,
   the defaults and the goal and met-day rules, and the shared cases in `fixtures/insights/` keep
   the two in step ([api.md](api.md) §1.1, §9).
 - **A week gets its own plan when it first changes**, ticks included: the store copies what the week
@@ -235,8 +248,8 @@ reps), "3 × 45 s" or "1 min 30 s each side" for a timed exercise (`durationText
 card's words).
 
 `useDietStore` holds `plans` of foods (`{ id, name, target }`) and its own `log`, kept by the sync
-store like the planner's. It reads `planner.weekKey`, so week navigation moves both
-sections. It derives `foods`, `dayCounts`, `grandTotal` and `goalsMet`, and
+store like the planner's. It reads `planner.weekKey`, so week navigation moves every
+section. It derives `foods`, `dayCounts`, `grandTotal` and `goalsMet`, and
 offers `isEaten`, `totalFor`, `toggle`, `changeTarget` (0–7), `addFood` (a name, or a name with
 its goal from the Add food dialog; goal 3 when none is given; the new id, or `null` for an empty
 name), `updateFood` (name and goal from the Edit food dialog, `false` for an empty name or a food
@@ -244,7 +257,17 @@ not in the week), `removeFood`, `adopt`, `adoptWeek` and `clear`. Food goals wor
 like exercise goals (met once the count reaches a non-zero goal). The daily target, foods a day,
 is the planner store's `foodPick`, with the other settings (K57).
 
-`Tracked` (`src/lib/tracker.ts`), the item shape both plan stores share, is `{ id, name, target }`.
+`useCardioStore` (`src/stores/cardio.ts`, K90) holds `plans` of cardio items (`{ id, name,
+duration?, distance?, target }`: seconds in all and km) and its own `log`, kept by the sync store
+like the others, on the planner's week. With no plans at all it shows none (`defaultCardio()` is
+empty), so an account from before Cardio has an empty section. It derives `items`, `dayCounts`
+and `goalsMet`, and offers `markOf`, `totalFor`, `toggle` (the exercise's cycle: great, partial,
+missed), `changeTarget` (0–7), `addCardio` and `updateCardio` (a name, a time, a distance and a
+goal; seconds rounded and capped at 86,400, km to 2 places and capped at 1,000, zero leaving either
+out; `updateCardio` keeps the goal when none is given), `removeCardio`, `adopt`, `adoptWeek` and
+`clear`. It has no daily target: no setting, and no day turns green.
+
+`Tracked` (`src/lib/tracker.ts`), the item shape the plan stores share, is `{ id, name, target }`.
 It has no `notes`: they are the item's details.
 
 `useDetailsStore` (`src/stores/details.ts`) holds `docs`, each section's details by item id. An
@@ -312,10 +335,11 @@ with storage blocked or full the app keeps working in memory.
 | Key                                            | Holds                                                                           | Written |
 | ---------------------------------------------- | ------------------------------------------------------------------------------- | ------- |
 | `tracker-session-v1`                           | `{ user }`: the last signed-in user                                             | yes     |
-| `tracker-cache-v4:<user>`                      | the user's state as `GET /api/state` returns it, with `revs` and `detailRevs`   | yes     |
-| `tracker-outbox-v4:<user>`                     | writes not yet sent (§7)                                                        | yes     |
+| `tracker-cache-v5:<user>`                      | the user's state as `GET /api/state` returns it, with `revs` and `detailRevs`   | yes     |
+| `tracker-outbox-v5:<user>`                     | writes not yet sent (§7)                                                        | yes     |
 | `tracker-import-v1:<user>`                     | the first-login prompt's answer, `imported` or `dismissed` (§7)                 | yes     |
 | `tracker-settings-v1`                          | `theme`, read before first paint by `public/theme-init.js`, and `markSet`       | both    |
+| `tracker-cache-v4:<user>`, `-outbox-v4:<user>` | the cache and outbox from before Cardio; moved at sign-in as they are           | never   |
 | `tracker-cache-v3:<user>`, `-outbox-v3:<user>` | the cache and outbox from before item details; moved at sign-in, notes lifted   | never   |
 | `tracker-cache-v2:<user>`, `-outbox-v2:<user>` | the cache and outbox from before the solid and hatch drawings; moved at sign-in | never   |
 | `tracker-cache-v1:<user>`, `-outbox-v1:<user>` | the cache and outbox from before marks had kinds; moved at sign-in (below)      | never   |
@@ -368,6 +392,13 @@ the note changed after the migration, so it brings the server's copy in, as for 
 edit to the item before the lifted write is sent replaces it and stays `lifted`. An id the details
 path can't name (§7) queues nothing.
 
+The names went to `-v5` on 2026-11-09 with Cardio (K90). A `-v5` cache holds a third section,
+`cardio`, whose items keep a `duration` and a `distance`. A tab still open on older code would
+write the cache back without it, and drop queued cardio writes from the shared outbox, since it
+doesn't know the section. A `-v4` cache and outbox already hold item details, so they move as they
+are: nothing is lifted and no details write is queued (`WITH_DETAILS` in `src/stores/sync.ts`).
+`normaliseState` reads a state with no `cardio` (the server mid-deploy) as no cardio.
+
 **Migration.** Before weekly plans, one list served every week: `{ exercises, log }` under
 `tracker-v1` (the design prototype's shape, under its key renamed) and `{ foods, log }` under
 `tracker-diet-v1`. When a v2 key is missing and its v1 key exists, `parsePlannerData` and
@@ -415,7 +446,8 @@ The notes render with `src/lib/markdown.ts` (markdown-it, raw HTML off, no image
 or rules). The row shows one line of inline formatting, where a link is its underlined text. The
 whole note opens in a Popover that scrolls when it is taller than the window, and the item page
 shows it whole. Links there open in a new tab with `rel="noopener noreferrer"`. The notes are
-edited on the item page and in the Note field of the Edit exercise and Edit food dialogs. The
+edited on the item page and in the Note field of the Edit exercise, Edit cardio and Edit food
+dialogs. The
 field counts from 19,000 characters (`NOTES_COUNT_FROM`), and a blank one clears the notes.
 
 `parseSettings` accepts any `#rrggbb` accent (K3a, K13), clamps the daily pick to
@@ -432,6 +464,7 @@ load as `system`, and before the mark set existed as `squiggles`.
   "version": 5,
   "exportedAt": "2026-10-24T09:30:00.000Z",
   "exercise": { "plans": {}, "log": {}, "details": {} },
+  "cardio": { "plans": {}, "log": {}, "details": {} },
   "diet": { "plans": {}, "log": {}, "details": {} },
   "settings": { "accent": "#30d158", "dailyPick": 3, "foodPick": 2, "goals": "" },
   "conversations": [{ "id": "Kq3x…", "title": "…", "createdAt": 0, "updatedAt": 0, "turns": [] }]
@@ -450,7 +483,10 @@ exported, because it belongs to the device rather than the person. Import… rea
 `format`, or has a `version` other than 1 to 5 (a version 1 file's `true` days read as `"great"`,
 K12; version 4 added notes on plan items, K43; version 5 moved them into `details`). My goals
 came without a new version, as `foodPick` did: an older reader drops the key, and a file without
-it reads as no goals.
+it reads as no goals. The `cardio` section came the same way (K90): a file without it reads as no
+cardio. A cardio item keeps `duration` in whole seconds (capped at 86,400) and `distance` in km to 2
+places (capped at 1,000), each only when above zero (`normaliseCardio`, the API's
+`normalise_cardio`).
 
 A file of version 4 or older carries its notes on plan items, so `liftNotes` lifts them into
 `details`, and any `details` key in it is ignored. Per item, the note comes from the latest week
@@ -506,8 +542,8 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
   grid is a `<table role="grid">` with `row`, `columnheader`, `rowheader` and `gridcell` roles, and
   one tab stop (§6.5).
 - **One screen per section, not a window.** The handoff drew the app as a macOS window (traffic
-  lights, a framed window on a backdrop). The app fills the browser instead: Exercises and Food are
-  a screen each, the page sprints between them, and the navbar keeps out of sight until it is
+  lights, a framed window on a backdrop). The app fills the browser instead: Exercises, Cardio and
+  Food are a screen each, the page sprints between them, and the navbar keeps out of sight until it is
   wanted (K24, K25; §6.6). Edit plan is an ordinary page with a sticky navbar (K27), full
   width at the week's sizes with rows a fixed 100u (K54). Settings has no navbar (K52) and is full
   width in rows like the week (K51), and an item's page follows it, rows and all (K64, K65). The navbar keeps the week controls, This week, Edit plan,
@@ -771,10 +807,10 @@ page from resting across two screens. A wheel or a fling sprints as soon as the 
 screens is a step (4% of the window, at least 16px) inside it, while it is still moving (K45); a finger on the
 screen waits until it lifts; a scrollbar drag or the keyboard 120ms after the scroll stops (K38).
 `sprintTarget` picks the place, in the direction of travel, and `sprintTo` moves there in 260ms,
-eased out, setting the position each frame so a fling's momentum can't carry the page past it. The
-wheel is swallowed while it coasts the way the sprint went (a fling's momentum, its steps only
-shrinking; `pushing` compares the latest steps with the last 70, K93); a wheel pushing on the same
-way goes on at once, and one the other way stops the sprint and scrolls back (K89). After a resize or rotation, the page
+eased out, setting the position each frame so a fling's momentum can't carry the page past it. A
+wheel gesture (events less than 150ms apart: a swipe and its momentum) moves one screen at most:
+once it has, the rest of it is swallowed (`spent`, K94). The next gesture moves on at once, and a
+wheel the other way stops the sprint and scrolls back (K89). After a resize or rotation, the page
 settles on the screen that fills more of the window (K40). It replaced `scroll-snap-type: y mandatory`, which a mouse wheel couldn't
 cross from the end of a tall screen. Four custom variants in main.css carry
 the layout, all screen-only so paper keeps the table: `screen:` (the WeekGrid is a CSS grid),
@@ -809,10 +845,11 @@ tall or less).
   `[role="dialog"]` or the bar starts no hold, and `html.planner-screens` turns off text selection
   and the iOS callout outside fields, popovers and dialogs. The bar is moved out of view with a
   transform, never hidden, so its controls stay reachable by Tab.
-- **The arrows between the screens** (K42). A chevron IconButton, "Go to Food", at the foot of the
-  Exercises screen, and one pointing up, "Back to Exercises", 48px from the top of Food, below the
-  bar's handle. Each sprints to the other screen's top with `sprintToScreen`. A short
-  screen leaves them out.
+- **The arrows between the screens** (K42, K90). A chevron IconButton at the foot of each screen
+  but the last, and one pointing up on each screen but the first, on its title's line just under
+  the fixed week. Exercises has "Go to Cardio"; Cardio has "Back to Exercises" and "Go to Food";
+  Food has "Back to Cardio". Each sprints to its screen's top with `sprintToScreen`, by the
+  heading's id. A short screen leaves them out.
 - **Settings and Ask** are pages of their own (`#/settings`, `#/ask`), outside the screens and with
   no bar (K52): each starts with "Back to the week", and leaving one returns focus to the bar button
   that opened it. Ask fills the window (K67, K70): the SidePanel (`h-dvh`) and the page beside it
@@ -839,8 +876,9 @@ literal colours the system allows (`src/styles/__tests__/print.spec.ts` holds th
   popover and Banners carry `print:hidden`.
 - A met day's name keeps its `pen` and its underline (K60). A table split across pages repeats its
   header.
-- The Food section's heading stays with its grid (`print:break-inside-avoid`), and a section header never ends
-  a page (`print:break-after-avoid`).
+- The Cardio and Food sections' headings stay with their grids (`print:break-inside-avoid`), and a
+  section header never ends a page (`print:break-after-avoid`). Cardio prints after Exercises and
+  before Food, set apart by a rule, as Food is.
 - An item's page prints its head (the type, the name and its chips), its notes and its filled
   details, each detail as its label over its value with no box. Back to the week, the plan, Recent
   weeks, the notes' field and its button are `data-noprint`, and each row prints its heading over

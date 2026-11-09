@@ -21,6 +21,7 @@
         "log": {},
         "details": {}
       },
+      "cardio": { "plans": {}, "log": {}, "details": {} },
       "diet": {
         "plans": {},
         "log": {},

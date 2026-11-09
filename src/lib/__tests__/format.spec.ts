@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { MARKS, normaliseDetails, normaliseExercise, normaliseFood } from '@/lib/storage'
+import {
+  MARKS,
+  normaliseCardio,
+  normaliseDetails,
+  normaliseExercise,
+  normaliseFood,
+} from '@/lib/storage'
 import {
   CACHE_PREFIX,
   OLD_CACHE_PREFIXES,
@@ -14,14 +20,17 @@ import {
  * doesn't know as empty and writes its copy back, emptying the newer tab's marks. That happened
  * twice (journal 261025-stale-tab, and the solid and hatch drawings of #38).
  *
- * Each row records what one version stores: the marks, the fields an exercise and a food keep, the
- * keys of a cached section, and the keys an item's details keep. A row may change only before its
+ * Each row records what one version stores: the marks, the fields an exercise, a cardio item and a
+ * food keep, the sections a cache holds, the keys of a cached section, and the keys an item's
+ * details keep. A row may change only before its
  * version ships.
  */
 type Format = {
   marks: string[]
   exercise: string[]
+  cardio: string[]
   food: string[]
+  sections: string[]
   section: string[]
   details: string[]
 }
@@ -52,7 +61,9 @@ const FORMATS: Record<string, Format> = {
       'missed-hatch',
     ],
     exercise: ['duration', 'id', 'name', 'notes', 'perSide', 'reps', 'sets', 'target', 'weight'],
+    cardio: [],
     food: ['id', 'name', 'notes', 'target'],
+    sections: ['diet', 'exercise', 'settings'],
     section: ['log', 'plans', 'revs'],
     details: [],
   },
@@ -60,7 +71,19 @@ const FORMATS: Record<string, Format> = {
   'tracker-cache-v4:': {
     marks: MARK_NAMES,
     exercise: ['duration', 'id', 'name', 'perSide', 'reps', 'sets', 'target', 'weight'],
+    cardio: [],
     food: ['id', 'name', 'target'],
+    sections: ['diet', 'exercise', 'settings'],
+    section: ['detailRevs', 'details', 'log', 'plans', 'revs'],
+    details: ['fields', 'notes'],
+  },
+  // Cardio (K90): a third section, whose items keep a time and a distance.
+  'tracker-cache-v5:': {
+    marks: MARK_NAMES,
+    exercise: ['duration', 'id', 'name', 'perSide', 'reps', 'sets', 'target', 'weight'],
+    cardio: ['distance', 'duration', 'id', 'name', 'target'],
+    food: ['id', 'name', 'target'],
+    sections: ['cardio', 'diet', 'exercise', 'settings'],
     section: ['detailRevs', 'details', 'log', 'plans', 'revs'],
     details: ['fields', 'notes'],
   },
@@ -76,6 +99,7 @@ function keptFields(normalise: (v: unknown) => object | null): string[] {
     duration: 30,
     perSide: true,
     weight: 12,
+    distance: 5,
     target: 3,
     notes: 'a note',
     probe: 'not a field',
@@ -99,7 +123,9 @@ describe('the stored format (K14)', () => {
     const now = {
       marks: [...MARKS],
       exercise: keptFields(normaliseExercise),
+      cardio: keptFields(normaliseCardio),
       food: keptFields(normaliseFood),
+      sections: Object.keys(normaliseState({ exercise: {}, diet: {} })!).sort(),
       section: Object.keys(normaliseState({ exercise: {}, diet: {} })!.exercise).sort(),
       details: Object.keys(details ?? {}).sort(),
     }

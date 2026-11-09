@@ -67,6 +67,7 @@
           "ht": { "notes": "<script>alert(1)</script>" }
         }
       },
+      "cardio": { "plans": {}, "log": {}, "details": {} },
       "diet": {
         "plans": {
           "2026-10-19": [

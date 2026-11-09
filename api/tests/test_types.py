@@ -17,7 +17,7 @@ EXPECTED: dict[str, Any] = json.loads(
 
 def test_sections_map_to_types_as_the_web_app_does() -> None:
     assert {s: t.id for s, t in SECTION_TYPES.items()} == EXPECTED["sections"]
-    assert SECTIONS == ("exercise", "diet")
+    assert SECTIONS == ("exercise", "cardio", "diet")
 
 
 def test_types_have_the_web_apps_fields_pick_and_goal() -> None:
@@ -46,9 +46,19 @@ def test_section_literal_matches_the_registry() -> None:
 
 def test_validate_reads_the_registry() -> None:
     assert validate.SECTIONS is SECTIONS
-    expected = {"exercise": validate.normalise_exercise, "diet": validate.normalise_food}
+    expected = {
+        "exercise": validate.normalise_exercise,
+        "cardio": validate.normalise_cardio,
+        "diet": validate.normalise_food,
+    }
     assert expected == validate.NORMALISERS
-    targets = (validate.NEW_EXERCISE_TARGET, validate.NEW_FOOD_TARGET)
-    assert targets == (SECTION_TYPES["exercise"].new_target, SECTION_TYPES["diet"].new_target)
+    targets = (validate.NEW_EXERCISE_TARGET, validate.NEW_CARDIO_TARGET, validate.NEW_FOOD_TARGET)
+    assert targets == tuple(SECTION_TYPES[s].new_target for s in ("exercise", "cardio", "diet"))
     # The export's sections are the registry's, plus settings and Ask's conversations.
     assert set(validate.ExportData.__annotations__) == {*SECTIONS, "settings", "conversations"}
+
+
+def test_cardio_has_no_daily_pick() -> None:
+    """K90: Cardio has weekly goals only, so no setting names a number a day for it."""
+    assert SECTION_TYPES["cardio"].pick_key is None
+    assert [t.pick_key for t in TYPES.values() if t.pick_key] == ["dailyPick", "foodPick"]

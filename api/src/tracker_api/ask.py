@@ -43,6 +43,7 @@ from .config import Config
 from .db import connect, transaction
 from .validate import (
     MAX_QUESTION,
+    SECTIONS,
     AskStop,
     Section,
     Turn,
@@ -100,13 +101,15 @@ def system_prompt(plain_verdicts: bool) -> str:
     verdicts = f"- {VERDICT_RULE}" if plain_verdicts else _STRICT_VOICE
     return f"""\
 You answer one person's questions about what they track in Tracker. Tracker is a weekly planner \
-for exercise and food. Answer about this person's tracking only. Answer plainly and briefly. \
-When a question is about something else, say in one sentence that you can help only with their \
-tracking.
+for exercise, cardio and food. Answer about this person's tracking only. Answer plainly and \
+briefly. When a question is about something else, say in one sentence that you can help only \
+with their tracking.
 
 How Tracker counts:
-- Each week has an exercise plan and a food plan. Each item in a plan has a weekly goal: the \
-number of days to mark it that week.
+- Each week has an exercise plan, a cardio plan and a food plan. Each item in a plan has a weekly \
+goal: the number of days to mark it that week.
+- Cardio is cycling, running and the like. A cardio item may have a duration (seconds, the whole \
+session's) and a distance in km, and has a weekly goal, but no daily target.
 - A week with no plan of its own shows the latest earlier plan, so a plan carries forward. A \
 week before the first plan shows the earliest plan. With no plan at all, a week shows the \
 default items.
@@ -115,13 +118,14 @@ missed day count too.
 - The tools give great, partial and missed days separately. Report missed and partial days as \
 what they are, never as days done well.
 - A day is met when the items marked that day reach the daily target. The target is exercises \
-a day for exercise and foods a day for food.
-- When daily_goal is false or a daily target is null, the person has turned Daily goal off. \
-There is no daily target, and the tools give no met days. Don't mention met days or a number \
-a day.
+a day for exercise and foods a day for food. Cardio has none, so its tools give no met days.
+- When daily_goal is false or an exercise or food daily target is null, the person has turned \
+Daily goal off. There is no daily target, and the tools give no met days. Don't mention met days \
+or a number a day.
 - A day after today hasn't happened yet. It is not a gap, and a week that hasn't finished has \
 not fallen short.
 - A goal of 0 asks for nothing and is never met.
+- With no plan at all, the cardio section is empty: it has no default items.
 
 The data:
 - Use the tools to read the person's weeks before you judge anything. Never guess a number.
@@ -154,7 +158,11 @@ SYSTEM: list[TextBlockParam] = [
     {"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}
 ]
 
-_SECTION = {"type": "string", "enum": ["exercise", "diet"], "description": "diet is food."}
+_SECTION = {
+    "type": "string",
+    "enum": list(SECTIONS),
+    "description": "diet is food. cardio is cycling, running and the like, with no daily target.",
+}
 _MONDAY = {"type": "string", "format": "date", "description": "A Monday, written YYYY-MM-DD."}
 _WEEKS = {
     "type": "integer",
@@ -185,29 +193,32 @@ TOOLS: list[ToolParam] = [
         "consistency",
         "How steady the last weeks of one section were: the share of days up to today that met"
         " the daily target, the share of weekly goals met in the finished weeks, and the current"
-        " runs. While Daily goal is off, its met-day fields are null. Call it for questions about"
-        " consistency or habits over time.",
+        " runs. While Daily goal is off, and always for cardio, its met-day fields are null. Call"
+        " it for questions about consistency or habits over time.",
         {"section": _SECTION, "weeks": _WEEKS},
     ),
     _tool(
         "goals",
-        "What this week asks for: each exercise and food with its weekly goal, exercises a day,"
-        " foods a day, whether Daily goal is on (daily_goal; off, both a-day targets are null),"
-        " and the My goals note. Call it first for any question about goals or about doing"
+        "What this week asks for: each exercise, cardio item and food with its weekly goal (a"
+        " cardio item with its seconds and distance_km when it has them), exercises a day, foods"
+        " a day, whether Daily goal is on (daily_goal; off, both a-day targets are null), and the"
+        " My goals note. Call it first for any question about goals or about doing"
         " enough.",
         {},
     ),
     _tool(
         "item_history",
-        "One exercise or food over the last weeks: its goal and its marks in each week that"
+        "One exercise, cardio item or food over the last weeks: its goal and its marks in each"
+        " week that"
         " shows it. Call it for questions about one item. Take item_id from goals or a week.",
         {"section": _SECTION, "item_id": {"type": "string"}, "weeks": _WEEKS},
     ),
     _tool(
         "week_summary",
         "One week of one section as its screen shows it: the items with their goals, notes and"
-        " marks, and each day's count against the daily target. While Daily goal is off, the"
-        " target and each day's met are null. Call it for questions about a particular week.",
+        " marks (a cardio item with its seconds and distance_km), and each day's count against"
+        " the daily target. While Daily goal is off, and always for cardio, the target and each"
+        " day's met are null. Call it for questions about a particular week.",
         {"section": _SECTION, "week": _MONDAY},
     ),
     _tool(

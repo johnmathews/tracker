@@ -7,35 +7,13 @@ export const STEP_SHARE = 0.04
 export const MIN_STEP_PX = 16
 /** How long a sprint takes, eased out (K45). */
 export const SPRINT_MS = 260
-/** How long the wheel must be quiet after a sprint before it scrolls the page again. */
-export const QUIET_MS = 180
 /**
  * How long after a wheel event, or after a finger lifts, a scroll counts as a wheel's or a fling's
- * and may sprint at once. A fling's momentum runs on after the finger lifts.
+ * and may sprint at once. A fling's momentum runs on after the finger lifts. A wheel event further
+ * than this after the last one starts a new gesture (K94).
  */
 export const WHEEL_MS = 150
 export const FLING_MS = 1200
-/** A wheel event further than this after the last starts its history afresh (K93). */
-export const GESTURE_GAP_MS = 200
-
-/** The mean of the last `n` values, or of all of them when there are fewer. */
-function meanOfLast(values: readonly number[], n: number): number {
-  const tail = values.slice(-n)
-  return tail.reduce((sum, v) => sum + v, 0) / tail.length
-}
-
-/**
- * Whether the wheel is pushing rather than coasting (K93): its latest steps (the last 10, or the
- * later half of a shorter run) are, on average, at least as big as the last 70. A fling's momentum
- * only ever slows, so it fails this; a new push of a trackpad grows, and a mouse wheel's notches
- * stay the same size, so both pass. A single step is a push.
- */
-export function pushing(steps: readonly number[]): boolean {
-  if (steps.length === 0) return false
-  const latest = Math.min(10, Math.ceil(steps.length / 2))
-  return meanOfLast(steps, latest) >= meanOfLast(steps, 70)
-}
-
 /**
  * Where a scroll should go (PlannerScreen card, K38, K45). `top` is the scroll position, `height`
  * the screen's, `starts` each screen's top in page coordinates, in order, and `direction` the way
@@ -208,7 +186,6 @@ export function useScreenSprint(enabled: Ref<boolean>) {
   let last = 0
   let direction: 1 | -1 | 0 = 1
   let timer: ReturnType<typeof setTimeout> | undefined
-  let quietUntil = 0
   let finger = false
   /** When the last wheel event came, and when a finger last lifted. */
   let wheelAt = -Infinity
@@ -218,8 +195,12 @@ export function useScreenSprint(enabled: Ref<boolean>) {
    * it goes and how far it has gone. Momentum arriving at an end mid-gesture never starts one.
    */
   let push: { way: 1 | -1; sum: number } | null = null
-  /** The sizes of the wheel's recent steps, for telling a push from momentum (K93). */
-  let steps: number[] = []
+  /**
+   * Whether the wheel gesture going on now has already moved a screen (K94). A gesture is a run of
+   * wheel events less than WHEEL_MS apart: a swipe and all its momentum, or a mouse wheel turned
+   * without stopping. It moves one screen at most.
+   */
+  let spent = false
   /** Where a finger came down, and whether the page was at an end then. */
   let touchY = 0
   let touchEnd: 1 | -1 | 0 = 0
@@ -244,9 +225,9 @@ export function useScreenSprint(enabled: Ref<boolean>) {
     )
     if (target === null) return false
     clearTimeout(timer)
+    spent = true
     sprintTo(target, () => {
       last = window.scrollY
-      quietUntil = performance.now() + QUIET_MS
     })
     return true
   }
@@ -259,9 +240,9 @@ export function useScreenSprint(enabled: Ref<boolean>) {
   /** Wrap round to the first screen or the last (K92), then rest as after a sprint. */
   function wrap(way: 1 | -1): void {
     clearTimeout(timer)
+    spent = true
     wrapAround(way, () => {
       last = window.scrollY
-      quietUntil = performance.now() + QUIET_MS
     })
   }
 
@@ -292,32 +273,25 @@ export function useScreenSprint(enabled: Ref<boolean>) {
   }
 
   /**
-   * During a sprint, and after it while the wheel is still coasting, the wheel can't move the
-   * page: that swallows a fling's momentum, which runs on the way the sprint went. Once the sprint
-   * has landed, a wheel pushing on the same way is the person scrolling on (K93), and a wheel the
-   * other way is the person turning round (K89): neither is held back.
+   * One gesture, one screen (K94): once a wheel gesture has moved a screen, the rest of it can't
+   * move the page, however long its momentum runs. A new gesture, after the wheel has been still
+   * for WHEEL_MS, moves the next one at once. A wheel the other way is the person turning round
+   * (K89): it stops a sprint where it is, and counts as a new gesture.
    */
   function onWheel(event: WheelEvent): void {
     if (!enabled.value) return
     const now = performance.now()
-    const gap = now - wheelAt
+    let fresh = now - wheelAt >= WHEEL_MS
     wheelAt = now
     const way = Math.sign(event.deltaY)
-    if (gap > GESTURE_GAP_MS) steps = []
-    steps.push(Math.abs(event.deltaY))
-    if (steps.length > 70) steps.shift()
-    // Turning round, or pushing on after a sprint, counts as a new gesture, so at an end it can
-    // wrap at once (K89, K92, K93).
-    let fresh = gap >= WHEEL_MS
-    if (sprinting() || now < quietUntil) {
-      const onward = way !== 0 && way === heading && !sprinting() && !wrapping && pushing(steps)
-      if (!onward && (way === 0 || way === heading || wrapping)) {
+    if (fresh) spent = false
+    if (sprinting() || spent) {
+      if (way === 0 || way === heading || wrapping) {
         event.preventDefault()
-        quietUntil = now + QUIET_MS
         return
       }
       stopSprint()
-      quietUntil = 0
+      spent = false
       last = window.scrollY
       fresh = true
     }

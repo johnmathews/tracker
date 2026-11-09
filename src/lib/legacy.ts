@@ -42,8 +42,10 @@ export function readLegacyData(currentWeek: string): ExportData | null {
     !Object.keys(t.plans).length && !Object.keys(t.log).length
   if (empty(exercise) && empty(diet) && !settings) return null
   // No details: these keys were last written before accounts (P9), and notes came after (K43).
+  // No cardio either: it came after accounts (K90).
   return {
     exercise: { ...exercise, details: {} },
+    cardio: { plans: {}, log: {}, details: {} },
     diet: { ...diet, details: {} },
     settings,
   }

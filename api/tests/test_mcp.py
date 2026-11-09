@@ -389,9 +389,10 @@ def test_every_read_tool_is_listed_read_only_with_a_description(
         assert len(tools[name]["description"]) > 40
         assert tools[name]["outputSchema"]
     props = tools["week_summary"]["inputSchema"]["properties"]
-    assert props["section"]["enum"] == ["exercise", "diet"]
+    assert props["section"]["enum"] == ["exercise", "cardio", "diet"]
     assert "Monday" in props["week"]["description"]
     assert "food" in props["section"]["description"]
+    assert "no daily target" in props["section"]["description"]
 
 
 def test_week_summary_defaults_to_this_weeks_exercises(
@@ -598,6 +599,8 @@ def test_week_summary_matches_the_shared_fixtures(
     expected = case["expected"]
     if case["section"] == "exercise":
         load_tracked(conn, uid, exercise=case, settings={"dailyPick": case["dailyTarget"]})
+    elif case["section"] == "cardio":
+        load_tracked(conn, uid, cardio=case)
     else:
         load_tracked(conn, uid, diet=case, settings={"foodPick": case["dailyTarget"]})
     day = datetime.fromisoformat(case["today"]).replace(hour=12, tzinfo=UTC)
@@ -605,7 +608,9 @@ def test_week_summary_matches_the_shared_fixtures(
     out = tool(agent, token, "week_summary", section=case["section"], week=case["week"])
     assert out["today"] == case["today"]
     assert out["plan_week"] == expected["planWeek"]
-    assert [d["met"] for d in out["days"]] == expected["metDays"]
+    # No daily target (cardio, K90): each day's `met` is null, as with Daily goal off.
+    no_target = case["dailyTarget"] is None
+    assert [d["met"] for d in out["days"]] == ([None] * 7 if no_target else expected["metDays"])
     assert [d["count"] for d in out["days"]] == expected["dayCounts"]
     assert out["days_met"] == expected["daysMet"]
     assert out["goals_met"] == expected["goalsMet"]
@@ -745,6 +750,48 @@ def test_a_note_through_the_tool_shows_in_the_apps_state(
     assert tool(agent, writer, "week_summary", week="2026-11-02")["items"][2]["notes"] == (
         "Knees out."
     )
+
+
+def test_cardio_through_the_tools(
+    agent: TestClient, client: TestClient, uid: int, writer: str
+) -> None:
+    """K90: a cardio item takes a whole session's seconds and a distance in km, any mark, and
+    shows in the app's state; the reads give its session and no daily target."""
+    out = write(
+        agent,
+        writer,
+        "add_item",
+        {"section": "cardio", "name": "Cycling", "seconds": 5400, "times_a_week": 2},
+    )
+    cycling = out["item"]
+    assert cycling == {"id": cycling["id"], "name": "Cycling", "seconds": 5400, "times_a_week": 2}
+    assert (out["before"], out["copied_from"]) == ([], "defaults")
+    out = tool(
+        agent, writer, "update_item", section="cardio", item_id=cycling["id"], distance_km=21.1
+    )
+    assert out["item"]["distance_km"] == 21.1
+    out = tool(agent, writer, "mark_day", section="cardio", item_id=cycling["id"], mark="missed")
+    assert out["after"] == "missed"
+    summary = tool(agent, writer, "week_summary", section="cardio")
+    assert (summary["daily_target"], summary["days_met"]) == (None, None)
+    (item,) = summary["items"]
+    assert (item["seconds"], item["distance_km"], item["missed"]) == (5400, 21.1, 1)
+    assert tool(agent, writer, "goals")["cardio"][0]["seconds"] == 5400
+    login = client.post("/api/auth/login", json={"username": EMAIL, "password": PASSWORD})
+    assert login.status_code == 200
+    state = client.get("/api/state").json()["cardio"]
+    assert state["plans"][THIS_WEEK] == [
+        {
+            "id": cycling["id"],
+            "name": "Cycling",
+            "duration": 5400,
+            "distance": 21.1,
+            "target": 2,
+        }
+    ]
+    # An exercise's fields are refused by name, as a food's are.
+    arguments = {"section": "cardio", "item_id": "x", "reps": 3}
+    assert "reps: a cardio item has no reps" in write_error(agent, writer, "update_item", arguments)
 
 
 def test_mark_day_defaults_to_today(agent: TestClient, uid: int, writer: str) -> None:

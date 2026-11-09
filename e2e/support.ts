@@ -61,6 +61,19 @@ function state() {
       revs: {},
       detailRevs: { pu: 1, kh: 1 },
     },
+    // Cardio (K90): a time, a distance, each marked like an exercise.
+    cardio: {
+      plans: {
+        [MONDAY]: [
+          { id: 'cy', name: 'Cycling', duration: 1800, target: 2 },
+          { id: 'ru', name: 'Running', distance: 5, target: 3 },
+        ] as { id: string; name: string; duration?: number; distance?: number; target: number }[],
+      },
+      log: { [MONDAY]: { cy: [G, _, _, _, _, _, _], ru: [_, _, P, _, _, _, _] } },
+      details: {},
+      revs: {},
+      detailRevs: {},
+    },
     diet: {
       plans: {},
       log: { [MONDAY]: { veg: [G, G, _, _, _, _, _], fish: [G, _, _, _, _, _, _] } },
@@ -145,6 +158,7 @@ export async function openApp(
     theme = 'light',
     unconfirmed = false,
     moreExercises = 0,
+    moreCardio = 0,
     moreFoods = 0,
     ask = false,
   }: {
@@ -153,6 +167,8 @@ export async function openApp(
     unconfirmed?: boolean
     /** Extra exercises after the mocked five, for a week taller than the screen. */
     moreExercises?: number
+    /** Extra cardio after the mocked two, for a Cardio screen taller than the screen. */
+    moreCardio?: number
     /** Foods for the Food screen, enough to run past it. */
     moreFoods?: number
     /** Ask is on (an Anthropic key on the server). */
@@ -163,6 +179,9 @@ export async function openApp(
   const s = state()
   for (let i = 1; i <= moreExercises; i++) {
     s.exercise.plans[MONDAY]!.push({ id: `x${i}`, name: `Exercise ${i}`, reps: 10, target: 2 })
+  }
+  for (let i = 1; i <= moreCardio; i++) {
+    s.cardio.plans[MONDAY]!.push({ id: `c${i}`, name: `Cardio ${i}`, duration: 600, target: 1 })
   }
   if (moreFoods) {
     s.diet.plans = {

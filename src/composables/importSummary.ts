@@ -1,5 +1,6 @@
 import { useAskStore } from '@/stores/ask'
 import { useDetailsStore } from '@/stores/details'
+import { useCardioStore } from '@/stores/cardio'
 import { useDietStore } from '@/stores/diet'
 import { usePlannerStore } from '@/stores/planner'
 import { mergeSummary, type ExportData } from '@/lib/transfer'
@@ -33,6 +34,7 @@ function listed(parts: string[]): string {
  */
 export function useImportSummary() {
   const planner = usePlannerStore()
+  const cardio = useCardioStore()
   const diet = useDietStore()
   const ask = useAskStore()
   const details = useDetailsStore()
@@ -42,16 +44,20 @@ export function useImportSummary() {
       { plans: planner.plans, log: planner.log, details: details.docs.exercise },
       data.exercise,
     )
+    const ca = mergeSummary(
+      { plans: cardio.plans, log: cardio.log, details: details.docs.cardio },
+      data.cardio,
+    )
     const di = mergeSummary(
       { plans: diet.plans, log: diet.log, details: details.docs.diet },
       data.diet,
     )
     const here = new Set(ask.conversations.map((c) => c.id))
-    // Exercise and food plans count separately: a week can gain either or both.
+    // Each section's plans count separately: a week can gain any of them.
     return {
-      plans: ex.weeks + di.weeks,
-      ticks: ex.ticks + di.ticks,
-      details: ex.details + di.details,
+      plans: ex.weeks + ca.weeks + di.weeks,
+      ticks: ex.ticks + ca.ticks + di.ticks,
+      details: ex.details + ca.details + di.details,
       settings: data.settings !== null && planner.savedSettings() === null,
       // As mergeSettings: the file's goals fill empty ones, and never replace any.
       goals: !!data.settings?.goals && !planner.goals,

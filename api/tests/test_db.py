@@ -34,12 +34,14 @@ ASK_LOG_STEP = "CREATE TABLE ask_log"
 ASK_HISTORY_STEP = "CREATE TABLE ask_conversations"
 OAUTH_STEP = "CREATE TABLE oauth_grants"
 DAILY_GOAL_STEP = "ADD COLUMN daily_goal"
+SECTION_CHECK_STEP = "CREATE TABLE plans_new"
 
 
 def test_steps_are_numbered_as_the_docs_say() -> None:
     """Schema 6 adds API tokens, 7 item details, 8 the item pages' arrangement, 9 My goals,
-    10 Ask's caps, 11 Ask's history, 12 OAuth connections and 13 Daily goal (docs/api.md §2)."""
-    assert SCHEMA_VERSION == 13
+    10 Ask's caps, 11 Ask's history, 12 OAuth connections, 13 Daily goal and 14 plans and ticks
+    without a CHECK on the section, for Cardio (docs/api.md §2)."""
+    assert SCHEMA_VERSION == 14
     steps = (
         TOKENS_STEP,
         DETAILS_STEP,
@@ -49,8 +51,68 @@ def test_steps_are_numbered_as_the_docs_say() -> None:
         ASK_HISTORY_STEP,
         OAUTH_STEP,
         DAILY_GOAL_STEP,
+        SECTION_CHECK_STEP,
     )
-    assert [_step_of(m) + 1 for m in steps] == [6, 7, 8, 9, 10, 11, 12, 13]
+    assert [_step_of(m) + 1 for m in steps] == [6, 7, 8, 9, 10, 11, 12, 13, 14]
+
+
+def test_section_check_step_keeps_plans_and_ticks_and_takes_cardio(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Step 14 builds plans and ticks again without the CHECK on their section (K90): every row
+    and every other constraint stays, and a cardio row, refused before, goes in."""
+    from tracker_api import db
+
+    c = connect(tmp_path / "f.db")
+    monkeypatch.setattr(db, "MIGRATIONS", db.MIGRATIONS[: _step_of(SECTION_CHECK_STEP)])
+    db.migrate(c)
+    monkeypatch.undo()
+    assert c.execute("PRAGMA user_version").fetchone()[0] == 13
+    c.executescript(
+        """
+        INSERT INTO users (id, username, password_hash, created_at) VALUES (1, 'a', 'h', 0);
+        INSERT INTO plans VALUES (1, 'exercise', '2026-10-19', '[{"id":"pu"}]', 3),
+            (1, 'diet', '2026-10-19', '[]', 1);
+        INSERT INTO ticks (user_id, section, week, item_id, days, partial, missed, solid, hatch)
+            VALUES (1, 'exercise', '2026-10-19', 'pu', 7, 2, 4, 1, 2),
+            (1, 'diet', '2026-10-26', 'veg', 1, 0, 0, 0, 0);
+        """
+    )
+    with pytest.raises(sqlite3.IntegrityError):
+        c.execute("INSERT INTO plans VALUES (1, 'cardio', '2026-10-19', '[]', 1)")
+
+    def rows() -> dict[str, list[tuple[object, ...]]]:
+        return {
+            t: sorted(tuple(r) for r in c.execute(f"SELECT * FROM {t}"))  # noqa: S608
+            for t in ("plans", "ticks")
+        }
+
+    before = rows()
+    db.migrate(c)
+    assert c.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
+    assert rows() == before
+    c.execute("INSERT INTO plans VALUES (1, 'cardio', '2026-10-19', '[]', 1)")
+    c.execute("INSERT INTO ticks VALUES (1, 'cardio', '2026-10-19', 'cy', 1, 0, 0, 0, 0)")
+    # The other checks stay: a rev of 0, a mask past seven days, a kind outside the days' range.
+    for bad in (
+        "INSERT INTO plans VALUES (1, 'cardio', '2026-10-26', '[]', 0)",
+        "INSERT INTO ticks VALUES (1, 'cardio', 'w', 'x', 128, 0, 0, 0, 0)",
+        "INSERT INTO ticks VALUES (1, 'cardio', 'w', 'y', 1, 0, 0, 0, -1)",
+        "INSERT INTO plans VALUES (1, 'cardio', '2026-10-19', '[]', 2)",
+    ):
+        with pytest.raises(sqlite3.IntegrityError):
+            c.execute(bad)
+    # They still go with their user, and stay strict and without rowid.
+    sql = {
+        r[0]: r[1] for r in c.execute("SELECT name, sql FROM sqlite_master WHERE type = 'table'")
+    }
+    for table in ("plans", "ticks"):
+        assert "STRICT" in sql[table] and "WITHOUT ROWID" in sql[table]
+        assert "section IN" not in sql[table]
+    assert "plans_new" not in sql and "ticks_new" not in sql
+    c.execute("DELETE FROM users WHERE id = 1")
+    assert rows() == {"plans": [], "ticks": []}
+    c.close()
 
 
 OAUTH_TABLES = ("oauth_requests", "oauth_grants", "oauth_retired", "oauth_codes", "oauth_access")
@@ -604,7 +666,6 @@ def test_constraints_reject_bad_rows(conn: sqlite3.Connection) -> None:
     bad = [
         # Usernames are unique regardless of case.
         "INSERT INTO users (username, password_hash, created_at) VALUES ('ann', 'h', 0)",
-        "INSERT INTO plans VALUES (1, 'other', '2026-10-19', '[]', 1)",
         "INSERT INTO plans VALUES (1, 'exercise', '2026-10-19', '[]', 0)",
         "INSERT INTO ticks VALUES (1, 'diet', '2026-10-19', 'veg', 128, 0, 0, 0, 0)",
         "INSERT INTO ticks VALUES (1, 'diet', '2026-10-19', 'veg', 1, 128, 0, 0, 0)",
@@ -639,13 +700,15 @@ def test_constraints_reject_bad_rows(conn: sqlite3.Connection) -> None:
 
 
 def test_item_details_take_any_section(conn: sqlite3.Connection) -> None:
-    """F3: no CHECK on the section, so a third tracker needs no table rebuild; the API checks the
-    section against the registry instead."""
+    """F3: no CHECK on the section, so a fourth tracker needs no table rebuild; the API checks the
+    section against the registry instead. Plans and ticks have none since step 14 either."""
     conn.execute(
         "INSERT INTO users (id, username, password_hash, created_at) VALUES (1, 'a', 'h', 0)"
     )
     conn.execute("INSERT INTO item_details VALUES (1, 'stretching', 'hip', '{}', 1)")
     assert conn.execute("SELECT section FROM item_details").fetchone()[0] == "stretching"
+    conn.execute("INSERT INTO plans VALUES (1, 'stretching', '2026-10-19', '[]', 1)")
+    conn.execute("INSERT INTO ticks VALUES (1, 'stretching', '2026-10-19', 'hip', 1, 0, 0, 0, 0)")
 
 
 def test_transaction_commits_or_rolls_back(conn: sqlite3.Connection) -> None:

@@ -363,6 +363,7 @@ describe('sync of item details', () => {
     details.setNotes('exercise', 'sq', 'Before the import')
     const outcome = await sync.importFile({
       exercise: { plans: {}, log: {}, details: { pl: { notes: 'From the file' } } },
+      cardio: { plans: {}, log: {}, details: {} },
       diet: { plans: {}, log: {}, details: {} },
       settings: null,
     })
@@ -385,8 +386,8 @@ describe('sync of item details', () => {
 })
 
 describe('moving a -v3 cache and outbox', () => {
-  const [V3_CACHE] = OLD_CACHE_PREFIXES
-  const [V3_OUTBOX] = OLD_OUTBOX_PREFIXES
+  const V3_CACHE = OLD_CACHE_PREFIXES.find((p) => p.endsWith('-v3:'))!
+  const V3_OUTBOX = OLD_OUTBOX_PREFIXES.find((p) => p.endsWith('-v3:'))!
   const v3 = {
     exercise: {
       plans: {
@@ -598,8 +599,9 @@ describe('moving a -v3 cache and outbox', () => {
 
 describe('details in diff and normaliseState', () => {
   const empty = () => ({ plans: {}, log: {}, details: {} })
-  const snapshot = (exercise = empty(), diet = empty()) => ({
+  const snapshot = (exercise = empty(), diet = empty(), cardio = empty()) => ({
     exercise,
+    cardio,
     diet,
     settings: { accent: '#30d158', dailyPick: 3, foodPick: 2, goals: '' },
   })
@@ -609,10 +611,12 @@ describe('details in diff and normaliseState', () => {
     const local = snapshot(
       { ...empty(), details: { sq: { notes: 'A' }, kh: { notes: 'C' } } },
       { ...empty(), details: { veg: { fields: { serving: '80 g' } } } },
+      { ...empty(), details: { ru: { fields: { route: 'The park' } } } },
     )
     expect(diff(base, local)).toEqual([
       { kind: 'details', section: 'exercise', item: 'pu' },
       { kind: 'details', section: 'exercise', item: 'kh' },
+      { kind: 'details', section: 'cardio', item: 'ru' },
       { kind: 'details', section: 'diet', item: 'veg' },
     ])
   })

@@ -49,11 +49,17 @@ While Daily goal is off (K85), the readers give no daily target and no met days.
 `goal_met_rate`, `goal_week_streak`) don't change. The rule functions stay as they are; the switch
 applies where a reader builds its output.
 
+Cardio (K90) has no daily target at all. Its `daily_target`, `days_met`, each day's `met` and the
+met-day fields of `consistency` are always null, whatever Daily goal says. A cardio item in
+`week_summary`, `weeks` and `goals` also carries its session in the edit tools' words: `seconds`
+(the whole session) and `distance_km`, each only when it has one. An exercise's sets, reps and
+timed sets stay out of the readers.
+
 The rules are ports of the web app's:
 
 - `plan_source` is `planSource` (architecture.md §2): a week's own plan, else the latest earlier
   one, else the earliest. `week_items` gives the items a week shows, and `default_items` the
-  defaults when nothing is planned.
+  defaults when nothing is planned. Cardio has no defaults: with no plan, its week is empty.
 - `total_for`, `day_counts`, `goal_met`, `goals_met` and `met_days` are `src/lib/tracker.ts`'s.
   Every mark counts towards a goal, a missed day included. A goal of 0 is never met. Only the
   items the week shows count. A day is met when its count reaches exercises or foods a day.
@@ -65,7 +71,7 @@ The readers each return a dict:
 | `week_summary(conn, user_id, section, week, today)`           | `week`, `plan_week` (None for the defaults), `carried`, `daily_target`; seven `days` (`date`, `count`, `met`, `future`); the `items` (`id`, `name`, `target`, `notes`, seven mark kinds, `done`, `great`, `partial`, `missed`, `goal_met`); `goals_met`, `days_met` |
 | `weeks(conn, user_id, section, start, end, today)`            | `week_summary` for each week from `start` to `end`, oldest first, at most 26                                                                                                                                                                                        |
 | `item_history(conn, user_id, section, item_id, weeks, today)` | one item over the last `weeks` weeks: its `name`, its whole `notes` (uncut), and per week `in_plan`, `target`, the marks and their counts. A week that doesn't show the item reads as empty, as on screen                                                           |
-| `goals(conn, user_id, today)`                                 | today's week's items with their goals, `exercises_a_day`, `foods_a_day`, and `note`, the My goals text from settings (`""` when there is none)                                                                                                                      |
+| `goals(conn, user_id, today)`                                 | today's week's items with their goals per section (`exercise`, `cardio`, `diet`), `exercises_a_day`, `foods_a_day`, `daily_goal`, and `note`, the My goals text from settings (`""` when there is none)                                                                                                                      |
 | `consistency(conn, user_id, section, weeks, today)`           | over the last `weeks` weeks: the days up to today, how many met the daily target and the rate; the goals of the finished weeks, how many were met and the rate; the current runs of met days and of weeks with every goal met                                       |
 
 Every reader keeps these rules:
@@ -106,9 +112,9 @@ Every reader keeps these rules:
 | `ask_turns`         | `(user_id, conversation_id, seq)`   | `question`, `answer`, `stop` (`end_turn`, `max_tokens`, `refused`, `error` or `cancelled`), `asked_at`: one question and its answer, text only. Only `end_turn` and `max_tokens` keep an answer; any other is `''` |
 | `item_details`      | `(user_id, section, item_id)`       | `details_json` (one document per item for every week: `{notes?, fields?}`), `rev`                                                                                                                                  |
 
-`section` is `exercise` or `diet`, the registry's sections (`types.py`). `plans` and `ticks` CHECK
-it in the schema, so a new section there needs a table rebuild. `item_details` has no such CHECK:
-the API checks the section against the registry. Every row cascades from its user, and an Ask turn from its conversation. Tokens and session ids are
+`section` is `exercise`, `cardio` or `diet`, the registry's sections (`types.py`). No table
+CHECKs it since version 14: the API checks the section against the registry, so a new tracker
+needs no table rebuild. Every row cascades from its user, and an Ask turn from its conversation. Tokens and session ids are
 stored only as SHA-256 hashes. A database lookup with a stolen copy of the file cannot recover a
 working cookie or link. Times are Unix seconds. The theme is not stored: it belongs to the device.
 
@@ -151,6 +157,13 @@ is two conversations.
 
 Version 13 adds Daily goal (K85): `settings.daily_goal`, 0 or 1 with a CHECK, default 1, so saved
 settings read as on.
+
+Version 14 takes the CHECK on `section` off `plans` and `ticks`, for Cardio (K90), as
+`item_details` never had one. SQLite can't drop a CHECK, so each table is built again under a new
+name, filled from the old one, and renamed into place. Every other column, CHECK, key and the
+cascade from `users` stay, as do `STRICT` and `WITHOUT ROWID`. Nothing references either table.
+Every row is kept. Older code reads the rebuilt tables unchanged, so a rollback needs only the
+code.
 
 Version 12 adds OAuth's five tables: `oauth_requests`, `oauth_grants`, `oauth_retired`, `oauth_codes` and `oauth_access` (§3.3). It only adds, so it reshapes no data. Every code and token is stored as its SHA-256 only. `oauth_grants` cascades from its user, and the other three grant tables from the grant, so removing a grant removes its codes, access tokens and retired refresh tokens. Rolling the API back leaves the tables unused.
 
@@ -223,7 +236,7 @@ tabs and clients work unchanged). While mail is on it also carries `confirmed`, 
 address is confirmed. A legacy account still named by a username (below), and every account while
 mail is off, has no such key.
 
-`GET /state` returns `{exercise, diet, settings}`. Each section is
+`GET /state` returns `{exercise, cardio, diet, settings}`. Each section is
 `{plans, log, details, revs, detailRevs}`:
 
 - `plans` and `log` have the same shape as in the app's cache (a log row is seven marks or nulls).
@@ -232,6 +245,14 @@ mail is off, has no such key.
   cleared.
 - `revs` maps each planned week to its revision, and `detailRevs` each item id to its details'
   revision, cleared ones included.
+
+An account from before Cardio has an empty `cardio` section. Plan items differ by type:
+
+- an exercise is `{id, name, sets?, reps, duration?, perSide?, weight?, target}`;
+- a cardio item (K90) is `{id, name, duration?, distance?, target}`. `duration` is the whole
+  session in seconds, 1 to 86,400. `distance` is km, 0.01 to 1,000, rounded to two places as a
+  weight is. Each is left out when not set, and an exercise's fields drop;
+- a food is `{id, name, target}`.
 
 `settings` is `{accent, dailyPick, foodPick, dailyGoal, goals, itemSections?}`, or null before any are saved.
 
@@ -327,6 +348,8 @@ also carries `conversations`, Ask's history, the one updated last first, in the 
 `GET /ask/conversations/{id}` returns; it took no new version either. The browser keeps no
 conversations, so Settings → Export writes the device's plans, marks and settings and takes
 `conversations` from this export (`architecture.md` §4); with none, the file has no such key.
+The `cardio` section (K90) took no new version either: a file without it has no cardio, and a
+reader from before it drops the key.
 Import reads:
 
 - version 5;
@@ -410,14 +433,14 @@ A token of either scope may call a `read` tool. Only a `write` token may call a 
 result unchanged, with `this_week` (the Monday of today's week) and `today` added, both in the
 account's timezone, so the agent knows "now". Every read tool has `readOnlyHint`. The server
 passes `today` to the reader, since `insights.py` never reads the clock. `section` is `exercise`
-(the default) or `diet` (food). A week is a Monday written `YYYY-MM-DD`.
+(the default), `cardio` (cycling, running and the like, K90) or `diet` (food). A week is a Monday written `YYYY-MM-DD`.
 
 | Tool           | Arguments (defaults)                                                      | Returns                                                                   |
 | -------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
 | `week_summary` | `section` (`exercise`), `week` (this week)                                | One week: each item's marks against its goal, and the met days            |
 | `weeks`        | `section` (`exercise`), `start` (3 weeks before `end`), `end` (this week) | `week_summary` for each week from `start` to `end`, 26 at most            |
 | `item_history` | `item_id`, `section` (`exercise`), `weeks` (8)                            | One item's goal and marks over the last `weeks` weeks, and its whole note |
-| `goals`        | none                                                                      | This week's goals for both sections, daily targets and the note           |
+| `goals`        | none                                                                      | This week's goals for every section, daily targets and the note           |
 | `consistency`  | `section` (`exercise`), `weeks` (8)                                       | Met-day and goal-met rates over the last `weeks` weeks, streaks           |
 
 `week_summary`, `weeks` and `goals` cut each item's `notes` at 500 characters, a longer note
@@ -458,9 +481,13 @@ Every write tool has `readOnlyHint` false and `openWorldHint` false; only `remov
   changed only the note. `rev` is the week's plan revision, 0 for a week still without its own.
 - **Item fields use the app's words.** An exercise has `name`, `sets` (0 to 20), `reps` (0 to
   9999), `seconds` (0 to 3600), `per_side`, `weight_kg` (0 to 500), `times_a_week` (0 to 7) and
-  `note` (up to 20,000 characters). A food has `name`, `times_a_week` and `note`. They are stored
-  as `name`, `sets`, `reps`, `duration`, `perSide`, `weight`, `target` and `notes`; `edits.WORDS`
-  holds that mapping. A 0, or an empty `note`, clears the field.
+  `note` (up to 20,000 characters). A cardio item (K90) has `name`, `seconds` (the whole
+  session's, 0 to 86,400), `distance_km` (0 to 1,000), `times_a_week` and `note`. A food has
+  `name`, `times_a_week` and `note`. They are stored as `name`, `sets`, `reps`, `duration`,
+  `perSide`, `weight`, `distance`, `target` and `notes`; `edits.WORDS` holds that mapping, and
+  `edits.TYPE_WORDS` each type's fields. A field another type has is refused by name, as
+  `reps: a cardio item has no reps; it has name, seconds, distance_km, times_a_week, note`. A 0,
+  or an empty `note`, clears the field.
 - **A note is the item's, not the week's.** `note` is the item's notes in its details (§3), one
   copy for every week, which the app's row and item page read. It never goes into a plan. The
   plan write and the note are one transaction, so a note refused for the quota or for the 32 KB
@@ -470,14 +497,15 @@ Every write tool has `readOnlyHint` false and `openWorldHint` false; only `remov
   the agent's, as after any details conflict. Setting the same note again writes nothing. An exercise counts reps or
   seconds, not both: giving `seconds` to an exercise with reps sets its reps to 0, and giving
   `reps` drops its seconds. Names are trimmed, may not be empty, and are capped at 80 characters.
-  A new exercise's `times_a_week` is 3, as is a new food's.
+  A new exercise's `times_a_week` is 3, as is a new cardio item's and a new food's.
 - **Ids are made by the server**, in the app's shape: `x`, the time in milliseconds in base 36, and
   four random base-36 characters. An id already used in the section is never reused.
 - **`mark_day`** marks one item on one date. The week is that date's Monday and the day its
   weekday. It may be in the future, as on screen. `mark` is one of the nine marks
-  (§2), or null to clear the day. A food takes only `great`, `great-solid` or `great-hatch`, the
-  marks the app gives a food. An item the week does not show is refused.
-- **`set_daily_targets`** sets exercises a day and foods a day, each 1 to 8. The accent and the
+  (§2), or null to clear the day. An exercise and a cardio item take any of them. A food takes
+  only `great`, `great-solid` or `great-hatch`, the marks the app gives a food. An item the week does not show is refused.
+- **`set_daily_targets`** sets exercises a day and foods a day, each 1 to 8. Cardio has no daily
+  target. The accent and the
   target not given keep their saved values, or the defaults while none are saved. It still saves
   the numbers while Daily goal is off, which only the app can turn on, and its result has
   `daily_goal`.
@@ -605,8 +633,9 @@ and logs it as an exception.
 
 **The prompt.** The system prompt is one constant: the role, the rules from §1.1 (a plan
 carries forward, every mark counts towards a goal, missed and partial days are reported as such,
-met days use exercises a day and foods a day, future days don't count), names and notes as data
-and never instructions, tools before judgement, no medical advice, short markdown with no
+met days use exercises a day and foods a day, future days don't count), what cardio is (a
+duration and a distance, a weekly goal, no daily target and no defaults, K90), names and notes as
+data and never instructions, tools before judgement, no medical advice, short markdown with no
 headings, tables or images, and the voice. It holds nothing that varies, so it caches; the cache
 breakpoint is on it, and the tools render before it. Today, this week and the My goals note open
 the first user turn instead. The voice is John's ruling (K68, voice.md "Ask"): facts first and
@@ -617,7 +646,8 @@ False would put back the app's own rules (no streaks, scores or rankings, nothin
 
 **The tools** are `consistency`, `goals`, `item_history`, `week_summary` and `weeks`, sorted by
 name, each with a strict schema. Each wraps the `insights` reader of the same name (§1.1) and is a
-closure over the session's user and the question's `today`. No schema has a user field, and a
+closure over the session's user and the question's `today`. `section` is an enum of the
+registry's sections: `exercise`, `cardio`, `diet`. No schema has a user field, and a
 key the schema lacks is never read, so a tool reads only the asker's data whatever the model
 writes. Each call runs on a worker thread with its own connection. An `InsightsError` goes back
 to Claude as an error result naming the field. A result over 20 KB of JSON goes back as an error
@@ -1031,6 +1061,9 @@ differs by default:
 
 `tests/test_parity.py` runs every case in `fixtures/transfer/`, the same files the Vitest suite
 runs. A rule changed on one side without the other fails one of the two suites. The
+`parse/cardio.json` case holds a cardio item to one normaliser (`normalise_cardio`,
+`normaliseCardio`): whole seconds capped at 86,400, km rounded and capped at 1,000 like a weight,
+and an exercise's fields dropped. The
 `parse/goals*.json` cases hold My goals to one normaliser, and `merge-settings.json` holds the
 import's settings rule, goals filling only empty ones included. The `parse/conversations*.json`
 cases hold Ask's conversations to one normaliser (`normalise_conversations`,
@@ -1074,7 +1107,8 @@ Tests sit in `api/tests/`:
   deliberate divergences from JavaScript (§9).
 - `test_insights.py`: every case in `fixtures/insights/` (§9), then each reader over a real
   database: the defaults, missed days, the output's shape and cuts, user isolation, no writes,
-  the 26-week bound, Monday keys, item history, goals and consistency.
+  the 26-week bound, Monday keys, item history, goals and consistency, and cardio's session with
+  no daily target.
 - `test_api.py`: the HTTP layer: the write guard, error shapes, body limits (chunked too), every
   data endpoint, user isolation, `X-Expected-User`, sign-up and its refusals (closed included),
   the quota on plans, ticks and imports, every mark and the old `done` body, import and export
@@ -1096,11 +1130,11 @@ Tests sit in `api/tests/`:
   32 KB cap as stored), revisions and conflicts, an empty document keeping its revision, sections
   and users kept apart, 400s, the quota, export version 5, import keeping existing details, and a
   version 4 file's notes lifting into details.
-- `test_types.py`: the registry against `fixtures/types/registry.json`, the `Section` literal and
-  `validate.py` reading it.
-- `test_seed.py`: `seed-demo` only on a local stack, a confirmed account, three weeks of every mark,
-  details for two items, an account's own marks and details kept, a second run adding nothing,
-  and what the CLI prints.
+- `test_types.py`: the registry against `fixtures/types/registry.json`, the `Section` literal,
+  `validate.py` reading it, and cardio having no daily pick.
+- `test_seed.py`: `seed-demo` only on a local stack, a confirmed account, three weeks of every mark
+  in each tracker, details for three items, an account's own marks and details kept, a second run
+  adding nothing, Cardio added to an account seeded before it, and what the CLI prints.
 - `test_ask.py`: Ask with no network. An `httpx2.MockTransport` behind the SDK replays Messages
   API event streams, built in the documented wire format: a plain answer, a tool round, every
   tool, a refusal, `max_tokens`, the last round, 529, 429, 500, a dropped connection, a timeout,
@@ -1118,7 +1152,8 @@ Tests sit in `api/tests/`:
   ones, the WAL switch, old ticks reading as `great` after step 2, every row surviving step 6
   from a populated database, step 7 lifting each item's latest note, rerunning and on an empty
   database, step 8's empty column, step 9's goals reading as none, and Ask's tables after steps 10
-  and 11 holding text only and going with their user), configuration from the environment (`TIMEZONE`, and the
+  and 11 holding text only and going with their user, step 14 keeping every plan and tick and
+  taking a cardio row), configuration from the environment (`TIMEZONE`, and the
   week turning over at local midnight), daily copies, `tracker-admin`.
 - `test_mcp.py`: the MCP endpoint through `TestClient`: `initialize`, `tools/list` and `whoami`
   with a token, on both protocol kinds, and each refusal (no, bad, revoked or disabled token; a
@@ -1133,9 +1168,10 @@ Tests sit in `api/tests/`:
   token and revoke guard, Connections) and the personal-token routes. `test_mcp.py` also covers the
   verifier's prefix dispatch, expiry on the clock, the grant's resource and the 503.
 - `test_edits.py`: the plan edits behind the write tools: copying a carried week first, the ids
-  the server makes, each field's bounds, replaying a conflict, the quota, and marks per section.
+  the server makes, each field's bounds, replaying a conflict, the quota, marks per section, and
+  cardio's fields and refusals.
 - `test_validate.py`: the write checks REST and MCP share: week keys, plan bodies, item ids, days,
-  marks and the stricter item shape for MCP writes.
+  marks, the stricter item shape for MCP writes, and cardio's normaliser.
 - `conftest.py` gives each test a temporary database, a controllable clock, a cheap hasher and a
   mailer that records instead of sending (`mail_client`), and puts the package logger back after
   each test;

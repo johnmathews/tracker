@@ -21,7 +21,7 @@ Tracker is a weekly plan for exercise and diet: one row per exercise or food, on
 
 | Layer | Where | How it behaves |
 | --- | --- | --- |
-| 1. Now | The Exercises and Food screens, each filling the screen | One obvious thing to do. The week fills the screen, the bar keeps out of sight, 44px targets. |
+| 1. Now | The Exercises, Cardio and Food screens, each filling the screen | One obvious thing to do. The week fills the screen, the bar keeps out of sight, 44px targets. |
 | 2. Record | The year strip, notes, search, an item's recent weeks | Quiet and dense: `caption` type, `ink-secondary`, small marks. |
 
 ## How to use this system

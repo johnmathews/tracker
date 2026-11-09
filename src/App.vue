@@ -6,6 +6,7 @@ import WeekHeader from '@/components/WeekHeader.vue'
 import SettingsPage from '@/components/SettingsPage.vue'
 import AskPage from '@/components/AskPage.vue'
 import ExerciseGrid from '@/components/ExerciseGrid.vue'
+import CardioSection from '@/components/CardioSection.vue'
 import DietSection from '@/components/DietSection.vue'
 import LoginForm from '@/components/LoginForm.vue'
 import PasswordForm from '@/components/PasswordForm.vue'
@@ -334,6 +335,7 @@ onBeforeUnmount(() => {
           <EmailStatus />
           <ImportPrompt v-if="session.user" :key="session.user" :user="session.user" />
         </ExerciseGrid>
+        <CardioSection />
         <DietSection />
       </template>
       <template v-else>

@@ -117,6 +117,22 @@ test.describe('the app passes axe', () => {
       await expectNoAxeViolations(page)
     })
 
+    test(`a cardio item’s page, and the Edit cardio dialog (K90), ${theme}`, async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 900 })
+      await openApp(page, { theme })
+      await page.getByTestId('cardio-grid').getByRole('link', { name: 'Running' }).click()
+      await page.getByRole('heading', { level: 1, name: 'Running' }).waitFor()
+      await settle(page)
+      await expectNoAxeViolations(page)
+      await page.goBack()
+      await page.getByTestId('cardio-grid').waitFor()
+      await callUpBar(page)
+      await page.getByTestId('cardio-grid').getByRole('button', { name: 'Edit Cycling' }).click()
+      await page.getByRole('dialog', { name: 'Edit cardio' }).waitFor()
+      await settle(page)
+      await expectNoAxeViolations(page)
+    })
+
     test(`an item’s page, folded, 390px, ${theme}`, async ({ page }) => {
       await page.setViewportSize({ width: 390, height: 844 })
       await openApp(page, { theme })
