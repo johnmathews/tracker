@@ -1,4 +1,4 @@
-<!-- @dsCard group="Planner" height=360 subtitle="Section title, the week beside it, and an optional hint line" -->
+<!-- @dsCard group="Planner" height=440 subtitle="The week centred as the title, the section as a heading, and Edit plan’s daily target" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -14,8 +14,12 @@
   .hint { margin: 0; color: var(--ink-secondary); }
   .variant { margin: 0 0 var(--space-2); color: var(--ink-secondary); }
   .line { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-4); }
-  .big { font-size: 40px; line-height: 46px; }
-  .week { font-size: 20px; line-height: 26px; color: var(--ink-secondary); }
+  /* K86, K87: the week as the title, centred, in the title serif at 40u; the section's name in the
+     same serif at 32u. */
+  .week-title { margin: 0 0 12px; text-align: center; font: 600 40px/46px var(--font-serif); color: var(--ink); }
+  .section-header.stack { display: block; }
+  .heading { margin: 0; font: 600 32px/1.15 var(--font-serif); color: var(--ink); }
+  @media (max-width: 639px) { .week-title { font-size: 30px; line-height: 36px; } .heading { font-size: 24px; } }
   .section-header.centred { align-items: center; }
   /* Edit plan (K62): three columns like the Header's, the target in the middle one. */
   .section-header.thirds { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
@@ -33,16 +37,17 @@
 </style>
 </head>
 <body>
-<p class="variant caption">On a PlannerScreen: the title and the week beside it</p>
-<header class="section-header">
+<p class="variant caption">On a PlannerScreen: the week as the screen’s title, the section’s name a step smaller</p>
+<header class="section-header stack">
+  <p class="week-title" aria-hidden="true">19–25 October</p>
   <div class="titles">
-    <div class="line"><h2 class="title-1 big" id="ex">Exercises</h2><span class="week" aria-hidden="true">19–25 October</span></div>
+    <h2 class="heading" id="ex">Exercises</h2>
   </div>
 </header>
 <p class="variant caption">In Edit plan: the title, and the daily target centred on the line, reading “2 per day”</p>
 <header class="section-header centred thirds">
   <div class="titles">
-    <h2 class="title-1 big" id="fd">Food</h2>
+    <h2 class="heading" id="fd">Food</h2>
   </div>
   <div class="target" role="group" aria-label="Foods a day">
     <div class="stepper">
@@ -52,7 +57,7 @@
     </div>
   </div>
 </header>
-<p class="variant caption">Folded: the title alone</p>
+<p class="variant caption">On paper: the section’s name in title-1, the week in the page’s heading above</p>
 <header class="section-header">
   <div class="titles">
     <h2 class="title-1">Food</h2>

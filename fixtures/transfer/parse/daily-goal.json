@@ -1,0 +1,36 @@
+{
+  "description": "Daily goal off (K85) is kept as false.",
+  "input": {
+    "format": "tracker-export",
+    "version": 4,
+    "settings": {
+      "accent": "#0a84ff",
+      "dailyPick": 4,
+      "foodPick": 3,
+      "goals": "",
+      "dailyGoal": false
+    }
+  },
+  "expected": {
+    "ok": true,
+    "data": {
+      "exercise": {
+        "plans": {},
+        "log": {},
+        "details": {}
+      },
+      "diet": {
+        "plans": {},
+        "log": {},
+        "details": {}
+      },
+      "settings": {
+        "accent": "#0a84ff",
+        "dailyPick": 4,
+        "foodPick": 3,
+        "dailyGoal": false,
+        "goals": ""
+      }
+    }
+  }
+}

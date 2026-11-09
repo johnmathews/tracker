@@ -1,0 +1,53 @@
+/*
+  The week screen (PlannerScreen, Exercises) with the date as the screen's title. One frame (.wk) is
+  one screen, sized from its own box like the app: u is 1 on a 1280×800 screen; n on a phone. The
+  shipped sizes are main.css's (--fs-title, --fs-day, --screen-pad-x); new values are --candidate-*.
+*/
+.wk { position: relative; overflow: hidden; box-sizing: border-box; container: wk / size; background: var(--canvas); color: var(--ink);
+  font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
+.wk *, .wk *::before, .wk *::after { box-sizing: border-box; }
+.wk-in { position: absolute; inset: 0; display: flex; flex-direction: column;
+  --u: clamp(0.75px, min(calc(100cqw / 1280), calc(100cqh / 800)), 1.6px);
+  --pad-x: calc(var(--u) * 48); --fs-title: max(30px, calc(var(--u) * 40)); --fs-day: max(20px, calc(var(--u) * 27));
+  --name-w: calc(var(--u) * 320); --box: min(calc(var(--u) * 64), 64px);
+  /* The date as the screen's title: the title serif at the title size, ink, centred. */
+  --candidate-date: 600 var(--fs-title) / 1.1 var(--font-serif);
+  /* T1: the section as a heading in the sans, at the Settings section-heading size. */
+  --candidate-sec: 600 max(22px, calc(var(--u) * 27)) / 1.2 var(--font-sans);
+  padding: calc(var(--u) * 28) var(--pad-x) calc(var(--u) * 20); }
+.wk[data-t="t2"] .wk-in { /* T2: the section keeps the serif, smaller than the date. */
+  --candidate-sec: 600 max(24px, calc(var(--u) * 30)) / 1.15 var(--font-serif); }
+.wk[data-t="now"] .wk-in { --candidate-sec: 600 var(--fs-title) / 1.1 var(--font-serif); }
+/* Round 3: the section as a serif title of its own, with more weight. H1: 32u under the 40u date.
+   H2: 36u, with the date raised to 46u so it stays the title. */
+.wk[data-t="h1"] .wk-in { --candidate-sec: 600 max(26px, calc(var(--u) * 32)) / 1.12 var(--font-serif); }
+.wk[data-t="h2"] .wk-in { --candidate-sec: 600 max(28px, calc(var(--u) * 36)) / 1.1 var(--font-serif);
+  --candidate-date: 600 max(34px, calc(var(--u) * 46)) / 1.08 var(--font-serif); }
+
+.wk-date { margin: 0 0 calc(var(--u) * 20); text-align: center; font: var(--candidate-date); color: var(--ink); letter-spacing: -0.005em; }
+.wk-sec { margin: 0 0 calc(var(--u) * 16); font: var(--candidate-sec); color: var(--ink); }
+.wk[data-t="now"] .wk-date { display: none; }
+.wk-now { display: none; margin-left: calc(var(--u) * 16); font: 400 max(16px, calc(var(--u) * 20)) / 1 var(--font-sans); color: var(--ink-secondary); }
+.wk[data-t="now"] .wk-now { display: inline; }
+
+.wk-grid { flex: 1; display: grid; grid-template-columns: var(--name-w) repeat(7, minmax(0, 1fr)); grid-template-rows: auto repeat(3, minmax(0, 1fr)); }
+.wk-head { align-self: end; padding-bottom: calc(var(--u) * 12); border-bottom: 1px solid var(--ink); text-align: center; font: 600 var(--fs-day) / 1.2 var(--font-sans); }
+.wk-head.today { color: var(--pen); text-decoration: underline; text-decoration-thickness: max(2px, calc(var(--u) * 3)); text-underline-offset: 0.22em; }
+.wk-name { display: flex; align-items: center; gap: calc(var(--u) * 10); border-bottom: 1px solid var(--line); font: 600 max(19px, calc(var(--u) * 26)) / 1.2 var(--font-sans); }
+.wk-chip { padding: 1px calc(var(--u) * 8); border-radius: var(--radius-sm); background: var(--tile); color: var(--ink-secondary); font-size: 0.72em; }
+.wk-cell { display: grid; place-items: center; border-bottom: 1px solid var(--line); }
+.wk-box { width: var(--box); height: var(--box); border: max(3px, calc(var(--u) * 4)) solid var(--control-border); border-radius: calc(var(--u) * 6); }
+.wk-box.on { background: var(--pen); border-color: var(--pen); }
+
+/* Folded (a phone held upright): the date centred over the section; the grid's days as now. */
+@container wk (width < 760px) {
+  .wk-in { --u: 1px; --pad-x: 16px; --fs-title: 26px; --fs-day: 16px; --name-w: 0px; --box: 34px; padding-top: 34px;
+    --candidate-sec: 600 19px / 1.2 var(--font-sans); }
+  .wk[data-t="t2"] .wk-in { --candidate-sec: 600 24px / 1.15 var(--font-serif); }
+  .wk[data-t="h1"] .wk-in { --candidate-sec: 600 24px / 1.12 var(--font-serif); }
+  .wk[data-t="h2"] .wk-in { --candidate-sec: 600 26px / 1.1 var(--font-serif); --candidate-date: 600 30px / 1.08 var(--font-serif); }
+  .wk-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); grid-template-rows: auto; grid-auto-rows: auto; row-gap: 8px; }
+  .wk-name { grid-column: 1 / -1; border: 0; padding-top: 12px; font-size: 17px; }
+  .wk-cell { border: 0; }
+  .wk-corner { display: none; }
+}

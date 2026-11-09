@@ -288,6 +288,12 @@ MIGRATIONS = [
     ) STRICT;
     CREATE INDEX oauth_access_by_grant ON oauth_access (grant_id);
     """,
+    # Daily goal (K85): whether the daily targets apply. Saved settings take it on, as the app
+    # showed them, and as a file without one reads; turned off, the targets are kept.
+    """
+    ALTER TABLE settings ADD COLUMN daily_goal INTEGER NOT NULL DEFAULT 1
+        CHECK (daily_goal IN (0, 1));
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

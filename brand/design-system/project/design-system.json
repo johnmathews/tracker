@@ -197,9 +197,9 @@
   ],
   "lastChange": {
     "by": "John Mathews",
-    "at": "2026-11-08T22:08:20Z",
+    "at": "2026-11-09T07:06:53Z",
     "via": "Claude Code",
-    "note": "A bar led by the week, and a smaller Ask (K81-K84): the Header has no wordmark and no Edit plan button, the week first in the serif, Done in Edit plan and a hidden Edit plan for the keyboard; BarAction gains filled; Transcript gains a Conversation view; SidePanel takes --side-panel-w; the PlannerScreen preview follows."
+    "note": "Daily goal and the week as the title (K85-K87): SettingsPage's Your goals starts with a Daily goal switch; SectionHeader sets the week centred as the screen's title and the section's name in the serif a step smaller; Header, PlannerScreen and the project README follow."
   },
   "layout": "files",
   "libraries": [],

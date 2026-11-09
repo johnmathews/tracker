@@ -401,6 +401,20 @@ thing", with four screenshots of the bar and the Ask page. Decided on the mockup
 | K83 | The Ask page is about 70% of the Settings sizes it used: text and labels max(14px, 14u) (15px folded), its h2 max(17px, 19u), its title max(24px, 28u), icons max(17px, 18u), the history panel max(210px, 230u) and the question column 180u. Controls keep 44px. The intro reads at 72 characters of its own size. The "Ask" beside the question box goes, and the box starts at the page's left edge | "it looks to big - if i zoom to 70% then the ask view looks "normal"", "the width of text above the text input box is narrow", "the text input box has an "ask" title to its left, this is redundant". Option S2 over S1 (about 80%) |
 | K84 | Ask has two views, chosen by a SegmentedControl named "View" at the end of the title line and remembered on each device: Document, the default, is the rows of K67 (the Transcript card's layout A); Conversation is one centred reading column with each question in a `tile` on the right and the answer under it (the 1 November mockup's B). Option D1 over D2 (headings over answers) | "lets give the ask view both "conversational view" and "document view" options. default is document view". John called the page "mostly fine", so Document stays as it is |
 
+### 4.19 A Daily goal switch, and the date as the week's title (2026-11-08)
+
+Asked for by John: "i want an option in settings to hide the "- N per day +" element. if its
+hidden, then the day column doesnt get a marking when ive achieved N exerices for that day. the
+option in settings is called "daily goal"", then "lets put the date in the center ... at the top
+of the tracker, like a title". Decided on the mockup
+`brand/design-system/mockups/261108-daily-goal`.
+
+| ID | Decision | Why |
+| --- | --- | --- |
+| K85 | Settings › Your goals starts with a Switch, "Daily goal", on by default and saved with the account (`dailyGoal`, synced and exported like the targets). Off: Edit plan shows no "N per day" Steppers, no day name turns green (K30, K60), and Ask and the AI connections get no daily target and no met days. The numbers are kept and come back when it is on. One switch for both sections. Option A over B (in Appearance) | John's answers: one switch for both, on every device, and the AI ignoring the targets while off. "daily goal should be in the "your goals" section" |
+| K86 | On the week screens the date is the title: at the top centre of each screen, in the title serif at `--fs-title`, in `ink`. "Exercises" and "Food" become section headings in the sans, 600, max(22px, 27u), over their grids, in Edit plan too (the sans superseded by K87). Edit plan shows no date over its sections: its bar holds the week (K81). Supersedes K54's week beside each title in `ink-secondary`. Option T1 over T2 (a smaller serif) | "notive the date is small and grey next to the tracker title. this is weird ... it is the title, and the tracker type ("exercises" or "food") is more of a section heading" |
+| K87 | The section's name is a serif title after all: `title-1` (the serif, 600) at `--fs-section`, max(26px, 32u) (24n folded), a step under the week's 40u, in `ink`. Supersedes K86's sans heading; the week centred as the screen's title stands. Option H1 over H2 (36u, with the week raised to 46u) | John, having seen T1: "lets make the tracker title ("Exercises" in the screeshot) more like a title. it should be a serif font and a bit larger. it should have more visual impact than it does now" |
+
 ## 5. Accepted risks
 
 Each is described where it applies:

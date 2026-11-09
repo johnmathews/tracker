@@ -92,6 +92,7 @@ def test_fills_three_weeks_ending_today_with_every_kind_and_drawing(
         "dailyPick": 3,
         "foodPick": 2,
         "goals": "",
+        "dailyGoal": True,
     }
 
 

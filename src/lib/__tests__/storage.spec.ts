@@ -259,11 +259,12 @@ describe('normalisePortableSettings', () => {
 })
 
 describe('parseSettings', () => {
-  it('defaults to green accent, three exercises and two foods a day, the system theme and squiggles', () => {
+  it('defaults to green accent, three exercises and two foods a day with Daily goal on, the system theme and squiggles', () => {
     expect(parseSettings(null)).toEqual({
       accent: '#30d158',
       dailyPick: 3,
       foodPick: 2,
+      dailyGoal: true,
       goals: '',
       theme: 'system',
       markSet: 'squiggles',
@@ -280,6 +281,7 @@ describe('parseSettings', () => {
       accent: '#bf5af2',
       dailyPick: 8,
       foodPick: 5,
+      dailyGoal: true,
       goals: '',
       theme: 'dark',
       markSet: 'squiggles',
@@ -287,6 +289,16 @@ describe('parseSettings', () => {
     expect(parseSettings(JSON.stringify({ dailyPick: 0 })).dailyPick).toBe(1)
     expect(parseSettings(JSON.stringify({ foodPick: 0 })).foodPick).toBe(1)
     expect(parseSettings(JSON.stringify({ foodPick: 12 })).foodPick).toBe(8)
+  })
+
+  it('reads Daily goal off only from false, and leaves it out of portable settings when unknown (K85)', () => {
+    expect(parseSettings(JSON.stringify({ dailyGoal: false })).dailyGoal).toBe(false)
+    expect(parseSettings(JSON.stringify({ dailyGoal: 'no' })).dailyGoal).toBe(true)
+    expect(normalisePortableSettings({ dailyGoal: false }).dailyGoal).toBe(false)
+    expect(normalisePortableSettings({ dailyGoal: true }).dailyGoal).toBe(true)
+    // Unknown (a cache or file from before it): absent, so sending it keeps the saved one.
+    expect('dailyGoal' in normalisePortableSettings({ dailyGoal: 0 })).toBe(false)
+    expect('dailyGoal' in normalisePortableSettings({})).toBe(false)
   })
 
   it('rejects a non-hex accent', () => {

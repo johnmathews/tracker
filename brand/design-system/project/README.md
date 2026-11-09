@@ -8,7 +8,7 @@ This document shows each part of the Tracker web app in light and dark. New scre
 
 Tracker should feel like a well-made notebook kept for years: plain, dependable and calm, with today and this week in one bold, obvious place and everything older quiet and dense.
 
-Tracker is a weekly plan for exercise and diet: one row per exercise or food, one mark per day, and a day that turns green once it reaches the daily pick. A personal trainer could recommend it and use it with a client. It is (almost) as simple as a paper star chart, and it never pretends to be more than the record of someone showing up.
+Tracker is a weekly plan for exercise and diet: one row per exercise or food, one mark per day, and a day that turns green once it reaches the daily pick (while Daily goal is on, K85). A personal trainer could recommend it and use it with a client. It is (almost) as simple as a paper star chart, and it never pretends to be more than the record of someone showing up.
 
 ## The feeling
 

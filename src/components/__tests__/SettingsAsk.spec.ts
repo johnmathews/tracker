@@ -288,3 +288,81 @@ describe('export and import with Ask’s history', () => {
     )
   })
 })
+
+describe('Daily goal in Settings (K85)', () => {
+  const dailyGoal = () => wrapper.get('[data-testid="daily-goal"]')
+  async function toWeek(): Promise<void> {
+    location.hash = '#/'
+    await settle()
+  }
+  /** Marks Monday for the first `n` exercises, enough to reach a daily pick of `n`. */
+  async function markMonday(n: number): Promise<void> {
+    const cells = wrapper.findAll('[data-testid="exercise-grid"] [data-slot="day-mark-button"]')
+    for (let i = 0; i < n; i++) await cells[i * 7]!.trigger('click')
+  }
+  const monday = () =>
+    wrapper.get('[data-testid="exercise-grid"]').findAll('[data-testid="day-head"]')[0]!
+
+  it('is the first thing in Your goals, on by default, with what it does', async () => {
+    await openSettings()
+    const section = wrapper
+      .findAll('[data-testid="settings-page"] section')
+      .find((s) => s.get('h2').text() === 'Your goals')!
+    expect(section.get('[data-slot="switch"]').element).toBe(dailyGoal().element)
+    expect(dailyGoal().text()).toBe('Daily goal')
+    expect(dailyGoal().attributes('aria-checked')).toBe('true')
+    const hint = document.getElementById(dailyGoal().attributes('aria-describedby')!)!
+    expect(hint.textContent).toContain('set in Edit plan. A day that reaches it turns green.')
+    // Unknown until the server says or the person sets it: nothing is sent for it (K85).
+    expect(usePlannerStore().dailyGoalKnown).toBe(false)
+  })
+
+  it('turned off, saves with the account, hides the steppers and every met day, keeping the numbers', async () => {
+    await openSettings()
+    await dailyGoal().trigger('click')
+    await settle()
+    expect(dailyGoal().attributes('aria-checked')).toBe('false')
+    expect(puts()).toEqual([{ ...SENT, dailyGoal: false, goals: 'Ten pull-ups by March.' }])
+    expect(api.accounts.get(USER)!.settings!.dailyGoal).toBe(false)
+    await toWeek()
+    await markMonday(3)
+    expect(monday().attributes('data-met')).toBeUndefined()
+    // Food too: two foods on Monday reach foods a day (2), and still no day is met.
+    const foods = wrapper.findAll('[data-testid="diet-grid"] [data-slot="day-mark-button"]')
+    await foods[0]!.trigger('click')
+    await foods[7]!.trigger('click')
+    const foodMonday = wrapper
+      .get('[data-testid="diet-grid"]')
+      .findAll('[data-testid="day-head"]')[0]!
+    expect(foodMonday.attributes('data-met')).toBeUndefined()
+    usePlannerStore().setDailyGoal(true)
+    await settle()
+    expect(foodMonday.attributes('data-met')).toBe('true')
+    usePlannerStore().setDailyGoal(false)
+    await settle()
+    usePlannerStore().setConfigMode(true)
+    await settle()
+    expect(wrapper.find('[data-testid="exercises-a-day"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="foods-a-day"]').exists()).toBe(false)
+    // Back on: the same numbers, and Monday is met.
+    usePlannerStore().setConfigMode(false)
+    usePlannerStore().setDailyGoal(true)
+    await settle()
+    expect(monday().attributes('data-met')).toBe('true')
+    usePlannerStore().setConfigMode(true)
+    await settle()
+    expect(wrapper.find('[data-testid="exercises-a-day"]').exists()).toBe(true)
+    expect(usePlannerStore().dailyPick).toBe(3)
+  })
+
+  it('reads an off from the account, and sends it with its next settings write', async () => {
+    await openSettings({ saved: { ...PICKS, dailyGoal: false, goals: '' } })
+    expect(dailyGoal().attributes('aria-checked')).toBe('false')
+    await toWeek()
+    await markMonday(3)
+    expect(monday().attributes('data-met')).toBeUndefined()
+    usePlannerStore().changeDailyPick(1)
+    await settle()
+    expect(puts().at(-1)).toEqual({ ...SENT, dailyPick: 4, dailyGoal: false, goals: '' })
+  })
+})

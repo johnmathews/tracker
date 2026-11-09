@@ -23,8 +23,13 @@ const details = useDetailsStore()
 /** The section's type: its names and its chips, which for a food are none (src/lib/trackerTypes.ts). */
 const type = SECTIONS.diet
 
-/** The days whose marked foods reach foods a day (K57): their names turn green, underlined, as exercises'. */
-const metDays = computed(() => daysMet(diet.dayCounts, planner.foodPick))
+/**
+ * The days whose marked foods reach foods a day (K57): their names turn green, underlined, as
+ * exercises'. None while Daily goal is off (K85).
+ */
+const metDays = computed(() =>
+  planner.dailyGoal ? daysMet(diet.dayCounts, planner.foodPick) : planner.days.map(() => false),
+)
 /** Foods a day, set on the title line in Edit plan (K56). */
 const foodPick = computed({
   get: () => planner.foodPick,
@@ -99,7 +104,7 @@ watch(
         heading-id="diet-heading"
         :week="planner.configMode ? undefined : planner.label"
       >
-        <template v-if="planner.configMode" #actions>
+        <template v-if="planner.configMode && planner.dailyGoal" #actions>
           <!-- Centred on the title line (K62), the Stepper alone, reading "− 3 per day +" (K63): its
              label, "Foods a day", is for a screen reader. -->
           <div data-slot="day-target" data-noprint>

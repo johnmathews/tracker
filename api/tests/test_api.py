@@ -588,12 +588,14 @@ def test_settings_are_normalised(client: TestClient, config: Config) -> None:
         "dailyPick": 8,
         "foodPick": 1,
         "goals": "",
+        "dailyGoal": True,
     }
     assert client.get("/api/state").json()["settings"] == {
         "accent": "#30d158",
         "dailyPick": 8,
         "foodPick": 1,
         "goals": "",
+        "dailyGoal": True,
     }
 
 
@@ -607,6 +609,7 @@ def test_settings_without_a_food_pick_keep_the_saved_one(
         "dailyPick": 4,
         "foodPick": 2,
         "goals": "",
+        "dailyGoal": True,
     }
     client.put("/api/settings", json={"accent": "#bf5af2", "dailyPick": 4, "foodPick": 6})
     assert client.put("/api/settings", json={"accent": "#bf5af2", "dailyPick": 3}).json() == {
@@ -614,7 +617,63 @@ def test_settings_without_a_food_pick_keep_the_saved_one(
         "dailyPick": 3,
         "foodPick": 6,
         "goals": "",
+        "dailyGoal": True,
     }
+
+
+def test_settings_carry_daily_goal_on_by_default(client: TestClient, config: Config) -> None:
+    """K85: Daily goal is saved with the account, on until it is turned off, and survives a round
+    trip either way with the targets kept."""
+    sign_up(client, config)
+    mine = {"accent": "#30d158", "dailyPick": 5, "foodPick": 4, "goals": ""}
+    assert client.put("/api/settings", json=mine).json() == {**mine, "dailyGoal": True}
+    assert client.put("/api/settings", json={**mine, "dailyGoal": False}).json() == {
+        **mine,
+        "dailyGoal": False,
+    }
+    assert client.get("/api/state").json()["settings"] == {**mine, "dailyGoal": False}
+    assert client.put("/api/settings", json={**mine, "dailyGoal": True}).json()["dailyGoal"]
+    assert client.get("/api/state").json()["settings"] == {**mine, "dailyGoal": True}
+
+
+def test_settings_without_daily_goal_keep_the_saved_one(client: TestClient, config: Config) -> None:
+    """A tab still running the app from before Daily goal (K85) sends no dailyGoal (F2): saving
+    its settings must not turn Daily goal back on."""
+    sign_up(client, config)
+    mine = {"accent": "#30d158", "dailyPick": 3, "foodPick": 2, "goals": ""}
+    client.put("/api/settings", json={**mine, "dailyGoal": False})
+    old_tab = {"accent": "#0a84ff", "dailyPick": 6, "foodPick": 2}
+    assert client.put("/api/settings", json=old_tab).json() == {
+        **old_tab,
+        "goals": "",
+        "dailyGoal": False,
+    }
+    # A value that isn't a boolean counts as not sent, as goals that aren't a string do.
+    for other in (None, "false", 0):
+        assert (
+            client.put("/api/settings", json={**old_tab, "dailyGoal": other}).json()["dailyGoal"]
+            is False
+        ), other
+    assert client.get("/api/state").json()["settings"]["dailyGoal"] is False
+    assert client.get("/api/export").json()["settings"]["dailyGoal"] is False
+
+
+def test_import_applies_a_files_daily_goal_only_to_unsaved_settings(
+    client: TestClient, config: Config
+) -> None:
+    sign_up(client, config)
+    # Nothing saved and a file from before Daily goal: it reads as on.
+    older = {"format": "tracker-export", "version": 5, "settings": {"dailyPick": 4}}
+    with other_client(config) as bob:
+        sign_up(bob, config, "bob@example.com")
+        assert post_import(bob, older).json()["settings"] is True
+        assert bob.get("/api/state").json()["settings"]["dailyGoal"] is True
+    file = {"format": "tracker-export", "version": 5, "settings": {"dailyGoal": False}}
+    assert post_import(client, file).json()["settings"] is True
+    assert client.get("/api/state").json()["settings"]["dailyGoal"] is False
+    client.put("/api/settings", json={"dailyGoal": True})
+    assert post_import(client, file).json()["settings"] is False
+    assert client.get("/api/state").json()["settings"]["dailyGoal"] is True
 
 
 def test_settings_without_goals_keep_the_saved_ones(client: TestClient, config: Config) -> None:
@@ -625,13 +684,15 @@ def test_settings_without_goals_keep_the_saved_ones(client: TestClient, config: 
     assert client.put("/api/settings", json={**mine, "goals": "Lose 3 kg."}).json() == {
         **mine,
         "goals": "Lose 3 kg.",
+        "dailyGoal": True,
     }
     old_tab = {"accent": "#30d158", "dailyPick": 5, "foodPick": 2}
-    assert client.put("/api/settings", json=old_tab).json() == {**old_tab, "goals": "Lose 3 kg."}
+    kept = {**old_tab, "goals": "Lose 3 kg.", "dailyGoal": True}
+    assert client.put("/api/settings", json=old_tab).json() == kept
     assert client.put("/api/settings", json={**old_tab, "goals": None}).json()["goals"] == (
         "Lose 3 kg."
     )
-    assert client.get("/api/state").json()["settings"] == {**old_tab, "goals": "Lose 3 kg."}
+    assert client.get("/api/state").json()["settings"] == kept
     # Clearing them on purpose is a string too.
     assert client.put("/api/settings", json={**old_tab, "goals": "  "}).json()["goals"] == ""
 
@@ -649,7 +710,7 @@ def test_goals_are_normalised_like_notes(client: TestClient, config: Config) -> 
 
 #: An exercise page with Details hidden and Recent weeks first (K66).
 ARRANGED = {"order": ["history", "notes", "details", "plan"], "hidden": ["details"]}
-SETTINGS = {"accent": "#bf5af2", "dailyPick": 4, "foodPick": 3, "goals": ""}
+SETTINGS = {"accent": "#bf5af2", "dailyPick": 4, "foodPick": 3, "goals": "", "dailyGoal": True}
 
 
 def test_settings_carry_each_types_item_page_arrangement(
@@ -778,7 +839,13 @@ def test_users_cannot_see_or_change_each_others_data(client: TestClient, config:
     assert alice["exercise"]["plans"] == {WEEK: [PUSHUPS]}
     assert alice["exercise"]["log"] == {WEEK: {"pu": ["partial"] + [None] * 6}}
     assert alice["diet"] == EMPTY
-    assert alice["settings"] == {"accent": "#0a84ff", "dailyPick": 5, "foodPick": 4, "goals": ""}
+    assert alice["settings"] == {
+        "accent": "#0a84ff",
+        "dailyPick": 5,
+        "foodPick": 4,
+        "goals": "",
+        "dailyGoal": True,
+    }
 
 
 # --- import and export --------------------------------------------------------------------------
@@ -840,11 +907,15 @@ def test_sample_import_then_export_round_trips(client: TestClient, config: Confi
     assert (
         exported.headers["content-disposition"] == 'attachment; filename="tracker-2026-10-23.json"'
     )
-    assert exported.json() == {
+    # The sample is from before Daily goal (K85): its settings read as on, and export so.
+    assert "dailyGoal" not in sample["settings"]
+    expected = {
         **sample,
         "exportedAt": "2026-10-23T08:00:00.000Z",
+        "settings": {**sample["settings"], "dailyGoal": True},
         "conversations": [],
     }
+    assert exported.json() == expected
     assert post_import(client, sample).json() == {
         "weeks": 0,
         "ticks": 0,
@@ -852,11 +923,7 @@ def test_sample_import_then_export_round_trips(client: TestClient, config: Confi
         "settings": False,
         "conversations": 0,
     }
-    assert client.get("/api/export").json() == {
-        **sample,
-        "exportedAt": "2026-10-23T08:00:00.000Z",
-        "conversations": [],
-    }
+    assert client.get("/api/export").json() == expected
 
 
 def test_import_merges_without_deleting(client: TestClient, config: Config) -> None:
@@ -883,7 +950,13 @@ def test_import_merges_without_deleting(client: TestClient, config: Config) -> N
     assert state["exercise"]["revs"] == {"2026-10-12": 1, WEEK: 1}
     # A version 1 file's true day reads as great; the day already marked keeps its mark.
     assert state["exercise"]["log"][WEEK]["pu"][:2] == ["missed", "great"]
-    assert state["settings"] == {"accent": "#ff9f0a", "dailyPick": 2, "foodPick": 2, "goals": ""}
+    assert state["settings"] == {
+        "accent": "#ff9f0a",
+        "dailyPick": 2,
+        "foodPick": 2,
+        "goals": "",
+        "dailyGoal": True,
+    }
 
 
 def test_import_fills_empty_goals_only(client: TestClient, config: Config) -> None:
@@ -905,6 +978,7 @@ def test_import_fills_empty_goals_only(client: TestClient, config: Config) -> No
         "dailyPick": 2,
         "foodPick": 2,
         "goals": "Run 5 km by March.",
+        "dailyGoal": True,
     }
     again = {**file, "settings": {**settings, "goals": "Something else."}}
     assert post_import(client, again).json()["settings"] is False

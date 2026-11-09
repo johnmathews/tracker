@@ -155,7 +155,7 @@ def demo_file(today: date) -> str:
             "version": EXPORT_VERSION,
             "exercise": section(EXERCISES, EXERCISE_WEEKS, EXERCISE_DETAILS),
             "diet": section(FOODS, FOOD_WEEKS, FOOD_DETAILS),
-            "settings": {"accent": "#30d158", "dailyPick": 3, "foodPick": 2},
+            "settings": {"accent": "#30d158", "dailyPick": 3, "foodPick": 2, "dailyGoal": True},
         }
     )
 

@@ -16,16 +16,20 @@
   circle, a cross) or faces (happy, so-so, sad), drawn in marker or stamped on a coloured box; a
   press then steps green, yellow, red and back to empty. Each exercise has a weekly goal of 0–7 days, set
   in its Edit dialog. A day whose marked exercises reach **Exercises a day** turns green: its
-  name in the header goes green and is underlined.
+  name in the header goes green and is underlined. **Daily goal** in Settings turns this off,
+  and the per-day counters with it, for both sections; the numbers are kept.
 - **Food.** The screen after the exercises works the same way, with one kind of mark: mark each day you ate
   one. Each food has a weekly goal, set in its Edit dialog. Defaults are Vegetables (7), Fruit (5),
   Fish (2) and Nuts (3). A day whose marked foods reach **Foods a day** (default two) turns green,
   as an exercise day does.
-- **Normal mode and config mode.** The app opens in normal mode, where you only mark cells. The
-  **Edit plan** button in the top bar turns on config mode for changing the plan:
-  - a counter centred on each section's title line, reading "− 3 per day +", sets its daily
-    target (1–8): exercises a day and foods a day. They are one setting for every week. The week isn't shown beside the titles in
-    config mode, since the bar shows it;
+- **Normal mode and config mode.** The app opens in normal mode, where you only mark cells. Each
+  screen's title is the week, centred at the top, with "Exercises" or "Food" a step smaller under it.
+  A long press anywhere (or the handle at the top centre) turns on config mode, **Edit plan**, for
+  changing the plan, with the bar in view; **Done** in the bar, or another long press, goes back:
+  - while **Daily goal** is on, a counter centred on each section's title line, reading
+    "− 3 per day +", sets its daily target (1–8): exercises a day and foods a day. They are one
+    setting for every week. The week isn't shown over the sections in config mode, since the bar
+    shows it;
   - **Add exercise** and **Add food**, under each grid, open the item's dialog with nothing in it:
     an exercise takes a name, optional sets, reps or a time in seconds (a plank), "Per set" or
     "Each side", an optional weight in kg (e.g. squats with a 12 kg kettlebell), a goal and a
@@ -56,10 +60,12 @@
   anywhere (or the handle at the top centre) opens Edit plan, with the bar above the page. Scrolling brings Food,
   which takes the screen in turn: a flick jumps straight to it. An arrow at the foot of Exercises
   and the top of Food leads to the other. Held upright, a phone or an iPad folds the week: each row's name
-  above its seven boxes. A day that reaches its daily target turns green.
+  above its seven boxes. A day that reaches its daily target turns green (while Daily goal is on).
 - **Settings** is a page of its own. It sets how marks are drawn (Squiggles, Ticks, Stamped ticks,
-  Faces or Stamped faces) and the theme (System, Light or Dark), keeps **Your goals** (what you
-  are aiming for, in your own words, which only Ask reads; saved when you pause typing), holds
+  Faces or Stamped faces) and the theme (System, Light or Dark), keeps **Your goals** (the
+  **Daily goal** switch, which turns the daily targets and green days on or off on every device,
+  and what you are aiming for, in your own words, which only Ask reads; saved when you pause
+  typing), holds
   export and import, and shows who is signed in, with **Sign out**.
 - **Ask** is a page where you ask an AI (Claude) about what you track: whether you are doing too
   much or too little for your goals, whether your diet is good enough, how steady your weeks are.

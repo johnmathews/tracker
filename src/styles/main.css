@@ -69,7 +69,8 @@
   --grid-row-min: 76px;
   --grid-row-max: 76px;
   --fs-title: max(30px, calc(var(--u) * 40));
-  --fs-week: max(16px, calc(var(--u) * 20));
+  /* A section's title on the planner, the serif a step under the week's (K86, K87). */
+  --fs-section: max(26px, calc(var(--u) * 32));
   --fs-name: max(20px, calc(var(--u) * 27));
   --fs-chip: max(18px, calc(var(--u) * 19));
   --fs-day: max(20px, calc(var(--u) * 27));
@@ -140,6 +141,7 @@
     --screen-pad-top: calc(var(--n) * 34);
     --screen-pad-bottom: 12px;
     --fs-title: calc(var(--n) * 30);
+    --fs-section: calc(var(--n) * 24);
     --fs-name: calc(var(--n) * 20);
     --fs-chip: calc(var(--n) * 18);
     --fs-day: calc(var(--n) * 20);
@@ -401,15 +403,16 @@
 /*
  * Arranging an item's page (ItemPage card, K66): each section's Show at Edit plan's row-button
  * height (K54), its label at the page's label size in 600 like the page's other control labels.
+ * Settings' Daily goal (K85) takes the same sizes.
  */
-[data-slot='item-page'] [data-slot='switch'] {
+:is([data-slot='item-page'], [data-slot='settings-page']) [data-slot='switch'] {
   height: var(--edit-ib);
   font-size: var(--set-label);
   font-weight: 600;
   line-height: 1.3;
 }
 @media screen and (orientation: portrait) and (width < 1000px), screen and (width < 760px) {
-  [data-slot='item-page'] [data-slot='switch'] {
+  :is([data-slot='item-page'], [data-slot='settings-page']) [data-slot='switch'] {
     padding-inline: 6px;
   }
 }

@@ -1,0 +1,161 @@
+<title>A Daily goal switch, and the date as the week’s title</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="settings.css">
+<link rel="stylesheet" href="goal.css">
+<link rel="stylesheet" href="week.css">
+<!--
+  A mockup (design-system skill, references/mockups.md). Two questions: where Settings puts the
+  Daily goal switch, and how the week screen's title line looks with the date as the title (week.js
+  and week.css draw the Exercises screen). What it does is decided (one switch, on the account, on by default). The rest of
+  Settings stays as it is. goal.js draws the page on the shipped Settings frame (settings.css); the
+  switch is the Switch card at the page's sizes. Nothing new but its place, so no new colours.
+-->
+<style>
+  body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font-sans); }
+  .mockup-page {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: var(--space-8, 32px) var(--space-16, 64px);
+    max-width: 1200px; margin: 0 auto; display: grid; gap: var(--space-12, 48px);
+  }
+  .mockup-head { display: grid; gap: var(--space-2, 8px); max-width: 70ch; }
+  .mockup-head h1, .option h2 { margin: 0; text-wrap: balance; }
+  .mockup-head p, .option p { margin: 0; }
+  .mockup-meta { color: var(--ink-secondary); }
+  .option { display: grid; gap: var(--space-4, 16px); }
+  .option-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2, 8px) var(--space-3, 12px); }
+  .option-tag { color: var(--ink-secondary); }
+  .option[data-recommended] .option-tag::after { content: " · Recommended"; color: var(--ink); }
+  .panes { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4, 16px); }
+  .pane { min-width: 0; background: var(--canvas); color: var(--ink); border: 1px solid var(--line);
+          border-radius: var(--radius-lg, 10px); padding: var(--space-4, 16px); overflow-x: auto; }
+  .pane-label { color: var(--ink-secondary); margin: 0 0 var(--space-3, 12px); }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .notes { margin: 0; padding-left: 1.2em; display: grid; gap: var(--space-1, 4px); max-width: 70ch; }
+  .device { position: relative; width: 100%; }
+  .device > div { position: absolute; top: 0; left: 0; transform-origin: 0 0; border: 1px solid var(--line); border-radius: var(--radius-lg); }
+  .device.phone > div { border-radius: 28px; border-width: 2px; }
+  .phones { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+  .phones .device { max-width: 260px; }
+</style>
+
+<main class="mockup-page">
+  <header class="mockup-head">
+    <p class="caption mockup-meta">Mockup · 2026-11-08 · Tracker</p>
+    <h1 class="title-1">A Daily goal switch, and the date as the week’s title</h1>
+    <p class="body">One switch, “Daily goal”, saved with your account and on by default. Off, Edit plan has no “N per day” steppers, no day turns green, and Ask and the AI connections leave the daily targets out. The numbers are kept for when it’s back on. The question is only where the switch goes; the rest of Settings stays as it is.</p>
+    <p class="body">Two questions: where the switch goes (1), and how the week screen looks with the date as its title (2). Press the switches to try them.</p>
+  </header>
+
+  <h2 class="title-2">3. The section’s name as a title (open)</h2>
+  <p class="body">You picked T1, then asked for “Exercises” to be “more like a title … a serif font and a bit larger … more visual impact”. Both keep the date centred above it.</p>
+
+  <section class="option" id="h1" data-recommended aria-labelledby="h1-h">
+    <div class="option-head">
+      <h2 class="title-2" id="h1-h">H1. Serif at 32u, the date as now</h2>
+      <span class="label option-tag">Option H1</span>
+    </div>
+    <p class="body">“Exercises” in the title serif, 600, max(26px, 32u): a clear step up from the sans heading at 27u, and still under the date at 40u. 24px on a phone.</p>
+    <div class="panes">
+      <div class="pane" data-theme="light"><p class="label pane-label">Light · 1280×800</p><div class="device" data-w="1280" data-h="800" data-wk="h1"></div></div>
+      <div class="pane" data-theme="dark"><p class="label pane-label">Dark · phone</p><div class="phones"><div class="device phone" data-w="390" data-h="560" data-wk="h1"></div></div></div>
+    </div>
+  </section>
+
+  <section class="option" id="h2" aria-labelledby="h2-h">
+    <div class="option-head">
+      <h2 class="title-2" id="h2-h">H2. Serif at 36u, the date larger</h2>
+      <span class="label option-tag">Option H2</span>
+    </div>
+    <p class="body">“Exercises” at max(28px, 36u), and the date raised to max(34px, 46u) so it stays the title. More weight on both lines; the grid starts a little lower. 26px and 30px on a phone.</p>
+    <div class="panes">
+      <div class="pane" data-theme="light"><p class="label pane-label">Light · 1280×800</p><div class="device" data-w="1280" data-h="800" data-wk="h2"></div></div>
+      <div class="pane" data-theme="dark"><p class="label pane-label">Dark · phone</p><div class="phones"><div class="device phone" data-w="390" data-h="560" data-wk="h2"></div></div></div>
+    </div>
+  </section>
+
+  <h2 class="title-2">1. Where the Daily goal switch goes (decided: A)</h2>
+
+  <section class="option" id="a" data-recommended aria-labelledby="a-h">
+    <div class="option-head">
+      <h2 class="title-2" id="a-h">A. In Your goals, above the text</h2>
+      <span class="label option-tag">Option A</span>
+    </div>
+    <p class="body">A daily target is a goal too, so it sits with the goals Ask reads. The Switch at the page’s label size (19u, weight 600), its hint under it in the page’s hint size.</p>
+    <div class="panes">
+      <div class="pane" data-theme="light"><p class="label pane-label">Light · 1280×800, on</p><div class="device" data-w="1280" data-h="800" data-place="goals"></div></div>
+      <div class="pane" data-theme="dark"><p class="label pane-label">Dark · phone, off</p><div class="phones"><div class="device phone" data-w="390" data-h="1000" data-place="goals" data-off></div></div></div>
+    </div>
+  </section>
+
+  <section class="option" id="b" aria-labelledby="b-h">
+    <div class="option-head">
+      <h2 class="title-2" id="b-h">B. In Appearance, after Theme</h2>
+      <span class="label option-tag">Option B</span>
+    </div>
+    <p class="body">With the other things that change how the week looks. But it also changes what Ask says, which isn’t appearance.</p>
+    <div class="panes">
+      <div class="pane" data-theme="light"><p class="label pane-label">Light · 1280×800, on</p><div class="device" data-w="1280" data-h="800" data-place="look"></div></div>
+      <div class="pane" data-theme="dark"><p class="label pane-label">Dark · phone, off</p><div class="phones"><div class="device phone" data-w="390" data-h="1000" data-place="look" data-off></div></div></div>
+    </div>
+  </section>
+
+
+  <h2 class="title-2">2. The date as the week’s title (decided: T1, now revised in 3)</h2>
+  <p class="body">On the week screens the date moves to the top centre as the screen’s title: the title serif at the title size, in black. “Exercises” and “Food” become section headings above their grids. Edit plan keeps the week in its bar (K81), so its sections show no date. The screen reader’s page heading is the date, as now.</p>
+
+  <section class="option" id="t1" data-recommended aria-labelledby="t1-h">
+    <div class="option-head">
+      <h2 class="title-2" id="t1-h">T1. The section in the sans</h2>
+      <span class="label option-tag">Option T1</span>
+    </div>
+    <p class="body">“Exercises” as a section heading in the sans, 600, max(22px, 27u): the size of Settings’ section headings. Clearly below the date, and the serif is left to the one title.</p>
+    <div class="panes">
+      <div class="pane" data-theme="light"><p class="label pane-label">Light · 1280×800</p><div class="device" data-w="1280" data-h="800" data-wk="t1"></div></div>
+      <div class="pane" data-theme="dark"><p class="label pane-label">Dark · phone</p><div class="phones"><div class="device phone" data-w="390" data-h="560" data-wk="t1"></div></div></div>
+    </div>
+  </section>
+
+  <section class="option" id="t2" aria-labelledby="t2-h">
+    <div class="option-head">
+      <h2 class="title-2" id="t2-h">T2. The section in a smaller serif</h2>
+      <span class="label option-tag">Option T2</span>
+    </div>
+    <p class="body">“Exercises” keeps the serif at max(24px, 30u), smaller than the date’s 40u. Closer to today’s look; two serif lines, one over the other.</p>
+    <div class="panes">
+      <div class="pane" data-theme="light"><p class="label pane-label">Light · 1280×800</p><div class="device" data-w="1280" data-h="800" data-wk="t2"></div></div>
+      <div class="pane" data-theme="dark"><p class="label pane-label">Dark · phone</p><div class="phones"><div class="device phone" data-w="390" data-h="560" data-wk="t2"></div></div></div>
+    </div>
+  </section>
+
+  <div class="panes">
+    <div class="pane" data-theme="light"><p class="label pane-label">For comparison · today</p><div class="device" data-w="1280" data-h="800" data-wk="now"></div></div>
+  </div>
+
+  <ul class="notes body">
+    <li>The label names what is on: “Daily goal”. The hint says what it is and where the number is set.</li>
+    <li>It takes effect at once and syncs to your other devices, like the numbers do.</li>
+  </ul>
+</main>
+
+<script src="goal.js"></script>
+<script src="week.js"></script>
+<script>
+  for (const device of document.querySelectorAll('.device')) {
+    const w = Number(device.dataset.w), h = Number(device.dataset.h)
+    const screen = document.createElement('div')
+    screen.style.width = w + 'px'
+    screen.style.height = h + 'px'
+    device.append(screen)
+    const fit = () => {
+      const s = Math.min(1, device.clientWidth / w)
+      screen.style.transform = `scale(${s})`
+      device.style.height = Math.ceil(h * s) + 'px'
+    }
+    new ResizeObserver(fit).observe(device)
+    fit()
+    if (device.dataset.wk) WK.mount(screen, { t: device.dataset.wk })
+    else DG.mount(screen, { place: device.dataset.place, on: !('off' in device.dataset) })
+  }
+</script>

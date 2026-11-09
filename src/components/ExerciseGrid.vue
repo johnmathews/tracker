@@ -22,8 +22,13 @@ const details = useDetailsStore()
 /** The section's type: its names and its chips (src/lib/trackerTypes.ts). */
 const type = SECTIONS.exercise
 
-/** The days whose marked exercises reach the daily pick (K30): their names turn green, underlined (K60). */
-const metDays = computed(() => daysMet(store.dayCounts, store.dailyPick))
+/**
+ * The days whose marked exercises reach the daily pick (K30): their names turn green, underlined
+ * (K60). None while Daily goal is off (K85).
+ */
+const metDays = computed(() =>
+  store.dailyGoal ? daysMet(store.dayCounts, store.dailyPick) : store.days.map(() => false),
+)
 /** Exercises a day, set on the title line in Edit plan (K56). */
 const dailyPick = computed({
   get: () => store.dailyPick,
@@ -84,7 +89,7 @@ watch(
       heading-id="exercises-heading"
       :week="store.configMode ? undefined : store.label"
     >
-      <template v-if="store.configMode" #actions>
+      <template v-if="store.configMode && store.dailyGoal" #actions>
         <!-- Centred on the title line (K62), the Stepper alone, reading "− 3 per day +" (K63): its
              label, "Exercises a day", is for a screen reader. -->
         <div data-slot="day-target" data-noprint>

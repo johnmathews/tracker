@@ -33,12 +33,13 @@ GOALS_STEP = "ADD COLUMN goals"
 ASK_LOG_STEP = "CREATE TABLE ask_log"
 ASK_HISTORY_STEP = "CREATE TABLE ask_conversations"
 OAUTH_STEP = "CREATE TABLE oauth_grants"
+DAILY_GOAL_STEP = "ADD COLUMN daily_goal"
 
 
 def test_steps_are_numbered_as_the_docs_say() -> None:
     """Schema 6 adds API tokens, 7 item details, 8 the item pages' arrangement, 9 My goals,
-    10 Ask's caps, 11 Ask's history and 12 OAuth connections (docs/api.md §2)."""
-    assert SCHEMA_VERSION == 12
+    10 Ask's caps, 11 Ask's history, 12 OAuth connections and 13 Daily goal (docs/api.md §2)."""
+    assert SCHEMA_VERSION == 13
     steps = (
         TOKENS_STEP,
         DETAILS_STEP,
@@ -47,8 +48,9 @@ def test_steps_are_numbered_as_the_docs_say() -> None:
         ASK_LOG_STEP,
         ASK_HISTORY_STEP,
         OAUTH_STEP,
+        DAILY_GOAL_STEP,
     )
-    assert [_step_of(m) + 1 for m in steps] == [6, 7, 8, 9, 10, 11, 12]
+    assert [_step_of(m) + 1 for m in steps] == [6, 7, 8, 9, 10, 11, 12, 13]
 
 
 OAUTH_TABLES = ("oauth_requests", "oauth_grants", "oauth_retired", "oauth_codes", "oauth_access")
@@ -97,8 +99,11 @@ def test_oauth_migration_keeps_every_row_of_a_populated_database(
 
     before = snapshot()
     assert sum(len(rows) for rows in before.values()) == 13
+    # Up to step 12 alone: a later step may add a column to a row (13 does to settings).
+    monkeypatch.setattr(db, "MIGRATIONS", db.MIGRATIONS[: _step_of(OAUTH_STEP) + 1])
     db.migrate(c)
-    assert c.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION == 12
+    monkeypatch.undo()
+    assert c.execute("PRAGMA user_version").fetchone()[0] == 12
     assert snapshot() == before
     for table in OAUTH_TABLES:
         assert c.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0  # noqa: S608
@@ -341,6 +346,7 @@ def test_item_sections_migration_adds_an_empty_column(
         "dailyPick": 4,
         "foodPick": 3,
         "goals": "",
+        "dailyGoal": True,
     }
     c.close()
 
@@ -394,9 +400,48 @@ def test_goals_migration_gives_saved_settings_none(
     monkeypatch.undo()
     db.migrate(c)
     assert c.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
-    assert load_settings(c, 1) == {"accent": "#0a84ff", "dailyPick": 5, "foodPick": 4, "goals": ""}
+    assert load_settings(c, 1) == {
+        "accent": "#0a84ff",
+        "dailyPick": 5,
+        "foodPick": 4,
+        "goals": "",
+        "dailyGoal": True,
+    }
     with pytest.raises(sqlite3.IntegrityError):
         c.execute("UPDATE settings SET goals = NULL")
+    c.close()
+
+
+def test_daily_goal_migration_turns_it_on_for_saved_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Settings saved before Daily goal (K85) keep every value, and read with it on, as the app
+    showed them: the targets and the met days."""
+    from tracker_api import db
+    from tracker_api.data import load_settings
+
+    c = connect(tmp_path / "f.db")
+    monkeypatch.setattr(db, "MIGRATIONS", db.MIGRATIONS[: _step_of(DAILY_GOAL_STEP)])
+    db.migrate(c)
+    monkeypatch.undo()
+    c.execute("INSERT INTO users (id, username, password_hash, created_at) VALUES (1, 'a', 'h', 0)")
+    c.execute(
+        "INSERT INTO settings (user_id, accent, daily_pick, food_pick, goals)"
+        " VALUES (1, '#bf5af2', 6, 5, 'Run 5 km.')"
+    )
+    db.migrate(c)
+    assert c.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
+    assert c.execute("SELECT daily_goal FROM settings").fetchone()[0] == 1
+    assert load_settings(c, 1) == {
+        "accent": "#bf5af2",
+        "dailyPick": 6,
+        "foodPick": 5,
+        "goals": "Run 5 km.",
+        "dailyGoal": True,
+    }
+    for bad in ("NULL", "2", "'yes'"):
+        with pytest.raises(sqlite3.IntegrityError):
+            c.execute(f"UPDATE settings SET daily_goal = {bad}")  # noqa: S608
     c.close()
 
 

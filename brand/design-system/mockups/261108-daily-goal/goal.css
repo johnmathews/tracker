@@ -1,0 +1,17 @@
+/* The Switch card at the Settings page's sizes (as ItemPage's Show switch takes them), and the
+   page's own hint and text area. Nothing new but where the switch sits. */
+.dg-field { display: flex; flex-direction: column; align-items: flex-start; gap: calc(var(--u) * 6); }
+.dg-switch { display: inline-flex; align-items: center; gap: calc(var(--u) * 14); height: max(44px, calc(var(--u) * 52));
+  margin-left: calc(var(--u) * -8); padding: 0 calc(var(--u) * 8); border: 0; border-radius: var(--radius-md); background: transparent;
+  color: var(--ink); cursor: pointer; }
+.dg-switch:hover { background: var(--tile); }
+.dg-label { font: 600 var(--candidate-label) / 1.3 var(--font-sans); }
+.dg-track { position: relative; box-sizing: border-box; flex: none; width: 40px; height: 24px; border: 1px solid var(--control-border);
+  border-radius: var(--radius-full); background: transparent; }
+.dg-thumb { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: var(--radius-full); background: var(--ink-secondary); }
+.dg-switch[aria-checked="true"] .dg-track { background: var(--ink); border-color: var(--ink); }
+.dg-switch[aria-checked="true"] .dg-thumb { left: 19px; background: var(--on-ink); }
+.dg-hint { margin: 0; max-width: 60ch; font-size: max(16px, calc(var(--u) * 16)); line-height: 1.35; color: var(--ink-secondary); }
+.dg-text { width: 100%; max-width: calc(var(--u) * 900); padding: calc(var(--u) * 14) calc(var(--u) * 16); border: 1px solid var(--control-border);
+  border-radius: var(--radius-md); background: var(--canvas); color: var(--ink); font: inherit; font-size: var(--candidate-body); line-height: 1.45; resize: vertical; }
+.sp .seg button { padding: 0 calc(var(--u) * 24); }

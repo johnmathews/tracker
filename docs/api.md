@@ -42,6 +42,13 @@ scoped by `user_id`, and no endpoint reads another user's data.
 `insights.py` is a read-only view of one user's weeks. The /ask page and the MCP server both read
 through it. It counts the way the screen counts, so an answer never contradicts the week (§9).
 
+While Daily goal is off (K85), the readers give no daily target and no met days. `goals` has
+`exercises_a_day` and `foods_a_day` null and `daily_goal: false`. In `week_summary` and `weeks`,
+`daily_target`, `days_met` and each day's `met` are null. In `consistency`, `daily_target`,
+`days_met`, `met_day_rate` and `met_day_streak` are null. Item goals (`goal_met`, `goals_met`,
+`goal_met_rate`, `goal_week_streak`) don't change. The rule functions stay as they are; the switch
+applies where a reader builds its output.
+
 The rules are ports of the web app's:
 
 - `plan_source` is `planSource` (architecture.md §2): a week's own plan, else the latest earlier
@@ -142,6 +149,9 @@ Version 11 adds `ask_conversations` and `ask_turns`, Ask's history (§3.2). A co
 by its account and its id, so the same id in two accounts, as after one imports the other's file,
 is two conversations.
 
+Version 13 adds Daily goal (K85): `settings.daily_goal`, 0 or 1 with a CHECK, default 1, so saved
+settings read as on.
+
 Version 12 adds OAuth's five tables: `oauth_requests`, `oauth_grants`, `oauth_retired`, `oauth_codes` and `oauth_access` (§3.3). It only adds, so it reshapes no data. Every code and token is stored as its SHA-256 only. `oauth_grants` cascades from its user, and the other three grant tables from the grant, so removing a grant removes its codes, access tokens and retired refresh tokens. Rolling the API back leaves the tables unused.
 
 Migrations are a list in `db.py`, and the version is its length. A step is appended, never
@@ -186,7 +196,7 @@ but the same `Content-Type` header.
 | `PUT /plans/{section}/{week}`              | session | `{items, rev}` → `{rev}`; 409 `conflict` with the server copy                                                         |
 | `PUT /ticks/{section}/{week}/{item}/{day}` | session | `{mark}` → `{days}`, the week's seven marks for that item                                                             |
 | `PUT /details/{section}/{item}`            | session | `{details, rev}` → `{rev}`; 409 `conflict` with the server copy (below)                                               |
-| `PUT /settings`                            | session | `{accent, dailyPick, foodPick, goals, itemSections}` → the stored settings; a missing key keeps the saved one (below) |
+| `PUT /settings`                            | session | `{accent, dailyPick, foodPick, dailyGoal, goals, itemSections}` → the stored settings; a missing key keeps the saved one (below) |
 | `GET /export`                              | session | the export file (`architecture.md` §4)                                                                                |
 | `POST /import`                             | session | an export file, merged in; → `{weeks, ticks, details, settings, conversations}` added                                 |
 | `GET /ask`                                 | session | `{remaining, limit}`: questions left today, and the per-account cap (§3.2)                                            |
@@ -223,11 +233,15 @@ mail is off, has no such key.
 - `revs` maps each planned week to its revision, and `detailRevs` each item id to its details'
   revision, cleared ones included.
 
-`settings` is `{accent, dailyPick, foodPick, goals, itemSections?}`, or null before any are saved.
+`settings` is `{accent, dailyPick, foodPick, dailyGoal, goals, itemSections?}`, or null before any are saved.
 
 **Settings.** `PUT /settings` normalises the accent and daily picks (a bad accent reads as the
 default, a pick is clamped to 1 to 8) and returns what it stored. A body without `foodPick` (K57),
 `itemSections` (K66) or `goals` keeps the saved value, so a tab on older code cannot reset it.
+`dailyGoal` (boolean, default `true`) is Daily goal (K85): off, the daily targets (`dailyPick`,
+`foodPick`) are kept but apply nowhere, so no day is met and the insights give no daily target
+(§1.1). A body without `dailyGoal`, or with a value that isn't a boolean, keeps the saved one. The
+state and the export always carry it; a file without it reads as on.
 `itemSections` is each tracker type's item-page arrangement, keyed by type id (`exercise`,
 `food`): `{"exercise": {"order": ["history", "notes", "details", "plan"], "hidden": ["details"]}}`.
 The keys are `notes`, `details`, `plan` and `history`. A shape the app never sends is refused
@@ -464,7 +478,9 @@ Every write tool has `readOnlyHint` false and `openWorldHint` false; only `remov
   (§2), or null to clear the day. A food takes only `great`, `great-solid` or `great-hatch`, the
   marks the app gives a food. An item the week does not show is refused.
 - **`set_daily_targets`** sets exercises a day and foods a day, each 1 to 8. The accent and the
-  target not given keep their saved values, or the defaults while none are saved.
+  target not given keep their saved values, or the defaults while none are saved. It still saves
+  the numbers while Daily goal is off, which only the app can turn on, and its result has
+  `daily_goal`.
 - **Conflicts.** A plan write that meets a newer `rev` re-reads the week and applies the change
   again, up to three tries in all, then fails with a tool error. The app adopts the server's copy
   on its next read, as after any 409 (architecture.md §7).

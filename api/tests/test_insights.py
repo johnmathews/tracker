@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 
 from tracker_api import insights
-from tracker_api.data import import_data, put_details, put_settings
+from tracker_api.data import import_data, load_settings, put_details, put_settings
 from tracker_api.validate import MAX_NOTES, ExportData, Section, Tracked
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "insights"
@@ -503,7 +503,107 @@ def test_goals(conn: sqlite3.Connection) -> None:
         "diet": [{"id": "fish", "name": "Fish", "target": 2, "notes": ""}],
         "exercises_a_day": 4,
         "foods_a_day": 3,
+        "daily_goal": True,
         "note": "Run 5 km by March.",
+    }
+
+
+# --- Daily goal off (K85) -------------------------------------------------------------------------
+
+#: Two finished weeks and this one, as in test_consistency, with the daily targets kept but off.
+OFF_PLAN = [
+    {"id": "a", "name": "A", "reps": 1, "target": 2},
+    {"id": "b", "name": "B", "reps": 1, "target": 0},
+]
+OFF_LOG = {
+    "2026-10-12": {"a": days(0, 1), "b": days(0)},
+    "2026-10-19": {"a": days(5), "b": days(5, 6)},
+    "2026-10-26": {"a": days(0, 1), "b": days(0, 1, 4)},
+}
+
+
+def load_off(conn: sqlite3.Connection) -> int:
+    uid = add_user(conn)
+    load(
+        conn,
+        uid,
+        exercise={"plans": {"2026-10-12": OFF_PLAN}, "log": OFF_LOG},
+        diet={"plans": {"2026-10-12": [{"id": "fish", "name": "Fish", "target": 2}]}, "log": {}},
+        settings={"dailyPick": 2, "foodPick": 3, "dailyGoal": False},
+    )
+    return uid
+
+
+def turn_on(conn: sqlite3.Connection, user_id: int) -> None:
+    """Daily goal back on, as the app saves it: every setting sent, the targets as they were."""
+    saved = load_settings(conn, user_id)
+    assert saved is not None
+    put_settings(conn, user_id, {**saved, "dailyGoal": True})
+
+
+def test_goals_give_no_daily_targets_while_daily_goal_is_off(conn: sqlite3.Connection) -> None:
+    """The targets are kept (they come back when it is on) but no reader gives them, so neither
+    Ask nor an MCP client can talk about a number a day. Each item's weekly goal stays."""
+    uid = load_off(conn)
+    assert insights.goals(conn, uid, TODAY) == {
+        "week": "2026-10-26",
+        "exercise": [
+            {"id": "a", "name": "A", "target": 2, "notes": ""},
+            {"id": "b", "name": "B", "target": 0, "notes": ""},
+        ],
+        "diet": [{"id": "fish", "name": "Fish", "target": 2, "notes": ""}],
+        "exercises_a_day": None,
+        "foods_a_day": None,
+        "daily_goal": False,
+        "note": "",
+    }
+    turn_on(conn, uid)
+    back = insights.goals(conn, uid, TODAY)
+    assert (back["exercises_a_day"], back["foods_a_day"], back["daily_goal"]) == (2, 3, True)
+
+
+def test_week_summaries_have_no_met_days_while_daily_goal_is_off(conn: sqlite3.Connection) -> None:
+    """Each day keeps its count, but `met` and `days_met` are null, not false and 0: the person
+    met no day because they asked for none. Item goals count as before."""
+    uid = load_off(conn)
+    out = insights.week_summary(conn, uid, "exercise", "2026-10-26", TODAY)
+    assert out["daily_target"] is None
+    assert [d["met"] for d in out["days"]] == [None] * 7
+    assert [d["count"] for d in out["days"]] == [2, 2, 0, 0, 1, 0, 0]
+    assert out["days_met"] is None
+    assert (out["goals_met"], [it["goal_met"] for it in out["items"]]) == (1, [True, False])
+    for summary in insights.weeks(conn, uid, "exercise", "2026-10-12", "2026-10-26", TODAY)[
+        "weeks"
+    ]:
+        assert (summary["daily_target"], summary["days_met"]) == (None, None)
+        assert {d["met"] for d in summary["days"]} == {None}
+    assert [
+        s["goals_met"]
+        for s in insights.weeks(conn, uid, "exercise", "2026-10-12", "2026-10-26", TODAY)["weeks"]
+    ] == [1, 0, 1]
+    # On again, the same week has its met days back.
+    turn_on(conn, uid)
+    on = insights.week_summary(conn, uid, "exercise", "2026-10-26", TODAY)
+    assert (on["daily_target"], on["days_met"]) == (2, 2)
+
+
+def test_consistency_has_no_met_days_while_daily_goal_is_off(conn: sqlite3.Connection) -> None:
+    uid = load_off(conn)
+    assert insights.consistency(conn, uid, "exercise", 3, TODAY) == {
+        "section": "exercise",
+        "start": "2026-10-12",
+        "end": "2026-10-26",
+        "today": "2026-10-28",
+        "daily_target": None,
+        "days": 17,
+        "days_met": None,
+        "met_day_rate": None,
+        "finished_weeks": 2,
+        "goals": 2,
+        "goals_met": 1,
+        "goal_met_rate": 0.5,
+        "met_day_streak": None,
+        "goal_week_streak": 0,
     }
 
 

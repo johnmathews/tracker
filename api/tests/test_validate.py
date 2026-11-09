@@ -1,5 +1,6 @@
 """The request-level checks shared by the REST routes and the MCP tools."""
 
+import json
 from typing import Any
 
 import pytest
@@ -9,6 +10,9 @@ from tracker_api.validate import (
     check_day,
     check_item_id,
     check_plan_body,
+    merge_settings,
+    normalise_portable,
+    parse_export,
     strict_item,
     tick_mark,
     week_key,
@@ -133,3 +137,27 @@ def test_strict_item_reports_a_missing_id_or_a_non_object() -> None:
     assert strict_item("diet", {"id": "a" * 129, "name": "Row"}).problems == [
         "id must be 1 to 128 characters"
     ]
+
+
+def test_daily_goal_is_kept_only_as_a_boolean() -> None:
+    """K85, as storage.ts's normalisePortableSettings reads it: a boolean is kept, and anything
+    else, or nothing, leaves the key out (not known), which reads as on."""
+    assert normalise_portable({"dailyGoal": True})["dailyGoal"] is True
+    assert normalise_portable({"dailyGoal": False})["dailyGoal"] is False
+    assert "dailyGoal" not in normalise_portable({})
+    others: list[Any] = [None, 0, 1, "false", "", [], {}]
+    for other in others:
+        assert "dailyGoal" not in normalise_portable({"dailyGoal": other}), other
+
+
+def test_an_export_carries_daily_goal_and_saved_settings_keep_theirs() -> None:
+    """A file with Daily goal off reads as off; one from before it has none. An import keeps
+    the account's saved value, as it keeps the targets."""
+    file = {"format": "tracker-export", "version": 5, "settings": {"dailyGoal": False}}
+    off = parse_export(json.dumps(file))["settings"]
+    assert off is not None and off["dailyGoal"] is False
+    older = parse_export(json.dumps({**file, "settings": {"dailyPick": 4}}))["settings"]
+    assert older is not None and "dailyGoal" not in older
+    assert merge_settings(None, off) == off
+    saved = normalise_portable({"dailyPick": 4})
+    assert merge_settings(saved, off) == saved

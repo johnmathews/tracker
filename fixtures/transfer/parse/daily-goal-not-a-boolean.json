@@ -1,0 +1,35 @@
+{
+  "description": "Daily goal that isn't a boolean is left out, which reads as on and never overwrites a saved one (K85).",
+  "input": {
+    "format": "tracker-export",
+    "version": 4,
+    "settings": {
+      "accent": "#0a84ff",
+      "dailyPick": 4,
+      "foodPick": 3,
+      "goals": "",
+      "dailyGoal": "off"
+    }
+  },
+  "expected": {
+    "ok": true,
+    "data": {
+      "exercise": {
+        "plans": {},
+        "log": {},
+        "details": {}
+      },
+      "diet": {
+        "plans": {},
+        "log": {},
+        "details": {}
+      },
+      "settings": {
+        "accent": "#0a84ff",
+        "dailyPick": 4,
+        "foodPick": 3,
+        "goals": ""
+      }
+    }
+  }
+}

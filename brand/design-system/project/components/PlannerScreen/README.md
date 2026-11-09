@@ -16,10 +16,10 @@ The planner's layout: Exercises and Food each fill the screen, the page sprints 
 
 | State | Look |
 | --- | --- |
-| At rest | the screen alone: the title line, the week, and the arrow to the other screen |
+| At rest | the screen alone: the week centred as its title (K86), the section's heading, the week's grid, and the arrow to the other screen |
 | Bar called up | the Header over the top of the screen, with `shadow-overlay` |
 | Short (540px tall or less) | the title in the grid's corner; no chips, no arrows |
-| Folded (upright under 1000px wide, or under 760px wide) | the WeekGrid folded; the week's name left off the title line |
+| Folded (upright under 1000px wide, or under 760px wide) | the WeekGrid folded; the week still centred as the title |
 
 ## Accessibility
 

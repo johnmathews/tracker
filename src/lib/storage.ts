@@ -111,6 +111,11 @@ export type Settings = {
   dailyPick: number
   /** Foods a day (K57): a day whose food marks reach it turns green. */
   foodPick: number
+  /**
+   * Daily goal (K85): whether the daily picks apply at all. Off, Edit plan has no steppers, no
+   * day turns green, and Ask and the AI connections get no daily target; the picks are kept.
+   */
+  dailyGoal: boolean
   /** My goals: the person's own words about what they are aiming for; only Ask reads them. */
   goals: string
   theme: Theme
@@ -165,6 +170,7 @@ export const DEFAULT_SETTINGS: Settings = {
   accent: '#30d158',
   dailyPick: 3,
   foodPick: 2,
+  dailyGoal: true,
   goals: '',
   theme: 'system',
   markSet: 'squiggles',
@@ -474,6 +480,11 @@ export function parseDietData(
 
 /** The settings that belong to the person rather than the device: not the theme, totals or marks. */
 export type PortableSettings = Pick<Settings, 'accent' | 'dailyPick' | 'foodPick' | 'goals'> & {
+  /**
+   * Daily goal (K85), left out where it isn't known (a cache, file or tab from before it), which
+   * reads as on and, sent to the API, keeps the saved one.
+   */
+  dailyGoal?: boolean
   /** Each type's item-page arrangement (K66, P29); left out while every page has the default. */
   itemSections?: ItemSections
 }
@@ -481,13 +492,14 @@ export type PortableSettings = Pick<Settings, 'accent' | 'dailyPick' | 'foodPick
 /**
  * Portable settings as a tab or its cache knows them. `goals` is absent when the tab hasn't read
  * them from the server or had them from the person: a cache written by a tab from before My goals
- * has none, and sending a stand-in would erase the saved ones (F1).
+ * has none, and sending a stand-in would erase the saved ones (F1). (`dailyGoal` is optional in
+ * PortableSettings already, for the same reason.)
  */
 export type KnownSettings = Omit<PortableSettings, 'goals'> & { goals?: string }
 
 /**
  * Any `#rrggbb` accent, daily picks for exercises and foods clamped to 1–8, each falling back to
- * its default, My goals as `normaliseGoals` reads them, and the item pages' arrangement as
+ * its default, Daily goal only when it is a boolean, My goals as `normaliseGoals` reads them, and the item pages' arrangement as
  * `normaliseItemSections` reads it, left out when every page has the default.
  */
 export function normalisePortableSettings(v: Record<string, unknown>): PortableSettings {
@@ -510,6 +522,7 @@ export function normalisePortableSettings(v: Record<string, unknown>): PortableS
     accent,
     dailyPick,
     foodPick,
+    ...(typeof v.dailyGoal === 'boolean' ? { dailyGoal: v.dailyGoal } : {}),
     goals: normaliseGoals(v.goals),
     ...(Object.keys(itemSections).length ? { itemSections } : {}),
   }
@@ -520,7 +533,13 @@ export function parseSettings(raw: string | null): Settings {
   if (!isRecord(parsed)) return { ...DEFAULT_SETTINGS }
   const theme = isTheme(parsed.theme) ? parsed.theme : DEFAULT_SETTINGS.theme
   const markSet = isMarkSet(parsed.markSet) ? parsed.markSet : DEFAULT_SETTINGS.markSet
-  return { ...normalisePortableSettings(parsed), theme, markSet }
+  const portable = normalisePortableSettings(parsed)
+  return {
+    ...portable,
+    dailyGoal: portable.dailyGoal ?? DEFAULT_SETTINGS.dailyGoal,
+    theme,
+    markSet,
+  }
 }
 
 /** `localStorage` can throw (private mode, blocked site data); the app must still run. */

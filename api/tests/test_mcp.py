@@ -16,6 +16,7 @@ from httpx2 import Response
 from tracker_api import auth
 from tracker_api.app import MAX_BODY, create_app
 from tracker_api.config import Config
+from tracker_api.data import put_settings
 from tracker_api.mcp_server import MCP_PATH, OUT_OF_RANGE, caller
 
 from .conftest import ORIGIN, Clock
@@ -498,7 +499,43 @@ def test_goals_reports_the_defaults_for_an_account_with_no_plans(
     assert [g["name"] for g in out["diet"]] == ["Vegetables", "Fruit", "Fish", "Nuts"]
     assert out["exercises_a_day"] >= 1
     assert out["foods_a_day"] >= 1
+    assert out["daily_goal"] is True
     assert out["note"] == ""
+
+
+def test_the_reads_leave_daily_targets_out_while_daily_goal_is_off(
+    agent: TestClient, conn: sqlite3.Connection, uid: int, token: str
+) -> None:
+    """K85: with Daily goal off an MCP client sees no daily target and no met day, and the tools
+    that describe them say so. Item goals stay."""
+    plan = [{"id": "sq", "name": "Squats", "reps": 10, "target": 1}]
+    load_tracked(
+        conn,
+        uid,
+        exercise={"plans": {THIS_WEEK: plan}, "log": {THIS_WEEK: {"sq": ["great"] + [None] * 6}}},
+        settings={"dailyPick": 1, "dailyGoal": False},
+    )
+    goals = tool(agent, token, "goals")
+    assert (goals["exercises_a_day"], goals["foods_a_day"], goals["daily_goal"]) == (
+        None,
+        None,
+        False,
+    )
+    week = tool(agent, token, "week_summary")
+    assert (week["daily_target"], week["days_met"], week["goals_met"]) == (None, None, 1)
+    assert {d["met"] for d in week["days"]} == {None}
+    assert {d["met"] for w in tool(agent, token, "weeks")["weeks"] for d in w["days"]} == {None}
+    steady = tool(agent, token, "consistency")
+    assert (steady["days_met"], steady["met_day_rate"], steady["met_day_streak"]) == (
+        None,
+        None,
+        None,
+    )
+    tools = {t["name"]: t for t in result(call(agent, "tools/list", token=token))["tools"]}
+    for name in ("week_summary", "goals", "consistency", "set_daily_targets"):
+        assert "Daily goal is off" in tools[name]["description"], name
+    # The result's schema lets the nulls through.
+    assert tools["goals"]["outputSchema"]["properties"]["daily_goal"]["type"] == "boolean"
 
 
 def test_consistency_defaults_to_eight_weeks(agent: TestClient, uid: int, token: str) -> None:
@@ -726,8 +763,25 @@ def test_set_daily_targets_through_the_tool(agent: TestClient, uid: int, writer:
     assert out == {
         "before": {"exercises_a_day": 3, "foods_a_day": 2},
         "after": {"exercises_a_day": 3, "foods_a_day": 4},
+        "daily_goal": True,
     }
     assert tool(agent, writer, "goals")["foods_a_day"] == 4
+
+
+def test_set_daily_targets_keeps_working_while_daily_goal_is_off(
+    agent: TestClient, conn: sqlite3.Connection, uid: int, writer: str
+) -> None:
+    """The numbers are kept for when Daily goal is back on; the result says it is off."""
+    put_settings(conn, uid, {"accent": "#30d158", "dailyPick": 3, "dailyGoal": False})
+    out = tool(agent, writer, "set_daily_targets", exercises_a_day=5)
+    assert out == {
+        "before": {"exercises_a_day": 3, "foods_a_day": 2},
+        "after": {"exercises_a_day": 5, "foods_a_day": 2},
+        "daily_goal": False,
+    }
+    assert tool(agent, writer, "goals")["exercises_a_day"] is None
+    put_settings(conn, uid, {"accent": "#30d158", "dailyPick": 5, "dailyGoal": True})
+    assert tool(agent, writer, "goals")["exercises_a_day"] == 5
 
 
 @pytest.mark.parametrize(

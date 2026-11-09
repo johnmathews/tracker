@@ -355,7 +355,10 @@ listed in [api.md](api.md) §10):
   changes, a full account, and the history panel: grouped by Today, Last week and Earlier,
   deleting one or all after asking with focus kept in place, a failed delete, the strip the
   device remembers, and the drawer on a phone.
-- `src/components/__tests__/SettingsAsk.spec.ts`: Settings → Your goals (its place and label, one
+- `src/components/__tests__/SettingsAsk.spec.ts`: Settings → Your goals: Daily goal first, on by
+  default, unknown until read (K85); turned off it saves with the account, hides both steppers and
+  every met day (exercises and foods), and back on the numbers return; an off read from the account
+  goes with the next settings write. Then My goals (its place and label, one
   save per pause in typing, at once on leaving the box or closing the page, nothing kept of a
   draft another tab signed out under, goals saved elsewhere never over a draft, closed until the
   saved goals are known, a new account), and Export and Import with Ask's history (the server's

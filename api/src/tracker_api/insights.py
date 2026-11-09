@@ -10,6 +10,10 @@ cannot know the browser's), and return plain JSON with snake_case keys and Monda
 week keys. They read only that user's rows, write nothing, and carry no user or session fields.
 Names and notes are cut in their output, since they reach a model as text (docs/api.md §1),
 except `item_history`'s note: one item's, given whole so it can be read before it is rewritten.
+
+While Daily goal is off (K85) the readers give no daily target and no met days: those fields are
+None, never False or 0, so nothing reads as a day missed. The rules above stay as they are; the
+switch applies where a reader builds its output. Item goals don't depend on it.
 """
 
 import copy
@@ -140,8 +144,9 @@ class Day(TypedDict):
     date: str
     #: The shown items marked on the day.
     count: int
-    #: `count` reaches the daily target: the day's name is green on screen.
-    met: bool
+    #: `count` reaches the daily target: the day's name is green on screen. None while Daily
+    #: goal is off (K85).
+    met: bool | None
     #: After `today`. A mark on a future day still counts, as on screen.
     future: bool
 
@@ -168,12 +173,13 @@ class WeekSummary(TypedDict):
     plan_week: str | None
     #: The week has no plan of its own: it shows `plan_week`'s, or the defaults.
     carried: bool
-    #: Exercises a day or foods a day.
-    daily_target: int
+    #: Exercises a day or foods a day; None while Daily goal is off (K85).
+    daily_target: int | None
     days: list[Day]
     items: list[ItemWeek]
     goals_met: int
-    days_met: int
+    #: None while Daily goal is off.
+    days_met: int | None
 
 
 class Weeks(TypedDict):
@@ -223,8 +229,11 @@ class Goals(TypedDict):
     week: str
     exercise: list[GoalItem]
     diet: list[GoalItem]
-    exercises_a_day: int
-    foods_a_day: int
+    #: Each None while Daily goal is off (K85); the saved numbers come back when it is on.
+    exercises_a_day: int | None
+    foods_a_day: int | None
+    #: Daily goal's setting: false says why there are no daily targets.
+    daily_goal: bool
     #: The "My goals" note from Settings; "" when there is none.
     note: str
 
@@ -234,12 +243,14 @@ class Consistency(TypedDict):
     start: str
     end: str
     today: str
-    daily_target: int
+    #: None while Daily goal is off (K85), and so are `days_met`, `met_day_rate` and
+    #: `met_day_streak`.
+    daily_target: int | None
     #: The days up to today, today included.
     days: int
-    days_met: int
+    days_met: int | None
     #: `days_met / days`, to 2 places.
-    met_day_rate: float
+    met_day_rate: float | None
     #: The weeks whose Sunday is before today.
     finished_weeks: int
     #: Items with a goal above 0, counted once per finished week.
@@ -249,7 +260,7 @@ class Consistency(TypedDict):
     goal_met_rate: float | None
     #: Met days in a row back from today. Today counts once met, and doesn't break the run
     #: before then.
-    met_day_streak: int
+    met_day_streak: int | None
     #: Finished weeks in a row, latest first, that met every goal above 0.
     goal_week_streak: int
 
@@ -272,12 +283,13 @@ def _week_count(weeks: object) -> int:
     return weeks
 
 
-def _daily_target(settings: Portable | None, section: Section) -> int:
-    """Exercises a day or foods a day: the section's type names the setting (K30, K57)."""
+def _daily_target(settings: Portable | None, section: Section) -> int | None:
+    """Exercises a day or foods a day: the section's type names the setting (K30, K57). None
+    while Daily goal is off (K85)."""
     key = SECTION_TYPES[section].pick_key
     if settings is None:
         return DEFAULT_DAILY_PICK if key == "dailyPick" else DEFAULT_FOOD_PICK
-    return settings[key]
+    return settings[key] if settings["dailyGoal"] else None
 
 
 def _mondays(end: date, count: int) -> list[date]:
@@ -320,14 +332,15 @@ def _item_week(item: Item, week: WeekLog, details: DetailsMap) -> ItemWeek:
 
 
 def _summary(
-    section: Section, tracked: Tracked, monday: date, today: date, target: int
+    section: Section, tracked: Tracked, monday: date, today: date, target: int | None
 ) -> WeekSummary:
     week = monday.isoformat()
     plan_week = plan_source(tracked["plans"], week)
     items = week_items(section, tracked["plans"], week)
     log = tracked["log"].get(week, {})
     counts = day_counts(items, log)
-    met = met_days(counts, target)
+    # No target, no met days: each is None rather than False (K85).
+    met: list[bool | None] = [None] * 7 if target is None else list(met_days(counts, target))
     dates = [monday + timedelta(days=i) for i in range(7)]
     return {
         "week": week,
@@ -340,12 +353,12 @@ def _summary(
         ],
         "items": [_item_week(it, log, tracked["details"]) for it in items],
         "goals_met": goals_met(items, log),
-        "days_met": sum(met),
+        "days_met": None if target is None else sum(1 for m in met if m),
     }
 
 
-def _load(conn: sqlite3.Connection, user_id: int, section: Section) -> tuple[Tracked, int]:
-    """The section's plans and log, and its daily target."""
+def _load(conn: sqlite3.Connection, user_id: int, section: Section) -> tuple[Tracked, int | None]:
+    """The section's plans and log, and its daily target (None while Daily goal is off)."""
     tracked = load_tracked(conn, user_id, section)
     return tracked, _daily_target(load_settings(conn, user_id), section)
 
@@ -445,8 +458,8 @@ def item_history(
 
 
 def goals(conn: sqlite3.Connection, user_id: int, today: date) -> Goals:
-    """What today's week asks for: each item's weekly goal, both daily targets, and the
-    "My goals" note."""
+    """What today's week asks for: each item's weekly goal, both daily targets (None while
+    Daily goal is off), and the "My goals" note."""
     week = monday_of(today).isoformat()
     settings = load_settings(conn, user_id)
     tracked = {section: load_tracked(conn, user_id, section) for section in SECTIONS}
@@ -468,6 +481,7 @@ def goals(conn: sqlite3.Connection, user_id: int, today: date) -> Goals:
         "diet": cast(list[GoalItem], shown["diet"]),
         "exercises_a_day": _daily_target(settings, "exercise"),
         "foods_a_day": _daily_target(settings, "diet"),
+        "daily_goal": settings is None or settings["dailyGoal"],
         "note": "" if settings is None else settings["goals"],
     }
 
@@ -480,7 +494,8 @@ def consistency(
     conn: sqlite3.Connection, user_id: int, section: Section, weeks: int, today: date
 ) -> Consistency:
     """How steady the last `weeks` weeks were, today's included: the share of days that met the
-    daily target, the share of weekly goals met in the finished weeks, and the current runs."""
+    daily target, the share of weekly goals met in the finished weeks, and the current runs.
+    While Daily goal is off there is no target, so the met-day fields are None."""
     section = _section(section)
     count = _week_count(weeks)
     tracked, target = _load(conn, user_id, section)
@@ -492,12 +507,16 @@ def consistency(
     goal_count = sum(1 for s in finished for it in s["items"] if it["target"] > 0)
     goals_hit = sum(s["goals_met"] for s in finished)
 
-    run = elapsed if elapsed[-1]["met"] else elapsed[:-1]
-    day_streak = 0
-    for d in reversed(run):
-        if not d["met"]:
-            break
-        day_streak += 1
+    day_streak: int | None = None
+    days_met: int | None = None
+    if target is not None:
+        run = elapsed if elapsed[-1]["met"] else elapsed[:-1]
+        day_streak = 0
+        for d in reversed(run):
+            if not d["met"]:
+                break
+            day_streak += 1
+        days_met = sum(1 for d in elapsed if d["met"])
     week_streak = 0
     for s in reversed(finished):
         planned = [it for it in s["items"] if it["target"] > 0]
@@ -505,7 +524,6 @@ def consistency(
             break
         week_streak += 1
 
-    days_met = sum(d["met"] for d in elapsed)
     return {
         "section": section,
         "start": mondays[0].isoformat(),
@@ -514,7 +532,7 @@ def consistency(
         "daily_target": target,
         "days": len(elapsed),
         "days_met": days_met,
-        "met_day_rate": _rate(days_met, len(elapsed)),
+        "met_day_rate": None if days_met is None else _rate(days_met, len(elapsed)),
         "finished_weeks": len(finished),
         "goals": goal_count,
         "goals_met": goals_hit,

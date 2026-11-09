@@ -120,6 +120,10 @@ export const usePlannerStore = defineStore('planner', () => {
    * saved ones (F1).
    */
   const goalsKnown = ref(false)
+  /** Daily goal (K85): on unless the person turned it off; the picks are kept either way. */
+  const dailyGoal = ref(DEFAULT_SETTINGS.dailyGoal)
+  /** Whether `dailyGoal` came from the server, a cache that carried it, or the person (as goals). */
+  const dailyGoalKnown = ref(false)
   /** Each type's item-page arrangement (K66); a type left out shows every section in order. */
   const itemSections = ref<ItemSections>({})
   const theme = ref<Theme>(parseSettings(readKey(SETTINGS_KEY)).theme)
@@ -244,7 +248,8 @@ export const usePlannerStore = defineStore('planner', () => {
 
   /**
    * Replace the user's data wholesale: from the cache, the server, or another tab. Settings
-   * without goals (a tab from before My goals wrote them) keep the goals this tab has.
+   * without goals (a tab from before My goals wrote them) keep the goals this tab has, and those
+   * without Daily goal keep this tab's Daily goal (K85).
    */
   function adopt(data: PlannerData, settings: KnownSettings | null): void {
     plans.value = data.plans
@@ -255,6 +260,10 @@ export const usePlannerStore = defineStore('planner', () => {
     if (settings?.goals !== undefined) {
       goals.value = settings.goals
       goalsKnown.value = true
+    }
+    if (settings?.dailyGoal !== undefined) {
+      dailyGoal.value = settings.dailyGoal
+      dailyGoalKnown.value = true
     }
     itemSections.value = normaliseItemSections(settings?.itemSections)
     settingsSaved.value = settings !== null
@@ -273,6 +282,8 @@ export const usePlannerStore = defineStore('planner', () => {
     adopt({ plans: {}, log: {} }, null)
     goals.value = DEFAULT_SETTINGS.goals
     goalsKnown.value = false
+    dailyGoal.value = DEFAULT_SETTINGS.dailyGoal
+    dailyGoalKnown.value = false
     useDetailsStore().clear()
     configMode.value = false
     weekOffset.value = 0
@@ -295,6 +306,13 @@ export const usePlannerStore = defineStore('planner', () => {
     if (next === goals.value) return
     goals.value = next
     goalsKnown.value = true
+    settingsSaved.value = true
+  }
+  /** Daily goal on or off (K85), from Settings. The picks stay as they are. */
+  function setDailyGoal(on: boolean): void {
+    if (dailyGoalKnown.value && on === dailyGoal.value) return
+    dailyGoal.value = on
+    dailyGoalKnown.value = true
     settingsSaved.value = true
   }
   function setTheme(next: Theme): void {
@@ -320,6 +338,7 @@ export const usePlannerStore = defineStore('planner', () => {
       accent: accent.value,
       dailyPick: dailyPick.value,
       foodPick: foodPick.value,
+      ...(dailyGoalKnown.value ? { dailyGoal: dailyGoal.value } : {}),
       ...(goalsKnown.value ? { goals: goals.value } : {}),
       ...(Object.keys(itemSections.value).length
         ? { itemSections: normaliseItemSections(itemSections.value) }
@@ -355,6 +374,8 @@ export const usePlannerStore = defineStore('planner', () => {
     foodPick,
     goals,
     goalsKnown,
+    dailyGoal,
+    dailyGoalKnown,
     itemSections,
     theme,
     now,
@@ -385,6 +406,7 @@ export const usePlannerStore = defineStore('planner', () => {
     changeDailyPick,
     changeFoodPick,
     setGoals,
+    setDailyGoal,
     setTheme,
     portableSettings,
     arrangementFor,

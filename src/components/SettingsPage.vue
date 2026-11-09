@@ -34,6 +34,7 @@ import { DayMarkDrawing } from '@/components/ui/day-mark'
 import { InlineMessage } from '@/components/ui/inline-message'
 import { RadioCard } from '@/components/ui/radio-card'
 import { SegmentedControl } from '@/components/ui/segmented-control'
+import { Switch } from '@/components/ui/switch'
 import { TextArea } from '@/components/ui/text-area'
 import { TextLink } from '@/components/ui/text-link'
 import ConnectionsSection from '@/components/ConnectionsSection.vue'
@@ -93,6 +94,12 @@ onMounted(() => heading.value!.focus())
  * Your goals: the box keeps its own draft, saved when the person stops typing for a moment or
  * leaves the box, so one pause is one write (F18). The draft is never trimmed while typing.
  */
+/** Daily goal (K85): the switch reads and sets the store's, which syncs with the account. */
+const dailyGoal = computed({
+  get: () => store.dailyGoal,
+  set: (on: boolean) => store.setDailyGoal(on),
+})
+const dailyGoalHint = useId()
 const goalsDraft = ref(store.goals)
 let goalsTimer: ReturnType<typeof setTimeout> | undefined
 /**
@@ -159,6 +166,7 @@ async function exportData(): Promise<void> {
       accent: store.accent,
       dailyPick: store.dailyPick,
       foodPick: store.foodPick,
+      ...(store.dailyGoalKnown ? { dailyGoal: store.dailyGoal } : {}),
       goals: store.goals,
       itemSections: store.itemSections,
     },
@@ -315,6 +323,23 @@ async function confirmSignOut(): Promise<void> {
         Your goals
       </h2>
       <div class="flex min-w-0 flex-col gap-(--set-gap)">
+        <!-- Daily goal (K85): first in Your goals, the Switch with its hint under it. -->
+        <div class="flex flex-col items-start gap-[calc(var(--u)*6)]">
+          <Switch
+            v-model="dailyGoal"
+            label="Daily goal"
+            class="-ml-2"
+            :aria-describedby="dailyGoalHint"
+            data-testid="daily-goal"
+          />
+          <p
+            :id="dailyGoalHint"
+            class="caption max-w-[60ch] text-(length:--set-caption) leading-[1.35] text-ink-secondary"
+          >
+            A number of exercises and of foods to reach each day, set in Edit plan. A day that
+            reaches it turns green.
+          </p>
+        </div>
         <TextArea
           v-model="goalsDraft"
           label="What you’re working towards"

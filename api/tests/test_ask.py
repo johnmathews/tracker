@@ -1252,6 +1252,20 @@ def test_the_system_prompt_is_frozen_and_holds_the_rules() -> None:
         assert rule in prompt, rule
 
 
+def test_the_prompt_and_tools_say_daily_goal_off_means_no_daily_target() -> None:
+    """K85: with Daily goal off the tools give no daily target and no met days (null), and the
+    prompt tells the model not to talk about either."""
+    for prompt in (ask.system_prompt(plain_verdicts=True), ask.system_prompt(plain_verdicts=False)):
+        assert (
+            "When daily_goal is false or a daily target is null, the person has turned Daily goal"
+            " off. There is no daily target, and the tools give no met days. Don't mention met"
+            " days or a number a day."
+        ) in prompt
+    tools = {t["name"]: t["description"] for t in ask.TOOLS}
+    for name in ("consistency", "goals", "week_summary"):
+        assert "Daily goal" in tools[name], name
+
+
 def test_the_verdict_rule_is_johns_v2_extended() -> None:
     """Plain verdicts, goals and notes quoted back as advice, and streaks, scores and rankings;
     the rest of the voice holds (no exclamation marks, no hype, no blame)."""

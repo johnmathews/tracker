@@ -294,6 +294,11 @@ TimesArg = Annotated[int | None, Field(description="The goal: times a week, 0 to
 NOTES_CUT = (
     'Notes are cut at 500 characters, ending in "…"; `item_history` gives an item\'s whole note.'
 )
+#: K85: the app's Daily goal switch, off, takes the daily targets and the met days away.
+DAILY_GOAL_OFF = (
+    "While Daily goal is off, `daily_target`, each day's `met` and `days_met` are null: there is "
+    "no daily target, so say nothing about met days."
+)
 NOTE_HELP = (
     "An item's `note` is the item's own, the same in every week, as on its page in the app: "
     "changing it changes no week's plan. `week_summary`, `weeks` and `goals` cut a note at 500 "
@@ -362,7 +367,8 @@ def _add_tools(server: MCPServer, config: Config) -> None:
     @server.tool(
         title="Week summary",
         description="How one week went: each item's marks against its times-a-week goal, which "
-        "goals were met, and which days met the daily target, as the app shows that week. Call "
+        "goals were met, and which days met the daily target, as the app shows that week. "
+        f"{DAILY_GOAL_OFF} Call "
         "it first to answer 'how is my training going this week'. A week with no plan of its "
         "own shows the plan it carries forward (`plan_week`), or the defaults (`plan_week` is "
         "null). The result also has `this_week` and `today`, the account's current week and date. "
@@ -444,7 +450,9 @@ def _add_tools(server: MCPServer, config: Config) -> None:
     @server.tool(
         title="Goals",
         description="What this week asks for: every exercise and food with its times-a-week "
-        "goal, the daily targets (exercises a day, foods a day) and the 'My goals' note. Call it "
+        "goal, the daily targets (exercises a day, foods a day), `daily_goal` and the 'My goals' "
+        "note. While Daily goal is off, `daily_goal` is false and both daily targets are null: "
+        "say nothing about a number a day or met days. Call it "
         "for 'what are my goals' or before comparing progress with them. Always this week's "
         f"plan, for both exercise and diet. {NOTES_CUT}",
         annotations=READ_ONLY,
@@ -456,7 +464,8 @@ def _add_tools(server: MCPServer, config: Config) -> None:
     @server.tool(
         title="Consistency",
         description="How steady training has been: the share of days that met the daily target, "
-        "the share of weekly goals met in finished weeks, and the current streaks. Call it for "
+        "the share of weekly goals met in finished weeks, and the current streaks. "
+        "While Daily goal is off, the daily target and every met-day field are null. Call it for "
         "'am I consistent' or 'how long a streak do I have'. Counts the last weeks, this week "
         "included, up to today.",
         annotations=READ_ONLY,
@@ -587,7 +596,9 @@ def _add_tools(server: MCPServer, config: Config) -> None:
         title="Set daily targets",
         description="Set how many exercises a day and how many foods a day make a day count "
         "as met (the app's 'Exercises a day' and 'Foods a day'). Each is 1 to 8; one not given "
-        "stays as it is. The result has both targets `before` and `after`. Needs a write token.",
+        "stays as it is. The result has both targets `before` and `after`, and `daily_goal`. "
+        "While Daily goal is off (`daily_goal` false) the numbers are saved but count only once "
+        "it is back on, which only the app can do. Needs a write token.",
         annotations=SETTING,
     )
     def set_daily_targets(

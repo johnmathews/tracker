@@ -33,7 +33,8 @@ OLD_EXPORT_FORMATS = ("fitness-planner-export", "exercise-planner-export")
 #: carry the kinds alone, which read as the zigzag; version 1 files a `true` per done day, which
 #: reads as `great`. All five import. Settings may carry My goals (`goals`) with no new version,
 #: as `foodPick` came: a reader from before them drops the key, and a file without them reads as
-#: none. Ask's conversations (`conversations`) came the same way.
+#: none. Ask's conversations (`conversations`) came the same way, and so did Daily goal
+#: (`dailyGoal`, K85): a file without it reads as on.
 EXPORT_VERSION = 5
 #: The last version whose notes live in plan items.
 LAST_ITEM_NOTES_VERSION = 4
@@ -146,6 +147,11 @@ class Portable(TypedDict):
     foodPick: int
     #: My goals, in the person's words; "" when there are none.
     goals: str
+    #: Daily goal (K85): whether exercises a day and foods a day apply. Off, they are kept but
+    #: nothing reads them: no day is met, and the insights give no daily target. Left out where it
+    #: isn't known (a file or a tab from before it), which reads as on; settings the API has saved
+    #: always have it.
+    dailyGoal: NotRequired[bool]
     #: Each type's item-page arrangement (K66, P29); left out while every page has the default.
     itemSections: NotRequired[ItemSections]
 
@@ -568,6 +574,10 @@ def normalise_portable(v: dict[str, Any]) -> Portable:
         ),
         "goals": normalise_goals(v.get("goals")),
     }
+    # Kept only when it is a boolean, as storage.ts keeps it: anything else is not known.
+    daily_goal = v.get("dailyGoal")
+    if isinstance(daily_goal, bool):
+        out["dailyGoal"] = daily_goal
     item_sections = normalise_item_sections(v.get("itemSections"))
     if item_sections:
         out["itemSections"] = item_sections

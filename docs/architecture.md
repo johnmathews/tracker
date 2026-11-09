@@ -132,9 +132,10 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 ├── EmailStatus.vue     "Confirm your email." Banner, with Send it again, until it is confirmed
 ├── ImportPrompt.vue    this browser's log from before accounts, offered once (§7)
 ├── WeekHeader.vue      the page's h1, the week ("19–25 October"), visually hidden on screen (each
-│                       SectionHeader shows the week); set in display on paper
-├── ExerciseGrid.vue    the Exercises section: SectionHeader (the title and the week; in config
-│   │                   mode the title alone, with the Exercises a day Stepper centred on its line, K62)
+│                       SectionHeader shows the week as the screen's title, K86); set in display on paper
+├── ExerciseGrid.vue    the Exercises section: SectionHeader (the week centred as the title, then
+│   │                   the section's heading; in config mode the heading alone, with the
+│   │                   Exercises a day Stepper centred on its line while Daily goal is on, K62, K85)
 │   ├── TrackerGrid.vue a <table> (WeekGrid card): day names, one TrackerRow per item, and
 │   │   │               the days that met the daily pick
 │   │   └── TrackerRow.vue  name (a link to the item's page) and chips on one line, the
@@ -146,8 +147,9 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 │                           PerSideToggle, weight (kg), Times a week (the goal); then Note (K55),
 │                           the item's notes for every week (the details store);
 │                           Edit exercise, or Add exercise from the button under the grid (K54)
-└── DietSection.vue     the Food section: SectionHeader (the title and the week; in config mode
-                        the title alone, with the Foods a day Stepper centred on its line, K62), kept
+└── DietSection.vue     the Food section: SectionHeader (the week centred as the title, then the
+                        heading; in config mode the heading alone, with the Foods a day Stepper
+                        centred on its line while Daily goal is on, K62, K85), kept
                         with its grid, whose days that met foods a day turn green (K57); on the
                         screens, the "Back to Exercises" arrow (K42)
     ├── TrackerGrid.vue wired to diet: no chips
@@ -188,6 +190,7 @@ foods (with goals). Ticks live in a separate **log**, keyed by week and item id.
 | `log`                             | the sync store: server and per-user cache | week Monday `YYYY-MM-DD` → exercise id → seven marks (`Days`, below)        |
 | `accent`, `dailyPick`, `foodPick` | the sync store: server and per-user cache | defaults `#30d158`, `3` and `2`. The accent is kept but draws nothing (K13) |
 | `goals`, `goalsKnown`             | the sync store: server and per-user cache | My goals, `''` by default; only Ask reads them. `goalsKnown` is below       |
+| `dailyGoal`, `dailyGoalKnown`     | the sync store: server and per-user cache | Daily goal (K85), `true` by default; sent only once known, like `goals`     |
 | `itemSections`                    | the sync store: server and per-user cache | each type's item-page arrangement (K66); `{}` is every page as it comes     |
 | `theme`                           | `tracker-settings-v1` (the device)        | `system` (default), `light` or `dark`                                       |
 | `markSet`                         | `tracker-settings-v1` (the device)        | `squiggles` (default), `ticks`, `stamped-ticks`, `faces`, `stamped-faces`   |
@@ -607,7 +610,11 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
   underlined (K60). The rule is `metDays` in `src/lib/tracker.ts`: a day is met when the items
   marked on it reach the day's target. The day names are max(20px, 27u), the rows' name size. `DietSection` does
   the same against foods a day (K57). Both picks are stored, synced and exported (`dailyPick`,
-  `foodPick`). The sections have no weekly figure (K31), Settings no totals switch (K32), and the grids no Week
+  `foodPick`). **Daily goal** (K85), `dailyGoal` beside them, turns all of it off: while it is
+  false both grids get no met days and Edit plan shows no Stepper, and the picks are kept. Like
+  `goals`, a tab sends it only once it knows it (from the server, its cache or the person):
+  `PortableSettings.dailyGoal` is optional, absent reads as on, and the API keeps the saved value
+  when it is absent, so a cache from before it can't switch it back on. The sections have no weekly figure (K31), Settings no totals switch (K32), and the grids no Week
   column (K33). The Header has a Full screen button where the browser supports one (K34).
 - **Print is the light theme on white paper, from either theme** (§6.7).
 - **Narrow screens.** Folded (held upright under 1000px wide, or under 760px wide), the navbar

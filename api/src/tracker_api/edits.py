@@ -155,6 +155,9 @@ class Targets(TypedDict):
 class TargetsEdit(TypedDict):
     before: Targets
     after: Targets
+    #: Daily goal's setting (K85), which this leaves as it is: false says the targets are kept
+    #: but apply only once it is back on.
+    daily_goal: bool
 
 
 def in_words(item: Item, notes: str = "") -> Words:
@@ -554,8 +557,9 @@ def set_daily_targets(
     exercises_a_day: int | None = None,
     foods_a_day: int | None = None,
 ) -> TargetsEdit:
-    """Set exercises a day, foods a day or both, keeping the accent and the other target: the
-    planner store's `changeDailyPick` and `changeFoodPick`, landing on a chosen number."""
+    """Set exercises a day, foods a day or both, keeping the accent, the other target and Daily
+    goal: the planner store's `changeDailyPick` and `changeFoodPick`, landing on a chosen number.
+    While Daily goal is off (K85) the numbers are saved for when it is back on."""
     if exercises_a_day is None and foods_a_day is None:
         raise EditError("exercises_a_day", "give exercises_a_day, foods_a_day or both")
     picks = {
@@ -573,4 +577,5 @@ def set_daily_targets(
     return {
         "before": {"exercises_a_day": saved["dailyPick"], "foods_a_day": saved["foodPick"]},
         "after": {"exercises_a_day": stored["dailyPick"], "foods_a_day": stored["foodPick"]},
+        "daily_goal": stored["dailyGoal"],
     }

@@ -243,7 +243,8 @@ export function normaliseState(v: unknown, itemNotes = false): SyncState | null 
 
 /**
  * Settings as a cache or the API words them. Goals are kept only when they are there: a tab from
- * before My goals writes none, and reading that as "no goals" would erase them (F1).
+ * before My goals writes none, and reading that as "no goals" would erase them (F1). Daily goal is
+ * left out the same way by `normalisePortableSettings` (K85).
  */
 function knownSettings(v: Record<string, unknown>): KnownSettings {
   const { goals, ...rest } = normalisePortableSettings(v)
@@ -286,6 +287,7 @@ export function diff(base: Snapshot, local: Snapshot): Op[] {
     bs.accent !== ls.accent ||
     bs.dailyPick !== ls.dailyPick ||
     bs.foodPick !== ls.foodPick ||
+    bs.dailyGoal !== ls.dailyGoal ||
     bs.goals !== ls.goals ||
     // No key and `{}` are both every page as it comes (K66).
     JSON.stringify(bs.itemSections ?? {}) !== JSON.stringify(ls.itemSections ?? {})
@@ -370,6 +372,7 @@ export const useSyncStore = defineStore('sync', () => {
         accent: planner.accent,
         dailyPick: planner.dailyPick,
         foodPick: planner.foodPick,
+        ...(planner.dailyGoalKnown ? { dailyGoal: planner.dailyGoal } : {}),
         goals: planner.goals,
         itemSections: planner.itemSections,
       },
@@ -569,11 +572,13 @@ export const useSyncStore = defineStore('sync', () => {
     // The arrangement always goes, `{}` for the default: the API keeps the saved one when the
     // key is missing (an older tab), so leaving it out could never reset it. Goals go only once
     // this tab has read them or the person set them: an absent key keeps the saved ones (F1).
+    // Daily goal the same way (K85).
     const res = await call('PUT', '/settings', {
       accent: planner.accent,
       dailyPick: planner.dailyPick,
       foodPick: planner.foodPick,
       itemSections: planner.itemSections,
+      ...(planner.dailyGoalKnown ? { dailyGoal: planner.dailyGoal } : {}),
       ...(planner.goalsKnown ? { goals: planner.goals } : {}),
     })
     if (gen !== generation) return 'stop'
@@ -810,6 +815,7 @@ export const useSyncStore = defineStore('sync', () => {
         planner.accent,
         planner.dailyPick,
         planner.foodPick,
+        planner.dailyGoal,
         planner.goals,
         planner.itemSections,
       ],

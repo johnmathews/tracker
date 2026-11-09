@@ -431,12 +431,14 @@ export class FakeApi {
     }
     if (path === '/ask' || path.startsWith('/ask/')) return this.routeAsk(a, method, path, body)
     if (method === 'PUT' && path === '/settings') {
-      // As the API: a client that sends no foodPick (K57) or itemSections (K66) keeps the saved
+      // As the API: a client that sends no foodPick (K57), Daily goal (K85) or itemSections (K66) keeps the saved
       // one; an arrangement is normalised, and left out when every page has the default.
       a.settings = normalisePortableSettings({
         accent: String(body.accent),
         dailyPick: Number(body.dailyPick),
         foodPick: Number(body.foodPick ?? a.settings?.foodPick ?? 2),
+        // As the API: a client that sends no Daily goal keeps the saved one (K85).
+        dailyGoal: typeof body.dailyGoal === 'boolean' ? body.dailyGoal : a.settings?.dailyGoal,
         // As the API: goals that aren't a string are not sent, so the saved ones stay (F1).
         goals:
           typeof body.goals === 'string' ? normaliseGoals(body.goals) : (a.settings?.goals ?? ''),

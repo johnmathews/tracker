@@ -180,7 +180,7 @@ def load_tracked(conn: sqlite3.Connection, user_id: int, section: Section) -> Tr
 
 def load_settings(conn: sqlite3.Connection, user_id: int) -> Portable | None:
     row = conn.execute(
-        "SELECT accent, daily_pick, food_pick, goals, item_sections FROM settings"
+        "SELECT accent, daily_pick, food_pick, goals, daily_goal, item_sections FROM settings"
         " WHERE user_id = ?",
         (user_id,),
     ).fetchone()
@@ -191,6 +191,7 @@ def load_settings(conn: sqlite3.Connection, user_id: int) -> Portable | None:
         "dailyPick": row["daily_pick"],
         "foodPick": row["food_pick"],
         "goals": row["goals"],
+        "dailyGoal": bool(row["daily_goal"]),
     }
     # Normalised on the way out too, so a type this version's registry lacks drops (P29).
     stored = row["item_sections"]
@@ -446,32 +447,39 @@ def set_tick(
 
 def put_settings(conn: sqlite3.Connection, user_id: int, raw: dict[str, Any]) -> Portable:
     # A tab still running the app from before foods a day (K57) sends no foodPick, and one from
-    # before arranging the item page (K66) no itemSections, and one from before My goals no goals;
-    # keep the saved ones rather than reset them. The app sends `itemSections: {}` for the default
-    # arrangement. Goals that aren't a string count as not sent, and a tab never sends goals it
-    # hasn't read (F1).
+    # before arranging the item page (K66) no itemSections, and one from before My goals no goals,
+    # and one from before Daily goal (K85) no dailyGoal; keep the saved ones rather than reset
+    # them. The app sends `itemSections: {}` for the default arrangement. Goals that aren't a
+    # string count as not sent, and a tab never sends goals it hasn't read (F1); a dailyGoal that
+    # isn't a boolean likewise (F2). The result always has dailyGoal: on when nothing gave one.
     saved = load_settings(conn, user_id)
     if saved is not None:
         if "foodPick" not in raw:
             raw = {**raw, "foodPick": saved["foodPick"]}
+        if not isinstance(raw.get("dailyGoal"), bool):
+            raw = {**raw, "dailyGoal": saved["dailyGoal"]}
         if "itemSections" not in raw:
             raw = {**raw, "itemSections": saved.get("itemSections", {})}
         if not isinstance(raw.get("goals"), str):
             raw = {**raw, "goals": saved["goals"]}
     settings = normalise_portable(raw)
+    settings.setdefault("dailyGoal", True)
     item_sections = settings.get("itemSections")
     conn.execute(
-        "INSERT INTO settings (user_id, accent, daily_pick, food_pick, goals, item_sections)"
-        " VALUES (?, ?, ?, ?, ?, ?)"
+        "INSERT INTO settings"
+        " (user_id, accent, daily_pick, food_pick, goals, daily_goal, item_sections)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?)"
         " ON CONFLICT (user_id) DO UPDATE SET accent = excluded.accent,"
         " daily_pick = excluded.daily_pick, food_pick = excluded.food_pick,"
-        " goals = excluded.goals, item_sections = excluded.item_sections",
+        " goals = excluded.goals, daily_goal = excluded.daily_goal,"
+        " item_sections = excluded.item_sections",
         (
             user_id,
             settings["accent"],
             settings["dailyPick"],
             settings["foodPick"],
             settings["goals"],
+            int(settings["dailyGoal"]),
             json.dumps(item_sections, separators=(",", ":")) if item_sections else None,
         ),
     )

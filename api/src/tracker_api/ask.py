@@ -116,6 +116,9 @@ missed day count too.
 what they are, never as days done well.
 - A day is met when the items marked that day reach the daily target. The target is exercises \
 a day for exercise and foods a day for food.
+- When daily_goal is false or a daily target is null, the person has turned Daily goal off. \
+There is no daily target, and the tools give no met days. Don't mention met days or a number \
+a day.
 - A day after today hasn't happened yet. It is not a gap, and a week that hasn't finished has \
 not fallen short.
 - A goal of 0 asks for nothing and is never met.
@@ -182,14 +185,16 @@ TOOLS: list[ToolParam] = [
         "consistency",
         "How steady the last weeks of one section were: the share of days up to today that met"
         " the daily target, the share of weekly goals met in the finished weeks, and the current"
-        " runs. Call it for questions about consistency or habits over time.",
+        " runs. While Daily goal is off, its met-day fields are null. Call it for questions about"
+        " consistency or habits over time.",
         {"section": _SECTION, "weeks": _WEEKS},
     ),
     _tool(
         "goals",
         "What this week asks for: each exercise and food with its weekly goal, exercises a day,"
-        " foods a day, and the My goals note. Call it first for any question about goals or"
-        " about doing enough.",
+        " foods a day, whether Daily goal is on (daily_goal; off, both a-day targets are null),"
+        " and the My goals note. Call it first for any question about goals or about doing"
+        " enough.",
         {},
     ),
     _tool(
@@ -201,8 +206,8 @@ TOOLS: list[ToolParam] = [
     _tool(
         "week_summary",
         "One week of one section as its screen shows it: the items with their goals, notes and"
-        " marks, and each day's count against the daily target. Call it for questions about a"
-        " particular week.",
+        " marks, and each day's count against the daily target. While Daily goal is off, the"
+        " target and each day's met are null. Call it for questions about a particular week.",
         {"section": _SECTION, "week": _MONDAY},
     ),
     _tool(
