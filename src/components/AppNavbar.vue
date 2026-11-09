@@ -2,7 +2,6 @@
 import { computed, ref, toRef } from 'vue'
 import {
   Calendar,
-  Check,
   ChevronLeft,
   ChevronRight,
   Maximize,
@@ -18,6 +17,7 @@ import { BarAction } from '@/components/ui/bar-action'
 import { IconButton } from '@/components/ui/icon-button'
 import { useBarReveal } from '@/composables/barReveal'
 import { useFullscreen } from '@/composables/fullscreen'
+import { useShortcuts } from '@/composables/shortcuts'
 
 const props = defineProps<{
   /**
@@ -45,10 +45,28 @@ function print(): void {
   window.print()
 }
 
+function toggleEditPlan(): void {
+  store.setConfigMode(!store.configMode)
+}
+
 /** Settings is a page of its own (#/settings); App shows it on the hash change. */
 function openSettings(): void {
   location.hash = '#/settings'
 }
+
+// The week's keys (K91): E in and out of Edit plan, Esc out of full screen and then out of Edit
+// plan, F full screen, P print and S Settings, as their buttons do.
+useShortcuts(() => ({
+  e: toggleEditPlan,
+  escape: () => {
+    if (fullscreen.active.value) void fullscreen.toggle()
+    else if (store.configMode) store.setConfigMode(false)
+    else return false
+  },
+  f: fullscreen.supported ? () => void fullscreen.toggle() : undefined,
+  p: print,
+  s: openSettings,
+}))
 
 /** Ask is a page of its own too (#/ask). */
 function openAsk(): void {
@@ -75,19 +93,20 @@ function skipToToday(): void {
   The Header card (brand/design-system/project/components/Header), full width and as big as the
   week below it (K47). The week navigation comes first, at the start, its label set as the page's
   title (K81), and the BarActions follow at the end: "This week" while another week is on screen,
-  Ask (only while the API answers questions), Settings, Print, Full screen (K49) and, in Edit
-  plan, "Done" (K82). There is no wordmark and no Edit plan button: the bar showing and Edit plan
-  are one thing (K80). The Settings and Ask pages have no bar (K52). Every size is a `--bar-*`
+  Ask (only while the API answers questions), Settings, Print and Full screen (K49). There is no
+  wordmark and no Edit plan or Done button: the bar showing and Edit plan are one thing (K80),
+  and a long press, E or Esc leave it (K91). The Settings and Ask pages have no bar (K52). Every size is a `--bar-*`
   size from main.css, so the bar follows the screen. Folded, the week takes the first row and the
   actions share the second; the markup stays in the desktop order, which is the tab order.
 
-  "Skip to today" comes first in the tab order (F15), and off Edit plan "Edit plan" second (K82):
-  each hidden until it has focus, then shown over the start of the bar with the focus ring.
+  "Skip to today" comes first in the tab order (F15), and "Edit plan" second, reading "Done" in
+  Edit plan (K82, K91): each hidden until it has focus, then shown over the start of the bar with
+  the focus ring.
 
   With `overlay` (the planner's screens) the bar is fixed above the top edge (Header card, Out of
   sight). A long press anywhere, or the handle at the top centre wherever a finger may be, opens
   Edit plan (K80), where the bar is sticky and the page sits below it, so it covers nothing; a
-  long press there, or Done, closes it again. Focus inside the bar slides it down over the screen,
+  long press there, E or Esc closes it again. Focus inside the bar slides it down over the screen,
   so it stays reachable by Tab: it is moved out of view, never hidden.
 -->
 <template>
@@ -124,8 +143,8 @@ function skipToToday(): void {
     data-noprint
   >
     <!-- The first two Tab stops, out of sight until each has focus, then shown over the start
-         of the bar with the focus ring: "Skip to today" (F15), and, off Edit plan, "Edit plan"
-         (K82), so the keyboard reaches Edit plan without a long press. -->
+         of the bar with the focus ring: "Skip to today" (F15), and "Edit plan", "Done" in Edit
+         plan (K82, K91), so the keyboard reaches Edit plan and leaves it without a long press. -->
     <div class="absolute top-1.5 left-2 z-30">
       <!-- not-sr-only zeroes the link's padding, so the span carries it. -->
       <a
@@ -136,13 +155,13 @@ function skipToToday(): void {
         ><span class="block px-3 py-2">Skip to today</span></a
       >
       <button
-        v-if="!store.configMode"
         type="button"
         class="sr-only cursor-pointer rounded-md bg-panel text-base font-semibold text-ink underline underline-offset-4 shadow-overlay focus:not-sr-only focus:block"
+        aria-keyshortcuts="E"
         data-testid="edit-plan-button"
-        @click="store.setConfigMode(true)"
+        @click="toggleEditPlan"
       >
-        <span class="block px-3 py-2">Edit plan</span>
+        <span class="block px-3 py-2">{{ store.configMode ? 'Done' : 'Edit plan' }}</span>
       </button>
     </div>
     <!-- The week first, at the start, as the page's title (K81); the actions at the end. Folded,
@@ -173,8 +192,8 @@ function skipToToday(): void {
       </nav>
       <!-- The actions: "This week" first while another week is on screen (K81), then Ask (only
            once the API has said it answers questions, so it never flashes in or out), Settings,
-           Print, Full screen and, in Edit plan, "Done" in the ink fill (K82). Folded, they share
-           the second row equally. -->
+           Print and Full screen, each naming its key (K91). Folded, they share the second row
+           equally. -->
       <div class="flex items-stretch gap-(--bar-gap) folded:contents">
         <BarAction
           v-if="otherWeek"
@@ -193,34 +212,29 @@ function skipToToday(): void {
         /></BarAction>
         <BarAction
           label="Settings"
+          aria-keyshortcuts="S"
           class="folded:flex-1 folded:basis-0"
           data-testid="settings-button"
           @click="openSettings"
           ><Settings
         /></BarAction>
         <!-- Printing from a phone is rare, and the bar has no room for it there. -->
-        <BarAction label="Print…" class="max-sm:hidden folded:flex-1 folded:basis-0" @click="print"
+        <BarAction
+          label="Print…"
+          aria-keyshortcuts="P"
+          class="max-sm:hidden folded:flex-1 folded:basis-0"
+          @click="print"
           ><Printer
         /></BarAction>
         <!-- Full screen (K34): left out where the browser has none, as on an iPhone. -->
         <BarAction
           v-if="fullscreen.supported"
           :label="fullscreen.active.value ? 'Exit full screen' : 'Full screen'"
+          aria-keyshortcuts="F"
           class="folded:flex-1 folded:basis-0"
           data-testid="fullscreen-button"
           @click="fullscreen.toggle"
           ><Minimize v-if="fullscreen.active.value" /><Maximize v-else
-        /></BarAction>
-        <!-- Done, last, only in Edit plan: back to the week (K82). The bar showing and Edit plan
-             are one thing (K80), so there is no Edit plan button. -->
-        <BarAction
-          v-if="store.configMode"
-          label="Done"
-          filled
-          class="folded:flex-1 folded:basis-0"
-          data-testid="edit-plan-button"
-          @click="store.setConfigMode(false)"
-          ><Check
         /></BarAction>
       </div>
     </div>

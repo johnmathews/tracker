@@ -114,7 +114,7 @@ describe('the planner’s screens (K24–K27)', () => {
     expect(bar().findAll('[data-slot="bar-action"]')[0]!.text()).toBe('This week')
   })
 
-  it('ends the actions with Full screen where the browser has one, then Done (K49, K82)', async () => {
+  it('ends the actions with Full screen where the browser has one, in Edit plan too (K49, K91)', async () => {
     Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: true })
     Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: null })
     try {
@@ -125,7 +125,7 @@ describe('the planner’s screens (K24–K27)', () => {
           .map((b) => b.text())
       expect(actions().at(-1)).toBe('Full screen')
       await wrapper.get('[data-testid="edit-plan-button"]').trigger('click')
-      expect(actions().slice(-2)).toEqual(['Full screen', 'Done'])
+      expect(actions().at(-1)).toBe('Full screen')
       // Full screen on: the button says how to leave it.
       Object.defineProperty(document, 'fullscreenElement', {
         configurable: true,
@@ -140,7 +140,7 @@ describe('the planner’s screens (K24–K27)', () => {
     }
   })
 
-  it('has no Edit plan button: Done leaves Edit plan, and the keyboard’s hidden one enters (K82)', async () => {
+  it('has no Edit plan or Done action: the keyboard’s hidden button goes in and out (K82, K91)', async () => {
     mountApp()
     const actions = () =>
       bar()
@@ -148,21 +148,120 @@ describe('the planner’s screens (K24–K27)', () => {
         .map((b) => b.text())
     expect(actions()).not.toContain('Edit plan')
     expect(actions()).not.toContain('Done')
-    // The keyboard's way in: after "Skip to today", out of sight until focused.
+    // The keyboard's way in and out: after "Skip to today", out of sight until focused.
     const hidden = wrapper.get('[data-testid="edit-plan-button"]')
     expect(hidden.element.tagName).toBe('BUTTON')
     expect(hidden.classes()).toEqual(expect.arrayContaining(['sr-only', 'focus:not-sr-only']))
+    expect(hidden.attributes('aria-keyshortcuts')).toBe('E')
     expect(hidden.element.previousElementSibling?.getAttribute('data-testid')).toBe('skip-to-today')
     await hidden.trigger('click')
     expect(editing()).toBe(true)
-    // In Edit plan: "Done", last, in the ink fill.
-    expect(actions().at(-1)).toBe('Done')
-    const done = wrapper.get('[data-testid="edit-plan-button"]')
-    expect(done.classes()).toEqual(expect.arrayContaining(['bg-ink', 'text-on-ink']))
-    expect(done.attributes('aria-pressed')).toBeUndefined()
-    await done.trigger('click')
+    expect(actions()).not.toContain('Done')
+    await hidden.trigger('click')
     expect(editing()).toBe(false)
     expect(screens()).toBe(true)
+  })
+
+  describe('the week’s keys (K91)', () => {
+    async function press(key: string, init: KeyboardEventInit = {}, target: EventTarget = window) {
+      const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init })
+      target.dispatchEvent(event)
+      await flushPromises()
+      return event
+    }
+
+    it('E goes into Edit plan and out again, and Esc leaves it', async () => {
+      mountApp()
+      expect((await press('e')).defaultPrevented).toBe(true)
+      expect(editing()).toBe(true)
+      await press('E')
+      expect(editing()).toBe(false)
+      expect((await press('Escape')).defaultPrevented).toBe(false) // nothing to leave
+      await press('e')
+      await press('Escape')
+      expect(editing()).toBe(false)
+    })
+
+    it('P prints, S opens Settings, and each button names its key', async () => {
+      const print = vi.spyOn(window, 'print').mockImplementation(() => {})
+      mountApp()
+      await press('p')
+      expect(print).toHaveBeenCalledOnce()
+      const keys = bar()
+        .findAll('[data-slot="bar-action"]')
+        .map((b) => [b.text(), b.attributes('aria-keyshortcuts')])
+      expect(keys).toEqual(
+        expect.arrayContaining([
+          ['Settings', 'S'],
+          ['Print…', 'P'],
+        ]),
+      )
+      await press('s')
+      expect(location.hash).toBe('#/settings')
+      history.replaceState(null, '', location.pathname)
+      print.mockRestore()
+    })
+
+    it('F toggles full screen where the browser has it, and Esc leaves it before Edit plan', async () => {
+      const request = vi.fn<() => Promise<void>>(async () => {})
+      const exit = vi.fn<() => Promise<void>>(async () => {})
+      Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: true })
+      Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: null })
+      document.documentElement.requestFullscreen = request
+      document.exitFullscreen = exit
+      try {
+        mountApp()
+        expect(
+          wrapper.get('[data-testid="fullscreen-button"]').attributes('aria-keyshortcuts'),
+        ).toBe('F')
+        await press('f')
+        expect(request).toHaveBeenCalledOnce()
+        Object.defineProperty(document, 'fullscreenElement', {
+          configurable: true,
+          value: document.documentElement,
+        })
+        document.dispatchEvent(new Event('fullscreenchange'))
+        await press('e')
+        await press('Escape')
+        expect(exit).toHaveBeenCalledOnce()
+        expect(editing()).toBe(true) // full screen first
+      } finally {
+        Object.defineProperty(document, 'fullscreenEnabled', {
+          configurable: true,
+          value: undefined,
+        })
+        Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: null })
+      }
+    })
+
+    it('leaves a key alone in a field, with a modifier, repeating, or while a dialog is open', async () => {
+      mountApp()
+      const field = document.createElement('input')
+      document.body.append(field)
+      await press('e', {}, field)
+      await press('e', { metaKey: true })
+      await press('e', { ctrlKey: true })
+      await press('e', { altKey: true })
+      await press('e', { repeat: true })
+      await press('e', { isComposing: true })
+      const edit = document.createElement('div')
+      edit.contentEditable = 'true'
+      Object.defineProperty(edit, 'isContentEditable', { value: true })
+      document.body.append(edit)
+      await press('e', {}, edit)
+      const taken = new KeyboardEvent('keydown', { key: 'e', cancelable: true })
+      taken.preventDefault()
+      window.dispatchEvent(taken)
+      const dialog = document.createElement('div')
+      dialog.setAttribute('role', 'dialog')
+      document.body.append(dialog)
+      await press('e')
+      dialog.remove()
+      await press('x') // no key of the week's
+      expect(editing()).toBe(false)
+      field.remove()
+      edit.remove()
+    })
   })
 
   it('has no strip along the top edge, and floats the bar only for focus (K79, K80)', () => {

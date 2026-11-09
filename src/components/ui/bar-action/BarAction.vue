@@ -6,15 +6,13 @@ import { barActionVariants } from '.'
 
 const props = withDefaults(
   defineProps<{
-    /** The action's name, shown under the icon and its accessible name: "Settings", "Done". */
+    /** The action's name, shown under the icon and its accessible name: "Settings". */
     label: string
     /** A toggle sets this; an ordinary action leaves it out, so it has no aria-pressed. */
     pressed?: boolean
-    /** The one action that ends a mode ("Done" in Edit plan, K82): the ink fill, always. */
-    filled?: boolean
     class?: HTMLAttributes['class']
   }>(),
-  { pressed: undefined, filled: false, class: undefined },
+  { pressed: undefined, class: undefined },
 )
 
 // The slotted Lucide icon keeps the system's 1.5 stroke (foundations: Icons); its size comes from
@@ -29,7 +27,7 @@ setLucideProps({ strokeWidth: 1.5 })
     type="button"
     data-slot="bar-action"
     :aria-pressed="pressed === undefined ? undefined : pressed"
-    :class="cn(barActionVariants({ filled }), props.class)"
+    :class="cn(barActionVariants(), props.class)"
   >
     <slot />
     <span class="text-(length:--bar-name) leading-[1.3] font-semibold whitespace-nowrap">

@@ -124,8 +124,8 @@ test('a long press opens Edit plan with the bar above the week, and marks no day
 }) => {
   await openApp(page)
   const bar = page.locator('[data-slot="bar"]')
-  // "Done" shows in the bar only in Edit plan (K82).
-  const done = page.getByRole('button', { name: 'Done', exact: true })
+  // The keyboard's hidden button reads "Done" only in Edit plan (K91).
+  const done = page.getByTestId('edit-plan-button').filter({ hasText: 'Done' })
   // The first day with no mark yet, held by its place so the locator stays on it once marked.
   const cells = page.locator('[data-slot="day-mark-button"]')
   const free = await cells.evaluateAll((els) =>
@@ -137,7 +137,7 @@ test('a long press opens Edit plan with the bar above the week, and marks no day
   const box = (await cell.boundingBox())!
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
   await page.mouse.down()
-  await expect(done).toBeVisible()
+  await expect(done).toHaveCount(1)
   await page.mouse.up()
   expect(await page.evaluate(() => window.getSelection()?.toString() ?? '')).toBe('')
   // The bar is in the page, not over it: the week starts below it.
@@ -178,4 +178,68 @@ test('a wheel the other way is never held back: it turns straight round (K45)', 
   await page.mouse.wheel(0, 120)
   await page.waitForTimeout(500)
   expect(await top()).toBe(food)
+})
+
+/** The page's scroll position, and its foot. */
+async function place(page: Page) {
+  return page.evaluate(() => ({
+    y: Math.round(window.scrollY),
+    max: document.documentElement.scrollHeight - window.innerHeight,
+    copies: document.querySelectorAll('[data-wrap-copy]').length,
+  }))
+}
+
+test('the screens wrap round: past the last the first comes up, above the first the last (K92)', async ({
+  page,
+}) => {
+  await openApp(page)
+  await page.mouse.move(640, 400)
+  await page.mouse.wheel(0, 120)
+  await page.waitForTimeout(700)
+  let at = await place(page)
+  expect(at.y).toBe(at.max) // on the last screen, at the page's foot
+  // On down, past the end: back on the first screen, with no copy left behind.
+  await page.mouse.wheel(0, 120)
+  await page.waitForTimeout(700)
+  at = await place(page)
+  expect(at).toEqual({ y: 0, max: at.max, copies: 0 })
+  // Up, past the top: the last screen.
+  await page.mouse.wheel(0, -120)
+  await page.waitForTimeout(700)
+  at = await place(page)
+  expect(at).toEqual({ y: at.max, max: at.max, copies: 0 })
+})
+
+test('a fling that reaches the foot of a tall screen stops there, and doesn’t wrap (K92)', async ({
+  page,
+}) => {
+  await openApp(page, { moreFoods: 14 })
+  await page.mouse.move(640, 400)
+  await page.mouse.wheel(0, 120) // to Food's top
+  await page.waitForTimeout(700)
+  // Steps without a pause, each continuing the last, all the way down and on past the foot.
+  for (let i = 0; i < 120; i++) {
+    await page.mouse.wheel(0, 60)
+    await page.waitForTimeout(16)
+  }
+  await page.waitForTimeout(700)
+  const at = await place(page)
+  expect(at.y).toBe(at.max)
+  expect(at.copies).toBe(0)
+})
+
+test('the week’s keys: E in and out of Edit plan, Esc out, S to Settings (K91)', async ({
+  page,
+}) => {
+  await openApp(page)
+  const bar = page.locator('[data-slot="bar"]')
+  await page.keyboard.press('e')
+  await expect(bar).toHaveClass(/sticky/)
+  await page.keyboard.press('e')
+  await expect(bar).not.toHaveClass(/sticky/)
+  await page.keyboard.press('e')
+  await page.keyboard.press('Escape')
+  await expect(bar).not.toHaveClass(/sticky/)
+  await page.keyboard.press('s')
+  await expect(page).toHaveURL(/#\/settings$/)
 })

@@ -26,7 +26,7 @@
   week stays fixed at the top centre as the page's title, and "Exercises" and "Food" move under it,
   one screen at a time, each a step smaller under the week.
   A long press anywhere (or the handle at the top centre) turns on config mode, **Edit plan**, for
-  changing the plan, with the bar in view; **Done** in the bar, or another long press, goes back:
+  changing the plan, with the bar in view; another long press, **E** or **Esc** goes back:
   - while **Daily goal** is on, a counter centred on each section's title line, reading
     "− 3 per day +", sets its daily target (1–8): exercises a day and foods a day. They are one
     setting for every week. The week isn't shown over the sections in config mode, since the bar
@@ -54,13 +54,17 @@
   copy the first time you change it or mark a cell. So a change to this week also reaches the weeks
   after it that you haven't changed yet.
 - The bar starts with the week, as the page's title, and `‹` / `›` beside it move between weeks
-  for both sections; past weeks persist. In Edit plan the bar ends with **Done**, which goes back
-  to the week; from the keyboard, the second Tab stop is a hidden **Edit plan**. **Print…** produces a
-  sheet in the light theme's colours on white paper.
+  for both sections; past weeks persist. From the keyboard, the second Tab stop is a hidden **Edit
+  plan** (**Done** in Edit plan). **Print…** produces a sheet in the light theme's colours on white
+  paper.
+- **Keys** on the week: **E** goes into Edit plan and out again, **Esc** leaves full screen or Edit
+  plan, **F** is full screen, **P** print and **S** Settings. They do nothing while you type in a
+  field or a dialog is open.
 - **One screen per section.** The week fills the screen, and the bar stays out of sight. A long press
   anywhere (or the handle at the top centre) opens Edit plan, with the bar above the page. Scrolling brings Food,
   which takes the screen in turn: a flick jumps straight to it. An arrow at the foot of Exercises
-  and the top of Food leads to the other. Held upright, a phone or an iPad folds the week: each row's name
+  and the top of Food leads to the other. The screens wrap round: scrolling on past the last brings
+  the first up from below, and scrolling up past the first brings the last down from above. Held upright, a phone or an iPad folds the week: each row's name
   above its seven boxes. A day that reaches its daily target turns green (while Daily goal is on).
 - **Settings** is a page of its own. It sets how marks are drawn (Squiggles, Ticks, Stamped ticks,
   Faces or Stamped faces) and the theme (System, Light or Dark), keeps **Your goals** (the

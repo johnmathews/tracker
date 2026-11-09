@@ -3,6 +3,9 @@ import { defineComponent, h, nextTick, ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import {
   bandHeight,
+  pageEnd,
+  stopSprint,
+  wrapAround,
   sprintToScreen,
   QUIET_MS,
   REST_MS,
@@ -330,5 +333,161 @@ describe('useScreenSprint', () => {
       .setAttribute('aria-labelledby', 'diet-heading')
     sprintToScreen('diet-heading')
     expect(landed()).toBe(1220)
+  })
+
+  describe('wrapping round (K92)', () => {
+    /**
+     * The page as the browser lays it out: Exercises 1300px tall from 0, Food 800px from 1300, so
+     * its foot is at 1300 in an 800px window. A wrap's copy goes after Food (down) or before
+     * Exercises (up), and the rectangles follow it.
+     */
+    function layout(): void {
+      Object.defineProperty(document.documentElement, 'scrollHeight', {
+        configurable: true,
+        get: () => 2100 + (document.querySelector('[data-wrap-copy]') ? copyHeight() : 0),
+      })
+      const [ex, food] = document.querySelectorAll<HTMLElement>('[data-planner-screen]')
+      const shift = () => (copyFirst() ? copyHeight() : 0)
+      ex!.getBoundingClientRect = () => rect(shift(), 1300)
+      food!.getBoundingClientRect = () => rect(1300 + shift(), 800)
+      vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+        this: HTMLElement,
+      ) {
+        return rect(copyFirst() ? 0 : 2100, copyHeight())
+      })
+    }
+    function copy(): HTMLElement | null {
+      return document.querySelector<HTMLElement>('[data-wrap-copy]')
+    }
+    function copyFirst(): boolean {
+      return copy()?.nextElementSibling?.hasAttribute('data-planner-screen') ?? false
+    }
+    function copyHeight(): number {
+      return copyFirst() ? 800 : 1300
+    }
+    function rect(top: number, height: number): DOMRect {
+      return { top: top - window.scrollY, bottom: top + height - window.scrollY, height } as DOMRect
+    }
+    function at(y: number): void {
+      Object.defineProperty(window, 'scrollY', { configurable: true, value: y })
+    }
+    function touch(type: string, y: number): void {
+      const event = new Event(type) as Event & Record<string, unknown>
+      const list = [{ clientY: y }]
+      Object.assign(event, type === 'touchstart' ? { touches: list } : { changedTouches: list })
+      window.dispatchEvent(event)
+    }
+
+    beforeEach(() => {
+      document.querySelectorAll('[data-planner-screen]')[0]!.setAttribute('id', 'ex')
+      layout()
+    })
+    afterEach(() => {
+      vi.restoreAllMocks()
+      Reflect.deleteProperty(document.documentElement, 'scrollHeight')
+    })
+
+    it('knows the page’s ends', () => {
+      at(0)
+      expect(pageEnd()).toBe(-1)
+      at(600)
+      expect(pageEnd()).toBe(0)
+      at(1300)
+      expect(pageEnd()).toBe(1)
+      Object.defineProperty(document.documentElement, 'scrollHeight', {
+        configurable: true,
+        value: 800,
+      })
+      expect(pageEnd()).toBe(0) // a page that doesn't scroll has no ends
+    })
+
+    it('brings the first screen up from below a copy, then rests on the real one', () => {
+      at(1300)
+      const done = vi.fn<() => void>()
+      expect(wrapAround(1, done)).toBe(true)
+      const c = copy()!
+      expect(c.previousElementSibling?.hasAttribute('data-planner-screen')).toBe(true)
+      expect(c.hasAttribute('data-planner-screen')).toBe(false)
+      expect(c.getAttribute('aria-hidden')).toBe('true')
+      expect(c.inert).toBe(true)
+      expect(c.querySelector('[id]') ?? c.id).toBeFalsy()
+      vi.advanceTimersByTime(SPRINT_MS / 2)
+      expect(window.scrollY).toBeGreaterThan(1300) // moving onto the copy
+      expect(landed()).toBe(0)
+      expect(copy()).toBeNull()
+      expect(done).toHaveBeenCalledOnce()
+    })
+
+    it('brings the last screen down from above, without the page jumping first', () => {
+      at(0)
+      wrapAround(-1)
+      expect(copyFirst()).toBe(true)
+      expect(scrollTo.mock.calls[0]?.[0].top).toBe(800) // follows the copy: nothing moves
+      expect(landed()).toBe(1300)
+      expect(copy()).toBeNull()
+    })
+
+    it('needs two screens, and leaves no copy when stopped', () => {
+      document.querySelectorAll('[data-planner-screen]')[1]!.remove()
+      expect(wrapAround(1)).toBe(false)
+      screens()
+      layout()
+      at(1300)
+      wrapAround(1)
+      stopSprint()
+      expect(copy()).toBeNull()
+    })
+
+    it('wraps once a new wheel gesture at the foot has gone a step on, and can’t be turned round', () => {
+      const wrapper = holder()
+      at(1300)
+      const first = wheel(10)
+      expect(first.defaultPrevented).toBe(true)
+      expect(copy()).toBeNull() // 10px: not yet a step
+      wheel(30)
+      expect(copy()).not.toBeNull()
+      expect(wheel(-10).defaultPrevented).toBe(true) // a wrap runs to its end
+      expect(landed()).toBe(0)
+      wrapper.unmount()
+    })
+
+    it('counts a wheel in lines, and wraps up from the top', () => {
+      const wrapper = holder()
+      at(0)
+      const event = new WheelEvent('wheel', { deltaY: -3, deltaMode: 1, cancelable: true })
+      window.dispatchEvent(event)
+      expect(landed()).toBe(1300)
+      wrapper.unmount()
+    })
+
+    it('never wraps on momentum that reaches the foot mid-gesture, or a gesture the other way', () => {
+      const wrapper = holder()
+      at(1000)
+      wheel(40) // the gesture starts above the foot
+      at(1300)
+      expect(wheel(40).defaultPrevented).toBe(false)
+      vi.advanceTimersByTime(QUIET_MS)
+      expect(wheel(-40).defaultPrevented).toBe(false) // up from the foot: an ordinary scroll
+      wheel(0)
+      expect(copy()).toBeNull()
+      wrapper.unmount()
+    })
+
+    it('wraps on a swipe past an end, and scrolls as usual otherwise', () => {
+      const wrapper = holder()
+      at(1300)
+      touch('touchstart', 500)
+      touch('touchend', 480) // under a step
+      expect(copy()).toBeNull()
+      touch('touchstart', 500)
+      touch('touchend', 400)
+      expect(landed()).toBe(0)
+      vi.advanceTimersByTime(QUIET_MS)
+      at(0)
+      touch('touchstart', 400)
+      touch('touchend', 500)
+      expect(landed()).toBe(1300)
+      wrapper.unmount()
+    })
   })
 })

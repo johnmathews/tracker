@@ -430,8 +430,9 @@ listed in [api.md](api.md) §10):
 - `src/components/__tests__/PlannerScreen.spec.ts`: the planner's screens in the mounted app
   (K24–K27, K79–K82): the `planner-screens` class and Edit plan's sticky bar, no top-edge strip,
   the bar led by the week in `title-1` with no wordmark and "This week" first among the actions,
-  no Edit plan BarAction but "Done" (filled) in Edit plan and the keyboard's hidden "Edit plan"
-  after "Skip to today",
+  no Edit plan or Done BarAction and the keyboard's hidden "Edit plan" ("Done" in Edit plan)
+  after "Skip to today", the week's keys (E in and out, Esc out of full screen and then Edit plan,
+  F, P and S, and none in a field, with a modifier, repeating or under a dialog; K91),
   a long press turning Edit plan on and a second one off (by mouse or finger; not when let go
   early, moved, cancelled, held with another button, or in a field, popover, dialog or the bar),
   the held day cell or button left unpressed, a later click not swallowed, a finger's or pen's

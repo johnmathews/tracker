@@ -102,13 +102,14 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 ├── LoginForm.vue       email and password; explains refusals; notes an ended
 │                       session; links to #/signup, and to #/forgot where the API sends email
 │   (all five inside AuthCard.vue: a centred Panel with the BrandMark)
-├── AppNavbar.vue       the Header card: Skip to today and, off Edit plan, a hidden Edit plan
-│                       for the keyboard; ‹ the week › first, as the page's title (K81); then
-│                       the BarActions This week, Ask (only while the API answers questions),
-│                       Settings, Print…, Full screen (useFullscreen, where the browser has
-│                       one) and, in Edit plan, Done (K82); full width, sized by main.css's
-│                       --bar-* (K47, K49); on the planner's screens out of sight until a long
-│                       press or the handle opens Edit plan (useBarReveal, §6.6)
+├── AppNavbar.vue       the Header card: Skip to today and a hidden Edit plan ("Done" in Edit
+│                       plan) for the keyboard; ‹ the week › first, as the page's title (K81);
+│                       then the BarActions This week, Ask (only while the API answers
+│                       questions), Settings, Print… and Full screen (useFullscreen, where the
+│                       browser has one); the week's keys E, Esc, F, P and S (useShortcuts,
+│                       K91); full width, sized by main.css's --bar-* (K47, K49); on the
+│                       planner's screens out of sight until a long press or the handle opens
+│                       Edit plan (useBarReveal, §6.6)
 ├── ConnectPage.vue     an OAuth consent link (#/connect/<id>, K73), signed in or out: who is
 │                       asking, email and password, Read only or Read and change, Cancel and
 │                       Connect; then leaves for Claude's callback
@@ -574,8 +575,12 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
   name cell's widget, so Enter opens the page in one press, and F2 reaches the cell's other controls
   (§6.5).
 - **Config mode and normal mode.** Normal mode, the default on every load, only marks cells. A
-  long press, the handle, or the keyboard's hidden "Edit plan" button (K80, K82) turns on config
-  mode (Edit plan), where the bar is in view and ends with "Done", which turns it off. Edit plan
+  long press, the handle, E, or the keyboard's hidden "Edit plan" button (K80, K82, K91) turns on
+  config mode (Edit plan), where the bar is in view. Another long press, E, Esc or the hidden
+  button (reading "Done") turns it off; the bar has no Done (K91). `useShortcuts`
+  (`src/composables/shortcuts.ts`) carries the week's keys: E, Esc (full screen first, then Edit
+  plan), F full screen, P print and S Settings. `ownedElsewhere` leaves a key alone in a field,
+  with Ctrl, ⌘ or Alt, repeating, mid-composition, or while a dialog or popover is open. Edit plan
   shows the
   edit and remove IconButtons, an "Add exercise" and an "Add food" button under the grids, and
   the daily targets centred on each title line, under the bar's week: a Stepper at max(44px, 40u)

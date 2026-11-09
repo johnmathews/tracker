@@ -1,4 +1,4 @@
-<!-- @dsCard group="Basics" height=520 subtitle="The Header's actions: a Lucide icon over its name, at the week's size; Edit plan as a pressed toggle" -->
+<!-- @dsCard group="Basics" height=520 subtitle="The Header's actions: a Lucide icon over its name, at the week's size" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -20,7 +20,7 @@
   .bar-action svg { width: 32px; height: 32px; flex: none; }
   .bar-action .name { font: 600 17px/22px var(--font-sans); white-space: nowrap; }
   .bar-action:hover, .bar-action.is-hover { background: var(--tile); }
-  .bar-action[aria-pressed="true"], .bar-action.filled, .bar-action.filled:hover { background: var(--ink); color: var(--on-ink); }
+  .bar-action[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
   .bar-action:focus-visible, .bar-action.is-focus { outline: 2px solid var(--focus); outline-offset: 2px; }
   @media (prefers-reduced-motion: no-preference) {
     .bar-action { transition: background-color 120ms ease-out, color 120ms ease-out; }
@@ -41,7 +41,6 @@
     <div class="cell"><p class="caption state">Default</p><button class="bar-action" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg><span class="name">Settings</span></button></div>
     <div class="cell"><p class="caption state">Hover</p><button class="bar-action is-hover" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg><span class="name">Full screen</span></button></div>
     <div class="cell"><p class="caption state">Focus</p><button class="bar-action is-focus" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg><span class="name">Print…</span></button></div>
-    <div class="cell"><p class="caption state">Filled (Done)</p><button class="bar-action filled" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span class="name">Done</span></button></div>
   </div>
 </section>
 <section aria-labelledby="h-header">
@@ -50,7 +49,7 @@
 </section>
 <section aria-labelledby="h-folded">
   <h2 class="label" id="h-folded">Folded, on a phone, in Edit plan</h2>
-  <div class="folded"><button class="bar-action" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></svg><span class="name">This week</span></button><button class="bar-action" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg><span class="name">Settings</span></button><button class="bar-action filled" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span class="name">Done</span></button></div>
+  <div class="folded"><button class="bar-action" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></svg><span class="name">This week</span></button><button class="bar-action" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg><span class="name">Settings</span></button></div>
   <p class="hint caption">Full screen and Print stay off an iPhone, as before.</p>
 </section>
 </body>

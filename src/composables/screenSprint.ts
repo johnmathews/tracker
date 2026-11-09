@@ -55,7 +55,7 @@ let heading: 1 | -1 | 0 = 0
  * sets the position, so a fling's momentum can't carry the page past it. `done` runs on arrival.
  */
 export function sprintTo(top: number, done?: () => void): void {
-  stopSprint()
+  halt()
   heading = top > window.scrollY ? 1 : top < window.scrollY ? -1 : 0
   if (reducedMotion()) {
     window.scrollTo({ top, behavior: 'auto' })
@@ -95,10 +95,77 @@ export function sprintToScreen(headingId: string): void {
   if (screen) sprintTo(screen.getBoundingClientRect().top + window.scrollY - bandHeight())
 }
 
-/** Stop a running sprint where it is. */
-export function stopSprint(): void {
+function halt(): void {
   cancelAnimationFrame(frame)
   landing = null
+}
+
+/** Stop a running sprint where it is. A wrap's copy goes with it, so none is left behind. */
+export function stopSprint(): void {
+  halt()
+  wrapping = false
+  for (const copy of document.querySelectorAll('[data-wrap-copy]')) copy.remove()
+}
+
+/** Whether a wrap's sprint is running: it can't be turned round halfway (K92). */
+let wrapping = false
+
+/**
+ * Where the page is against its ends: 1 at its foot, -1 at its top, 0 between them or when it
+ * doesn't scroll at all.
+ */
+export function pageEnd(): 1 | -1 | 0 {
+  const max = document.documentElement.scrollHeight - window.innerHeight
+  if (max <= 1) return 0
+  if (window.scrollY >= max - 1) return 1
+  return window.scrollY <= 1 ? -1 : 0
+}
+
+/**
+ * The screens wrap round (K92): past the last one the first comes up from below, and above the
+ * first the last comes down from above. A copy of the screen wrapped to, inert and hidden from a
+ * screen reader, goes beyond the end, and the page sprints onto it. Then the copy goes and the
+ * page jumps to the same place on the real screen, which looks the same, so the jump doesn't show.
+ * Going down it rests the screen's top under the fixed week; going up, its end at the window's
+ * foot, as a sprint up does. `done` runs once the page is on the real screen.
+ */
+export function wrapAround(way: 1 | -1, done?: () => void): boolean {
+  const screens = [...document.querySelectorAll<HTMLElement>('[data-planner-screen]')]
+  if (screens.length < 2) return false
+  stopSprint()
+  const target = way > 0 ? screens[0]! : screens.at(-1)!
+  const copy = target.cloneNode(true) as HTMLElement
+  for (const el of [copy, ...copy.querySelectorAll('[id]')]) el.removeAttribute('id')
+  copy.removeAttribute('data-planner-screen')
+  copy.removeAttribute('aria-labelledby')
+  copy.setAttribute('aria-hidden', 'true')
+  copy.inert = true
+  copy.dataset.wrapCopy = ''
+  const band = bandHeight()
+  let to: number
+  if (way > 0) {
+    screens.at(-1)!.after(copy)
+    to = copy.getBoundingClientRect().top + window.scrollY - band
+  } else {
+    screens[0]!.before(copy)
+    // The copy pushes everything down; the page follows, so nothing moves on screen.
+    const box = copy.getBoundingClientRect()
+    window.scrollTo({ top: window.scrollY + box.height, behavior: 'auto' })
+    const at = copy.getBoundingClientRect()
+    to = Math.max(at.top + window.scrollY - band, at.bottom + window.scrollY - window.innerHeight)
+  }
+  wrapping = true
+  sprintTo(to, () => {
+    wrapping = false
+    const offset = window.scrollY - (copy.getBoundingClientRect().top + window.scrollY)
+    copy.remove()
+    window.scrollTo({
+      top: target.getBoundingClientRect().top + window.scrollY + offset,
+      behavior: 'auto',
+    })
+    done?.()
+  })
+  return true
 }
 
 /** Whether a sprint is running. */
@@ -112,7 +179,8 @@ export function sprinting(): boolean {
  * as soon as the line is a step inside (K45), while it is still moving; a finger on the screen
  * waits until it lifts; anything else (a scrollbar drag, the keyboard) when the page comes to rest.
  * While a sprint runs, and until the wheel is quiet after it, the wheel and a finger can't move
- * the page, unless the wheel turns the other way (K89). A resize or a rotation that leaves the page across a line settles on the screen that
+ * the page, unless the wheel turns the other way (K89). At either end a new wheel gesture or a swipe
+ * on past it wraps round to the screen at the other end (K92). A resize or a rotation that leaves the page across a line settles on the screen that
  * fills more of the window (K40). The screens are the elements matching `[data-planner-screen]`.
  * Scrolling inside a screen is left alone, so a screen with more rows than fit scrolls as usual.
  */
@@ -125,6 +193,14 @@ export function useScreenSprint(enabled: Ref<boolean>) {
   /** When the last wheel event came, and when a finger last lifted. */
   let wheelAt = -Infinity
   let liftAt = -Infinity
+  /**
+   * A wheel gesture that began with the page at one of its ends, going on past it (K92): the way
+   * it goes and how far it has gone. Momentum arriving at an end mid-gesture never starts one.
+   */
+  let push: { way: 1 | -1; sum: number } | null = null
+  /** Where a finger came down, and whether the page was at an end then. */
+  let touchY = 0
+  let touchEnd: 1 | -1 | 0 = 0
 
   /**
    * Each screen's top, as the scroll position that rests it just under the fixed week (K88). With
@@ -153,6 +229,20 @@ export function useScreenSprint(enabled: Ref<boolean>) {
     return true
   }
 
+  /** How far a scroll must go to count: 4% of the window, at least 16px (K45). */
+  function step(): number {
+    return Math.max(MIN_STEP_PX, window.innerHeight * STEP_SHARE)
+  }
+
+  /** Wrap round to the first screen or the last (K92), then rest as after a sprint. */
+  function wrap(way: 1 | -1): void {
+    clearTimeout(timer)
+    wrapAround(way, () => {
+      last = window.scrollY
+      quietUntil = performance.now() + QUIET_MS
+    })
+  }
+
   /** At rest. A finger still on the screen is holding the page where it is; its lifting decides. */
   function settle(): void {
     if (enabled.value && !finger && !sprinting()) go(1)
@@ -167,7 +257,7 @@ export function useScreenSprint(enabled: Ref<boolean>) {
     // A wheel or a fling sprints at once; a scrollbar drag or the keyboard waits for rest (K45).
     const t = performance.now()
     const moving = t - wheelAt < WHEEL_MS || (!finger && t - liftAt < FLING_MS)
-    if (moving && go(Math.max(MIN_STEP_PX, window.innerHeight * STEP_SHARE))) return
+    if (moving && go(step())) return
     timer = setTimeout(settle, REST_MS)
   }
 
@@ -188,10 +278,24 @@ export function useScreenSprint(enabled: Ref<boolean>) {
   function onWheel(event: WheelEvent): void {
     if (!enabled.value) return
     const now = performance.now()
+    const gap = now - wheelAt
     wheelAt = now
-    if (!sprinting() && now >= quietUntil) return
     const way = Math.sign(event.deltaY)
-    if (way !== 0 && way !== heading) {
+    if (!sprinting() && now >= quietUntil) {
+      // A new gesture starting at an end, the way past it, wraps once it has gone a step (K92).
+      const end = pageEnd()
+      if (gap >= WHEEL_MS) push = end !== 0 && end === way ? { way: end, sum: 0 } : null
+      if (push && way === push.way && pageEnd() === way) {
+        event.preventDefault()
+        push.sum += Math.abs(event.deltaY) * (event.deltaMode === 1 ? 16 : 1)
+        if (push.sum >= step()) {
+          push = null
+          wrap(way)
+        }
+      } else push = null
+      return
+    }
+    if (way !== 0 && way !== heading && !wrapping) {
       stopSprint()
       quietUntil = 0
       last = window.scrollY
@@ -201,15 +305,33 @@ export function useScreenSprint(enabled: Ref<boolean>) {
     quietUntil = now + QUIET_MS
   }
 
-  function onTouchStart(): void {
+  function onTouchStart(event: TouchEvent): void {
     finger = true
+    touchY = event.touches?.[0]?.clientY ?? 0
+    touchEnd = sprinting() ? 0 : pageEnd()
   }
   function onTouchMove(event: TouchEvent): void {
     if (enabled.value && sprinting()) event.preventDefault()
   }
-  function onTouchEnd(): void {
+  /**
+   * A finger lifting. A swipe that began at an end and went a step the way past it, with the page
+   * still there, wraps round (K92); anything else is a scroll like any other.
+   */
+  function onTouchEnd(event: TouchEvent): void {
     finger = false
     liftAt = performance.now()
+    const y = event.changedTouches?.[0]?.clientY ?? touchY
+    const way = Math.sign(touchY - y)
+    if (
+      enabled.value &&
+      touchEnd !== 0 &&
+      way === touchEnd &&
+      pageEnd() === touchEnd &&
+      Math.abs(touchY - y) >= step()
+    ) {
+      wrap(touchEnd)
+      return
+    }
     onScroll()
   }
 
