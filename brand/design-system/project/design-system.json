@@ -197,9 +197,9 @@
   ],
   "lastChange": {
     "by": "John Mathews",
-    "at": "2026-11-09T22:39:25Z",
+    "at": "2026-11-09T23:33:48Z",
     "via": "Claude Code",
-    "note": "The week fixed at the top, keys, Cardio and wrap-round screens (K88-K95): PlannerScreen keeps the week as a fixed band over three screens (Exercises, Cardio, Food) that wrap round, one push a screen; SectionHeader no longer repeats the week; the Header has keys (E, Esc, F, P, S) and no Done, and BarAction loses its filled variant."
+    "note": "Scrolling and print (K96, K97): PlannerScreen moves one screen a push and never queues a second mid-sprint; on paper each section has a page of its own, and SectionHeader prints the week over it."
   },
 
   "layout": "files",
