@@ -15,14 +15,17 @@ export const SPRINT_MS = 260
 export const WHEEL_MS = 150
 export const FLING_MS = 1200
 /** A wheel step after this long a silence, and big enough, is a new click of a mouse wheel (K95). */
-export const CLICK_GAP_MS = 60
+export const CLICK_GAP_MS = 100
+/** The shortest time a wheel step is taken to cover, so a burst of steps can't read as fast. */
+const MIN_STEP_MS = 8
 
 /**
- * Tells a new push from the momentum of the last one (K95), fed one wheel step at a time once a
- * gesture has moved a screen. Momentum only slows. A trackpad's new swipe cuts it off, so the
- * steps drop and then grow again; this waits for the steps to fall below 70% of their peak, then
- * takes two steps in a row of at least 1.6 times the lowest since (and 6px more) as a new push.
- * One big step alone is not enough: the browser sometimes merges two steps into one. A mouse
+ * Tells a new push from the momentum of the last one (K95, K96), fed one wheel step at a time once
+ * a gesture has moved a screen. It goes by speed, a step's size over the time since the last:
+ * while the page sprints the browser sends steps late and merged, a frame's worth or three at
+ * once, and their sizes jump though the speed doesn't. Momentum only slows. A trackpad's new swipe
+ * cuts it off, so the speed drops and then grows: once it has fallen below 70% of its peak, two
+ * steps in a row at least 1.6 times the lowest since (and 6px a frame more) are a new push. A mouse
  * wheel's click comes after a silence, so a step of 10px or more, or of 4px and half as big again
  * as the one before, after CLICK_GAP_MS is a new push too; momentum's last steps are smaller.
  */
@@ -46,24 +49,26 @@ export class MomentumWatch {
     const prev = this.prev
     this.prev = size
     if (gap >= CLICK_GAP_MS && (size >= 10 || (size >= 4 && size > prev * 1.5))) return true
-    this.peak = Math.max(this.peak, size)
+    const speed = size / Math.max(gap, MIN_STEP_MS)
+    this.peak = Math.max(this.peak, speed)
     if (!this.armed) {
-      if (size < this.peak * 0.7) {
+      if (speed < this.peak * 0.7) {
         this.armed = true
-        this.low = size
+        this.low = speed
       }
       return false
     }
-    if (size < this.low) {
-      this.low = size
+    if (speed < this.low) {
+      this.low = speed
       this.rising = 0
       return false
     }
-    if (size >= Math.max(this.low * 1.6, this.low + 6)) return ++this.rising >= 2
+    if (speed >= Math.max(this.low * 1.6, this.low + 6 / 16)) return ++this.rising >= 2
     this.rising = 0
     return false
   }
 }
+
 /**
  * Where a scroll should go (PlannerScreen card, K38, K45). `top` is the scroll position, `height`
  * the screen's, `starts` each screen's top in page coordinates, in order, and `direction` the way
@@ -253,8 +258,6 @@ export function useScreenSprint(enabled: Ref<boolean>) {
   let spent = false
   /** Watches a spent gesture's momentum for a new push (K95). */
   const momentum = new MomentumWatch()
-  /** A new push came while a sprint ran: move on once more when it lands (K95). */
-  let queued = false
   /** Where a finger came down, and whether the page was at an end then. */
   let touchY = 0
   let touchEnd: 1 | -1 | 0 = 0
@@ -290,22 +293,9 @@ export function useScreenSprint(enabled: Ref<boolean>) {
     sprintTo(target, landed)
   }
 
-  /** A sprint or a wrap has landed; a push that came while it ran moves on once more (K95). */
+  /** A sprint or a wrap has landed. */
   function landed(): void {
     last = window.scrollY
-    if (queued && heading !== 0) {
-      queued = false
-      advance(heading)
-    }
-  }
-
-  /** On to the next screen the way given, round to the other end past the last (K92, K95). */
-  function advance(way: 1 | -1): void {
-    const y = window.scrollY
-    const rests = starts(bandHeight())
-    const next = way > 0 ? rests.find((r) => r > y + 1) : rests.filter((r) => r < y - 1).at(-1)
-    if (next !== undefined) begin(next)
-    else if (pageEnd() === way) wrap(way)
   }
 
   /** How far a scroll must go to count: 4% of the window, at least 16px (K45). */
@@ -350,8 +340,8 @@ export function useScreenSprint(enabled: Ref<boolean>) {
   /**
    * One push, one screen (K94, K95): once a wheel gesture has moved a screen, its momentum can't
    * move the page, however long it runs. A new push (a new gesture after the wheel was still for
-   * WHEEL_MS, or one MomentumWatch finds inside the momentum) moves the next screen: at once, or,
-   * if a sprint is running, as soon as it lands. A wheel the other way is the person turning round
+   * WHEEL_MS, or one MomentumWatch finds inside the momentum) moves the next screen once the
+   * sprint before has landed; nothing moves on while one runs (K96). A wheel the other way is the person turning round
    * (K89): it stops a sprint where it is, and counts as a new gesture.
    */
   function onWheel(event: WheelEvent): void {
@@ -364,13 +354,10 @@ export function useScreenSprint(enabled: Ref<boolean>) {
     const size = Math.abs(event.deltaY) * (event.deltaMode === 1 ? 16 : 1)
     if (fresh) spent = false
     if (sprinting() || spent) {
-      if (way !== 0 && way === heading && momentum.next(size, gap)) {
-        // A new push the same way (K95): once this sprint lands, or now.
-        if (sprinting()) {
-          queued = true
-          event.preventDefault()
-          return
-        }
+      // A new push the same way, once the sprint has landed (K95). Never during it (K96): the
+      // momentum watch still sees the steps, so a push that started then goes on to count after.
+      const push = way !== 0 && way === heading && momentum.next(size, gap)
+      if (push && !sprinting()) {
         spent = false
         fresh = true
       } else if (way === 0 || way === heading || wrapping) {
@@ -378,7 +365,6 @@ export function useScreenSprint(enabled: Ref<boolean>) {
         return
       } else {
         stopSprint()
-        queued = false
         spent = false
         last = window.scrollY
         fresh = true

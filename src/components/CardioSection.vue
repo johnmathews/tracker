@@ -65,7 +65,7 @@ watch(
 -->
 <template>
   <section
-    class="relative mt-8 border-t border-line pt-8 print:mt-4 print:border-0 print:pt-4 screen:mt-[calc(var(--u)*56)] screen:border-0 screen:pt-0 full:mt-0 full:border-0"
+    class="relative mt-8 border-t border-line pt-8 print:mt-0 print:break-before-page print:border-0 print:pt-0 screen:mt-[calc(var(--u)*56)] screen:border-0 screen:pt-0 full:mt-0 full:border-0"
     :class="SCREEN"
     data-planner-screen
     aria-labelledby="cardio-heading"
@@ -84,7 +84,7 @@ watch(
       class="print:break-inside-avoid full:flex full:min-h-0 full:flex-1 full:flex-col folded:flex-none"
       data-print-keep
     >
-      <SectionHeader :title="type.label" heading-id="cardio-heading" />
+      <SectionHeader :title="type.label" heading-id="cardio-heading" :week="planner.label" />
       <TrackerGrid
         :class="SCREEN_GRID"
         :label="type.itemLabel"

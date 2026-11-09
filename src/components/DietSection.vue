@@ -81,7 +81,7 @@ watch(
 -->
 <template>
   <section
-    class="relative mt-8 border-t border-line pt-8 print:mt-4 print:border-0 print:pt-4 screen:mt-[calc(var(--u)*56)] screen:border-0 screen:pt-0 full:mt-0 full:border-0"
+    class="relative mt-8 border-t border-line pt-8 print:mt-0 print:break-before-page print:border-0 print:pt-0 screen:mt-[calc(var(--u)*56)] screen:border-0 screen:pt-0 full:mt-0 full:border-0"
     :class="SCREEN"
     data-planner-screen
     aria-labelledby="diet-heading"
@@ -100,7 +100,7 @@ watch(
       class="print:break-inside-avoid full:flex full:min-h-0 full:flex-1 full:flex-col folded:flex-none"
       data-print-keep
     >
-      <SectionHeader :title="type.label" heading-id="diet-heading">
+      <SectionHeader :title="type.label" heading-id="diet-heading" :week="planner.label">
         <template v-if="planner.configMode && planner.dailyGoal" #actions>
           <!-- Centred on the title line (K62), the Stepper alone, reading "− 3 per day +" (K63): its
              label, "Foods a day", is for a screen reader. -->

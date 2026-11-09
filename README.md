@@ -61,8 +61,8 @@
   after it that you haven't changed yet.
 - The bar starts with the week, as the page's title, and `‹` / `›` beside it move between weeks
   for every section; past weeks persist. From the keyboard, the second Tab stop is a hidden **Edit
-  plan** (**Done** in Edit plan). **Print…** produces a sheet in the light theme's colours on white
-  paper.
+  plan** (**Done** in Edit plan). **Print…** (or **P**) produces a page for each tracker, with the week at the top of each, in
+  the light theme's colours on white paper.
 - **Keys** on the week: **E** goes into Edit plan and out again, **Esc** leaves full screen or Edit
   plan, **F** is full screen, **P** print and **S** Settings. They do nothing while you type in a
   field or a dialog is open.

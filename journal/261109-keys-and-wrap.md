@@ -122,6 +122,25 @@ John chose both ways.
   - Two mouse clicks 80ms apart go two screens.
   - A hard flick and a light flick still go one.
 
+## Too far after all (K96), and a page a tracker (K97)
+
+- **K96.** John: "even a little scroll movement scrolls too far - i see the "cardio" tracker but
+  then we jump to the next one".
+  - While the page sprints, its rAF `scrollTo` keeps the main thread busy. Chrome then delivers
+    trackpad steps late and merged: one event 50 to 70ms after the last, carrying several frames'
+    worth.
+  - K95 read that as a mouse click (more than 60ms of silence, 10px or more), or two merged steps
+    as a rising new swipe, and queued a second screen.
+  - **The fix:** no queue at all; judge by speed (size over gap, the gap at least 8ms); clicks need
+    100ms of silence.
+  - A new e2e test replays a small scroll whose momentum arrives merged every third frame after
+    64ms. It went to Food before the fix and stays on Cardio after.
+  - What it costs: two mouse clicks closer together than a sprint now move one screen.
+- **Why John "couldn't see" the empty Cardio.** It was there, but the overshoot carried the page
+  straight past it.
+- **K97, print.** One page per tracker, the week over each. SectionHeader got a print-only `week`
+  again, and WeekHeader is `print:sr-only`. A PDF of the mocked week has three pages.
+
 ## Tests
 
 - **Unit.** PlannerScreen spec: each key, Esc ordering, the exclusions, and `aria-keyshortcuts`.

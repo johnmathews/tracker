@@ -41,4 +41,15 @@ describe('SectionHeader', () => {
     expect(wrapper.find('[data-slot="section-week"]').exists()).toBe(false)
     expect(wrapper.text()).toBe('Exercises')
   })
+
+  it('sets the week over the section on paper only, when given (K97)', () => {
+    const wrapper = mount(SectionHeader, {
+      props: { title: 'Food', headingId: 'food-heading', week: '9–15 November' },
+    })
+    const week = wrapper.get('[data-slot="section-week"]')
+    expect(wrapper.element.firstElementChild).toBe(week.element)
+    expect(week.text()).toBe('9–15 November')
+    expect(week.attributes('aria-hidden')).toBe('true')
+    expect(week.classes()).toEqual(expect.arrayContaining(['display', 'hidden', 'print:block']))
+  })
 })

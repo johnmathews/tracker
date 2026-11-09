@@ -75,6 +75,22 @@ describe('MomentumWatch (K95)', () => {
     expect(feed(watch, [12, 16])).toBe(1)
   })
 
+  it('goes by speed, so momentum sent late and merged is still momentum (K96)', () => {
+    const watch = new MomentumWatch()
+    const steps: [number, number][] = [
+      [30, 16],
+      [26, 16],
+      [22, 16],
+      [18, 16],
+      [60, 64], // four frames' worth at once, slower than the frame before
+      [14, 16],
+      [44, 64],
+      [10, 16],
+      [32, 64],
+    ]
+    expect(steps.some(([size, gap]) => watch.next(size, gap))).toBe(false)
+  })
+
   it('takes a click after a silence for a push, but not momentum’s last small steps', () => {
     const watch = new MomentumWatch()
     feed(watch, [40, 30, 20, 2, 1])
@@ -556,33 +572,28 @@ describe('useScreenSprint', () => {
       wrapper.unmount()
     })
 
-    it('moves on once more when a push comes while a sprint runs, round the end too (K95)', () => {
+    it('lets a push made mid-sprint go, and moves on only after (K96)', () => {
       const wrapper = holder()
       at(0)
       wheel()
       scrollToY(600) // down to Food
       expect(sprinting()).toBe(true)
       vi.advanceTimersByTime(CLICK_GAP_MS)
-      expect(wheel(40).defaultPrevented).toBe(true) // a click mid-sprint: held for the landing
-      const stops = () => scrollTo.mock.calls.map((c) => c[0].top)
-      vi.advanceTimersByTime(SPRINT_MS)
-      expect(stops()).toContain(1300) // Food, then at once on, past the end:
-      expect(copy()).not.toBeNull() // the wrap to Exercises is running
-      expect(landed()).toBe(0)
+      expect(wheel(40).defaultPrevented).toBe(true) // a click mid-sprint: swallowed
+      expect(landed()).toBe(1300) // Food, and no further
+      expect(copy()).toBeNull()
       wrapper.unmount()
     })
 
-    it('moves on once more going up, to the screen before (K95)', () => {
+    it('counts a push that began mid-sprint once it has landed, as it goes on (K96)', () => {
       const wrapper = holder()
-      scrollToY(1300) // at Food, resting
-      vi.advanceTimersByTime(REST_MS + WHEEL_MS)
-      wheel(-10)
-      scrollToY(700) // up across the line: Exercises' end meets the window's foot
-      vi.advanceTimersByTime(CLICK_GAP_MS)
-      wheel(-40)
-      vi.advanceTimersByTime(SPRINT_MS)
-      expect(scrollTo.mock.calls.map((c) => c[0].top)).toContain(500)
-      expect(landed()).toBe(0) // then on to its top
+      at(1300)
+      wheel(40)
+      coast(SPRINT_MS - 100, 40) // momentum while the wrap runs
+      for (const d of [2, 8, 14]) wheel(d) // a new swipe starting before it lands
+      vi.advanceTimersByTime(150)
+      expect(sprinting()).toBe(false)
+      expect(wheel(20).defaultPrevented).toBe(false) // still growing, now landed: a new push
       wrapper.unmount()
     })
 

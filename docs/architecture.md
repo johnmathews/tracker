@@ -141,7 +141,8 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 ├── ImportPrompt.vue    this browser's log from before accounts, offered once (§7)
 ├── WeekHeader.vue      the page's h1, the week ("19–25 October"): on the planner's screens a band
 │                       fixed at the top, with a hairline once a screen is under it (K88); visually
-│                       hidden in Edit plan and on a short screen; set in display on paper
+│                       hidden in Edit plan, on a short screen and on paper, where each
+│                       SectionHeader prints the week over its own page (K97)
 ├── ExerciseGrid.vue    the Exercises section: SectionHeader (the section's heading; in config
 │   │                   mode with the Exercises a day Stepper centred on its line while Daily
 │   │                   goal is on, K62, K85)
@@ -811,8 +812,8 @@ eased out, setting the position each frame so a fling's momentum can't carry the
 push moves one screen (K94, K95). Once a wheel gesture (events less than 150ms apart) has moved
 one, it is `spent` and its momentum is swallowed, but `MomentumWatch` still looks for a new push
 in it: steps that fall below 70% of their peak and then rise twice, or a mouse wheel's click after
-60ms of silence. A new push moves on at once, or is `queued` while a sprint runs and moves on
-(`advance`) as it lands. A wheel the other way stops the sprint and scrolls back (K89). After a resize or rotation, the page
+100ms of silence, judged by speed (px a ms) so steps the browser sends merged mid-sprint can't
+pass for one. A new push moves on once the sprint has landed; nothing queues while one runs (K96). A wheel the other way stops the sprint and scrolls back (K89). After a resize or rotation, the page
 settles on the screen that fills more of the window (K40). It replaced `scroll-snap-type: y mandatory`, which a mouse wheel couldn't
 cross from the end of a tall screen. Four custom variants in main.css carry
 the layout, all screen-only so paper keeps the table: `screen:` (the WeekGrid is a CSS grid),
@@ -876,6 +877,9 @@ literal colours the system allows (`src/styles/__tests__/print.spec.ts` holds th
 - Anything marked `data-noprint` is hidden: the navbar and its handle, the arrows between the screens, the sync status,
   the import prompt, Edit plan's controls and Add buttons, and a section's hint line if it has one. Dialogs, the
   popover and Banners carry `print:hidden`.
+- Each section prints on a page of its own (`print:break-before-page` on Cardio and Food, K97),
+  under the week in display: SectionHeader's `week`, shown only on paper. The page's `<h1>`
+  (WeekHeader) stays for a screen reader but doesn't print.
 - A met day's name keeps its `pen` and its underline (K60). A table split across pages repeats its
   header.
 - The Cardio and Food sections' headings stay with their grids (`print:break-inside-avoid`), and a

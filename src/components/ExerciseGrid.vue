@@ -78,12 +78,12 @@ watch(
 <template>
   <section
     aria-labelledby="exercises-heading"
-    class="pt-8 print:pt-4"
+    class="pt-8 print:pt-0"
     :class="SCREEN"
     data-planner-screen
   >
     <slot />
-    <SectionHeader :title="type.label" heading-id="exercises-heading">
+    <SectionHeader :title="type.label" heading-id="exercises-heading" :week="store.label">
       <template v-if="store.configMode && store.dailyGoal" #actions>
         <!-- Centred on the title line (K62), the Stepper alone, reading "− 3 per day +" (K63): its
              label, "Exercises a day", is for a screen reader. -->

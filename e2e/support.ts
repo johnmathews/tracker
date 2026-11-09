@@ -160,6 +160,7 @@ export async function openApp(
     moreExercises = 0,
     moreCardio = 0,
     moreFoods = 0,
+    noCardio = false,
     ask = false,
   }: {
     theme?: Theme
@@ -171,6 +172,8 @@ export async function openApp(
     moreCardio?: number
     /** Foods for the Food screen, enough to run past it. */
     moreFoods?: number
+    /** No cardio planned at all, as on an account that has never added any. */
+    noCardio?: boolean
     /** Ask is on (an Anthropic key on the server). */
     ask?: boolean
   } = {},
@@ -182,6 +185,10 @@ export async function openApp(
   }
   for (let i = 1; i <= moreCardio; i++) {
     s.cardio.plans[MONDAY]!.push({ id: `c${i}`, name: `Cardio ${i}`, duration: 600, target: 1 })
+  }
+  if (noCardio) {
+    s.cardio.plans[MONDAY] = []
+    s.cardio.log[MONDAY] = {} as (typeof s.cardio.log)[typeof MONDAY]
   }
   if (moreFoods) {
     s.diet.plans = {

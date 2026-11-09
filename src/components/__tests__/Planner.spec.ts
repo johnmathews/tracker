@@ -440,8 +440,27 @@ describe('the planner grids (W10)', () => {
       const block = grid.closest('[data-print-keep]')!
       expect(block.contains(header)).toBe(true)
       expect(block.classList).toContain('print:break-inside-avoid')
-      // On paper a rule and some space set it apart, as Food's (F20).
-      expect(block.closest('section')!.classList).toContain('print:mt-4')
+      // On paper it starts a page of its own (K97).
+      expect(block.closest('section')!.classList).toContain('print:break-before-page')
+    })
+
+    it('prints each section on a page of its own, under the week (K97)', () => {
+      mountApp()
+      const sections = wrapper.findAll('section[data-planner-screen]')
+      expect(sections.map((s) => s.attributes('aria-labelledby'))).toEqual([
+        'exercises-heading',
+        'cardio-heading',
+        'diet-heading',
+      ])
+      for (const [i, section] of sections.entries()) {
+        const week = section.get('[data-slot="section-week"]')
+        expect(week.text()).toBe('19–25 October')
+        expect(week.attributes('aria-hidden')).toBe('true')
+        expect(week.classes()).toEqual(expect.arrayContaining(['display', 'hidden', 'print:block']))
+        expect(section.classes().includes('print:break-before-page')).toBe(i > 0)
+      }
+      // The page's h1 stays for a screen reader, but isn't printed a second time.
+      expect(wrapper.get('[data-slot="week-band"]').classes()).toContain('print:sr-only')
     })
 
     it('keeps the Food heading with its grid on paper', () => {

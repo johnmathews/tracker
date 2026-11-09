@@ -372,13 +372,70 @@ test('two swipes move twice, the second made while the first still coasts (K95)'
   expect(cardio).toBeGreaterThan(ex)
 })
 
-test('two clicks of a mouse wheel, close together, move twice (K95)', async ({ page }) => {
+test('two clicks of a mouse wheel move twice; one made mid-sprint is let go (K95, K96)', async ({
+  page,
+}) => {
   await openApp(page)
   await page.mouse.move(640, 400)
-  const [, , food] = await rests(page)
+  const [ex, cardio, food] = await rests(page)
   await page.mouse.wheel(0, 100)
-  await page.waitForTimeout(80)
+  await page.waitForTimeout(400)
   await page.mouse.wheel(0, 100)
-  await page.waitForTimeout(900)
+  await page.waitForTimeout(700)
   expect(await page.evaluate(() => Math.round(window.scrollY))).toBe(food)
+  // Two clicks 80ms apart: the second lands mid-sprint, and nothing moves on after it.
+  await page.mouse.wheel(0, -100)
+  await page.waitForTimeout(80)
+  await page.mouse.wheel(0, -100)
+  await page.waitForTimeout(700)
+  expect(await page.evaluate(() => Math.round(window.scrollY))).toBe(cardio)
+  expect(ex).toBe(0)
+})
+
+test('a small scroll moves one screen, though its momentum comes merged mid-sprint (K96)', async ({
+  page,
+}) => {
+  await openApp(page, { noCardio: true })
+  const [, cardio] = await rests(page)
+  // The finger moves a little; then, while the page sprints, the browser sends the momentum late,
+  // every third frame carrying four steps' worth after 64ms.
+  const steps: [number, number][] = [
+    [3, 16],
+    [6, 16],
+    [10, 16],
+    [14, 16],
+    [12, 16],
+  ]
+  let d = 12
+  for (let i = 0; i < 40; i++) {
+    d *= 0.93
+    const merged = i % 3 === 1
+    steps.push([Math.max(1, Math.round(merged ? d * 4 : d)), merged ? 64 : 16])
+  }
+  await page.evaluate(async (steps) => {
+    for (const [deltaY, wait] of steps) {
+      const event = new WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true })
+      ;(document.elementFromPoint(640, 400) ?? document.body).dispatchEvent(event)
+      if (!event.defaultPrevented) window.scrollBy(0, deltaY)
+      await new Promise((resolve) => setTimeout(resolve, wait))
+    }
+  }, steps)
+  await page.waitForTimeout(800)
+  expect(await page.evaluate(() => Math.round(window.scrollY))).toBe(cardio)
+})
+
+test('prints each tracker on a page of its own, the week over each (K97)', async ({ page }) => {
+  await openApp(page)
+  await page.emulateMedia({ media: 'print' })
+  const weeks = page.locator('[data-slot="section-week"]')
+  await expect(weeks).toHaveCount(3)
+  for (const week of await weeks.all()) await expect(week).toBeVisible()
+  const breaks = await page.evaluate(() =>
+    [...document.querySelectorAll('[data-planner-screen]')].map(
+      (el) => getComputedStyle(el).breakBefore,
+    ),
+  )
+  expect(breaks).toEqual(['auto', 'page', 'page'])
+  const pdf = (await page.pdf({ format: 'A4' })).toString('latin1')
+  expect(pdf.match(/\/Type\s*\/Page[^s]/g)).toHaveLength(3)
 })
