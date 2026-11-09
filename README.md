@@ -17,13 +17,17 @@
   press then steps green, yellow, red and back to empty. Each exercise has a weekly goal of 0–7 days, set
   in its Edit dialog. A day whose marked exercises reach **Exercises a day** turns green: its
   name in the header goes green and is underlined. **Daily goal** in Settings turns this off,
-  and the per-day counters with it, for both sections; the numbers are kept.
-- **Food.** The screen after the exercises works the same way, with one kind of mark: mark each day you ate
+  and the per-day counters with it, for Exercises and Food; the numbers are kept.
+- **Cardio.** The screen after the exercises holds cycling, running and the like. Each item has a
+  time, a distance in km, both or neither, shown as chips ("30 min", "5 km"), and a weekly goal.
+  A press steps a day through green, yellow and red, as an exercise's does. Cardio has no daily
+  target, so no day turns green. A new account starts with none.
+- **Food.** The screen after cardio works the same way, with one kind of mark: mark each day you ate
   one. Each food has a weekly goal, set in its Edit dialog. Defaults are Vegetables (7), Fruit (5),
   Fish (2) and Nuts (3). A day whose marked foods reach **Foods a day** (default two) turns green,
   as an exercise day does.
 - **Normal mode and config mode.** The app opens in normal mode, where you only mark cells. The
-  week stays fixed at the top centre as the page's title, and "Exercises" and "Food" move under it,
+  week stays fixed at the top centre as the page's title, and "Exercises", "Cardio" and "Food" move under it,
   one screen at a time, each a step smaller under the week.
   A long press anywhere (or the handle at the top centre) turns on config mode, **Edit plan**, for
   changing the plan, with the bar in view; **Done** in the bar, or another long press, goes back:
@@ -31,36 +35,38 @@
     "− 3 per day +", sets its daily target (1–8): exercises a day and foods a day. They are one
     setting for every week. The week isn't shown over the sections in config mode, since the bar
     shows it;
-  - **Add exercise** and **Add food**, under each grid, open the item's dialog with nothing in it:
-    an exercise takes a name, optional sets, reps or a time in seconds (a plank), "Per set" or
-    "Each side", an optional weight in kg (e.g. squats with a 12 kg kettlebell), a goal and a
-    note; a food a name, a goal and a note;
+  - **Add exercise**, **Add cardio** and **Add food**, under each grid, open the item's dialog with
+    nothing in it: an exercise takes a name, optional sets, reps or a time in seconds (a plank),
+    "Per set" or "Each side", an optional weight in kg (e.g. squats with a 12 kg kettlebell), a
+    goal and a note; cardio a name, minutes, a distance in km, a goal and a note; a food a name, a
+    goal and a note;
   - the pencil beside a name opens that item's dialog, where everything about it changes: for an
     exercise its sets, reps or seconds, weight, note and goal ("Times a week"), for a food its
     name, note and goal. A note is markdown and is the same on every week; it shows under the
     item's name, and pressing it opens the whole note with its links; the bin at the end of a row
     removes the item after a confirmation (its marks stay stored). New items start with a goal of 3.
-- **An item's own page.** Pressing an exercise's or a food's name, in either mode, opens its page.
+- **An item's own page.** Pressing an item's name, in either mode, opens its page.
   It reads in rows like Settings, each heading on the left and its content beside it. First come
   the notes, up to 20,000 characters of markdown, which save as you type. Then the details:
-  equipment, what it works and a link for an exercise, and a serving and examples for a food. Then
+  equipment, what it works and a link for an exercise, a route and a link for cardio, and a serving
+  and examples for a food. Then
   the week's plan for the item. Last come its last eight weeks, with how many days were marked
   against the goal; every mark counts, missed included. Notes and details are one copy for every
   week. **Arrange sections** chooses which of these every exercise page shows, and in what order,
-  and the same for every food page; the choice is saved with your account. **Back to the
+  and the same for every cardio page and every food page; the choice is saved with your account. **Back to the
   week** returns to the name you pressed.
 - **Weekly plans.** Each week has its own plan, so reps, sets, weights and goals can change from week
   to week. A week you haven't changed carries over the latest earlier week's plan; it gets its own
   copy the first time you change it or mark a cell. So a change to this week also reaches the weeks
   after it that you haven't changed yet.
 - The bar starts with the week, as the page's title, and `‹` / `›` beside it move between weeks
-  for both sections; past weeks persist. In Edit plan the bar ends with **Done**, which goes back
+  for every section; past weeks persist. In Edit plan the bar ends with **Done**, which goes back
   to the week; from the keyboard, the second Tab stop is a hidden **Edit plan**. **Print…** produces a
   sheet in the light theme's colours on white paper.
 - **One screen per section.** The week fills the screen, and the bar stays out of sight. A long press
-  anywhere (or the handle at the top centre) opens Edit plan, with the bar above the page. Scrolling brings Food,
-  which takes the screen in turn: a flick jumps straight to it. An arrow at the foot of Exercises
-  and the top of Food leads to the other. Held upright, a phone or an iPad folds the week: each row's name
+  anywhere (or the handle at the top centre) opens Edit plan, with the bar above the page. Scrolling brings Cardio,
+  then Food, each taking the screen in turn: a flick jumps straight to the next. An arrow at the
+  foot of a screen leads to the next one, and an arrow at the top back to the one before. Held upright, a phone or an iPad folds the week: each row's name
   above its seven boxes. A day that reaches its daily target turns green (while Daily goal is on).
 - **Settings** is a page of its own. It sets how marks are drawn (Squiggles, Ticks, Stamped ticks,
   Faces or Stamped faces) and the theme (System, Light or Dark), keeps **Your goals** (the

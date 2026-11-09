@@ -1257,13 +1257,37 @@ def test_the_prompt_and_tools_say_daily_goal_off_means_no_daily_target() -> None
     prompt tells the model not to talk about either."""
     for prompt in (ask.system_prompt(plain_verdicts=True), ask.system_prompt(plain_verdicts=False)):
         assert (
-            "When daily_goal is false or a daily target is null, the person has turned Daily goal"
-            " off. There is no daily target, and the tools give no met days. Don't mention met"
-            " days or a number a day."
+            "When daily_goal is false or an exercise or food daily target is null, the person has"
+            " turned Daily goal off. There is no daily target, and the tools give no met days."
+            " Don't mention met days or a number a day."
         ) in prompt
     tools = {t["name"]: t["description"] for t in ask.TOOLS}
     for name in ("consistency", "goals", "week_summary"):
         assert "Daily goal" in tools[name], name
+
+
+def test_the_prompt_and_tools_know_cardio() -> None:
+    """K90: a third section, cardio, whose items have a duration and a distance and a weekly goal
+    but never a daily target; its null target is not Daily goal turned off."""
+    prompt = ask.SYSTEM_PROMPT
+    for rule in (
+        "exercise, cardio and food",
+        "Cardio is cycling, running and the like",
+        "a distance in km",
+        "Cardio has none, so its tools give no met days",
+        "the cardio section is empty",
+    ):
+        assert rule in prompt, rule
+    for tool in ask.TOOLS:
+        section = tool["input_schema"]["properties"].get("section")  # type: ignore[attr-defined]
+        if section is not None:
+            assert section["enum"] == ["exercise", "cardio", "diet"], tool["name"]
+            assert "cardio" in section["description"]
+    tools = {t["name"]: t["description"] for t in ask.TOOLS}
+    for name in ("goals", "week_summary"):
+        assert "distance_km" in tools[name], name
+    for name in ("consistency", "week_summary"):
+        assert "always for cardio" in tools[name], name
 
 
 def test_the_verdict_rule_is_johns_v2_extended() -> None:

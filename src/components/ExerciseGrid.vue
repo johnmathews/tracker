@@ -74,7 +74,7 @@ watch(
 <!-- The Exercises section (SectionHeader, WeekGrid and PlannerScreen cards): its heading; in Edit
      plan with Exercises a day centred on its line, reading "3 per day" (K56, K62, K63), and the Add
      exercise button under the grid (K54). On the planner's screens it is the first screen, under
-     the fixed week (K88): the slot's messages at its top, the arrow to Food at its foot. -->
+     the fixed week (K88): the slot's messages at its top, the arrow to Cardio at its foot. -->
 <template>
   <section
     aria-labelledby="exercises-heading"
@@ -125,13 +125,14 @@ watch(
         <span class="title-1 text-[24px] leading-7 text-ink">{{ type.label }}</span>
       </template>
     </TrackerGrid>
-    <!-- The way on (PlannerScreen card, K42): an arrow, no words, sprinting to the Food screen. -->
+    <!-- The way on (PlannerScreen card, K42): an arrow, no words, sprinting to the Cardio screen,
+         the next of three (K90). -->
     <IconButton
-      label="Go to Food"
+      label="Go to Cardio"
       class="hidden self-center text-ink-secondary hover:text-ink full:mt-[calc(var(--u)*10)] full:inline-flex short:hidden"
       data-noprint
-      data-testid="to-food"
-      @click="sprintToScreen('diet-heading')"
+      data-testid="to-cardio"
+      @click="sprintToScreen('cardio-heading')"
       ><ChevronDown :size="24"
     /></IconButton>
     <!-- Adding opens the same dialog as editing (K54), at the page's control size. -->

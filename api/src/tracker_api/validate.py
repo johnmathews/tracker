@@ -18,7 +18,7 @@ from typing import Any, Literal, NotRequired, TypedDict, TypeIs, cast
 from .item_sections import ItemSections, normalise_item_sections
 
 # Re-exported: the rest of the API reads the sections from here, beside the normalisers.
-from .types import EXERCISE, FOOD, SECTION_TYPES, TypeId
+from .types import CARDIO, EXERCISE, FOOD, SECTION_TYPES, TypeId
 from .types import SECTIONS as SECTIONS
 from .types import Section as Section
 
@@ -34,7 +34,8 @@ OLD_EXPORT_FORMATS = ("fitness-planner-export", "exercise-planner-export")
 #: reads as `great`. All five import. Settings may carry My goals (`goals`) with no new version,
 #: as `foodPick` came: a reader from before them drops the key, and a file without them reads as
 #: none. Ask's conversations (`conversations`) came the same way, and so did Daily goal
-#: (`dailyGoal`, K85): a file without it reads as on.
+#: (`dailyGoal`, K85): a file without it reads as on, and Cardio (`cardio`, K90): a file without
+#: it has none.
 EXPORT_VERSION = 5
 #: The last version whose notes live in plan items.
 LAST_ITEM_NOTES_VERSION = 4
@@ -43,10 +44,15 @@ READ_VERSIONS = (1, 2, 3, LAST_ITEM_NOTES_VERSION, EXPORT_VERSION)
 MIN_TARGET, MAX_TARGET = 0, 7
 MIN_DAILY_PICK, MAX_DAILY_PICK = 1, 8
 NEW_EXERCISE_TARGET = EXERCISE.new_target
+NEW_CARDIO_TARGET = CARDIO.new_target
 NEW_FOOD_TARGET = FOOD.new_target
 MAX_WEIGHT = 500
 MAX_SETS = 20
 MAX_DURATION = 3600
+#: A cardio item's duration in seconds (K90): a day at most.
+MAX_CARDIO_DURATION = 86_400
+#: A cardio item's distance in km (K90).
+MAX_DISTANCE = 1000
 #: A plan item's note's length, in characters, from export version 4 (K43).
 MAX_NOTES = 500
 #: My goals' length, in characters (code points).
@@ -182,6 +188,7 @@ class Conversation(TypedDict):
 
 class ExportData(TypedDict):
     exercise: Tracked
+    cardio: Tracked
     diet: Tracked
     settings: Portable | None
     #: Present only when the file carries a list of them.
@@ -237,15 +244,25 @@ def whole(x: float) -> int | float:
     return int(x) if x.is_integer() else x
 
 
-def normalise_weight(v: object) -> int | float | None:
-    """A usable weight in kg, rounded to 2 decimals and capped; None means "no weight"."""
+def _hundredths(v: object, cap: float) -> int | float | None:
+    """A positive number rounded to 2 decimals and capped; None for anything else."""
     n = as_number(v)
     if n is None:
         return None
     scaled = n * 100
     # Scaling can overflow to ±Infinity, which Math.round passes through and the cap then catches.
-    kg = js_round(scaled) / 100 if math.isfinite(scaled) else scaled
-    return whole(min(MAX_WEIGHT, kg)) if kg > 0 else None
+    x = js_round(scaled) / 100 if math.isfinite(scaled) else scaled
+    return whole(min(cap, x)) if x > 0 else None
+
+
+def normalise_weight(v: object) -> int | float | None:
+    """A usable weight in kg, rounded to 2 decimals and capped; None means "no weight"."""
+    return _hundredths(v, MAX_WEIGHT)
+
+
+def normalise_distance(v: object) -> int | float | None:
+    """A usable distance in km, rounded and capped as a weight is; None means "no distance"."""
+    return _hundredths(v, MAX_DISTANCE)
 
 
 BLANK = " \t\n\r"
@@ -377,6 +394,26 @@ def normalise_exercise(v: object) -> Item | None:
     return out
 
 
+def normalise_cardio(v: object) -> Item | None:
+    """A cardio item (K90): a duration in whole seconds and a distance in km, either, both or
+    neither; an exercise's sets, reps, weight and per-side drop out."""
+    if (
+        not isinstance(v, dict)
+        or not isinstance(v.get("id"), str)
+        or not isinstance(v.get("name"), str)
+    ):
+        return None
+    out: Item = {"id": v["id"], "name": v["name"]}
+    duration = to_int(v.get("duration"), 0)
+    if duration > 0:
+        out["duration"] = min(MAX_CARDIO_DURATION, duration)
+    distance = normalise_distance(v.get("distance"))
+    if distance is not None:
+        out["distance"] = distance
+    out["target"] = clamp(to_int(v.get("target"), NEW_CARDIO_TARGET), MIN_TARGET, MAX_TARGET)
+    return out
+
+
 def normalise_food(v: object) -> Item | None:
     if (
         not isinstance(v, dict)
@@ -393,6 +430,7 @@ type Normaliser = Callable[[object], Item | None]
 #: Each type's item normaliser, and through the registry each section's.
 _TYPE_NORMALISERS: dict[TypeId, Normaliser] = {
     EXERCISE.id: normalise_exercise,
+    CARDIO.id: normalise_cardio,
     FOOD.id: normalise_food,
 }
 NORMALISERS: dict[Section, Normaliser] = {

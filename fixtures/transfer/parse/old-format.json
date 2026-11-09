@@ -17,6 +17,7 @@
         "log": { "2026-10-19": { "pu": ["great", null, null, null, null, null, null] } },
         "details": {}
       },
+      "cardio": { "plans": {}, "log": {}, "details": {} },
       "diet": { "plans": {}, "log": {}, "details": {} },
       "settings": { "accent": "#0a84ff", "dailyPick": 2, "foodPick": 2, "goals": "" }
     }

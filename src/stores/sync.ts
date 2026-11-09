@@ -8,6 +8,7 @@ import {
   isRecord,
   liftNotes,
   normaliseDetails,
+  normaliseCardio,
   normaliseDetailsMap,
   normaliseExercise,
   normaliseFood,
@@ -18,6 +19,7 @@ import {
   readKey,
   removeKey,
   writeKey,
+  type Cardio,
   type DetailsMap,
   type Exercise,
   type Food,
@@ -29,6 +31,7 @@ import {
 import type { Plans } from '@/lib/plans'
 import { SECTION_NAMES, isSection, type Section } from '@/lib/trackerTypes'
 import { EXPORT_FORMAT, EXPORT_VERSION, type ExportData } from '@/lib/transfer'
+import { useCardioStore } from '@/stores/cardio'
 import { useDetailsStore } from '@/stores/details'
 import { useDietStore } from '@/stores/diet'
 import { usePlannerStore } from '@/stores/planner'
@@ -42,10 +45,11 @@ import { usePlannerStore } from '@/stores/planner'
  * is waiting to go out, so a refresh can never undo an edit that hasn't reached the server yet.
  */
 
-export const CACHE_PREFIX = 'tracker-cache-v4:'
-export const OUTBOX_PREFIX = 'tracker-outbox-v4:'
+export const CACHE_PREFIX = 'tracker-cache-v5:'
+export const OUTBOX_PREFIX = 'tracker-outbox-v5:'
 /**
- * The names of earlier formats, newest first (K14): `-v3` from before item details (its plan items
+ * The names of earlier formats, newest first (K14): `-v4` from before Cardio (K90), which holds
+ * item details already, `-v3` from before item details (its plan items
  * carry their notes), `-v2` from before the solid and hatch drawings, `-v1` from before marks had
  * kinds. A tab still open on older code reads a mark it doesn't know as an empty day and writes its
  * copy back, which empties the boxes in every newer tab; it could also drop their queued marks. A
@@ -55,15 +59,19 @@ export const OUTBOX_PREFIX = 'tracker-outbox-v4:'
  * (`migrateKeyPrefix`), so the earlier versions are found under the new prefix.
  */
 export const OLD_CACHE_PREFIXES = [
+  'tracker-cache-v4:',
   'tracker-cache-v3:',
   'tracker-cache-v2:',
   'tracker-cache-v1:',
 ] as const
 export const OLD_OUTBOX_PREFIXES = [
+  'tracker-outbox-v4:',
   'tracker-outbox-v3:',
   'tracker-outbox-v2:',
   'tracker-outbox-v1:',
 ] as const
+/** The earlier formats that hold item details already (D2): they move as they are, lifting nothing. */
+const WITH_DETAILS: readonly string[] = ['tracker-cache-v4:', 'tracker-outbox-v4:']
 
 export type Op =
   | { kind: 'plan'; section: Section; week: string }
@@ -98,10 +106,11 @@ type SectionState<T> = {
 /** The shape of `GET /api/state`, and of the cache. */
 export type SyncState = {
   exercise: SectionState<Exercise>
+  cardio: SectionState<Cardio>
   diet: SectionState<Food>
   settings: KnownSettings | null
 }
-type Snapshot = { exercise: Tracked; diet: Tracked; settings: PortableSettings }
+type Snapshot = { exercise: Tracked; cardio: Tracked; diet: Tracked; settings: PortableSettings }
 /** What `POST /api/import` added; `conversations` counts Ask's (docs/api.md §3). */
 export type ImportAdded = {
   weeks: number
@@ -197,6 +206,11 @@ function isQueued(v: unknown): v is Queued {
   )
 }
 
+/** No revisions yet, for every section. */
+function noRevs(): Revs {
+  return Object.fromEntries(SECTION_NAMES.map((s) => [s, {}])) as Revs
+}
+
 function newId(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
 }
@@ -230,12 +244,14 @@ function sectionState<T extends object>(
 
 /**
  * Validate a state from the cache or the API with the same rules as stored data. `itemNotes` reads
- * a cache from before item details (`-v3` and older), lifting its plan notes into details.
+ * a cache from before item details (`-v3` and older), lifting its plan notes into details. Cardio
+ * came later (K90) with no new format: a cache, or an API mid-deploy, without it reads as no cardio.
  */
 export function normaliseState(v: unknown, itemNotes = false): SyncState | null {
   if (!isRecord(v) || !isRecord(v.exercise) || !isRecord(v.diet)) return null
   return {
     exercise: sectionState(v.exercise, normaliseExercise, itemNotes),
+    cardio: sectionState(isRecord(v.cardio) ? v.cardio : {}, normaliseCardio, itemNotes),
     diet: sectionState(v.diet, normaliseFood, itemNotes),
     settings: isRecord(v.settings) ? knownSettings(v.settings) : null,
   }
@@ -302,6 +318,7 @@ type Outcome = 'done' | 'again' | 'stop'
 
 export const useSyncStore = defineStore('sync', () => {
   const planner = usePlannerStore()
+  const cardio = useCardioStore()
   const diet = useDietStore()
   const details = useDetailsStore()
 
@@ -316,8 +333,8 @@ export const useSyncStore = defineStore('sync', () => {
   const fresh = ref(false)
 
   let base: Snapshot | null = null
-  let revs: Revs = { exercise: {}, diet: {} }
-  let detailRevs: Revs = { exercise: {}, diet: {} }
+  let revs: Revs = noRevs()
+  let detailRevs: Revs = noRevs()
   let stopWatch: WatchStopHandle | null = null
   let retryTimer: ReturnType<typeof setTimeout> | undefined
   let retryDelay = FIRST_RETRY
@@ -338,7 +355,10 @@ export const useSyncStore = defineStore('sync', () => {
   const cacheKey = () => CACHE_PREFIX + user.value
   const outboxKey = () => OUTBOX_PREFIX + user.value
   /** Each section's store, keyed by the registry's sections: a new section must add its own. */
-  const stores = { exercise: planner, diet } satisfies Record<Section, { plans: Plans<unknown> }>
+  const stores = { exercise: planner, cardio, diet } satisfies Record<
+    Section,
+    { plans: Plans<unknown> }
+  >
   /**
    * Take the server's copy of a week's plan, from a conflict. The base first: adopting their copy
    * is then no change to send back.
@@ -348,6 +368,11 @@ export const useSyncStore = defineStore('sync', () => {
       const theirs = normalisePlans({ [week]: items }, normaliseExercise)[week]!
       base!.exercise.plans[week] = clone(theirs)
       planner.adoptWeek(week, theirs)
+    },
+    cardio(week, items) {
+      const theirs = normalisePlans({ [week]: items }, normaliseCardio)[week]!
+      base!.cardio.plans[week] = clone(theirs)
+      cardio.adoptWeek(week, theirs)
     },
     diet(week, items) {
       const theirs = normalisePlans({ [week]: items }, normaliseFood)[week]!
@@ -367,6 +392,7 @@ export const useSyncStore = defineStore('sync', () => {
   function local(): Snapshot {
     return clone({
       exercise: { plans: planner.plans, log: planner.log, details: details.docs.exercise },
+      cardio: { plans: cardio.plans, log: cardio.log, details: details.docs.cardio },
       diet: { plans: diet.plans, log: diet.log, details: details.docs.diet },
       settings: {
         accent: planner.accent,
@@ -418,6 +444,7 @@ export const useSyncStore = defineStore('sync', () => {
     // The snapshot's plans are the stores' own, so they hold each section's items.
     const cache = {
       exercise: { ...snapshot.exercise, revs: revs.exercise, detailRevs: detailRevs.exercise },
+      cardio: { ...snapshot.cardio, revs: revs.cardio, detailRevs: detailRevs.cardio },
       diet: { ...snapshot.diet, revs: revs.diet, detailRevs: detailRevs.diet },
       settings: planner.savedSettings(),
     } as SyncState
@@ -429,13 +456,24 @@ export const useSyncStore = defineStore('sync', () => {
    * leaves the cache alone: another tab's state is already there, in that tab's words.
    */
   function adopt(state: SyncState, persist = true): void {
-    revs = { exercise: { ...state.exercise.revs }, diet: { ...state.diet.revs } }
-    detailRevs = { exercise: { ...state.exercise.detailRevs }, diet: { ...state.diet.detailRevs } }
+    revs = noRevs()
+    detailRevs = noRevs()
+    for (const section of SECTION_NAMES) {
+      revs[section] = { ...state[section].revs }
+      detailRevs[section] = { ...state[section].detailRevs }
+    }
     adopting = true
     try {
       planner.adopt(clone({ plans: state.exercise.plans, log: state.exercise.log }), state.settings)
+      cardio.adopt(clone({ plans: state.cardio.plans, log: state.cardio.log }))
       diet.adopt(clone({ plans: state.diet.plans, log: state.diet.log }))
-      details.adopt(clone({ exercise: state.exercise.details, diet: state.diet.details }))
+      details.adopt(
+        clone({
+          exercise: state.exercise.details,
+          cardio: state.cardio.details,
+          diet: state.diet.details,
+        }),
+      )
     } finally {
       adopting = false
     }
@@ -713,6 +751,7 @@ export const useSyncStore = defineStore('sync', () => {
       version: EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
       exercise: data.exercise,
+      cardio: data.cardio,
       diet: data.diet,
       ...(data.settings ? { settings: data.settings } : {}),
       // Ask's history: the server adds the ones it has no id for, and never changes the rest.
@@ -743,7 +782,8 @@ export const useSyncStore = defineStore('sync', () => {
    * cache under a newer name wins; queued writes from all of them are kept, the newer for the same
    * cell. The old keys go, so an old tab still open finds nothing of this tab's to overwrite.
    *
-   * Every old cache is from before item details, so its plan notes lift into details (D3). The
+   * A `-v4` cache and outbox hold item details already: they move as they are. Every older cache is
+   * from before item details, so its plan notes lift into details (D3). The
    * server lifted the same notes from its own plans (migration 7), so they are not sent, except in
    * a section whose plan writes were still queued: a note there may not have reached the server.
    * Those go as lifted writes, which replace the migration's copy (rev 1) of the old note; an item
@@ -756,10 +796,11 @@ export const useSyncStore = defineStore('sync', () => {
     for (const prefix of OLD_CACHE_PREFIXES) {
       const oldCache = readKey(prefix + name)
       if (oldCache === null) continue
-      const state = normaliseState(parseJson(oldCache), true)
+      const lift = !WITH_DETAILS.includes(prefix)
+      const state = normaliseState(parseJson(oldCache), lift)
       if (state && readKey(cacheKey()) === null) {
         writeKey(cacheKey(), state)
-        old = state
+        if (lift) old = state
       }
       removeKey(prefix + name)
     }
@@ -771,7 +812,7 @@ export const useSyncStore = defineStore('sync', () => {
         const keys = new Set(queued.map(opKey))
         const moved = oldOps.map(upgradeQueued).filter(isQueued)
         for (const op of moved) {
-          if (op.kind !== 'plan') continue
+          if (op.kind !== 'plan' || WITH_DETAILS.includes(prefix)) continue
           unsent.set(op.section, (unsent.get(op.section) ?? new Set()).add(op.week))
         }
         writeOutbox([...moved.filter((op) => !keys.has(opKey(op))), ...queued])
@@ -809,6 +850,8 @@ export const useSyncStore = defineStore('sync', () => {
       () => [
         planner.plans,
         planner.log,
+        cardio.plans,
+        cardio.log,
         diet.plans,
         diet.log,
         details.docs,
@@ -839,8 +882,8 @@ export const useSyncStore = defineStore('sync', () => {
     readPending = false
     retryDelay = FIRST_RETRY
     base = null
-    revs = { exercise: {}, diet: {} }
-    detailRevs = { exercise: {}, diet: {} }
+    revs = noRevs()
+    detailRevs = noRevs()
     user.value = null
     loaded.value = false
     fresh.value = false

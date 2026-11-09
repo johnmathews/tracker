@@ -31,9 +31,11 @@ describe('readLegacyData', () => {
       SETTINGS_KEY,
       JSON.stringify({ accent: '#0a84ff', dailyPick: 5, theme: 'dark' }),
     )
-    // No details: these keys predate accounts (P9), and notes came after them (K43).
+    // No details: these keys predate accounts (P9), and notes came after them (K43). No cardio
+    // either, which came after accounts (K90).
     expect(readLegacyData(WEEK)).toEqual({
       exercise: { ...exercise, details: {} },
+      cardio: { plans: {}, log: {}, details: {} },
       diet: { ...diet, details: {} },
       settings: { accent: '#0a84ff', dailyPick: 5, foodPick: 2, goals: '' },
     })
@@ -76,6 +78,7 @@ describe('readLegacyData', () => {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify({ accent: '#bf5af2', dailyPick: 2 }))
     expect(readLegacyData(WEEK)).toEqual({
       exercise: { plans: {}, log: {}, details: {} },
+      cardio: { plans: {}, log: {}, details: {} },
       diet: { plans: {}, log: {}, details: {} },
       settings: { accent: '#bf5af2', dailyPick: 2, foodPick: 2, goals: '' },
     })

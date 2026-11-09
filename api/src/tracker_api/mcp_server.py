@@ -192,8 +192,8 @@ def build_mcp(config: Config, max_body: int) -> McpEndpoint:
     resource = origin + MCP_PATH
     server = MCPServer(
         "tracker",
-        instructions="A weekly training tracker: exercise and food plans, and the days marked "
-        "against them.",
+        instructions="A weekly training tracker: exercise, cardio and food plans, and the days "
+        "marked against them.",
         token_verifier=Tokens(config, resource),
         # Strings, not AnyHttpUrl(...): that adds a slash to a bare origin, and the issuer must
         # match the authorization server's metadata exactly (F8). The 401's `resource_metadata`
@@ -258,7 +258,10 @@ class ConsistencyResult(insights.Consistency):
     this_week: str
 
 
-SECTION_HELP = "Which tracker: `exercise` (workouts and training, the default) or `diet` (food)."
+SECTION_HELP = (
+    "Which tracker: `exercise` (workouts and training, the default), `cardio` (cycling, running "
+    "and the like: a duration and a distance, a weekly goal, no daily target) or `diet` (food)."
+)
 WEEK_HELP = "The week, as its Monday written YYYY-MM-DD. Defaults to the current week."
 COUNT_HELP = "How many weeks back to look, this week included: 1 to 26. Defaults to 8."
 SectionArg = Annotated[Section, Field(description=SECTION_HELP)]
@@ -274,6 +277,7 @@ UNDO_HELP = (
 )
 ItemIdArg = Annotated[str, Field(description="The item's `id`, from `week_summary` or `goals`.")]
 SetsArg = Annotated[int | None, Field(description="Exercises only: sets, 0 to 20 (0 clears).")]
+#: A cardio session runs up to a day (validate.MAX_CARDIO_DURATION).
 RepsArg = Annotated[
     int | None,
     Field(description="Exercises only: reps a set, 0 to 9999. Giving reps clears `seconds`."),
@@ -281,13 +285,17 @@ RepsArg = Annotated[
 SecondsArg = Annotated[
     int | None,
     Field(
-        description="Exercises only: seconds a set for a timed exercise, 0 to 3600 (0 clears). "
-        "Giving seconds sets `reps` to 0."
+        description="Exercises: seconds a set for a timed exercise, 0 to 3600 (0 clears); giving "
+        "seconds sets `reps` to 0. Cardio: the whole session's seconds, 0 to 86400 (1800 is 30 "
+        "min; 0 clears)."
     ),
 ]
 PerSideArg = Annotated[bool | None, Field(description="Exercises only: done on each side.")]
 WeightArg = Annotated[
     float | None, Field(description="Exercises only: weight in kg, 0 to 500 (0 is bodyweight).")
+]
+DistanceArg = Annotated[
+    float | None, Field(description="Cardio only: distance in km, 0 to 1000 (0 clears).")
 ]
 TimesArg = Annotated[int | None, Field(description="The goal: times a week, 0 to 7.")]
 #: What the reads of many items say about their notes.
@@ -297,7 +305,8 @@ NOTES_CUT = (
 #: K85: the app's Daily goal switch, off, takes the daily targets and the met days away.
 DAILY_GOAL_OFF = (
     "While Daily goal is off, `daily_target`, each day's `met` and `days_met` are null: there is "
-    "no daily target, so say nothing about met days."
+    "no daily target, so say nothing about met days. Cardio has no daily target ever, so its are "
+    "always null; that is not Daily goal turned off."
 )
 NOTE_HELP = (
     "An item's `note` is the item's own, the same in every week, as on its page in the app: "
@@ -316,7 +325,8 @@ NoteArg = Annotated[
 MARK_HELP = (
     "How the day went: `great` (done), `partial` (done in part) or `missed` (tried and "
     "couldn't), each alone (the zigzag) or with `-solid` or `-hatch`, the drawings the app "
-    "offers; null clears the day. A food takes only `great`, `great-solid` or `great-hatch`."
+    "offers; null clears the day. Exercise and cardio take any of them. A food takes only "
+    "`great`, `great-solid` or `great-hatch`."
 )
 DailyArg = Annotated[int | None, Field(description="1 to 8. Left as it is when not given.")]
 
@@ -367,12 +377,13 @@ def _add_tools(server: MCPServer, config: Config) -> None:
     @server.tool(
         title="Week summary",
         description="How one week went: each item's marks against its times-a-week goal, which "
-        "goals were met, and which days met the daily target, as the app shows that week. "
+        "goals were met, and which days met the daily target, as the app shows that week. A "
+        "cardio item also has its `seconds` and `distance_km` when it has them. "
         f"{DAILY_GOAL_OFF} Call "
         "it first to answer 'how is my training going this week'. A week with no plan of its "
         "own shows the plan it carries forward (`plan_week`), or the defaults (`plan_week` is "
-        "null). The result also has `this_week` and `today`, the account's current week and date. "
-        f"{NOTES_CUT}",
+        "null; cardio has none). The result also has `this_week` and `today`, the account's "
+        f"current week and date. {NOTES_CUT}",
         annotations=READ_ONLY,
     )
     def week_summary(
@@ -429,7 +440,8 @@ def _add_tools(server: MCPServer, config: Config) -> None:
 
     @server.tool(
         title="Item history",
-        description="One exercise or food over the last weeks: its goal and marks in each week "
+        description="One exercise, cardio item or food over the last weeks: its goal and marks "
+        "in each week "
         "that shows it, and whether the goal was met. Call it for 'how are my squats going'. "
         "Get `item_id` from `week_summary` or `goals`. Weeks that do not show the item have "
         "`in_plan` false. `notes` is the item's whole note, uncut (up to 20,000 characters), "
@@ -449,12 +461,13 @@ def _add_tools(server: MCPServer, config: Config) -> None:
 
     @server.tool(
         title="Goals",
-        description="What this week asks for: every exercise and food with its times-a-week "
-        "goal, the daily targets (exercises a day, foods a day), `daily_goal` and the 'My goals' "
-        "note. While Daily goal is off, `daily_goal` is false and both daily targets are null: "
-        "say nothing about a number a day or met days. Call it "
-        "for 'what are my goals' or before comparing progress with them. Always this week's "
-        f"plan, for both exercise and diet. {NOTES_CUT}",
+        description="What this week asks for: every exercise, cardio item and food with its "
+        "times-a-week goal (a cardio item with its `seconds` and `distance_km`), the daily "
+        "targets (exercises a day, foods a day), `daily_goal` and the 'My goals' note. While "
+        "Daily goal is off, `daily_goal` is false and both daily targets are null: say nothing "
+        "about a number a day or met days. Call it for 'what are my goals' or before comparing "
+        "progress with them. Always this week's plan, for exercise, cardio and diet. Cardio has "
+        f"no daily target. {NOTES_CUT}",
         annotations=READ_ONLY,
     )
     def goals() -> GoalsResult:
@@ -465,7 +478,8 @@ def _add_tools(server: MCPServer, config: Config) -> None:
         title="Consistency",
         description="How steady training has been: the share of days that met the daily target, "
         "the share of weekly goals met in finished weeks, and the current streaks. "
-        "While Daily goal is off, the daily target and every met-day field are null. Call it for "
+        "While Daily goal is off, and always for cardio, the daily target and every met-day field "
+        "are null. Call it for "
         "'am I consistent' or 'how long a streak do I have'. Counts the last weeks, this week "
         "included, up to today.",
         annotations=READ_ONLY,
@@ -483,9 +497,11 @@ def _add_tools(server: MCPServer, config: Config) -> None:
 
     @server.tool(
         title="Add item",
-        description="Add an exercise or a food to a week's plan, with a new id. An exercise "
-        "counts reps or seconds, not both. A new item's goal is 3 times a week unless "
-        f"`times_a_week` is given. {CARRIED_HELP} {NOTE_HELP} {UNDO_HELP} Needs a write token.",
+        description="Add an exercise, a cardio item or a food to a week's plan, with a new id. An "
+        "exercise counts reps or seconds, not both. A cardio item has `seconds` (the whole "
+        "session), `distance_km`, either, both or neither. A new item's goal is 3 times a week "
+        f"unless `times_a_week` is given. {CARRIED_HELP} {NOTE_HELP} {UNDO_HELP} Needs a write "
+        "token.",
         annotations=ADDING,
     )
     def add_item(
@@ -497,6 +513,7 @@ def _add_tools(server: MCPServer, config: Config) -> None:
         seconds: SecondsArg = None,
         per_side: PerSideArg = None,
         weight_kg: WeightArg = None,
+        distance_km: DistanceArg = None,
         times_a_week: TimesArg = None,
         note: NoteArg = None,
     ) -> edits.PlanEdit:
@@ -507,6 +524,7 @@ def _add_tools(server: MCPServer, config: Config) -> None:
             "seconds": seconds,
             "per_side": per_side,
             "weight_kg": weight_kg,
+            "distance_km": distance_km,
             "times_a_week": times_a_week,
             "note": note,
         }
@@ -517,9 +535,10 @@ def _add_tools(server: MCPServer, config: Config) -> None:
 
     @server.tool(
         title="Update item",
-        description="Change one exercise or food in a week's plan: only the fields given "
-        "change, and the item keeps its id and its marks. Use it to rename an item, change its "
-        f"goal (`times_a_week`), its sets, reps or weight, or its note. {CARRIED_HELP} "
+        description="Change one exercise, cardio item or food in a week's plan: only the fields "
+        "given change, and the item keeps its id and its marks. Use it to rename an item, change "
+        "its goal (`times_a_week`), an exercise's sets, reps or weight, a cardio item's seconds "
+        f"or distance, or its note. {CARRIED_HELP} "
         f"{NOTE_HELP} A note alone copies no week. {UNDO_HELP} Needs a write token.",
         annotations=SETTING,
     )
@@ -533,6 +552,7 @@ def _add_tools(server: MCPServer, config: Config) -> None:
         seconds: SecondsArg = None,
         per_side: PerSideArg = None,
         weight_kg: WeightArg = None,
+        distance_km: DistanceArg = None,
         times_a_week: TimesArg = None,
         note: NoteArg = None,
     ) -> edits.PlanEdit:
@@ -543,6 +563,7 @@ def _add_tools(server: MCPServer, config: Config) -> None:
             "seconds": seconds,
             "per_side": per_side,
             "weight_kg": weight_kg,
+            "distance_km": distance_km,
             "times_a_week": times_a_week,
             "note": note,
         }
@@ -554,8 +575,8 @@ def _add_tools(server: MCPServer, config: Config) -> None:
 
     @server.tool(
         title="Remove item",
-        description="Take one exercise or food out of a week's plan. Its marks stay stored but "
-        "no longer count, as in the app; adding it back gives it a new id. "
+        description="Take one exercise, cardio item or food out of a week's plan. Its marks stay "
+        "stored but no longer count, as in the app; adding it back gives it a new id. "
         f"{CARRIED_HELP} `item` in the result is the removed item. Needs a write token.",
         annotations=REMOVING,
     )
@@ -571,7 +592,8 @@ def _add_tools(server: MCPServer, config: Config) -> None:
 
     @server.tool(
         title="Mark day",
-        description="Mark how one exercise or food went on one date, or clear the day. The "
+        description="Mark how one exercise, cardio item or food went on one date, or clear the "
+        "day. The "
         "item must be in that date's week. Marking a week with no plan of its own first gives "
         "it a copy of the plan it shows, as a tick in the app does, so later edits to the "
         "earlier week no longer reach it; later weeks that carry it forward follow it. The "
@@ -598,7 +620,8 @@ def _add_tools(server: MCPServer, config: Config) -> None:
         "as met (the app's 'Exercises a day' and 'Foods a day'). Each is 1 to 8; one not given "
         "stays as it is. The result has both targets `before` and `after`, and `daily_goal`. "
         "While Daily goal is off (`daily_goal` false) the numbers are saved but count only once "
-        "it is back on, which only the app can do. Needs a write token.",
+        "it is back on, which only the app can do. Cardio has no daily target. Needs a write "
+        "token.",
         annotations=SETTING,
     )
     def set_daily_targets(

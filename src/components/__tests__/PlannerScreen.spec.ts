@@ -1,6 +1,6 @@
 /**
  * The planner's screens (PlannerScreen and Header cards, K24–K27, K79, K80): the bar out of
- * sight until a long press opens Edit plan, the way on to Food, and the ordinary sticky bar in Edit plan, mounted in the real app.
+ * sight until a long press opens Edit plan, the ways on to Cardio and Food, and the ordinary sticky bar in Edit plan, mounted in the real app.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
@@ -411,20 +411,26 @@ describe('the planner’s screens (K24–K27)', () => {
     mountApp()
     const scrollTo = vi.fn<(options: ScrollToOptions) => void>()
     window.scrollTo = scrollTo as unknown as typeof window.scrollTo
-    const food = document.querySelector<HTMLElement>('[aria-labelledby="diet-heading"]')!
-    food.getBoundingClientRect = () => ({ top: 800 }) as DOMRect
-    const down = wrapper.get('[data-testid="to-food"]')
-    expect(down.attributes('aria-label')).toBe('Go to Food')
-    expect(down.text()).toBe('')
-    await down.trigger('click')
-    expect(scrollTo).toHaveBeenLastCalledWith({ top: 800, behavior: 'auto' })
-    const exercises = document.querySelector<HTMLElement>('[aria-labelledby="exercises-heading"]')!
-    exercises.getBoundingClientRect = () => ({ top: -800 }) as DOMRect
-    Object.defineProperty(window, 'scrollY', { configurable: true, value: 800 })
-    const up = wrapper.get('[data-testid="to-exercises"]')
-    expect(up.attributes('aria-label')).toBe('Back to Exercises')
-    await up.trigger('click')
-    expect(scrollTo).toHaveBeenLastCalledWith({ top: 0, behavior: 'auto' })
+    // Three screens a screen apart (K90): Exercises, Cardio, Food.
+    const tops: Record<string, number> = { exercises: 0, cardio: 800, diet: 1600 }
+    for (const [id, top] of Object.entries(tops)) {
+      const screen = document.querySelector<HTMLElement>(`[aria-labelledby="${id}-heading"]`)!
+      screen.getBoundingClientRect = () => ({ top: top - window.scrollY }) as DOMRect
+    }
+    const arrows: [testid: string, label: string, to: number][] = [
+      ['to-cardio', 'Go to Cardio', 800],
+      ['to-food', 'Go to Food', 1600],
+      ['back-to-cardio', 'Back to Cardio', 800],
+      ['to-exercises', 'Back to Exercises', 0],
+    ]
+    for (const [testid, label, to] of arrows) {
+      const arrow = wrapper.get(`[data-testid="${testid}"]`)
+      expect(arrow.attributes('aria-label')).toBe(label)
+      expect(arrow.text()).toBe('')
+      await arrow.trigger('click')
+      expect(scrollTo).toHaveBeenLastCalledWith({ top: to, behavior: 'auto' })
+      Object.defineProperty(window, 'scrollY', { configurable: true, value: to })
+    }
     Object.defineProperty(window, 'scrollY', { configurable: true, value: 0 })
     vi.unstubAllGlobals()
   })

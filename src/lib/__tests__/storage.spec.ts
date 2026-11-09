@@ -5,9 +5,12 @@ import {
   MARK_SETS,
   MAX_GOALS,
   SETTINGS_KEY,
+  defaultCardio,
   defaultExercises,
   defaultFoods,
   migrateKeyPrefix,
+  normaliseCardio,
+  normaliseDistance,
   normaliseGoals,
   normaliseWeight,
   parseDietData,
@@ -194,6 +197,36 @@ describe('exercise sets and weight', () => {
     )
     expect(exercises.map((e) => e.sets)).toEqual([3, 20, undefined, undefined])
     expect(exercises.slice(2).every((e) => !('sets' in e))).toBe(true)
+  })
+})
+
+describe('cardio items (K90)', () => {
+  it('has no default cardio: an account shows none until some is added', () => {
+    expect(defaultCardio()).toEqual([])
+  })
+
+  it('keeps a time in whole seconds and a distance in km to 2 places, each when above zero', () => {
+    expect(
+      normaliseCardio({ id: 'c', name: 'Cycling', duration: 1800.4, distance: 12.345, target: 2 }),
+    ).toEqual({ id: 'c', name: 'Cycling', duration: 1800, distance: 12.35, target: 2 })
+    expect(normaliseCardio({ id: 'r', name: 'Running', duration: -5, distance: 0 })).toEqual({
+      id: 'r',
+      name: 'Running',
+      target: 3,
+    })
+    expect(normaliseCardio({ id: 'x', name: 'X', duration: 1e9, distance: 1e9 })).toMatchObject({
+      duration: 86_400,
+      distance: 1000,
+    })
+    expect(normaliseCardio({ id: 1, name: 'X' })).toBeNull()
+    expect(normaliseCardio('Cycling')).toBeNull()
+  })
+
+  it('reads a distance like a weight', () => {
+    expect(normaliseDistance(0.004)).toBeUndefined()
+    expect(normaliseDistance('5')).toBeUndefined()
+    expect(normaliseDistance(Number.NaN)).toBeUndefined()
+    expect(normaliseDistance(21.0975)).toBe(21.1)
   })
 })
 

@@ -185,29 +185,33 @@ listed in [api.md](api.md) §10):
   DST change in EU timezones), labels.
 - `src/lib/__tests__/storage.spec.ts`: v2 plan validation and round-trip, migration from the v1
   (prototype) format, log normalisation, sets and weight, diet parsing, settings parsing,
-  skip-unchanged writes, storage that throws, and `migrateKeyPrefix` moving `fitness-planner-` and
+  skip-unchanged writes, storage that throws, a cardio item's time and distance and no default
+  cardio (K90), and `migrateKeyPrefix` moving `fitness-planner-` and
   `exercise-planner-` keys to `tracker-`, the newer name's copy winning (K44).
 - `src/lib/__tests__/plans.spec.ts`: which week's plan a week shows (own, carried forward, earliest,
   none) and plan copies.
 - `src/composables/__tests__/exerciseForm.spec.ts`: digits-only sets/reps and decimal weight
-  cleaning, loading and resetting the shared exercise form.
+  cleaning, loading and resetting the shared exercise form. The cardio form (`cardioForm.ts`) is
+  covered through `CardioSection.spec.ts` and `ItemPage.spec.ts`.
 - `src/lib/__tests__/markdown.spec.ts`: a note's markdown (K43): emphasis, code, lists and links
   opening a new tab; raw HTML, script links and images never rendered; headings and rules left as
   text; and the row's one line, where a link is its text.
 - `src/lib/__tests__/format.spec.ts`: K14 as a test (K41). Each cache key version has a row
-  recording what it stores (the marks, and the fields an exercise and a food keep). It fails when
+  recording what it stores (the marks, the fields an exercise, a cardio item and a food keep, and
+  the sections a cache holds; `-v5` added Cardio, K90). It fails when
   the stored format changes under the same key, and when an older key isn't moved at sign-in.
 - `src/lib/__tests__/transfer.spec.ts`: every case in `fixtures/transfer/` (parsing an export and
   merging one), plus building an export, the merge summary and the download. Add a fixture rather
   than an inline case when the behaviour is part of the export contract: the API's tests
   (`api/tests/test_parity.py`) read the same files.
 - `fixtures/transfer/sample/`: `storage.json` is a realistic `localStorage` snapshot: alice's cache
-  under the current key, `tracker-cache-v4:alice`, as the sync store keeps it, and a
+  under the current key, `tracker-cache-v5:alice`, as the sync store keeps it, and a
   `tracker-settings-v1` holding the dark theme. Each section holds `plans`, `log`, `details`,
   `revs` and `detailRevs`. It spans five weeks (2026-09-21 to 2026-10-19): four with data, and
   2026-09-28 left empty so it carries the plan before it forward. It has plans edited over time
-  (sets, weights, Back extensions removed, Plank added), 102 ticks, a diet with an added food,
-  details for Push-ups (notes and two fields) and Fish (one field), and non-default settings.
+  (sets, weights, Back extensions removed, Plank added), 108 ticks, a diet with an added food,
+  cardio (Cycling with a time, Running with a distance and a Route, K90), details for Push-ups
+  (notes and two fields), Fish (one field) and Running, and non-default settings.
   `export.json` is the version 5 export it must produce. A new cache format needs a new snapshot:
   `App.spec.ts` fails when the key isn't `CACHE_PREFIX`'s. `App.spec.ts` seeds the snapshot and checks Export gives
   `export.json`. It also imports `export.json` into an empty account and checks the cache and the
@@ -222,7 +226,8 @@ listed in [api.md](api.md) §10):
   normal form. `src/lib/__tests__/itemSections.spec.ts` and the API's `test_item_sections.py` both
   run every case, and the web spec also covers showing, hiding and moving a section.
 - `src/lib/__tests__/trackerTypes.spec.ts`: also each type's cycle, which `cycleFor` reads, its
-  labels, an exercise's chips and a food's none, and `isSection`.
+  labels, an exercise's chips, cardio's time and distance and a food's none, cardio's missing daily
+  target, the week's order (Exercises, Cardio, Food) and `isSection`.
 - `src/lib/__tests__/history.spec.ts`: an item's recent weeks (eight ending with the opened week,
   newest first, none before its first plan, goals from the plan each week shows, the default plan
   when nothing is planned), the latest plan holding an item, a week's count and whether it met its
@@ -295,6 +300,10 @@ listed in [api.md](api.md) §10):
 - `src/stores/__tests__/diet.spec.ts`: food toggling in the planner's week, shared week navigation,
   goal clamping, renaming, add/remove, carrying food plans forward, `adopt`, `adoptWeek` and `clear`, the
   old diet keys never being written, and no note kept in the week.
+- `src/stores/__tests__/cardio.spec.ts`: the cardio store (K90): no default items, the exercise's
+  cycle in each mark set, every kind of mark counting towards the goal, adding and changing a time
+  and a distance (rounded and capped), the goal clamped and kept, removal from one week only, and
+  following the planner's week.
 - `src/stores/__tests__/details.spec.ts`: the details store: a note edited on one week showing on
   every week (owned plans included), readers updating when an item's first details arrive, storing
   as the API would, fields beside the notes (unknown keys kept), and refusing a bad field key, notes
@@ -312,7 +321,8 @@ listed in [api.md](api.md) §10):
 - `src/stores/__tests__/sync.spec.ts`: the sync store against the fake API:
   - the cache shown at once, then the server's state; no cache, or a broken one;
   - a first tick creating the week's plan before the tick, and revisions carried forward;
-  - diet and settings writes, and a toggle made while its write is in flight;
+  - diet, cardio and settings writes, a cardio conflict, a state with no cardio read as none
+    (K90), and a toggle made while its write is in flight;
   - offline queueing, the backing-off retry timer, gateway errors as offline, and 401s handing
     control back;
   - conflicts (taking the server's copy with a notice, re-creating when the server has none, no
@@ -322,7 +332,8 @@ listed in [api.md](api.md) §10):
   - other tabs' cache and outbox writes (a cache adopted, never written back, even from older
     code), stop and forget, the old keys never written, `diff` and
     `normaliseState`;
-  - the older caches and outboxes moved at sign-in, the newer winning, and a tab from before
+  - the older caches and outboxes moved at sign-in, the newer winning, a `-v4` one moved as it
+    is with nothing lifted (K90), and a tab from before
     the solid and hatch drawings unable to empty a `great-solid` day (K41);
   - `importFile`: queued writes first, then one server import and a read; offline, refused, a
     full account (`quota`), 401, and nobody signed in.
@@ -416,7 +427,8 @@ listed in [api.md](api.md) §10):
   as you type, Done and Escape, the count from 19,000, over 20,000 and over 32 KB, the server's copy
   arriving while editing), details (the type's fields, the 500 limit, the Link's "Open … in a new
   tab", printing filled fields), this week's plan (each change applied at once, a number that isn't
-  valid, another week, a food's goal), an item not in the week (its latest plan, read-only),
+  valid, another week, a food's goal, a cardio item's Minutes and Distance in km with their limits,
+  K90), an item not in the week (its latest plan, read-only),
   recent weeks, and arranging (K66: the shown sections in the type's order, Show, Move up and
   Move down, focus kept on the moved section's button, the ends, Escape, every section hidden).
 - `src/components/__tests__/RecentWeeks.spec.ts`: the list labelled by its heading, newest first,
@@ -436,10 +448,17 @@ listed in [api.md](api.md) §10):
   early, moved, cancelled, held with another button, or in a field, popover, dialog or the bar),
   the held day cell or button left unpressed, a later click not swallowed, a finger's or pen's
   context menu kept back, the handle's press and pull opening Edit plan, Escape taking focus out
-  of the floating bar, and the arrows between the screens, named for where they go (K42).
+  of the floating bar, and the four arrows between the three screens, named for where they go
+  and each sprinting to its screen (K42, K90).
 - `src/components/__tests__/DietSection.spec.ts`: the diet section in the mounted app: default
   foods, ticking (totals checked in the store), shared week navigation, add and remove (after
   a confirmation) and the goal set in the Edit food dialog (in config mode), cross-tab sync.
+- `src/components/__tests__/CardioSection.spec.ts`: the Cardio section in the mounted app (K90):
+  between Exercises and Food and empty for an account with none, the time and distance chips, no
+  day turning green and no daily target in Edit plan, the exercise's marks, Add cardio and Edit
+  cardio (cleaned Minutes and Distance in km, a blank amount left out, notes, too-big notes, an id
+  with a slash, Cancel and Close), removing after a confirmation, and the dialog closing when
+  another tab removes the item or the week changes.
 
 `vitest.config.ts` sets coverage thresholds (100% lines and functions, 99% statements, 98%
 branches), so `npm run test:coverage` and CI fail when coverage drops below them. Coverage covers

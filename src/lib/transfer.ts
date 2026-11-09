@@ -4,6 +4,7 @@ import {
   cutText,
   isRecord,
   liftNotes,
+  normaliseCardio,
   normaliseDetailsMap,
   normaliseExercise,
   normaliseFood,
@@ -13,6 +14,7 @@ import {
   parseJson,
   type AskStop,
   type AskTurn,
+  type Cardio,
   type Conversation,
   type Days,
   type DetailsMap,
@@ -47,7 +49,7 @@ export const OLD_EXPORT_FORMATS: readonly unknown[] = [
  * reads as `great`. All five import. Settings may carry My goals (`goals`) with no new version,
  * as `foodPick` came: a reader from before them drops the key, and a file without them reads as
  * none. Ask's conversations (`conversations`), which only the API's export writes, came the same
- * way.
+ * way, and so did the `cardio` section (K90): a file without one reads as no cardio.
  */
 export const EXPORT_VERSION = 5
 /** The last version whose notes live in plan items. */
@@ -72,6 +74,7 @@ const ANSWERED: readonly AskStop[] = ['end_turn', 'max_tokens']
 
 export type ExportData = {
   exercise: SectionData<Exercise>
+  cardio: SectionData<Cardio>
   diet: SectionData<Food>
   /** Null when the file carries no settings. */
   settings: PortableSettings | null
@@ -84,6 +87,7 @@ export type ExportFile = {
   version: typeof EXPORT_VERSION
   exportedAt: string
   exercise: SectionData<Exercise>
+  cardio: SectionData<Cardio>
   diet: SectionData<Food>
   settings: PortableSettings
 }
@@ -95,6 +99,7 @@ export type ParseResult = { ok: true; data: ExportData } | { ok: false; error: P
 /** The theme is left out on purpose: it belongs to the device, not the person. */
 export function buildExport(input: {
   exercise: SectionData<Exercise>
+  cardio: SectionData<Cardio>
   diet: SectionData<Food>
   settings: PortableSettings
   now?: Date
@@ -105,6 +110,7 @@ export function buildExport(input: {
     version: EXPORT_VERSION,
     exportedAt: (input.now ?? new Date()).toISOString(),
     exercise: section(input.exercise),
+    cardio: section(input.cardio),
     diet: section(input.diet),
     // Normalised as the API's export writes them: the item pages' arrangement only when a type
     // has one (K66).
@@ -149,6 +155,7 @@ export function parseExport(text: string): ParseResult {
   const itemNotes = (parsed.version as number) <= LAST_ITEM_NOTES_VERSION
   const data: ExportData = {
     exercise: section(parsed.exercise, normaliseExercise, itemNotes),
+    cardio: section(parsed.cardio, normaliseCardio, itemNotes),
     diet: section(parsed.diet, normaliseFood, itemNotes),
     settings: isRecord(parsed.settings) ? normalisePortableSettings(parsed.settings) : null,
   }

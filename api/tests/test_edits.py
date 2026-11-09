@@ -103,6 +103,7 @@ def test_words_map_to_the_stored_keys_and_back() -> None:
         "seconds": "duration",
         "per_side": "perSide",
         "weight_kg": "weight",
+        "distance_km": "distance",
         "times_a_week": "target",
         "note": "notes",
     }
@@ -645,7 +646,7 @@ def test_add_refuses_exercise_fields_on_a_food(
     with pytest.raises(edits.EditError) as e:
         add(conn, config, uid, section="diet", name="Beans", reps=3)
     assert e.value.field == "reps"
-    assert "exercises only" in str(e.value)
+    assert str(e.value) == "reps: a food has no reps; it has name, times_a_week, note"
     # An exercise field left out (None) is no field at all, as the tools send it.
     out = add(conn, config, uid, section="diet", name="Beans", reps=None, seconds=None)
     assert out["item"]["name"] == "Beans"
@@ -912,3 +913,97 @@ def test_set_daily_targets_refuses_out_of_range_values(
         "goals": "",
         "dailyGoal": True,
     }
+
+
+# --- cardio (K90) --------------------------------------------------------------------------------
+
+
+def test_cardio_takes_a_session_and_a_distance(
+    conn: sqlite3.Connection, config: Config, uid: int
+) -> None:
+    """A cardio item's `seconds` is the whole session's, up to a day, and `distance_km` its km;
+    with no cardio plan anywhere, the week starts from none (no defaults)."""
+    out = add(conn, config, uid, section="cardio", name="Cycling", seconds=86_400)
+    assert (out["before"], out["copied_from"]) == ([], "defaults")
+    cycling = out["item"]
+    assert cycling == {"id": cycling["id"], "name": "Cycling", "seconds": 86_400, "times_a_week": 3}
+    out = add(conn, config, uid, section="cardio", name="Running", distance_km=5)
+    assert out["item"]["distance_km"] == 5
+    out = edits.update_item(
+        conn, config, uid, "cardio", WEEK, cycling["id"], {"seconds": 1800, "distance_km": 0}
+    )
+    # 0 clears a distance, as a weight of 0 is bodyweight.
+    assert out["item"] == {**cycling, "seconds": 1800}
+    out = edits.update_item(
+        conn, config, uid, "cardio", WEEK, cycling["id"], {"distance_km": 12.345}
+    )
+    assert out["item"]["distance_km"] == 12.35
+    assert [it["name"] for it in plans(conn, uid, "cardio")[WEEK]] == ["Cycling", "Running"]
+
+
+@pytest.mark.parametrize(
+    ("fields", "field", "words"),
+    [
+        ({"name": "Rowing", "seconds": 86_401}, "seconds", "0 to 86400"),
+        ({"name": "Rowing", "distance_km": 1001}, "distance_km", "0 to 1000 km"),
+        ({"name": "Rowing", "distance_km": -1}, "distance_km", "0 to 1000 km"),
+        ({"name": "Rowing", "distance_km": float("inf")}, "distance_km", "0 to 1000 km"),
+        ({"name": "Rowing", "distance_km": "far"}, "distance_km", "number of km"),
+        ({"name": "Rowing", "distance_km": True}, "distance_km", "number of km"),
+        (
+            {"name": "Rowing", "sets": 3},
+            "sets",
+            "a cardio item has no sets; it has name, seconds, distance_km, times_a_week, note",
+        ),
+        ({"name": "Rowing", "weight_kg": 10}, "weight_kg", "a cardio item has no weight_kg"),
+    ],
+)
+def test_cardio_refuses_a_bad_field_by_name(
+    conn: sqlite3.Connection,
+    config: Config,
+    uid: int,
+    fields: dict[str, object],
+    field: str,
+    words: str,
+) -> None:
+    with pytest.raises(edits.EditError) as e:
+        add(conn, config, uid, section="cardio", **fields)
+    assert e.value.field == field
+    assert words in str(e.value)
+    assert plans(conn, uid, "cardio") == {}
+
+
+@pytest.mark.parametrize("section", ["exercise", "diet"])
+def test_a_distance_is_for_cardio_only(
+    conn: sqlite3.Connection, config: Config, uid: int, section: Section
+) -> None:
+    with pytest.raises(edits.EditError) as e:
+        add(conn, config, uid, section=section, name="Dips", distance_km=3)
+    assert e.value.field == "distance_km"
+    assert "has no distance_km" in str(e.value)
+
+
+def test_an_empty_cardio_update_names_cardios_fields(
+    conn: sqlite3.Connection, config: Config, uid: int
+) -> None:
+    with pytest.raises(edits.EditError) as e:
+        edits.update_item(conn, config, uid, "cardio", WEEK, "cy", {})
+    assert str(e.value) == (
+        "item: nothing to change; give one of name, seconds, distance_km, times_a_week, note"
+    )
+
+
+def test_cardio_takes_every_mark(conn: sqlite3.Connection, config: Config, uid: int) -> None:
+    """A cardio item is marked as an exercise is: great, partial or missed in any drawing."""
+    plan(
+        conn,
+        uid,
+        WEEK,
+        [{"id": "ru", "name": "Running", "distance": 5, "target": 3}],
+        section="cardio",
+    )
+    for mark in ("partial", "missed-hatch", "great-solid"):
+        assert edits.mark_day(conn, config, uid, "cardio", FRIDAY, "ru", mark)["after"] == mark
+    with pytest.raises(edits.EditError) as e:
+        edits.mark_day(conn, config, uid, "cardio", FRIDAY, "cy", "great")
+    assert e.value.field == "item_id"

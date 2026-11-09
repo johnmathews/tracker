@@ -32,7 +32,7 @@ EMPTY: dict[str, dict[str, Any]] = {
     "revs": {},
     "detailRevs": {},
 }
-EMPTY_STATE = {"exercise": EMPTY, "diet": EMPTY, "settings": None}
+EMPTY_STATE = {"exercise": EMPTY, "cardio": EMPTY, "diet": EMPTY, "settings": None}
 
 
 def invite(config: Config, name: str) -> str:
@@ -751,7 +751,7 @@ def test_settings_without_item_sections_keep_the_saved_arrangement(
         None,
         [],
         "history",
-        {"cardio": ARRANGED},
+        {"swimming": ARRANGED},
         {"diet": ARRANGED},
         {"exercise": ["history"]},
         {"exercise": {"order": ["history"]}},
@@ -785,7 +785,7 @@ def test_a_stored_arrangement_reads_without_types_it_does_not_know(
     try:
         conn.execute(
             "UPDATE settings SET item_sections = ?",
-            (json.dumps({"cardio": ARRANGED, "exercise": ARRANGED}),),
+            (json.dumps({"swimming": ARRANGED, "exercise": ARRANGED}),),
         )
     finally:
         conn.close()
@@ -869,7 +869,7 @@ def test_an_import_may_be_up_to_six_mebibytes(client: TestClient, config: Config
     sign_up(client, config)
     r = post_import(client, padded_export(3 << 20))
     assert r.status_code == 200
-    assert r.json()["weeks"] == 6
+    assert r.json()["weeks"] == 7
 
 
 def test_a_chunked_import_over_a_mebibyte_is_read(client: TestClient, config: Config) -> None:
@@ -896,9 +896,10 @@ def test_sample_import_then_export_round_trips(client: TestClient, config: Confi
     r = post_import(client, sample)
     # The same counts the browser's confirm step shows for this file (App.spec.ts).
     assert r.json() == {
-        "weeks": 6,
-        "ticks": 102,
-        "details": 2,
+        # Six weeks of exercise and food plans and one of cardio (K90).
+        "weeks": 7,
+        "ticks": 108,
+        "details": 3,
         "settings": True,
         "conversations": 0,
     }

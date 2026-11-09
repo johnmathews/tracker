@@ -1054,6 +1054,7 @@ describe('export and import with the sample data', () => {
 
   const cache = storage[CACHE_PREFIX + USER] as SyncState
   const { revs: _er, detailRevs: _ed, ...exercise } = cache.exercise
+  const { revs: _cr, detailRevs: _cd, ...cardio } = cache.cardio
   const { revs: _dr, detailRevs: _dd, ...diet } = cache.diet
   const { accent, dailyPick, foodPick } = cache.settings as PortableSettings
   // The cache and the file carry the same goals.
@@ -1122,19 +1123,26 @@ describe('export and import with the sample data', () => {
     await input.trigger('change')
     await flushPromises()
     expect(wrapper.get('[data-testid="import-summary"]').text()).toBe(
-      'Adds six weekly plans and 102 marked days, plus the notes and details of two items, the exercises and foods a day and your goals. Existing plans and marks stay as they are.',
+      'Adds seven weekly plans and 108 marked days, plus the notes and details of three items, the exercises and foods a day and your goals. Existing plans and marks stay as they are.',
     )
     await button('Import').trigger('click')
     await flushPromises()
     const { revs: _e, detailRevs: _ed, ...cachedExercise } = cached().exercise
+    const { revs: _c, detailRevs: _cd, ...cachedCardio } = cached().cardio
     const { revs: _d, detailRevs: _dd, ...cachedDiet } = cached().diet
     expect(cachedExercise).toEqual(exercise)
+    expect(cachedCardio).toEqual(cardio)
     expect(cachedDiet).toEqual(diet)
     expect(cached().settings).toEqual({ accent, dailyPick, foodPick, goals })
     // Every plan, tick and item's details reached the server too.
     const server = api.state(USER) as SyncState
     const { plans, log, details } = server.exercise
     expect({ plans, log, details }).toEqual(exercise)
+    expect({
+      plans: server.cardio.plans,
+      log: server.cardio.log,
+      details: server.cardio.details,
+    }).toEqual(cardio)
     expect({
       plans: server.diet.plans,
       log: server.diet.log,

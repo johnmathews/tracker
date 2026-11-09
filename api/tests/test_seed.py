@@ -71,7 +71,7 @@ def test_fills_three_weeks_ending_today_with_every_kind_and_drawing(
 ) -> None:
     result = seed.seed(conn, local, seed.DEMO_EMAIL, None)
     # Three weeks of plans in each section.
-    assert result["weeks"] == 6
+    assert result["weeks"] == 9
     exported = export_file(conn, user_id(conn, seed.DEMO_EMAIL), local.clock())
     data = parse_export(json.dumps(exported))
     weeks = sorted(data["exercise"]["plans"])
@@ -79,7 +79,7 @@ def test_fills_three_weeks_ending_today_with_every_kind_and_drawing(
     assert date.fromisoformat(weeks[-1]).weekday() == 0
     marks = {
         m
-        for section in ("exercise", "diet")
+        for section in ("exercise", "cardio", "diet")
         for week in data[section]["log"].values()
         for days in week.values()
         for m in days
@@ -101,10 +101,9 @@ def test_gives_demo_items_details_for_the_item_page(
 ) -> None:
     seed.seed(conn, local, seed.DEMO_EMAIL, None)
     exported = export_file(conn, user_id(conn, seed.DEMO_EMAIL), local.clock())
-    demo: tuple[tuple[Section, str], ...] = (("exercise", "pu"), ("diet", "fish"))
+    demo: tuple[tuple[Section, str], ...] = (("exercise", "pu"), ("cardio", "ru"), ("diet", "fish"))
     for section, item_id in demo:
         details = exported[section]["details"][item_id]
-        assert details["notes"]
         assert details["fields"]
         # Every demo field is one the type lists, so the page shows it.
         keys = {f.key for f in SECTION_TYPES[section].fields}
@@ -159,8 +158,8 @@ def test_cli_prints_the_login_and_what_it_added(
     assert main(["seed-demo"], env, clock=Clock()) == 0
     out = capsys.readouterr().out
     assert f"Created {seed.DEMO_EMAIL} with the password '{seed.DEMO_PASSWORD}'." in out
-    assert "Added 6 week plans, " in out
-    assert " marks and details for 2 items." in out
+    assert "Added 9 week plans, " in out
+    assert " marks and details for 3 items." in out
     assert f"Sign in at {LOCAL}/" in out
     assert main(["seed-demo"], env, clock=Clock()) == 0
     out = capsys.readouterr().out
@@ -178,7 +177,7 @@ def test_cli_reports_details_added_to_weeks_already_there(
     capsys.readouterr()
     assert main(["seed-demo"], env, clock=Clock()) == 0
     out = capsys.readouterr().out
-    assert "Added details for 2 items." in out
+    assert "Added details for 3 items." in out
     assert "Nothing to add" not in out
 
 
@@ -186,3 +185,26 @@ def test_cli_refuses_a_deployed_config(config: Config, capsys: pytest.CaptureFix
     env = {"DATA_DIR": str(config.data_dir), "PUBLIC_ORIGIN": "https://fitness.example.com"}
     assert main(["seed-demo"], env, clock=Clock()) == 1
     assert "runs only on a local stack" in capsys.readouterr().err
+
+
+def test_adds_cardio_to_an_account_from_before_it(local: Config, conn: sqlite3.Connection) -> None:
+    """K90: an account seeded before Cardio has its exercise and food weeks; a run now adds
+    Cycling (30 min) and Running (5 km) and their marks, and nothing else."""
+    seed.seed(conn, local, seed.DEMO_EMAIL, None)
+    uid = user_id(conn, seed.DEMO_EMAIL)
+    for table in ("plans", "ticks", "item_details"):
+        conn.execute(f"DELETE FROM {table} WHERE section = 'cardio'")  # noqa: S608
+    before = export_file(conn, uid, local.clock())
+    assert before["cardio"] == {"plans": {}, "log": {}, "details": {}}
+    again = seed.seed(conn, local, seed.DEMO_EMAIL, None)
+    assert (again["weeks"], again["details"]) == (3, 1)
+    after = export_file(conn, uid, local.clock())
+    assert {k: after[k] for k in ("exercise", "diet")} == {
+        k: before[k] for k in ("exercise", "diet")
+    }
+    this_week = max(after["cardio"]["plans"])
+    assert after["cardio"]["plans"][this_week] == [
+        {"id": "cy", "name": "Cycling", "duration": 1800, "target": 2},
+        {"id": "ru", "name": "Running", "distance": 5, "target": 2},
+    ]
+    assert seed.seed(conn, local, seed.DEMO_EMAIL, None)["weeks"] == 0

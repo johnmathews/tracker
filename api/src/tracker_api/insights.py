@@ -12,7 +12,8 @@ Names and notes are cut in their output, since they reach a model as text (docs/
 except `item_history`'s note: one item's, given whole so it can be read before it is rewritten.
 
 While Daily goal is off (K85) the readers give no daily target and no met days: those fields are
-None, never False or 0, so nothing reads as a day missed. The rules above stay as they are; the
+None, never False or 0, so nothing reads as a day missed. Cardio has no daily target at all (K90),
+so its are None whatever the switch says. The rules above stay as they are; the
 switch applies where a reader builds its output. Item goals don't depend on it.
 """
 
@@ -20,10 +21,10 @@ import copy
 import sqlite3
 from collections.abc import Mapping, Sequence
 from datetime import date, timedelta
-from typing import TypedDict, cast
+from typing import NotRequired, TypedDict, cast
 
 from .data import load_settings, load_tracked, notes_of
-from .types import EXERCISE, SECTION_TYPES
+from .types import CARDIO, EXERCISE, SECTION_TYPES
 from .validate import (
     DEFAULT_DAILY_PICK,
     DEFAULT_FOOD_PICK,
@@ -45,8 +46,11 @@ type WeekLog = Mapping[str, Sequence[str | None]]
 
 
 def default_items(section: Section) -> list[Item]:
-    """The items a week shows while nothing is planned: storage.ts's defaultExercises and
+    """The items a week shows while nothing is planned: storage.ts's defaultExercises,
+    defaultCardio (none: an account from before Cardio shows an empty section) and
     defaultFoods."""
+    if SECTION_TYPES[section] is CARDIO:
+        return []
     if SECTION_TYPES[section] is EXERCISE:
         return [
             {"id": "pu", "name": "Push-ups", "reps": 10, "target": 4},
@@ -155,6 +159,10 @@ class ItemWeek(TypedDict):
     id: str
     name: str
     target: int
+    #: A cardio item's session (K90), in the edit tools' words, when it has them: its whole
+    #: duration in seconds and its distance in km.
+    seconds: NotRequired[int]
+    distance_km: NotRequired[int | float]
     #: "" when the item has none.
     notes: str
     #: Each day's mark kind, Monday first; the drawing is left out.
@@ -173,7 +181,7 @@ class WeekSummary(TypedDict):
     plan_week: str | None
     #: The week has no plan of its own: it shows `plan_week`'s, or the defaults.
     carried: bool
-    #: Exercises a day or foods a day; None while Daily goal is off (K85).
+    #: Exercises a day or foods a day; None while Daily goal is off (K85), and always for cardio.
     daily_target: int | None
     days: list[Day]
     items: list[ItemWeek]
@@ -221,6 +229,9 @@ class GoalItem(TypedDict):
     id: str
     name: str
     target: int
+    #: As ItemWeek's: a cardio item's session, when it has them.
+    seconds: NotRequired[int]
+    distance_km: NotRequired[int | float]
     notes: str
 
 
@@ -228,6 +239,8 @@ class Goals(TypedDict):
     #: Today's week, whose plan the goals are.
     week: str
     exercise: list[GoalItem]
+    #: Cardio's items (K90), which have weekly goals and no daily target.
+    cardio: list[GoalItem]
     diet: list[GoalItem]
     #: Each None while Daily goal is off (K85); the saved numbers come back when it is on.
     exercises_a_day: int | None
@@ -285,8 +298,10 @@ def _week_count(weeks: object) -> int:
 
 def _daily_target(settings: Portable | None, section: Section) -> int | None:
     """Exercises a day or foods a day: the section's type names the setting (K30, K57). None
-    while Daily goal is off (K85)."""
+    while Daily goal is off (K85), and for a type with no daily target (cardio, K90)."""
     key = SECTION_TYPES[section].pick_key
+    if key is None:
+        return None
     if settings is None:
         return DEFAULT_DAILY_PICK if key == "dailyPick" else DEFAULT_FOOD_PICK
     return settings[key] if settings["dailyGoal"] else None
@@ -313,13 +328,34 @@ def _cut_note(text: str) -> str:
     return text if len(text) <= MAX_NOTES else text[: MAX_NOTES - 1] + "…"
 
 
-def _item_week(item: Item, week: WeekLog, details: DetailsMap) -> ItemWeek:
+class Session(TypedDict, total=False):
+    """A cardio item's session (K90), in the edit tools' words."""
+
+    seconds: int
+    distance_km: int | float
+
+
+def session_of(section: Section, item: Item) -> Session:
+    """A cardio item's duration and distance in the edit tools' words, each when it has one
+    (K90). Other types give nothing: an exercise's sets and reps stay out of the readers."""
+    out: Session = {}
+    if SECTION_TYPES[section] is not CARDIO:
+        return out
+    if "duration" in item:
+        out["seconds"] = item["duration"]
+    if "distance" in item:
+        out["distance_km"] = item["distance"]
+    return out
+
+
+def _item_week(section: Section, item: Item, week: WeekLog, details: DetailsMap) -> ItemWeek:
     marks = [_kind(_mark(week, item["id"], i)) for i in range(7)]
     done = total_for(week, item["id"])
     return {
         "id": item["id"],
         "name": _cut(item["name"], MAX_NAME),
         "target": item["target"],
+        **session_of(section, item),
         # The item's notes, one copy for every week (its details), not the week's plan's.
         "notes": _cut_note(notes_of(details, item["id"])),
         "marks": marks,
@@ -351,7 +387,7 @@ def _summary(
             {"date": d.isoformat(), "count": counts[i], "met": met[i], "future": d > today}
             for i, d in enumerate(dates)
         ],
-        "items": [_item_week(it, log, tracked["details"]) for it in items],
+        "items": [_item_week(section, it, log, tracked["details"]) for it in items],
         "goals_met": goals_met(items, log),
         "days_met": None if target is None else sum(1 for m in met if m),
     }
@@ -431,7 +467,7 @@ def item_history(
                 }
             )
             continue
-        shown = _item_week(item, tracked["log"].get(week, {}), tracked["details"])
+        shown = _item_week(section, item, tracked["log"].get(week, {}), tracked["details"])
         name = shown["name"]
         rows.append(
             {
@@ -458,8 +494,8 @@ def item_history(
 
 
 def goals(conn: sqlite3.Connection, user_id: int, today: date) -> Goals:
-    """What today's week asks for: each item's weekly goal, both daily targets (None while
-    Daily goal is off), and the "My goals" note."""
+    """What today's week asks for: each item's weekly goal in each section, both daily targets
+    (None while Daily goal is off; cardio has none), and the "My goals" note."""
     week = monday_of(today).isoformat()
     settings = load_settings(conn, user_id)
     tracked = {section: load_tracked(conn, user_id, section) for section in SECTIONS}
@@ -469,6 +505,7 @@ def goals(conn: sqlite3.Connection, user_id: int, today: date) -> Goals:
                 "id": it["id"],
                 "name": _cut(it["name"], MAX_NAME),
                 "target": it["target"],
+                **session_of(section, it),
                 "notes": _cut_note(notes_of(tracked[section]["details"], it["id"])),
             }
             for it in week_items(section, tracked[section]["plans"], week)
@@ -478,6 +515,7 @@ def goals(conn: sqlite3.Connection, user_id: int, today: date) -> Goals:
     return {
         "week": week,
         "exercise": cast(list[GoalItem], shown["exercise"]),
+        "cardio": cast(list[GoalItem], shown["cardio"]),
         "diet": cast(list[GoalItem], shown["diet"]),
         "exercises_a_day": _daily_target(settings, "exercise"),
         "foods_a_day": _daily_target(settings, "diet"),

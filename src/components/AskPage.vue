@@ -285,9 +285,9 @@ function deleteFocus(): HTMLElement | null {
             class="grid max-w-[72ch] gap-[calc(var(--u)*16)] pb-[calc(var(--u)*28)] text-(length:--set-text)"
           >
             <p class="body text-(length:--set-text) leading-normal text-ink-secondary">
-              Ask about your exercises and food: whether you’re doing enough for your goals, how
-              steady the weeks are, what to change. The answer reads your plans and marks for the
-              last eight weeks{{ noGoals ? '.' : ', and your goals in Settings.' }}
+              Ask about your exercises, cardio and food: whether you’re doing enough for your goals,
+              how steady the weeks are, what to change. The answer reads your plans and marks for
+              the last eight weeks{{ noGoals ? '.' : ', and your goals in Settings.' }}
             </p>
             <p
               v-if="noGoals"

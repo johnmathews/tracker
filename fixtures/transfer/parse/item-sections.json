@@ -12,7 +12,7 @@
       "itemSections": {
         "exercise": { "order": ["history", "plan", "history"], "hidden": ["details", "map"] },
         "food": { "order": "history", "hidden": [] },
-        "cardio": { "order": ["history"], "hidden": [] }
+        "swimming": { "order": ["history"], "hidden": [] }
       }
     }
   },
@@ -20,6 +20,7 @@
     "ok": true,
     "data": {
       "exercise": { "plans": {}, "log": {}, "details": {} },
+      "cardio": { "plans": {}, "log": {}, "details": {} },
       "diet": { "plans": {}, "log": {}, "details": {} },
       "settings": {
         "accent": "#30d158",

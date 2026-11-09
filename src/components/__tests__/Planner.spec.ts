@@ -317,8 +317,11 @@ describe('the planner grids (W10)', () => {
         'Print…',
         'Push-ups, Friday 23 October, today',
         // The PlannerScreen's arrows between the screens (K42); the handle is for a finger only.
-        'Go to Food',
+        // Cardio's grid, empty until something is planned (K90), has no stop of its own.
+        'Go to Cardio',
         'Back to Exercises',
+        'Go to Food',
+        'Back to Cardio',
         'Vegetables, Friday 23 October, today',
       ])
     })
@@ -425,8 +428,20 @@ describe('the planner grids (W10)', () => {
     it('gives each section an h2 and no hint line', () => {
       mountApp()
       const sections = wrapper.findAll('section[aria-labelledby]')
-      expect(sections.map((s) => s.get('h2').text())).toEqual(['Exercises', 'Food'])
+      expect(sections.map((s) => s.get('h2').text())).toEqual(['Exercises', 'Cardio', 'Food'])
       expect(wrapper.find('[data-slot="section-hint"]').exists()).toBe(false)
+    })
+
+    it('keeps the Cardio heading with its grid on paper, apart from Exercises (K90)', () => {
+      mountApp()
+      const header = wrapper.get('#cardio-heading').element.closest('[data-slot="section-header"]')!
+      expect(header.classList).toContain('print:break-after-avoid')
+      const grid = wrapper.get('[data-testid="cardio-grid"]').element
+      const block = grid.closest('[data-print-keep]')!
+      expect(block.contains(header)).toBe(true)
+      expect(block.classList).toContain('print:break-inside-avoid')
+      // On paper a rule and some space set it apart, as Food's (F20).
+      expect(block.closest('section')!.classList).toContain('print:mt-4')
     })
 
     it('keeps the Food heading with its grid on paper', () => {

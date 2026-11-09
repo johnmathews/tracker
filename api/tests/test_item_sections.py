@@ -48,6 +48,8 @@ ARRANGED = {"order": ["history", "notes", "details", "plan"], "hidden": ["detail
         {},
         {"exercise": ARRANGED},
         {"exercise": ARRANGED, "food": {"order": [], "hidden": []}},
+        # Cardio is a type (K90), so it has an arrangement of its own.
+        {"cardio": ARRANGED},
         # Within the shape, unknown and repeated keys normalise rather than refuse.
         {"food": {"order": ["map", "plan", "plan"], "hidden": ["map"], "extra": 1}},
     ],
@@ -62,7 +64,7 @@ def test_valid_shapes(value: object) -> None:
         None,
         [],
         "notes",
-        {"cardio": ARRANGED},
+        {"swimming": ARRANGED},
         {"diet": ARRANGED},
         {"__proto__": ARRANGED},
         {"exercise": None},

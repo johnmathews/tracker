@@ -8,6 +8,7 @@ export const USER = 'alice'
 export function emptyState(): SyncState {
   return {
     exercise: { plans: {}, log: {}, details: {}, revs: {}, detailRevs: {} },
+    cardio: { plans: {}, log: {}, details: {}, revs: {}, detailRevs: {} },
     diet: { plans: {}, log: {}, details: {}, revs: {}, detailRevs: {} },
     settings: null,
   }

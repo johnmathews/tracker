@@ -12,6 +12,10 @@
 The server lives at `/api/mcp` and lets an agent read the training log and, with a write token,
 change it. Each token or connection belongs to one account and acts only as that account.
 
+The log has three trackers, each a `section` the tools take: `exercise` (the default), `cardio`
+and `diet` (food). A cardio item, such as cycling or running, has a session time in seconds and a
+distance in km, either, both or neither. It has a weekly goal but no daily target.
+
 **Read tools** answer questions about the log. A `read` or a `write` token may call them.
 
 | Tool           | Answers                                                         |
@@ -19,7 +23,7 @@ change it. Each token or connection belongs to one account and acts only as that
 | `whoami`       | Which account and scope the token has. Use it to test the link. |
 | `week_summary` | How one week went, item by item, against its goals.             |
 | `weeks`        | Several weeks side by side, for a trend.                        |
-| `item_history` | One exercise or food over the last weeks, and its whole note.   |
+| `item_history` | One item over the last weeks, and its whole note.               |
 | `goals`        | This week's goals, the daily targets and the "My goals" note.   |
 | `consistency`  | The share of days and goals met, and the current streaks.       |
 
@@ -27,7 +31,7 @@ change it. Each token or connection belongs to one account and acts only as that
 
 | Tool                | Does                                                |
 | ------------------- | --------------------------------------------------- |
-| `add_item`          | Adds an exercise or a food to a week's plan.        |
+| `add_item`          | Adds an item to a week's plan, in any tracker.      |
 | `update_item`       | Changes the fields given on one item, or its note.  |
 | `remove_item`       | Takes one item out of a week's plan.                |
 | `mark_day`          | Marks one item on one date, or clears the day.      |
@@ -257,6 +261,7 @@ With a write token or a Read and change connection, ask for a change:
 - "Mark squats as done today."
 - "Set my daily target to 3 exercises."
 - "Add a note to squats: knees out."
+- "Add a 5 km run to cardio, twice a week."
 
 Every write tool returns what it changed as it was (`before`) and as it is now (`after`): a week's
 items with their notes, a day's mark, or the two daily targets. To undo a change, ask the agent to restore the

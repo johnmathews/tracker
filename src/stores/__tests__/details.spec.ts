@@ -38,7 +38,7 @@ describe('details store', () => {
   it('starts with no details in any section', () => {
     const details = useDetailsStore()
     expect(details.docs).toEqual(noDetails())
-    expect(details.docs).toEqual({ exercise: {}, diet: {} })
+    expect(details.docs).toEqual({ exercise: {}, cardio: {}, diet: {} })
     expect(details.get('exercise', 'sq')).toEqual({})
     expect(details.notesOf('diet', 'veg')).toBe('')
     expect(details.fieldOf('diet', 'veg', 'serving')).toBe('')
@@ -117,14 +117,18 @@ describe('details store', () => {
 
   it('adopts every section, one item, and clears', () => {
     const details = useDetailsStore()
-    details.adopt({ exercise: { sq: { notes: 'A' } }, diet: { veg: { notes: 'B' } } })
+    details.adopt({
+      ...noDetails(),
+      exercise: { sq: { notes: 'A' } },
+      diet: { veg: { notes: 'B' } },
+    })
     expect(details.notesOf('diet', 'veg')).toBe('B')
     details.adoptItem('exercise', 'sq', { notes: 'C' })
     details.adoptItem('diet', 'veg', null)
     details.adoptItem('diet', 'fish', {})
-    expect(details.docs).toEqual({ exercise: { sq: { notes: 'C' } }, diet: {} })
+    expect(details.docs).toEqual({ exercise: { sq: { notes: 'C' } }, cardio: {}, diet: {} })
     details.clear()
-    expect(details.docs).toEqual({ exercise: {}, diet: {} })
+    expect(details.docs).toEqual({ exercise: {}, cardio: {}, diet: {} })
   })
 
   it('refuses an id the API cannot name, __proto__ among them, and changes nothing', () => {

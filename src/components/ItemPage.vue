@@ -12,16 +12,20 @@ import {
 } from 'vue'
 import { ArrowDown, ArrowUp, Check, ChevronLeft, List, Pencil } from '@lucide/vue'
 import { usePlannerStore } from '@/stores/planner'
+import { useCardioStore } from '@/stores/cardio'
 import { useDetailsStore } from '@/stores/details'
 import { useItemSource } from '@/composables/itemSource'
 import { MEASURE_OPTIONS, useExerciseForm } from '@/composables/exerciseForm'
+import { useCardioForm } from '@/composables/cardioForm'
 import { dayMonth } from '@/lib/dates'
 import { itemHistory, latestPlanWith, weekMonday } from '@/lib/history'
 import { renderNote } from '@/lib/markdown'
 import { detailsIdProblem } from '@/lib/problems'
 import { backToWeek, webHost } from '@/lib/routes'
 import {
+  MAX_CARDIO_DURATION,
   MAX_DETAILS_NOTES,
+  MAX_DISTANCE,
   MAX_DURATION,
   MAX_FIELD,
   MAX_SETS,
@@ -30,6 +34,7 @@ import {
   MIN_TARGET,
   NOTES_COUNT_FROM,
   codePoints,
+  type Cardio,
   type Exercise,
 } from '@/lib/storage'
 import { SECTIONS, type Section } from '@/lib/trackerTypes'
@@ -68,6 +73,7 @@ const LINES = {
 }
 
 const planner = usePlannerStore()
+const cardio = useCardioStore()
 const details = useDetailsStore()
 const source = useItemSource()
 const heading = useTemplateRef<HTMLHeadingElement>('heading')
@@ -76,6 +82,7 @@ const ids = { notes: useId(), plan: useId(), weeks: useId(), details: useId(), f
 
 const type = computed(() => SECTIONS[props.section])
 const isExercise = computed(() => type.value.id === 'exercise')
+const isCardio = computed(() => type.value.id === 'cardio')
 const src = computed(() => source(props.section))
 /** The item in the week the page was opened from (the week the planner shows), if it's there. */
 const inWeek = computed(() => src.value.items.find((it) => it.id === props.itemId) ?? null)
@@ -111,14 +118,25 @@ const planLine = computed(() => {
 
 const form = useExerciseForm()
 const { sets, reps, weight, perSide, measure, measureChoice, amountLabel } = form
-const planErrors = reactive<{ sets?: string; reps?: string; weight?: string }>({})
+/** A cardio item's time and distance (K90). */
+const cardioForm = useCardioForm()
+const { minutes, distance } = cardioForm
+const planErrors = reactive<{
+  sets?: string
+  reps?: string
+  weight?: string
+  minutes?: string
+  distance?: string
+}>({})
 /** The plan item as this page last left it: a change from anywhere else reloads the controls. */
 let planSeen = ''
 const planJson = () => JSON.stringify(inWeek.value)
 
 function loadPlan(): void {
-  if (inWeek.value) form.load(inWeek.value as Exercise)
+  if (inWeek.value && isCardio.value) cardioForm.load(inWeek.value as Cardio)
+  else if (inWeek.value) form.load(inWeek.value as Exercise)
   planErrors.sets = planErrors.reps = planErrors.weight = undefined
+  planErrors.minutes = planErrors.distance = undefined
   planSeen = planJson()
 }
 watch(planJson, (now) => {
@@ -131,6 +149,21 @@ function overLimit(value: number | undefined, max: number, unit: string): string
   if (value === undefined || value <= max) return undefined
   const fmt = (n: number) => n.toLocaleString('en-US')
   return `This is ${fmt(value)} ${unit}. Enter ${fmt(max)} or fewer to change the plan.`
+}
+
+/** The cardio item's controls changed: this week's plan takes them, unless a number isn't valid. */
+function applyCardio(): void {
+  const item = inWeek.value!
+  planErrors.minutes = overLimit(cardioForm.minutesValue(), MAX_CARDIO_DURATION / 60, 'minutes')
+  planErrors.distance = overLimit(cardioForm.distanceValue(), MAX_DISTANCE, 'km')
+  if (planErrors.minutes || planErrors.distance) return
+  cardio.updateCardio(item.id, { ...cardioForm.value(), name: item.name, target: item.target })
+  planSeen = planJson()
+}
+
+function onCardioInput(handler: (ev: Event) => void, ev: Event): void {
+  handler(ev)
+  applyCardio()
 }
 
 /** The exercise's controls changed: this week's plan takes them, unless a number isn't valid. */
@@ -175,6 +208,11 @@ const latestRows = computed<[string, string][]>(() => {
     else if (e.reps) rows.push(['Reps', String(e.reps)])
     rows.push(['Weight in kg', e.weight ? String(e.weight) : 'Bodyweight'])
     rows.push([e.duration ? 'Timed' : 'Reps count', e.perSide ? 'Each side' : 'Per set'])
+  }
+  if (isCardio.value) {
+    const c = item as Cardio
+    if (c.duration) rows.push(['Minutes', String(Math.round((c.duration / 60) * 100) / 100)])
+    if (c.distance) rows.push(['Distance in km', String(c.distance)])
   }
   rows.push(['Times a week', String(item.target)])
   return rows
@@ -314,7 +352,7 @@ const TEST_IDS: Record<SectionKey, string> = {
 }
 const arrangeLine = computed(
   () =>
-    `Choose which sections every ${isExercise.value ? 'exercise' : 'food'} page shows, and their order. Changes apply at once.`,
+    `Choose which sections every ${type.value.itemLabel.toLowerCase()} page shows, and their order. Changes apply at once.`,
 )
 
 function focusArrange(): void {
@@ -667,6 +705,31 @@ const LEDE = 'body max-w-[60ch] text-(length:--set-text) leading-normal text-ink
                 :model-value="perSide"
                 :timed="measure === 'time'"
                 @update:model-value="onPerSide"
+              />
+            </template>
+            <!-- A cardio item's time and distance (K90): either may stay blank. -->
+            <template v-else-if="isCardio">
+              <TextField
+                :id="`${ids.form}-minutes`"
+                :model-value="minutes"
+                label="Minutes"
+                inputmode="decimal"
+                maxlength="7"
+                :error="planErrors.minutes"
+                class="[&_input]:max-w-[max(5rem,calc(var(--u)*96))]"
+                data-field="minutes"
+                @input="onCardioInput(cardioForm.onMinutesInput, $event)"
+              />
+              <TextField
+                :id="`${ids.form}-distance`"
+                :model-value="distance"
+                label="Distance in km"
+                inputmode="decimal"
+                maxlength="7"
+                :error="planErrors.distance"
+                class="[&_input]:max-w-[max(11rem,calc(var(--u)*170))]"
+                data-field="distance"
+                @input="onCardioInput(cardioForm.onDistanceInput, $event)"
               />
             </template>
             <Stepper

@@ -427,6 +427,17 @@ scroll, and i want only the tracker content to scroll". Decided on the mockup
 | K88 | On the planner's screens the week is one band fixed at the top: the page's `h1` (WeekHeader), centred, the title serif at `--fs-title` in `ink`, on the canvas, `--week-band` tall. Exercises and Food move under it, each the window's height less the band, and a sprint rests each screen just under it. Once a screen is under it, a 1px hairline in `line` shows at its foot. The sections no longer repeat the week (K86's copy on each screen goes); Food's way back sits on its title's line. A short screen (a phone on its side) keeps K24's layout with no band, and Edit plan and paper are unchanged. Option F1 over F2 (no line) | The quote above. John picked F1, the recommended option |
 | K89 | A wheel the other way is never held back. During a sprint, and until the wheel is quiet after it, a wheel the same way as the sprint is still swallowed (K45: it is a fling's momentum), but one the other way stops the sprint where it is and scrolls, and the scroll sprints back | Found while trying K88: "if i scroll down i cant immediatly scroll back up, or vice versa". Every new step of the wheel restarted the quiet wait, so a turn back did nothing until the wheel paused. John, after the fix: "that works better" |
 
+### 4.21 A third tracker: Cardio (2026-11-09)
+
+Asked for by John, after trying three screens on the round 2 mockup of
+`brand/design-system/mockups/261109-fixed-week`: "if i had three trackers - lets mock an extra one
+up, for cardio (cycling and running), lets see how that works. can i scroll down twice". He then
+asked for it to be built, and answered how it should work.
+
+| ID | Decision | Why |
+| --- | --- | --- |
+| K90 | A third section, Cardio (section and type `cardio`), between Exercises and Food: the week shows Exercises, Cardio, Food, each a screen of its own, and the arrows follow the order (Exercises ↓ "Go to Cardio"; Cardio ↑ "Back to Exercises" and ↓ "Go to Food"; Food ↑ "Back to Cardio"). An item is cycling, running and the like: a name, a time (seconds, shown "30 min"), a distance in km ("5 km"), either, both or neither as chips, and a weekly goal. It is marked like an exercise: great, partial or missed. It has no daily target: no "N per day" Stepper, no day turns green, and Ask and the AI connections give it none; Daily goal (K85) still covers Exercises and Food. The item page's fields are Route and Link. An account from before it has an empty Cardio section: no default items. The cache and outbox move to `-v5` (K14), and the database drops the CHECK on `plans` and `ticks` sections (migration 14), as `item_details` did | John's answers: Cardio goes between Exercises and Food; its items are things like cycling and running; it is marked like an exercise; its chips are a time and/or a distance; it has no daily goal, only each item's weekly goal |
+
 ## 5. Accepted risks
 
 Each is described where it applies:

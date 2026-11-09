@@ -1,6 +1,7 @@
 import { usePlannerStore } from '@/stores/planner'
+import { useCardioStore } from '@/stores/cardio'
 import { useDietStore } from '@/stores/diet'
-import { defaultExercises, defaultFoods, type Log } from '@/lib/storage'
+import { defaultCardio, defaultExercises, defaultFoods, type Log } from '@/lib/storage'
 import type { Plans } from '@/lib/plans'
 import type { Tracked } from '@/lib/tracker'
 import type { Section } from '@/lib/trackerTypes'
@@ -18,11 +19,13 @@ export type ItemSource = {
 }
 
 /**
- * Each section's data from its store (the planner's exercises, the diet store's foods), by the
+ * Each section's data from its store (the planner's exercises, the cardio store's items, the diet
+ * store's foods), by the
  * registry's section names, for the item page and the route that opens it.
  */
 export function useItemSource(): (section: Section) => ItemSource {
   const planner = usePlannerStore()
+  const cardio = useCardioStore()
   const diet = useDietStore()
   const sources: Record<Section, () => ItemSource> = {
     exercise: () => ({
@@ -31,6 +34,13 @@ export function useItemSource(): (section: Section) => ItemSource {
       log: planner.log,
       fallback: defaultExercises(),
       changeTarget: planner.changeTarget,
+    }),
+    cardio: () => ({
+      plans: cardio.plans,
+      items: cardio.items,
+      log: cardio.log,
+      fallback: defaultCardio(),
+      changeTarget: cardio.changeTarget,
     }),
     diet: () => ({
       plans: diet.plans,

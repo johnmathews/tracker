@@ -74,9 +74,10 @@ watch(
   The Food section: the same WeekGrid without chips (the food type has none), under its own
   SectionHeader, and in Edit plan Foods a day centred on the title line, reading "2 per day" (K56, K62, K63) and the Add food
   button under the grid (K54). On screen 56u of space
-  sets it apart from Exercises, with no rule. On paper the heading and the grid stay on one page
+  sets it apart from Cardio, with no rule. On paper the heading and the grid stay on one page
   (F20): the header avoids a break after it, and the pair avoids a break inside. On the planner's
-  screens it is the second screen, under the fixed week (K88), with nothing ruling it off.
+  screens it is the third screen, after Cardio (K90), under the fixed week (K88), with nothing
+  ruling it off.
 -->
 <template>
   <section
@@ -86,13 +87,13 @@ watch(
     aria-labelledby="diet-heading"
   >
     <!-- The way back (PlannerScreen card, K42): an arrow on the screen's top, on the title's line
-         just under the fixed week (K88), sprinting to the top of Exercises. -->
+         just under the fixed week (K88), sprinting to the top of Cardio, the screen before (K90). -->
     <IconButton
-      label="Back to Exercises"
+      label="Back to Cardio"
       class="absolute top-(--screen-gap-top) left-1/2 hidden -translate-x-1/2 text-ink-secondary hover:text-ink full:inline-flex short:hidden"
       data-noprint
-      data-testid="to-exercises"
-      @click="sprintToScreen('exercises-heading')"
+      data-testid="back-to-cardio"
+      @click="sprintToScreen('cardio-heading')"
       ><ChevronUp :size="24"
     /></IconButton>
     <div

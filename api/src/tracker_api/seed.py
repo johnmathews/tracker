@@ -41,6 +41,11 @@ EXERCISES: list[dict[str, object]] = [
     {"id": "kh", "name": "Kettlebell halos", "reps": 8, "perSide": True, "weight": 12, "target": 2},
     {"id": "pl", "name": "Pull-ups", "sets": 3, "reps": 5, "target": 3},
 ]
+#: Cardio (K90): one item timed, one measured, as the sample export has them.
+CARDIO: list[dict[str, object]] = [
+    {"id": "cy", "name": "Cycling", "duration": 1800, "target": 2},
+    {"id": "ru", "name": "Running", "distance": 5, "target": 2},
+]
 FOODS: list[dict[str, object]] = [
     {"id": "veg", "name": "Vegetables", "target": 7},
     {"id": "fruit", "name": "Fruit", "target": 5},
@@ -56,6 +61,9 @@ EXERCISE_DETAILS: dict[str, dict[str, object]] = {
         "On a bad day, do them against the kitchen counter.",
         "fields": {"equipment": "None", "works": "Chest, shoulders, triceps"},
     },
+}
+CARDIO_DETAILS: dict[str, dict[str, object]] = {
+    "ru": {"fields": {"route": "Round the park and back along the river"}},
 }
 FOOD_DETAILS: dict[str, dict[str, object]] = {
     "fish": {
@@ -96,6 +104,12 @@ EXERCISE_WEEKS: list[Week] = [
         "kh": [E, E, GS, E, E, E, E],
         "pl": [M, G, E, E, P, E, E],
     },
+]
+# Cardio takes every kind, as an exercise does; its goals are met in the first and last weeks.
+CARDIO_WEEKS: list[Week] = [
+    {"cy": [E, G, E, E, E, GS, E], "ru": [G, E, E, P, E, E, E]},
+    {"cy": [E, E, G, E, E, E, E], "ru": [E, MH, E, E, G, E, E]},
+    {"cy": [G, E, E, PS, E, E, E], "ru": [E, E, G, E, E, GH, E]},
 ]
 FOOD_WEEKS: list[Week] = [
     {
@@ -154,6 +168,7 @@ def demo_file(today: date) -> str:
             "format": EXPORT_FORMAT,
             "version": EXPORT_VERSION,
             "exercise": section(EXERCISES, EXERCISE_WEEKS, EXERCISE_DETAILS),
+            "cardio": section(CARDIO, CARDIO_WEEKS, CARDIO_DETAILS),
             "diet": section(FOODS, FOOD_WEEKS, FOOD_DETAILS),
             "settings": {"accent": "#30d158", "dailyPick": 3, "foodPick": 2, "dailyGoal": True},
         }

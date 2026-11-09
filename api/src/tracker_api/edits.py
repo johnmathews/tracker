@@ -1,7 +1,8 @@
 """The MCP write tools' rules: change one item, one day's mark or the daily targets, as the web
 app's stores do (docs/api.md §3.1).
 
-Each operation mirrors a store action in src/stores/planner.ts and src/stores/diet.ts:
+Each operation mirrors a store action in src/stores/planner.ts, src/stores/cardio.ts and
+src/stores/diet.ts:
 
 - **A week is owned before it changes** (`own_week`, the stores' `own()`). A week with no plan of
   its own first gets a copy of the plan it shows, so the change never reaches the week it was
@@ -44,11 +45,13 @@ from .data import (
 )
 from .db import transaction
 from .insights import default_items, is_monday, monday_of, plan_source, week_items
-from .types import EXERCISE, FOOD, SECTION_TYPES
+from .types import CARDIO, EXERCISE, FOOD, SECTION_TYPES, TypeId
 from .validate import (
     BLANK,
+    MAX_CARDIO_DURATION,
     MAX_DAILY_PICK,
     MAX_DETAILS_NOTES,
+    MAX_DISTANCE,
     MAX_DURATION,
     MAX_ITEM_ID,
     MAX_SETS,
@@ -78,12 +81,26 @@ WORDS: dict[str, str] = {
     "seconds": "duration",
     "per_side": "perSide",
     "weight_kg": "weight",
+    "distance_km": "distance",
     "times_a_week": "target",
     "note": "notes",
 }
 KEYS: dict[str, str] = {key: word for word, key in WORDS.items()}
-#: The fields a food has; the rest are an exercise's.
+#: The fields a food has.
 FOOD_WORDS = ("name", "times_a_week", "note")
+#: The fields a cardio item has (K90): `seconds` is the whole session's, not a set's.
+CARDIO_WORDS = ("name", "seconds", "distance_km", "times_a_week", "note")
+#: Each type's fields, and the words its refusals use for one item of it.
+TYPE_WORDS: dict[TypeId, tuple[str, ...]] = {
+    EXERCISE.id: tuple(w for w in WORDS if w != "distance_km"),
+    CARDIO.id: CARDIO_WORDS,
+    FOOD.id: FOOD_WORDS,
+}
+AN_ITEM: dict[TypeId, str] = {
+    EXERCISE.id: "an exercise",
+    CARDIO.id: "a cardio item",
+    FOOD.id: "a food",
+}
 #: The app's Reps field takes four digits.
 MAX_REPS = 9999
 #: Whole-number fields and their bounds: the app's forms allow no more. 0 clears sets and seconds.
@@ -223,7 +240,7 @@ def parse_date(text: str) -> date:
     raise EditError("date", "must be a real date, written YYYY-MM-DD")
 
 
-def _field(word: str, value: object) -> object:
+def _field(section: Section, word: str, value: object) -> object:
     """One field in the tools' words, checked; its value as stored."""
     if word in ("name", "note"):
         if not isinstance(value, str):
@@ -242,7 +259,15 @@ def _field(word: str, value: object) -> object:
         if not (math.isfinite(value) and 0 <= value <= MAX_WEIGHT):
             raise EditError(word, f"must be 0 to {MAX_WEIGHT} kg (0 for bodyweight)")
         return value
-    lo, hi = WHOLE[word]
+    if word == "distance_km":
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise EditError(word, "must be a number of km")
+        if not (math.isfinite(value) and 0 <= value <= MAX_DISTANCE):
+            raise EditError(word, f"must be 0 to {MAX_DISTANCE} km (0 clears it)")
+        return value
+    # A cardio session runs longer than an exercise's set: up to a day.
+    cardio = word == "seconds" and SECTION_TYPES[section] is CARDIO
+    lo, hi = (0, MAX_CARDIO_DURATION) if cardio else WHOLE[word]
     if isinstance(value, bool) or not isinstance(value, int):
         raise EditError(word, f"must be a whole number from {lo} to {hi}")
     if not lo <= value <= hi:
@@ -258,9 +283,11 @@ def _changes(section: Section, fields: Mapping[str, object]) -> Item:
             continue
         if word not in WORDS:
             raise EditError(word, f"is not a field; use {', '.join(WORDS)}")
-        if SECTION_TYPES[section] is FOOD and word not in FOOD_WORDS:
-            raise EditError(word, f"is for exercises only; a food has {', '.join(FOOD_WORDS)}")
-        out[WORDS[word]] = _field(word, value)
+        type_id = SECTION_TYPES[section].id
+        if word not in TYPE_WORDS[type_id]:
+            has = ", ".join(TYPE_WORDS[type_id])
+            raise EditError(word, f"{AN_ITEM[type_id]} has no {word}; it has {has}")
+        out[WORDS[word]] = _field(section, word, value)
     # An exercise counts reps or seconds: giving one sets the other aside, as the app's form does.
     if SECTION_TYPES[section] is EXERCISE:
         if out.get("duration", 0) > 0 and "reps" not in out:
@@ -437,7 +464,8 @@ def add_item(
     week: str,
     fields: Mapping[str, object],
 ) -> PlanEdit:
-    """Add an item to the end of the week, with a new id: the stores' `addExercise`, `addFood`.
+    """Add an item to the end of the week, with a new id: the stores' `addExercise`,
+    `addCardio`, `addFood`.
     A `note` becomes the new item's notes, in its details."""
     changes = _changes(_section(section), fields)
     note = changes.pop("notes", None)
@@ -460,12 +488,14 @@ def update_item(
     fields: Mapping[str, object],
 ) -> PlanEdit:
     """Change the fields given of one item in the week, keeping its id, its place and the rest:
-    the stores' `updateExercise`, `updateFood`. A `note` is the item's notes in its details,
+    the stores' `updateExercise`, `updateCardio`, `updateFood`. A `note` is the item's notes in
+    its details,
     the same in every week; given alone, it writes no plan."""
     changes = _changes(_section(section), fields)
     note = changes.pop("notes", None)
     if not changes and note is None:
-        raise EditError("item", f"nothing to change; give one of {', '.join(WORDS)}")
+        words = TYPE_WORDS[SECTION_TYPES[section].id]
+        raise EditError("item", f"nothing to change; give one of {', '.join(words)}")
     item_id = _item_id(item_id)
 
     def update(items: list[Item], _: Tracked) -> tuple[list[Item], Item]:
