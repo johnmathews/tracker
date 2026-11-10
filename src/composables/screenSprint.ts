@@ -100,7 +100,7 @@ const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce
  * A touch screen (a phone, an iPad without a trackpad): there the browser snaps between the
  * screens itself (main.css, K98), with `scroll-snap-stop: always`, so a swipe moves one screen
  * and its momentum is the browser's own. A script setting the position each frame fights iOS's
- * momentum and jitters.
+ * momentum and jitters. The script only turns a slow drag sooner than the snap would (K103).
  */
 export const touchSnaps = () =>
   window.matchMedia?.('(hover: none) and (pointer: coarse)').matches ?? false
@@ -323,7 +323,10 @@ export function sprinting(): boolean {
  * While a sprint runs, and until the wheel is quiet after it, the wheel and a finger can't move
  * the page, unless the wheel turns the other way (K89). At either end a new wheel gesture or a swipe
  * on past it wraps round to the screen at the other end (K92). A resize or a rotation that leaves the page across a line settles on the screen that
- * fills more of the window (K40). The screens are the elements matching `[data-planner-screen]`.
+ * fills more of the window (K40). On a touch screen the browser snaps instead (K98), and the script
+ * keeps to the arrows, the copies beyond each end (K100), a tall screen's stops (K101, K102) and a
+ * slow drag, which it turns after a fifth of the window (K103). The screens are the elements
+ * matching `[data-planner-screen]`.
  * Scrolling inside a screen is left alone, so a screen with more rows than fit scrolls as usual.
  */
 export function useScreenSprint(enabled: Ref<boolean>) {
@@ -647,7 +650,7 @@ export function useScreenSprint(enabled: Ref<boolean>) {
   function onScroll(): void {
     if (!enabled.value) return
     if (touchSnaps()) {
-      // The browser snaps; the script only waits for rest, to step off a copy (K100).
+      // The browser snaps; here the script only waits for rest, to step off a copy (K100).
       touchMoving = true
       clearTimeout(restTimer)
       if (!restsByItself()) restTimer = setTimeout(rest, REST_MS)
@@ -754,7 +757,9 @@ export function useScreenSprint(enabled: Ref<boolean>) {
   }
   /**
    * A finger lifting. A swipe that began at an end and went a step the way past it, with the page
-   * still there, wraps round (K92); anything else is a scroll like any other.
+   * still there, wraps round (K92). On a touch screen, a slow drag gone a fifth of the window glides
+   * on to the next snap point (K103); a cancelled touch counts as a lift. Anything else is a scroll
+   * like any other.
    */
   function onTouchEnd(event: TouchEvent): void {
     finger = false

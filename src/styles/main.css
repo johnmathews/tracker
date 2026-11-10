@@ -147,7 +147,9 @@
    at the next screen, however hard, and iOS keeps its own smooth momentum. A screen taller than
    the window scrolls freely inside. The padding rests each screen under the fixed week. A mouse or
    trackpad keeps the script's sprint (K38, K45), which can leave a tall screen's end. The copies
-   beyond each end (useScreenSprint, K100) snap like the screens, so the wrap round is a swipe too. */
+   beyond each end (useScreenSprint, K100) snap like the screens, so the wrap round is a swipe too.
+   A slow drag turns after a fifth of the window, by script with snapping off, since the snap alone
+   turns only past half (K103). */
 @media screen and (hover: none) and (pointer: coarse) {
   :root.planner-screens {
     scroll-snap-type: y mandatory;

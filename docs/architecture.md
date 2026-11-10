@@ -819,8 +819,8 @@ in it: steps that fall below 70% of their peak and then rise twice, or a mouse w
 pass for one. A new push moves on once the sprint has landed; nothing queues while one runs (K96). A wheel the other way stops the sprint and scrolls back (K89). After a resize or rotation, the page
 settles on the screen that fills more of the window (K40). It replaced `scroll-snap-type: y mandatory`, which a mouse wheel couldn't
 cross from the end of a tall screen. On a touch screen (`(hover: none) and (pointer: coarse)`) the
-script stands aside and main.css snaps instead (K98): `mandatory` with `scroll-snap-stop: always`, so
-one swipe moves one screen and iOS keeps its own momentum. The script still runs the arrows there,
+script mostly stands aside and main.css snaps instead (K98): `mandatory` with `scroll-snap-stop: always`, so
+one swipe moves one screen and a fling keeps iOS's own momentum. The script still runs the arrows there,
 turning snapping off while they move (`touchSnaps`, `snapOff`). The wrap round on touch is a snap
 too (K100): an inert copy of the last screen stands above the first and of the first below the last
 (`data-snap-copy`, snap points in main.css). Once the page rests on one (`scrollend`, or 120ms
@@ -837,7 +837,7 @@ script notes the snap positions (`snapPoints`) and the finger's places; while th
 than 0.3px a ms over the last 100ms, or still, and `turnTarget()` finds the drag has gone a fifth
 of the window, snapping is off. On `touchend` the browser's smooth `scrollTo` carries the page to
 the next snap point the way it went, and snapping comes back on when it rests there, or after
-`GLIDE_MS`. A faster finger turns snapping back on, so a fling stays iOS's own. Four custom variants in main.css carry
+`GLIDE_MS`. A faster finger turns snapping back on, so a fling stays iOS's own. A `touchcancel` counts as a lift. Four custom variants in main.css carry
 the layout, all screen-only so paper keeps the table: `screen:` (the WeekGrid is a CSS grid),
 `full:`, `edit:` (Edit plan's screens, K99), `folded:` (upright under 1000px wide, or under 760px
 wide) and `short:` (landscape, 540px tall or less).

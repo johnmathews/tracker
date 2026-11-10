@@ -17,3 +17,13 @@ each in the background. The local data lives in `api/.data` and holds John's acc
 delete or reset it. Run `uv run tracker-admin seed-demo` from `api/`, with the same environment, when
 the current week has no marks; it only adds what is missing. Then give John the URL and say what
 to try, before any commit or push.
+
+## Shipping
+
+- **Lands by:** direct push (after every CI step passes locally, one push to `main`, no PR)
+- **Environments:**
+  - production (https://tracker.itsa-pizza.com): CI passing on `main` runs the Docker workflow,
+    which publishes `ghcr.io/johnmathews/tracker` and `tracker-api` as `latest`; What's Up Docker
+    on the home server pulls them ([docs/deployment.md](docs/deployment.md)).
+    Check: `gh run list --workflow docker.yml --branch main --limit 1` (the publish; the pull
+    itself shows only in the live site's assets)
