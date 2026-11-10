@@ -197,9 +197,9 @@
   ],
   "lastChange": {
     "by": "John Mathews",
-    "at": "2026-11-10T20:13:21Z",
+    "at": "2026-11-10T21:42:54Z",
     "via": "Claude Code",
-    "note": "A Profile action ends the Header and opens the new Menu: Signed in as, Profile and Sign out (K106). The new ProfilePage holds the account, Your goals and Your limits; SettingsPage keeps Appearance, Daily goal, Your data and Connections (K107)."
+    "note": "PlannerScreen: the screens scroll each wheel step themselves, so a trackpad swipe's momentum stays cancellable and one swipe moves one screen (K108)."
   },
 
   "layout": "files",
