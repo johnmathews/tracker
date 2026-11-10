@@ -264,6 +264,38 @@ describe('Your limits on the Profile page (K107)', () => {
   })
 })
 
+describe('both notes on a new account', () => {
+  it('keeps the other box open once one note is saved, and again after leaving and coming back', async () => {
+    await openProfile({ saved: null })
+    await goalsBox().setValue('Run 5 km.')
+    await goalsBox().trigger('blur')
+    await settle()
+    expect(limitsBox().element.disabled).toBe(false)
+    await limitsBox().setValue('Vegetarian.')
+    await limitsBox().trigger('blur')
+    await settle()
+    expect(api.accounts.get(USER)!.settings).toMatchObject({
+      goals: 'Run 5 km.',
+      limits: 'Vegetarian.',
+    })
+    // Leaving and opening the page again, with no read in between.
+    location.hash = '#/'
+    await settle()
+    location.hash = '#/profile'
+    await settle()
+    expect(goalsBox().element.disabled).toBe(false)
+    expect(limitsBox().element.disabled).toBe(false)
+  })
+
+  it('keeps the goals box open after another setting is changed first', async () => {
+    await openProfile({ saved: null })
+    usePlannerStore().changeDailyPick(1)
+    await settle()
+    expect(goalsBox().element.disabled).toBe(false)
+    expect(limitsBox().element.disabled).toBe(false)
+  })
+})
+
 describe('the Profile action and its menu (K106)', () => {
   /** The week, signed in as alice, with the bar in view (Edit plan, K80). */
   async function openWeek(): Promise<void> {

@@ -560,8 +560,8 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
   Food are a screen each, the page sprints between them, and the navbar keeps out of sight until it is
   wanted (K24, K25; §6.6). Edit plan has a sticky navbar (K27) and is one tracker per screen under
   it too (K99), full width at the week's sizes with rows a fixed 100u (K54). Settings has no navbar (K52) and is full
-  width in rows like the week (K51), and an item's page follows it, rows and all (K64, K65). The navbar keeps the week controls, This week, Edit plan,
-  Settings, Print… and Full screen.
+  width in rows like the week (K51), and an item's page follows it, rows and all (K64, K65). The navbar keeps the week controls, This week, Ask,
+  Settings, Print…, Full screen and Profile (K106).
 - **Light and dark themes.** The handoff is dark-only. Settings offers System (the default, which
   follows `prefers-color-scheme` live), Light and Dark. `App.vue` toggles a `dark` class on
   `<html>`; `public/theme-init.js` applies the saved choice before first paint so a dark preference
@@ -571,8 +571,10 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
   them. Settings started as a popover and became a page of its own (`SettingsPage.vue`, at
   `#/settings`) so it has room to grow. App reads the hash (as it does for invite and reset links)
   and shows the page in place of the week, without the Header (K52). Arriving moves
-  focus to the page's heading, and coming back to the week puts it on the Settings button. Signing
-  out there drops the hash, so the next sign-in opens on the week. The marks' pens are fixed, so
+  focus to the page's heading, and coming back to the week puts it on the Settings button. The
+  **Profile page** (`ProfilePage.vue`, at `#/profile`, K106) works the same way, opened from the
+  profile Menu at the end of the bar, and focus comes back to the Profile button. Signing out (on
+  the Profile page or from the Menu) drops any page's hash, so the next sign-in opens on the week. The marks' pens are fixed, so
   there is no Ink setting (K10). The theme and per-side choices are SegmentedControls: `aria-pressed` buttons in a
   `role="group"`. Marks is a RadioCard (a `radiogroup` of `role="radio"` rows), each row showing
   its set's three marks with `DayMarkDrawing`, the mark without its button (K20).
@@ -777,7 +779,7 @@ component's own.
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Basics   | Button (primary, secondary and quiet, 44px tall, `sm` 36px from 640px up), IconButton (44px, a required `label`), TextLink, BrandMark, BarAction (the Header's actions, K47)  |
 | Forms    | TextField, TextArea, SegmentedControl, Switch, Stepper, RadioCard                                                                                                             |
-| Overlays | Dialog, ConfirmDialog with ConfirmHost, Popover                                                                                                                               |
+| Overlays | Dialog, ConfirmDialog with ConfirmHost, Popover, Menu with MenuItem (K106)                                                                                                    |
 | Planner  | DayMark, Chip, SectionHeader                                                                                                                                                  |
 | Feedback | InlineMessage, Banner                                                                                                                                                         |
 | Ask      | Transcript (the turns in rows, answers through `answer()` in `src/lib/markdown.ts`), AnswerProgress (main.css's `pen-write` keyframe), QuotaChip, SidePanel (S1), HistoryList |
@@ -910,7 +912,7 @@ wide) and `short:` (landscape, 540px tall or less).
   the fixed week. Exercises has "Go to Cardio"; Cardio has "Back to Exercises" and "Go to Food";
   Food has "Back to Cardio". Each sprints to its screen's top with `sprintToScreen`, by the
   heading's id. A short screen leaves them out.
-- **Settings and Ask** are pages of their own (`#/settings`, `#/ask`), outside the screens and with
+- **Settings, Profile and Ask** are pages of their own (`#/settings`, `#/profile`, `#/ask`), outside the screens and with
   no bar (K52): each starts with "Back to the week", and leaving one returns focus to the bar button
   that opened it. Ask fills the window (K67, K70): the SidePanel (`h-dvh`) and the page beside it
   scroll on their own, the page in Settings' rows at about 70% of its sizes (K83:
@@ -1121,8 +1123,11 @@ leaves them out. `normaliseState` keeps `goals` only when a cache or reply carri
 so adopting that tab's cache keeps the goals this tab has. And a tab that has never read them
 (it started from that tab's cache, offline) sends and caches settings without them until a
 read brings them. The diff compares the goals, so an edit to them is sent. The Profile page's
-boxes follow the same rule: its box takes typing only once the goals are known, or once a read from the
-server found an account with no settings at all (a new one, whose goals are empty), and it saves
+boxes follow the same rule: a box takes typing only once its note is known, or once the last read
+from the server found an account with no settings at all (`sync.blank`: a new one, whose notes are
+empty). That stays true when this tab saves one note, until the next read, so the other box stays
+open; it never makes a note known, so nothing is sent for a note the person didn't type in. A box
+saves
 its draft when typing pauses for 600 ms or the box loses focus, so one pause is one write (F18).
 Goals that change elsewhere show in the box unless the person is mid-pause. The cache is validated with the
 storage normalisers when read, and outbox entries one by one, so a damaged key cannot break the app

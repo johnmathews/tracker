@@ -1,6 +1,5 @@
 import { computed, onBeforeUnmount, ref, watch, type ComputedRef, type Ref } from 'vue'
 import { useSyncStore } from '@/stores/sync'
-import { usePlannerStore } from '@/stores/planner'
 
 /** How long typing in a note rests before it is saved (F18). */
 export const NOTE_PAUSE_MS = 600
@@ -31,15 +30,15 @@ export type NoteDraft = {
  * mid-pause, and a draft still pending when the page closes is saved then.
  *
  * Typing may replace the note only once it is known: read from the server or a cache that carried
- * it, or an account the server says has no settings at all (a new one), whose notes are empty.
- * Until then a stand-in would erase the saved one (F1).
+ * it, or an account the server's last read found with no settings at all (a new one), whose notes
+ * are empty (`sync.blank`, which saving the other note doesn't undo). Until then a stand-in would
+ * erase the saved one (F1).
  */
 export function useNoteDraft(note: NoteBinding): NoteDraft {
-  const planner = usePlannerStore()
   const sync = useSyncStore()
   const draft = ref(note.saved())
   let timer: ReturnType<typeof setTimeout> | undefined
-  const editable = computed(() => note.known() || (sync.fresh && planner.savedSettings() === null))
+  const editable = computed(() => note.known() || sync.blank)
 
   function commit(): void {
     clearTimeout(timer)

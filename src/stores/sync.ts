@@ -337,6 +337,12 @@ export const useSyncStore = defineStore('sync', () => {
   const notice = ref<string | null>(null)
   /** True once this session has read the account from the server, not only from the cache. */
   const fresh = ref(false)
+  /**
+   * Whether the last read from the server found the account with no settings at all (a new one),
+   * so its notes are empty. It stays true after this tab saves settings, until the next read: the
+   * Profile page's boxes go on taking typing once one note is saved (K107).
+   */
+  const blank = ref(false)
 
   let base: Snapshot | null = null
   let revs: Revs = noRevs()
@@ -726,10 +732,11 @@ export const useSyncStore = defineStore('sync', () => {
       status.value = 'idle'
       retryDelay = FIRST_RETRY
       fresh.value = true
+      const state = normaliseState(res.data)
+      blank.value = state !== null && state.settings === null
       // A change made while the read was in flight is newer than the reply: keep it.
       capture()
       if (changes !== before || readOutbox().length) return
-      const state = normaliseState(res.data)
       if (state) adopt(state)
     })().finally(() => {
       refreshing = null
@@ -896,6 +903,7 @@ export const useSyncStore = defineStore('sync', () => {
     user.value = null
     loaded.value = false
     fresh.value = false
+    blank.value = false
     status.value = 'idle'
     pending.value = 0
     notice.value = null
@@ -943,6 +951,7 @@ export const useSyncStore = defineStore('sync', () => {
     pending,
     notice,
     fresh,
+    blank,
     start,
     stop,
     forget,

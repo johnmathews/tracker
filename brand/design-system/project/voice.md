@@ -81,4 +81,4 @@ The page's own words, from the mockup:
 | Save failed: storage full | Your account is full, so this answer wasn’t saved. |
 | Disclaimer: AI can make mistakes | Answers come from an AI and can be wrong. They aren’t medical advice. |
 
-In Settings, the Your goals row is "What you’re working towards", with "Ask reads this when it answers. Nothing else does." under it. Deleting history asks first and names the thing: "Delete “Is my diet good enough?”?", Delete; "Delete all conversations?", Delete all.
+On the Profile page, Your goals is "What you’re working towards", with "Ask and your Claude connections read this. Nothing else does." under it, and Your limits is "What you have to work around", with "Injuries, equipment, time and food. Ask and your Claude connections read this too." With no goals, Ask says "Your goals in Profile are empty, so answers can only compare you with the times a week you set." and links "Add your goals". Deleting history asks first and names the thing: "Delete “Is my diet good enough?”?", Delete; "Delete all conversations?", Delete all.

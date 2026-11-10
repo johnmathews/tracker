@@ -297,7 +297,7 @@ listed in [api.md](api.md) §10):
   cell's other controls and Escape back to the link).
 - `src/components/ui/__tests__/`: one spec per primitive (AnswerProgress, BarAction, Banner,
   BrandMark, Button, Chip, ConfirmDialog, DayMark, Dialog, HistoryList, IconButton, InlineMessage,
-  Popover, QuotaChip, RadioCard, SectionHeader, SegmentedControl, SidePanel, Stepper, Switch,
+  Menu, Popover, QuotaChip, RadioCard, SectionHeader, SegmentedControl, SidePanel, Stepper, Switch,
   TextArea, TextField, TextLink, Transcript), each checking its
   roles, accessible names, sizes, states and the role colours its card names. Examples: an
   IconButton renders nothing without a label, the Popover closes when focus leaves it (F14), the
@@ -385,15 +385,21 @@ listed in [api.md](api.md) §10):
   changes, a full account, and the history panel: grouped by Today, Last week and Earlier,
   deleting one or all after asking with focus kept in place, a failed delete, the strip the
   device remembers, and the drawer on a phone.
-- `src/components/__tests__/SettingsAsk.spec.ts`: Settings → Your goals: Daily goal first, on by
-  default, unknown until read (K85); turned off it saves with the account, hides both steppers and
-  every met day (exercises and foods), and back on the numbers return; an off read from the account
-  goes with the next settings write. Then My goals (its place and label, one
-  save per pause in typing, at once on leaving the box or closing the page, nothing kept of a
-  draft another tab signed out under, goals saved elsewhere never over a draft, closed until the
-  saved goals are known, a new account), and Export and Import with Ask's history (the server's
-  conversations in the file, none or offline, goals that fill empty ones, conversations already
-  here left out of the count).
+- `src/components/__tests__/SettingsAsk.spec.ts`: Settings' sections (Appearance, Daily goal, Your
+  data, Connections; no goals and no Sign out, K107); Daily goal, on by default, unknown until read
+  (K85); turned off it saves with the account, hides both steppers and every met day (exercises and
+  foods), and back on the numbers return; an off read from the account goes with the next settings
+  write. Then Export and Import with Ask's history (the server's conversations in the file, none
+  or offline, goals or limits that fill empty ones, conversations already here left out of the
+  count).
+- `src/components/__tests__/Profile.spec.ts`: the Profile page at `#/profile` (K106): its sections,
+  labels and hints, and Back to the week onto the Profile button. Your goals and Your limits (K107):
+  one save per pause in typing, at once on leaving the box or closing the page, nothing kept of a
+  draft another tab signed out under, a note saved elsewhere never over a draft, closed until the
+  saved note is known, a new account, and on a new account the other box still open once one note
+  is saved. The profile Menu: the last action, its header and items, Profile, Sign out at once,
+  asking first with unsent changes (focus back on the Profile button), and a refusal offline shown
+  in the question.
 - `src/components/__tests__/Connections.spec.ts`, `Connect.spec.ts` and
   `src/lib/__tests__/connections.spec.ts`: Settings › Connections (the address and Copy, the Apps
   and Tokens lists, the New banner, creating a token and showing it once, Remove after a
@@ -423,7 +429,7 @@ listed in [api.md](api.md) §10):
   double submit, creating an account (the link from sign-in, signing in by email, matching
   passwords, each refusal on its field or the form, offline, a double submit, back to sign in, and
   `#/signup` while signed in), invite and reset links (matching passwords, the length rule, expired links, a link
-  pasted into a running tab), sign-out (with unsynced changes, and refused offline), and the sync
+  pasted into a running tab), sign-out on the Profile page (with unsynced changes, and refused offline), and the sync
   status messages and triggers (loading, offline with and without a copy, retry, the conflict
   notice, focus, visibility and the minute tick).
 - `src/components/__tests__/Planner.spec.ts`: the planner on the design system's marks, in the

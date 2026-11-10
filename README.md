@@ -74,14 +74,17 @@
   past the first brings the last down from above. Held upright, a phone or an iPad folds the week: each row's name
   above its seven boxes. A day that reaches its daily target turns green (while Daily goal is on).
 - **Settings** is a page of its own. It sets how marks are drawn (Squiggles, Ticks, Stamped ticks,
-  Faces or Stamped faces) and the theme (System, Light or Dark), keeps **Your goals** (the
-  **Daily goal** switch, which turns the daily targets and green days on or off on every device,
-  and what you are aiming for, in your own words, which only Ask reads; saved when you pause
-  typing), holds
-  export and import, and shows who is signed in, with **Sign out**.
+  Faces or Stamped faces) and the theme (System, Light or Dark). It has the **Daily goal** switch,
+  which turns the daily targets and green days on or off on every device. It also holds export and
+  import, and the Claude connections.
+- **Profile** is the last button in the bar. It opens a menu: who is signed in, **Profile** and
+  **Sign out**. The Profile page shows the account with Sign out, and two notes in your own words:
+  **Your goals** (what you are working towards) and **Your limits** (what you have to work around:
+  injuries, equipment, time, food). Each saves when you pause typing. Ask and your Claude
+  connections read them.
 - **Ask** is a page where you ask an AI (Claude) about what you track: whether you are doing too
   much or too little for your goals, whether your diet is good enough, how steady your weeks are.
-  It reads your plans, marks, weekly goals, daily targets and Your goals, and the answer streams in
+  It reads your plans, marks, weekly goals, daily targets, Your goals and Your limits, and the answer streams in
   as it is written, with a Stop button. It may say plainly that something is too little or too
   much, quote your goals and notes back, and count streaks. Each account may ask 30 questions in
   any 24 hours by default; a chip under the box says how many are left. **History**, a panel down the left

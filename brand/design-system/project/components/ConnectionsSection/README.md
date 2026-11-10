@@ -2,7 +2,7 @@ Settings' Connections row: the address to give an app with how to connect claude
 
 ## Use
 
-- **Where:** a row of the Settings page (SettingsPage), between Your data and Account, in the page's grid and sizes: "Connections" in the 320u heading column, the contents to the right, folded to one column like the other rows.
+- **Where:** the last row of the Settings page (SettingsPage), after Your data, in the page's grid and sizes: "Connections" in the 320u heading column, the contents to the right, folded to one column like the other rows.
 - **Contents, in order** (from `ConnectionsSection.vue`):
   1. **The new-connection Banner,** only while an app connected in the last 24 hours is listed and not dismissed in this tab: "**Claude was connected just now**, with read and change. If that wasn’t you, remove it and change your password." with Remove (asks first) and Dismiss.
   2. **The lede** in `ink-secondary`: "Let Claude or ChatGPT read your weeks and, if you allow it, mark days and edit your plans."

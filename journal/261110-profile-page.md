@@ -28,6 +28,23 @@ for similar text. He picked option A in the mockup (`261110-profile-menu`): a Ba
   landmark. On the week, focus moving into it would have slid the keyboard-floated bar away, since
   the bar shows only while focus is inside it.
 
+- **Rebased onto a parallel run.** Another session shipped one item page and the H/B/L keys to
+  `main` first (0f0ac69, as K104 and K105). This run's IDs moved to K106 and K107 (§4.27). The
+  conflicts in `App.vue`, `decisions.md` and one transfer test were both sides adding beside
+  each other. The Profile page gets the new H/B back keys like every other page.
+
+- **A review fix.** The code review found that on a new account, saving one note disabled the
+  other note's box until the next read. A box's "new account" test was `savedSettings() === null`,
+  which the first save makes false. The sync store now records whether the last read found no
+  settings at all (`sync.blank`), and saving doesn't undo that. Two tests reproduced it first (seen
+  red). Marking both notes known instead would have sent an empty note with any later settings
+  change, so that option was rejected.
+- **Follow-up #69.** Ask wraps both notes in tags without escaping them, so a note can close its
+  own tag. This predates the change, since the goals note works the same way. It's Low because the
+  note is the person's own text.
+- **The docs audit** found stale Settings, sign-out and bar descriptions in the README, the voice
+  guide, three cards, `architecture.md` and `development.md`. All are fixed.
+
 ## What was observed
 
 - Confirmed:
@@ -38,4 +55,16 @@ for similar text. He picked option A in the mockup (`261110-profile-menu`): a Ba
     themes, and the menu and page at 375px.
 - Confirmed: Chromium screenshots show the open menu under its button in Edit plan (desktop and
   phone) and over the week from the keyboard.
-- Not yet observed: John on his own machine, and the deploy.
+- Confirmed on the rebased branch:
+  - 1,387 web unit tests and 1,261 API tests passed.
+  - 104 Playwright tests passed.
+  - Lint, types, the build, tokens and the design gate passed.
+- Confirmed: John tried it locally before the rebase and saved goals and limits for the demo
+  account; the database held them.
+- Not yet observed: the deploy.
+
+## What is deliberately not done
+
+- No key for Profile. B, H and L are now K105's, and the bar's keys stay E, Esc, F, P and S.
+- The trackpad carrying two screens on one small swipe (the K94–K96 momentum guess) is the next
+  change. This branch didn't touch scrolling.
