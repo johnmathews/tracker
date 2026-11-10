@@ -10,8 +10,8 @@ import type { TrackerTypeId } from '@/lib/trackerTypes'
 /** The page's sections: its notes, its type's fields, the week's plan and recent weeks. */
 export type SectionKey = 'notes' | 'details' | 'plan' | 'history'
 
-/** The order a page shows them in until it is arranged, every one shown (K65). */
-export const DEFAULT_ORDER: readonly SectionKey[] = ['notes', 'details', 'plan', 'history']
+/** The order a page shows them in until it is arranged, every one shown: the plan first (K104). */
+export const DEFAULT_ORDER: readonly SectionKey[] = ['plan', 'notes', 'details', 'history']
 
 /**
  * One type's page: every section once, in the order shown, and those it hides (in the default

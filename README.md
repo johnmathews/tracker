@@ -15,7 +15,7 @@
   marker drawing is yours to choose. **Marks** in Settings swaps the squiggles for ticks (a tick, a
   circle, a cross) or faces (happy, so-so, sad), drawn in marker or stamped on a coloured box; a
   press then steps green, yellow, red and back to empty. Each exercise has a weekly goal of 0–7 days, set
-  in its Edit dialog. A day whose marked exercises reach **Exercises a day** turns green: its
+  on its page. A day whose marked exercises reach **Exercises a day** turns green: its
   name in the header goes green and is underlined. **Daily goal** in Settings turns this off,
   and the per-day counters with it, for Exercises and Food; the numbers are kept.
 - **Cardio.** The screen after the exercises holds cycling, running and the like. Each item has a
@@ -23,7 +23,7 @@
   A press steps a day through green, yellow and red, as an exercise's does. Cardio has no daily
   target, so no day turns green. A new account starts with none.
 - **Food.** The screen after cardio works the same way, with one kind of mark: mark each day you ate
-  one. Each food has a weekly goal, set in its Edit dialog. Defaults are Vegetables (7), Fruit (5),
+  one. Each food has a weekly goal, set on its page. Defaults are Vegetables (7), Fruit (5),
   Fish (2) and Nuts (3). A day whose marked foods reach **Foods a day** (default two) turns green,
   as an exercise day does.
 - **Normal mode and config mode.** The app opens in normal mode, where you only mark cells. The
@@ -35,22 +35,21 @@
     "− 3 per day +", sets its daily target (1–8): exercises a day and foods a day. They are one
     setting for every week. The week isn't shown over the sections in config mode, since the bar
     shows it;
-  - **Add exercise**, **Add cardio** and **Add food**, under each grid, open the item's dialog with
-    nothing in it: an exercise takes a name, optional sets, reps or a time in seconds (a plank),
-    "Per set" or "Each side", an optional weight in kg (e.g. squats with a 12 kg kettlebell), a
-    goal and a note; cardio a name, minutes, a distance in km, a goal and a note; a food a name, a
-    goal and a note;
-  - the pencil beside a name opens that item's dialog, where everything about it changes: for an
-    exercise its sets, reps or seconds, weight, note and goal ("Times a week"), for a food its
-    name, note and goal. A note is markdown and is the same on every week; it shows under the
-    item's name, and pressing it opens the whole note with its links; the bin at the end of a row
-    removes the item after a confirmation (its marks stay stored). New items start with a goal of 3.
+  - **Add exercise**, **Add cardio** and **Add food**, under each grid, open a new item page: a
+    name, then this week's plan, notes and details. An exercise starts at one set of one rep, and
+    takes sets, reps or a time in seconds (a plank), "Per set" or "Each side" and an optional
+    weight in kg (e.g. squats with a 12 kg kettlebell); cardio takes minutes and a distance in km.
+    Nothing is added until the page's **Add** button, and **Cancel** adds nothing;
+  - pressing a name opens that item's page, where everything about it changes. In Edit plan the
+    page's title becomes a **Name** field, and **Remove from this week** ends the page. A note is
+    markdown and is the same on every week; it shows under the item's name, and pressing it opens
+    the whole note with its links; the bin at the end of a row, like Remove on the page, removes
+    the item after a confirmation (its marks stay stored). New items start with a goal of 3.
 - **An item's own page.** Pressing an item's name, in either mode, opens its page.
-  It reads in rows like Settings, each heading on the left and its content beside it. First come
-  the notes, up to 20,000 characters of markdown, which save as you type. Then the details:
-  equipment, what it works and a link for an exercise, a route and a link for cardio, and a serving
-  and examples for a food. Then
-  the week's plan for the item. Last come its last eight weeks, with how many days were marked
+  It reads in rows like Settings, each heading on the left and its content beside it. First comes
+  the week's plan for the item. Then the notes, up to 20,000 characters of markdown, which save as
+  you type. Then the details: equipment, what it works and a link for an exercise, a route and a
+  link for cardio, and a serving and examples for a food. Last come its last eight weeks, with how many days were marked
   against the goal; every mark counts, missed included. Notes and details are one copy for every
   week. **Arrange sections** chooses which of these every exercise page shows, and in what order,
   and the same for every cardio page and every food page; the choice is saved with your account. **Back to the
@@ -64,8 +63,9 @@
   plan** (**Done** in Edit plan). **Print…** (or **P**) produces a page for each tracker, with the week at the top of each, in
   the light theme's colours on white paper.
 - **Keys** on the week: **E** goes into Edit plan and out again, **Esc** leaves full screen or Edit
-  plan, **F** is full screen, **P** print and **S** Settings. They do nothing while you type in a
-  field or a dialog is open.
+  plan, **F** is full screen, **P** print and **S** Settings. On every page, **H** or **B** goes
+  back and **L** forward, as the browser's buttons do. They do nothing while you type in a field or
+  a dialog is open.
 - **One screen per section.** The week fills the screen, and the bar stays out of sight. A long press
   anywhere (or the handle at the top centre) opens Edit plan, with the bar above the page. Scrolling brings Cardio,
   then Food, each taking the screen in turn: a flick jumps straight to the next. An arrow at the

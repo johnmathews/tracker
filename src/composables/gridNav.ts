@@ -18,7 +18,7 @@ import { onBeforeUnmount, onMounted, type Ref } from 'vue'
  *   the widget's own (a DayMark toggles; Enter on a name's link opens the item's page in one
  *   press, F9, and Space on it does nothing); on a cell without one they do nothing.
  * - **Controls inside a cell.** Anything else focusable in a cell (a note's button and, in Edit
- *   plan, Edit in a row header, Remove in the row's last cell) is parked at `tabindex="-1"`, so
+ *   plan, Remove in the row's last cell) is parked at `tabindex="-1"`, so
  *   Tab doesn't stop on every row's controls. F2 on the cell (or Enter, on a cell without a
  *   widget) lets them back into the Tab order and focuses the
  *   first; Tab and Shift+Tab move among them (Shift+Tab from the first returns to the cell, which

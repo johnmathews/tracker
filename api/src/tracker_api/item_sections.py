@@ -12,8 +12,8 @@ from .types import TYPES, TypeId
 
 #: The item page's sections: its notes, its type's fields, the week's plan and recent weeks.
 type SectionKey = Literal["notes", "details", "plan", "history"]
-#: The order a page shows them in until it is arranged, every one shown (K65).
-DEFAULT_ORDER: tuple[SectionKey, ...] = ("notes", "details", "plan", "history")
+#: The order a page shows them in until it is arranged, every one shown: the plan first (K104).
+DEFAULT_ORDER: tuple[SectionKey, ...] = ("plan", "notes", "details", "history")
 
 
 class Arrangement(TypedDict):

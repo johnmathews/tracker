@@ -497,7 +497,7 @@ describe('savedSettings', () => {
     const s = usePlannerStore()
     expect(s.itemSections).toEqual({})
     expect(s.arrangementFor('exercise')).toEqual({
-      order: ['notes', 'details', 'plan', 'history'],
+      order: ['plan', 'notes', 'details', 'history'],
       hidden: [],
     })
     const arranged = { order: ['history', 'notes', 'details', 'plan'], hidden: ['details'] }
@@ -515,14 +515,14 @@ describe('savedSettings', () => {
       itemSections: { exercise: arranged },
     })
     // Back to the default: left out, as for an account that never arranged a page.
-    s.setArrangement('exercise', { order: ['notes', 'details', 'plan', 'history'], hidden: [] })
+    s.setArrangement('exercise', { order: ['plan', 'notes', 'details', 'history'], hidden: [] })
     expect(s.itemSections).toEqual({})
     expect(s.savedSettings()).toEqual({ accent: '#30d158', dailyPick: 3, foodPick: 2 })
   })
 
   it('adopts the arrangement with the settings, and the default with none', () => {
     const s = usePlannerStore()
-    const food = { order: ['plan', 'notes', 'details', 'history'], hidden: [] } as const
+    const food = { order: ['notes', 'details', 'plan', 'history'], hidden: [] } as const
     s.adopt(
       { plans: {}, log: {} },
       {

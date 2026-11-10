@@ -25,7 +25,8 @@ const target = ref(2)
 const weight = ref('8')
 </script>
 
-<!-- The card's Edit exercise dialog (components/Dialog/preview.html). It opens from its trigger
+<!-- The card's example (components/Dialog/preview.html): Edit exercise as it was before K104.
+     Nothing in the app opens a Dialog now; an item's page edits an item. It opens from its trigger
      only, so nothing traps the page on load; focus goes to the first field and returns to the
      trigger on close. -->
 <template>

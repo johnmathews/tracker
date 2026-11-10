@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed } from 'vue'
 import { usePlannerStore } from '@/stores/planner'
 import { useDietStore } from '@/stores/diet'
 import { useDetailsStore } from '@/stores/details'
 import { dayMonth } from '@/lib/dates'
 import { metDays as daysMet } from '@/lib/tracker'
-import { MAX_DAILY_PICK, MIN_DAILY_PICK, type Food, type Mark } from '@/lib/storage'
+import { MAX_DAILY_PICK, MIN_DAILY_PICK, type Mark } from '@/lib/storage'
 import { SECTIONS } from '@/lib/trackerTypes'
 import { SCREEN, SCREEN_GRID } from '@/lib/screens'
 import { ChevronUp, Plus } from '@lucide/vue'
@@ -15,7 +15,7 @@ import { sprintToScreen } from '@/composables/screenSprint'
 import TrackerGrid from '@/components/TrackerGrid.vue'
 import { Button } from '@/components/ui/button'
 import { Stepper } from '@/components/ui/stepper'
-import EditFoodDialog from '@/components/EditFoodDialog.vue'
+import { newItemHref } from '@/lib/routes'
 
 const planner = usePlannerStore()
 const diet = useDietStore()
@@ -45,29 +45,10 @@ function noteFor(item: { id: string }): string {
   return details.notesOf('diet', item.id)
 }
 
-const editing = ref<Food | null>(null)
-/** The Add food dialog (K54): Edit food's dialog with nothing to edit. */
-const adding = ref(false)
-
-function edit(id: string): void {
-  editing.value = diet.foods.find((f) => f.id === id) ?? null
+/** Edit plan's Add opens the new item page (K104), not a dialog. */
+function add(): void {
+  location.hash = newItemHref('diet')
 }
-
-// As in ExerciseGrid: close the dialog if another tab deletes the food, or if the week changes
-// under it, rather than save into a week the user didn't open it for.
-watch(
-  () => diet.foods,
-  (list) => {
-    if (editing.value && !list.some((f) => f.id === editing.value!.id)) editing.value = null
-  },
-)
-watch(
-  () => planner.weekKey,
-  () => {
-    editing.value = null
-    adding.value = false
-  },
-)
 </script>
 
 <!--
@@ -130,30 +111,26 @@ watch(
         :marks-for="marksFor"
         :details-for="type.details"
         :note-for="noteFor"
-        editable
         :config-mode="planner.configMode"
         :met-days="metDays"
         data-testid="diet-grid"
         @toggle="diet.toggle"
         @remove="diet.removeFood"
-        @edit="edit"
       >
         <template #corner>
           <span class="title-1 text-[24px] leading-7 text-ink">{{ type.label }}</span>
         </template>
       </TrackerGrid>
     </div>
-    <!-- Adding opens the same dialog as editing (K54), at the page's control size. -->
+    <!-- Add opens the new item page (K104), at the page's control size. -->
     <Button
       v-if="planner.configMode"
       class="mt-[calc(var(--u)*24)] h-(--set-control) self-start px-(--set-control-pad) text-(length:--set-label) [&_svg]:size-(--set-icon)"
       data-noprint
       data-add
       data-testid="add-food"
-      @click="adding = true"
+      @click="add"
       ><Plus :stroke-width="1.5" />Add food</Button
     >
-    <EditFoodDialog v-if="editing" :food="editing" @close="editing = null" />
-    <EditFoodDialog v-if="adding" @close="adding = false" />
   </section>
 </template>

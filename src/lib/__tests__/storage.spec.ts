@@ -284,7 +284,7 @@ describe('normalisePortableSettings', () => {
       }),
     ).toEqual({
       ...base,
-      itemSections: { food: { order: ['history', 'notes', 'details', 'plan'], hidden: ['plan'] } },
+      itemSections: { food: { order: ['history', 'plan', 'notes', 'details'], hidden: ['plan'] } },
     })
     expect(normalisePortableSettings({ ...base, itemSections: 'none' })).toEqual(base)
     expect(normalisePortableSettings({ ...base, itemSections: {} })).toEqual(base)

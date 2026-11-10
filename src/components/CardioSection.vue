@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
 import { usePlannerStore } from '@/stores/planner'
 import { useCardioStore } from '@/stores/cardio'
 import { useDetailsStore } from '@/stores/details'
 import { dayMonth } from '@/lib/dates'
-import type { Cardio, Mark } from '@/lib/storage'
+import type { Mark } from '@/lib/storage'
 import { SECTIONS } from '@/lib/trackerTypes'
 import { SCREEN, SCREEN_GRID } from '@/lib/screens'
 import { ChevronDown, ChevronUp, Plus } from '@lucide/vue'
@@ -13,7 +12,7 @@ import { IconButton } from '@/components/ui/icon-button'
 import { sprintToScreen } from '@/composables/screenSprint'
 import TrackerGrid from '@/components/TrackerGrid.vue'
 import { Button } from '@/components/ui/button'
-import EditCardioDialog from '@/components/EditCardioDialog.vue'
+import { newItemHref } from '@/lib/routes'
 
 const planner = usePlannerStore()
 const cardio = useCardioStore()
@@ -30,29 +29,10 @@ function noteFor(item: { id: string }): string {
   return details.notesOf('cardio', item.id)
 }
 
-const editing = ref<Cardio | null>(null)
-/** The Add cardio dialog (K54): Edit cardio's dialog with nothing to edit. */
-const adding = ref(false)
-
-function edit(id: string): void {
-  editing.value = cardio.items.find((c) => c.id === id) ?? null
+/** Edit plan's Add opens the new item page (K104), not a dialog. */
+function add(): void {
+  location.hash = newItemHref('cardio')
 }
-
-// As in ExerciseGrid: close the dialog if another tab deletes the item, or if the week changes
-// under it, rather than save into a week the user didn't open it for.
-watch(
-  () => cardio.items,
-  (list) => {
-    if (editing.value && !list.some((c) => c.id === editing.value!.id)) editing.value = null
-  },
-)
-watch(
-  () => planner.weekKey,
-  () => {
-    editing.value = null
-    adding.value = false
-  },
-)
 </script>
 
 <!--
@@ -96,12 +76,10 @@ watch(
         :marks-for="marksFor"
         :details-for="type.details"
         :note-for="noteFor"
-        editable
         :config-mode="planner.configMode"
         data-testid="cardio-grid"
         @toggle="cardio.toggle"
         @remove="cardio.removeCardio"
-        @edit="edit"
       >
         <template #corner>
           <span class="title-1 text-[24px] leading-7 text-ink">{{ type.label }}</span>
@@ -114,13 +92,13 @@ watch(
       class="grid grid-cols-[1fr_auto_1fr] items-center full:mt-[calc(var(--u)*10)] edit:mt-[calc(var(--u)*24)]"
       data-noprint
     >
-      <!-- Adding opens the same dialog as editing (K54), at the page's control size. -->
+      <!-- Add opens the new item page (K104), at the page's control size. -->
       <Button
         v-if="planner.configMode"
         class="col-start-1 h-(--set-control) justify-self-start px-(--set-control-pad) text-(length:--set-label) [&_svg]:size-(--set-icon)"
         data-add
         data-testid="add-cardio"
-        @click="adding = true"
+        @click="add"
         ><Plus :stroke-width="1.5" />Add cardio</Button
       >
       <IconButton
@@ -131,7 +109,5 @@ watch(
         ><ChevronDown :size="24"
       /></IconButton>
     </div>
-    <EditCardioDialog v-if="editing" :item="editing" @close="editing = null" />
-    <EditCardioDialog v-if="adding" @close="adding = false" />
   </section>
 </template>

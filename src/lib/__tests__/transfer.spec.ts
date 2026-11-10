@@ -213,7 +213,7 @@ describe('buildExport', () => {
         dailyPick: 2,
         foodPick: 2,
         goals: 'Fish twice a week.',
-        itemSections: { food: { order: ['plan', 'notes', 'details', 'history'], hidden: [] } },
+        itemSections: { food: { order: ['notes', 'details', 'plan', 'history'], hidden: [] } },
       },
     } satisfies ExportData
     expect(parseExport(JSON.stringify(buildExport(data)))).toEqual({ ok: true, data })

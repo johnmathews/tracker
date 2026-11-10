@@ -5,7 +5,6 @@ import { createPinia, setActivePinia } from 'pinia'
 import App from '@/App.vue'
 import { usePlannerStore } from '@/stores/planner'
 import { useDietStore } from '@/stores/diet'
-import { useDetailsStore } from '@/stores/details'
 import { SESSION_KEY, useSessionStore } from '@/stores/session'
 import { CACHE_PREFIX, type SyncState } from '@/stores/sync'
 import { DRAWINGS, MARKS, markDrawing, markKind, type PortableSettings } from '@/lib/storage'
@@ -62,12 +61,6 @@ function diet() {
 
 function rowCells(name: string) {
   return wrapper.findAll(`button[aria-label^="${name},"]`)
-}
-
-/** The open dialog, by role: Reka renders it in a portal on document.body, outside the wrapper. */
-function dialog(): DOMWrapper<HTMLElement> | null {
-  const el = document.querySelector<HTMLElement>('[role="dialog"]')
-  return el ? new DOMWrapper(el) : null
 }
 
 /** Lets Reka's queued work (focus-outside checks, presence, nextTick chains) settle. */
@@ -127,24 +120,17 @@ function target(testid: 'exercises-a-day' | 'foods-a-day'): string | undefined {
   return wrapper.get(`[data-testid="${testid}"] [role="spinbutton"]`).attributes('aria-valuenow')
 }
 
-/** Press an exercise's Edit button and return its dialog, once Reka has opened it. */
-async function openEdit(name: string): Promise<DOMWrapper<HTMLElement>> {
-  await wrapper.get(`button[aria-label="Edit ${name}"]`).trigger('click')
-  await flushPromises()
-  return dialog()!
-}
-
-/** Opens the Add exercise (or Add food) dialog from the button under its grid (K54). */
-async function openAdd(kind: 'exercise' | 'food' = 'exercise'): Promise<DOMWrapper<HTMLElement>> {
+/** Opens the new item page from the Add button under a grid (K104). */
+async function openAdd(kind: 'exercise' | 'food' = 'exercise') {
   await wrapper.get(`[data-testid="add-${kind}"]`).trigger('click')
-  await flushPromises()
-  return dialog()!
+  await settle()
+  return wrapper.get('[data-testid="new-item-page"]')
 }
 
-/** Submits the open dialog's form, as its primary button would, and lets it close. */
-async function submit(d: DOMWrapper<HTMLElement>): Promise<void> {
-  await d.get('form').trigger('submit')
-  await flushPromises()
+/** Adds the item on the new item page, as its Add button would, and goes back to the week. */
+async function submit(page: Omit<DOMWrapper<Element>, 'exists'>): Promise<void> {
+  await page.get('form').trigger('submit')
+  await settle()
 }
 
 describe('App', () => {
@@ -216,24 +202,26 @@ describe('App', () => {
     expect(cell.attributes('aria-pressed')).toBe('false')
   })
 
-  it('reaches a food’s goal once it is set lower in its dialog', async () => {
+  it('reaches a food’s goal once it is set lower on its page', async () => {
     await mountConfig()
     await rowCells('Nuts')[0]!.trigger('click')
     expect(foodTotal(3)).toBe('1 of 3')
-    const edit = await openEdit('Nuts')
-    const fewer = edit.get('button[aria-label="Fewer times a week"]')
+    location.hash = '#/item/diet/nuts'
+    await settle()
+    const fewer = wrapper
+      .get('[data-testid="item-page"]')
+      .get('button[aria-label="Fewer times a week"]')
     await fewer.trigger('click')
     await fewer.trigger('click')
-    await edit.get('form').trigger('submit')
-    await flushPromises()
+    await backToWeek()
     expect(foodTotal(3)).toBe('1 of 1')
   })
 
-  it('gives Edit plan rows no Stepper: both grids edit in a dialog', async () => {
+  it('gives Edit plan rows no Stepper and no Edit button: the name opens the page (K104)', async () => {
     await mountConfig()
     expect(wrapper.find('[data-testid="exercise-grid"] [role="spinbutton"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="diet-grid"] [role="spinbutton"]').exists()).toBe(false)
-    expect(wrapper.find('button[aria-label="Edit Vegetables"]').exists()).toBe(true)
+    expect(wrapper.find('button[aria-label^="Edit "]').exists()).toBe(false)
   })
 
   it('draws the marks in the set chosen in Settings, and the device remembers it', async () => {
@@ -356,89 +344,6 @@ function otherTabWrites(state: SyncState): void {
   window.dispatchEvent(new StorageEvent('storage', { key, storageArea: localStorage }))
 }
 
-describe('the Add exercise dialog (K54)', () => {
-  beforeEach(() => {
-    localStorage.clear()
-  })
-  afterEach(() => wrapper?.unmount())
-
-  it('adds an exercise from its dialog, keeping only digits in reps, and closes', async () => {
-    await mountConfig()
-    const add = await openAdd()
-    expect(document.getElementById(add.attributes('aria-labelledby')!)!.textContent).toBe(
-      'Add exercise',
-    )
-    expect(document.activeElement).toBe(add.get('#add-exercise-name').element)
-    await add.get('#add-exercise-name').setValue('Lunges')
-    const reps = add.get('#add-exercise-reps')
-    await reps.setValue('1a2')
-    expect((reps.element as HTMLInputElement).value).toBe('12')
-    await add
-      .findAll('button[aria-pressed]')
-      .find((b) => b.text() === 'Each side')!
-      .trigger('click')
-    await submit(add)
-    expect(dialog()).toBeNull()
-    expect(wrapper.findAll('[data-testid="item-detail"]').at(-1)!.text()).toBe('12 each side')
-    expect(exTotal(-1)).toBe('0 of 3')
-    // Opened again, it starts empty.
-    const again = await openAdd()
-    expect((again.get('#add-exercise-name').element as HTMLInputElement).value).toBe('')
-    const perSet = again.findAll('button[aria-pressed]').find((b) => b.text() === 'Per set')!
-    expect(perSet.attributes('aria-pressed')).toBe('true')
-  })
-
-  it('labels every field of the add dialogs visibly, not by placeholder (F17)', async () => {
-    await mountConfig()
-    const add = await openAdd()
-    const inputs = add.findAll('input')
-    expect(inputs.map((i) => i.attributes('id'))).toEqual([
-      'add-exercise-name',
-      'add-exercise-sets',
-      'add-exercise-reps',
-      'add-exercise-weight',
-      'add-exercise-target',
-    ])
-    expect(inputs.map((i) => add.get(`label[for="${i.attributes('id')}"]`).text())).toEqual([
-      'Name',
-      'Sets',
-      'Reps',
-      'Weight in kg',
-      'Times a week',
-    ])
-    for (const input of inputs) expect(input.attributes('aria-label')).toBeUndefined()
-    expect(add.get('#add-exercise-weight').attributes('placeholder')).toBe('Bodyweight')
-    const groups = add.get('form').findAll('[role="group"]')
-    expect(
-      groups
-        .filter((g) => g.attributes('aria-labelledby'))
-        .map((g) => document.getElementById(g.attributes('aria-labelledby')!)!.textContent!.trim()),
-    ).toEqual(['Measure', 'Reps count', 'Times a week'])
-    const primary = add.findAll('button').find((b) => b.text() === 'Add exercise')!
-    expect(primary.attributes('type')).toBe('submit')
-    expect(primary.attributes('form')).toBe(add.get('form').attributes('id'))
-  })
-
-  it('does nothing for an empty name, and stays open', async () => {
-    await mountConfig()
-    const add = await openAdd()
-    await add.get('#add-exercise-name').setValue('   ')
-    await submit(add)
-    expect(dialog()).not.toBeNull()
-    expect(ex().findAll('[data-testid="item-name"]')).toHaveLength(5)
-  })
-
-  it('shows no chip, not a dash, when no reps are given', async () => {
-    await mountConfig()
-    const add = await openAdd()
-    await add.get('#add-exercise-name').setValue('Plank')
-    await submit(add)
-    const plank = ex().findAll('tbody tr').at(-1)!
-    expect(plank.get('[data-testid="item-name"]').text()).toBe('Plank')
-    expect(plank.findAll('[data-testid="item-detail"]')).toHaveLength(0)
-  })
-})
-
 describe('an item’s page (#/item/<section>/<id>, F7)', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] })
@@ -476,9 +381,9 @@ describe('an item’s page (#/item/<section>/<id>, F7)', () => {
     expect(link.attributes('href')).toBe('#/item/exercise/sq')
     expect(nameLink('Fish', diet()).attributes('href')).toBe('#/item/diet/fish')
     await wrapper.get('[data-testid="edit-plan-button"]').trigger('click')
-    // Edit plan keeps both the link and the pencil.
+    // Edit plan keeps the link, the one way to the page: there is no pencil (K104).
     expect(nameLink('Squats').attributes('href')).toBe('#/item/exercise/sq')
-    expect(ex().find('button[aria-label="Edit Squats"]').exists()).toBe(true)
+    expect(ex().find('button[aria-label="Edit Squats"]').exists()).toBe(false)
   })
 
   it('opens as a page with no bar and no planner screens, focus on its name', async () => {
@@ -1218,418 +1123,6 @@ describe('theme', () => {
   })
 })
 
-describe('exercise weight', () => {
-  beforeEach(() => {
-    localStorage.clear()
-  })
-  afterEach(() => wrapper?.unmount())
-
-  function detail(name: string) {
-    const row = ex()
-      .findAll('[role="rowheader"]')
-      .find((r) => r.get('[data-testid="item-name"]').text() === name)!
-    return row
-      .findAll('[data-testid="item-detail"]')
-      .map((c) => c.text())
-      .join(' · ')
-  }
-
-  it('adds an exercise with a weight, accepting a comma decimal', async () => {
-    await mountConfig()
-    const add = await openAdd()
-    await add.get('#add-exercise-name').setValue('Swings')
-    await add.get('#add-exercise-reps').setValue('20')
-    const weight = add.get('#add-exercise-weight')
-    await weight.setValue('16,5kg')
-    expect((weight.element as HTMLInputElement).value).toBe('16.5')
-    await submit(add)
-    expect(detail('Swings')).toBe('20 reps a set · 16.5 kg')
-  })
-
-  it('adds a timed exercise, and edits its seconds and goal in the dialog', async () => {
-    await mountConfig()
-    const add = await openAdd()
-    await add.get('#add-exercise-name').setValue('Plank')
-    await add.get('#add-exercise-sets').setValue('3')
-    const time = add
-      .get('form')
-      .findAll('button')
-      .find((b) => b.text() === 'Time')!
-    await time.trigger('click')
-    expect(add.get('label[for="add-exercise-reps"]').text()).toBe('Seconds')
-    expect(add.get('form').text()).toContain('Timed')
-    await add.get('#add-exercise-reps').setValue('45')
-    await submit(add)
-    expect(detail('Plank')).toBe('3 × 45 s')
-    expect(usePlannerStore().exercises.at(-1)).toMatchObject({ reps: 0, duration: 45, target: 3 })
-
-    const edit = await openEdit('Plank')
-    expect(edit.get('label[for="edit-exercise-reps"]').text()).toBe('Seconds')
-    expect((edit.get('#edit-exercise-reps').element as HTMLInputElement).value).toBe('45')
-    await edit.get('#edit-exercise-reps').setValue('50')
-    const measure = (label: string) => edit.findAll('button').find((b) => b.text() === label)!
-    await measure('Reps').trigger('click')
-    expect(edit.get('label[for="edit-exercise-reps"]').text()).toBe('Reps')
-    await measure('Time').trigger('click')
-    expect(edit.get('label[for="edit-exercise-reps"]').text()).toBe('Seconds')
-    await edit.get('button[aria-label="More times a week"]').trigger('click')
-    await edit.get('form').trigger('submit')
-    await flushPromises()
-    expect(dialog()).toBeNull()
-    expect(detail('Plank')).toBe('3 × 50 s')
-    expect(exTotal(-1)).toBe('0 of 4')
-  })
-
-  it('edits an existing exercise in a dialog', async () => {
-    await mountConfig()
-    expect(dialog()).toBeNull()
-    const edit = await openEdit('Squats')
-    expect(edit.attributes('aria-modal')).toBe('true')
-    expect(document.getElementById(edit.attributes('aria-labelledby')!)!.textContent).toBe(
-      'Edit exercise',
-    )
-    expect(document.activeElement).toBe(edit.get('#edit-exercise-name').element)
-    expect((edit.get('input[data-field="reps"]').element as HTMLInputElement).value).toBe('15')
-
-    await edit.get('#edit-exercise-weight').setValue('12')
-    await edit.get('form').trigger('submit')
-    await flushPromises()
-    expect(dialog()).toBeNull()
-    expect(detail('Squats')).toBe('15 reps a set · 12 kg')
-  })
-
-  it('labels every field in the dialog, and saves from the button outside the form', async () => {
-    await mountConfig()
-    const edit = await openEdit('Squats')
-    const labels = edit
-      .findAll('input')
-      .map((i) => edit.get(`label[for="${i.attributes('id')}"]`).text())
-    expect(labels).toEqual(['Name', 'Sets', 'Reps', 'Weight in kg', 'Times a week'])
-    // No field is marked optional or has a hint; an empty Weight says "Bodyweight" in grey.
-    for (const id of ['sets', 'weight'])
-      expect(edit.get(`#edit-exercise-${id}`).attributes('aria-describedby')).toBeUndefined()
-    expect(edit.get('#edit-exercise-weight').attributes('placeholder')).toBe('Bodyweight')
-    const save = edit.findAll('button').find((b) => b.text() === 'Save')!
-    expect(save.attributes('type')).toBe('submit')
-    expect(save.attributes('form')).toBe(edit.get('form').attributes('id'))
-  })
-
-  it('discards changes on Cancel', async () => {
-    await mountConfig()
-    const edit = await openEdit('Squats')
-    await edit.get('#edit-exercise-weight').setValue('40')
-    await edit
-      .findAll('button')
-      .find((b) => b.text() === 'Cancel')!
-      .trigger('click')
-    await flushPromises()
-    expect(dialog()).toBeNull()
-    expect(detail('Squats')).toBe('15 reps a set')
-  })
-
-  it('edits the name, reps and per-side count, keeping the goal', async () => {
-    await mountConfig()
-    const edit = await openEdit('Kettlebell halos')
-    const toggle = (name: string) =>
-      edit.findAll('button[aria-pressed]').find((b) => b.text() === name)!
-    expect(toggle('Each side').attributes('aria-pressed')).toBe('true')
-    await edit.get('#edit-exercise-name').setValue('Halos')
-    await edit.get('input[data-field="reps"]').setValue('1x0')
-    await toggle('Per set').trigger('click')
-    await edit.get('#edit-exercise-notes').setValue('**Ribs down.**')
-    await edit.get('form').trigger('submit')
-    await flushPromises()
-    expect(detail('Halos')).toBe('10 reps a set')
-    expect(exTotal(-1)).toBe('0 of 3')
-    // The note is the exercise's details, for every week (D2); the week's plan keeps none.
-    expect(useDetailsStore().notesOf('exercise', 'kh')).toBe('**Ribs down.**')
-    expect(usePlannerStore().exercises.at(-1)).not.toHaveProperty('notes')
-  })
-
-  it('saves the note for every week, one with its own plan included (F1)', async () => {
-    await mountConfig()
-    const planner = usePlannerStore()
-    planner.nextWeek()
-    planner.toggle('sq', 0) // next week now has a plan of its own
-    const next = planner.weekKey
-    planner.prevWeek()
-    await nextTick()
-    const edit = await openEdit('Squats')
-    await edit.get('#edit-exercise-notes').setValue('Knees out')
-    await edit.get('form').trigger('submit')
-    await flushPromises()
-    planner.nextWeek()
-    await nextTick()
-    expect(planner.plans[next]).toBeDefined()
-    const note = ex()
-      .findAll('tr[role="row"]')
-      .find((r) => r.text().includes('Squats'))!
-      .get('[data-testid="item-note"]')
-    expect(note.text()).toBe('Knees out')
-  })
-
-  it('opens with the exercise’s notes, and counts them only near the limit', async () => {
-    await mountConfig()
-    useDetailsStore().setNotes('exercise', 'sq', 'Knees out')
-    const edit = await openEdit('Squats')
-    const notes = edit.get<HTMLTextAreaElement>('#edit-exercise-notes')
-    expect(notes.element.value).toBe('Knees out')
-    expect(notes.attributes('maxlength')).toBe('20000')
-    expect(edit.find('#edit-exercise-notes-count').exists()).toBe(false)
-    await notes.setValue('a'.repeat(19_000))
-    expect(edit.get('#edit-exercise-notes-count').text()).toBe('19,000 of 20,000 characters')
-  })
-
-  it('leaves a newer note alone when its own note is untouched', async () => {
-    await mountConfig()
-    useDetailsStore().setNotes('exercise', 'sq', 'Knees out')
-    const edit = await openEdit('Squats')
-    // The server's copy arrives while the dialog is open, as a sync conflict adopts it.
-    useDetailsStore().adoptItem('exercise', 'sq', { notes: 'From the phone' })
-    await edit.get('#edit-exercise-reps').setValue('20')
-    await edit.get('form').trigger('submit')
-    await flushPromises()
-    expect(dialog()).toBeNull()
-    expect(usePlannerStore().exercises.find((e) => e.id === 'sq')!.reps).toBe(20)
-    expect(useDetailsStore().notesOf('exercise', 'sq')).toBe('From the phone')
-  })
-
-  it('saves an exercise whose id has a slash, and says its note can’t be saved', async () => {
-    await mountConfig()
-    const planner = usePlannerStore()
-    const slashed = { id: 'a/b', name: 'Slashed', reps: 5, target: 3, perSide: false }
-    planner.plans[planner.weekKey] = [...planner.exercises, slashed]
-    await nextTick()
-    let edit = await openEdit('Slashed')
-    await edit.get('#edit-exercise-reps').setValue('8')
-    await edit.get('form').trigger('submit')
-    await flushPromises()
-    expect(dialog()).toBeNull()
-    expect(planner.exercises.find((e) => e.id === 'a/b')!.reps).toBe(8)
-    edit = await openEdit('Slashed')
-    await edit.get('#edit-exercise-notes').setValue('Elbows in')
-    await edit.get('form').trigger('submit')
-    await flushPromises()
-    expect(edit.get('#edit-exercise-notes-error').text()).toBe(
-      'This item’s notes can’t be saved: its id has a slash in it.',
-    )
-    expect(useDetailsStore().get('exercise', 'a/b')).toEqual({})
-  })
-
-  it('keeps everything as it was when the notes are too big to save', async () => {
-    await mountConfig()
-    const edit = await openEdit('Squats')
-    await edit.get('#edit-exercise-name').setValue('Goblet squats')
-    // Three bytes each: 12,000 characters are over the 32 KB an item’s details can take.
-    await edit.get('#edit-exercise-notes').setValue('語'.repeat(12_000))
-    await edit.get('form').trigger('submit')
-    await flushPromises()
-    expect(dialog()).not.toBeNull()
-    expect(edit.get('#edit-exercise-notes-error').text()).toBe(
-      'These notes are too long to save. Shorten them, then save again.',
-    )
-    expect(usePlannerStore().exercises.some((e) => e.name === 'Goblet squats')).toBe(false)
-    expect(useDetailsStore().notesOf('exercise', 'sq')).toBe('')
-    await edit.get('#edit-exercise-notes').setValue('Shorter')
-    expect(edit.find('#edit-exercise-notes-error').exists()).toBe(false)
-  })
-
-  it('closes on Escape and on Close without saving, returning focus to its Edit button', async () => {
-    await mountConfig()
-    for (const close of ['Escape', 'Close'] as const) {
-      const opener = wrapper.get('button[aria-label="Edit Squats"]').element as HTMLElement
-      opener.focus()
-      const edit = await openEdit('Squats')
-      await edit.get('#edit-exercise-weight').setValue('40')
-      if (close === 'Escape') {
-        document.activeElement!.dispatchEvent(
-          new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
-        )
-      } else {
-        await edit.get('button[aria-label="Close"]').trigger('click')
-      }
-      await flushPromises()
-      expect(dialog()).toBeNull()
-      expect(document.activeElement).toBe(opener)
-      expect(detail('Squats')).toBe('15 reps a set')
-    }
-  })
-
-  it('stays open with the input when the name is blank', async () => {
-    await mountConfig()
-    const edit = await openEdit('Squats')
-    await edit.get('#edit-exercise-name').setValue('  ')
-    await edit.get('form').trigger('submit')
-    await flushPromises()
-    expect(dialog()).not.toBeNull()
-    expect((dialog()!.get('#edit-exercise-name').element as HTMLInputElement).value).toBe('  ')
-    expect(detail('Squats')).toBe('15 reps a set')
-  })
-
-  it('closes the dialog when another tab deletes the exercise', async () => {
-    await mountConfig()
-    await openEdit('Squats')
-    const store = usePlannerStore()
-    const other = emptyState()
-    other.exercise.plans = { '2026-10-19': store.exercises.filter((e) => e.id !== 'sq') }
-    otherTabWrites(other)
-    await flushPromises()
-    expect(dialog()).toBeNull()
-  })
-
-  it('stays open when another tab changes a different exercise', async () => {
-    await mountConfig()
-    await openEdit('Squats')
-    const store = usePlannerStore()
-    const other = emptyState()
-    other.exercise.plans = { '2026-10-19': store.exercises.filter((e) => e.id !== 'pu') }
-    otherTabWrites(other)
-    await flushPromises()
-    expect(dialog()).not.toBeNull()
-  })
-
-  it('offers no edit buttons outside Edit plan', () => {
-    mountApp()
-    expect(wrapper.find('button[aria-label="Edit Vegetables"]').exists()).toBe(false)
-    expect(wrapper.find('button[aria-label="Edit Squats"]').exists()).toBe(false)
-  })
-})
-
-describe('the Edit food dialog', () => {
-  beforeEach(() => {
-    vi.useFakeTimers({ toFake: ['Date'] })
-    vi.setSystemTime(NOW)
-    localStorage.clear()
-  })
-  afterEach(() => {
-    wrapper?.unmount()
-    vi.useRealTimers()
-  })
-
-  it('renames a food and sets its goal, keeping its marks', async () => {
-    await mountConfig()
-    await rowCells('Fish')[0]!.trigger('click')
-    const edit = await openEdit('Fish')
-    expect(edit.get('h2').text()).toBe('Edit food')
-    const labels = edit
-      .findAll('input')
-      .map((i) => edit.get(`label[for="${i.attributes('id')}"]`).text())
-    expect(labels).toEqual(['Name', 'Times a week'])
-    expect(edit.get('label[for="edit-food-notes"]').text()).toBe('Note')
-    expect(document.activeElement).toBe(edit.get('#edit-food-name').element)
-    await edit.get('#edit-food-name').setValue('Salmon')
-    await edit.get('#edit-food-notes').setValue('Oily fish')
-    await edit.get('button[aria-label="More times a week"]').trigger('click')
-    await edit.get('form').trigger('submit')
-    await flushPromises()
-    expect(dialog()).toBeNull()
-    expect(rowCells('Salmon')[0]!.attributes('aria-pressed')).toBe('true')
-    expect(useDietStore().foods[2]).toEqual({ id: 'fish', name: 'Salmon', target: 3 })
-    expect(useDetailsStore().notesOf('diet', 'fish')).toBe('Oily fish')
-  })
-
-  it('leaves a newer food note alone when its own note is untouched', async () => {
-    await mountConfig()
-    useDetailsStore().setNotes('diet', 'fish', 'Oily fish')
-    const edit = await openEdit('Fish')
-    useDetailsStore().adoptItem('diet', 'fish', { notes: 'From the phone' })
-    await edit.get('#edit-food-name').setValue('Salmon')
-    await edit.get('form').trigger('submit')
-    await flushPromises()
-    expect(dialog()).toBeNull()
-    expect(useDietStore().foods[2]!.name).toBe('Salmon')
-    expect(useDetailsStore().notesOf('diet', 'fish')).toBe('From the phone')
-  })
-
-  it('saves a food whose id has a slash, and says its note can’t be saved', async () => {
-    await mountConfig()
-    const diet = useDietStore()
-    diet.plans[usePlannerStore().weekKey] = [
-      ...diet.foods,
-      { id: 'a/b', name: 'Slashed', target: 2 },
-    ]
-    await nextTick()
-    let edit = await openEdit('Slashed')
-    await edit.get('#edit-food-name').setValue('Still slashed')
-    await edit.get('form').trigger('submit')
-    await flushPromises()
-    expect(dialog()).toBeNull()
-    edit = await openEdit('Still slashed')
-    await edit.get('#edit-food-notes').setValue('Oily')
-    await edit.get('form').trigger('submit')
-    await flushPromises()
-    expect(edit.get('#edit-food-notes-error').text()).toBe(
-      'This item’s notes can’t be saved: its id has a slash in it.',
-    )
-  })
-
-  it('opens with the food’s notes, and keeps everything when they are too big to save', async () => {
-    await mountConfig()
-    useDetailsStore().setNotes('diet', 'fish', 'Oily fish')
-    const edit = await openEdit('Fish')
-    const notes = edit.get<HTMLTextAreaElement>('#edit-food-notes')
-    expect(notes.element.value).toBe('Oily fish')
-    await edit.get('#edit-food-name').setValue('Salmon')
-    await notes.setValue('語'.repeat(12_000))
-    // Under 19,000 characters: no count, though too many bytes.
-    expect(edit.find('#edit-food-notes-count').exists()).toBe(false)
-    await edit.get('form').trigger('submit')
-    await flushPromises()
-    expect(edit.find('#edit-food-notes-error').exists()).toBe(true)
-    expect(useDietStore().foods[2]!.name).toBe('Fish')
-    expect(useDetailsStore().notesOf('diet', 'fish')).toBe('Oily fish')
-  })
-
-  it('keeps the dialog open on an empty name, and discards changes on Cancel', async () => {
-    await mountConfig()
-    const edit = await openEdit('Fish')
-    await edit.get('#edit-food-name').setValue('   ')
-    await edit.get('form').trigger('submit')
-    await flushPromises()
-    expect(dialog()).not.toBeNull()
-    await edit
-      .findAll('button')
-      .find((b) => b.text() === 'Cancel')!
-      .trigger('click')
-    await flushPromises()
-    expect(dialog()).toBeNull()
-    expect(useDietStore().foods[2]!.name).toBe('Fish')
-  })
-
-  it('closes on Close without saving', async () => {
-    await mountConfig()
-    const edit = await openEdit('Fish')
-    await edit.get('#edit-food-name').setValue('Salmon')
-    await edit.get('button[aria-label="Close"]').trigger('click')
-    await flushPromises()
-    expect(dialog()).toBeNull()
-    expect(useDietStore().foods[2]!.name).toBe('Fish')
-  })
-
-  it('closes when another tab deletes the food, but not for a different one', async () => {
-    await mountConfig()
-    await openEdit('Fish')
-    const foods = useDietStore().foods
-    const other = emptyState()
-    other.diet.plans = { '2026-10-19': foods.filter((f) => f.id !== 'nuts') }
-    otherTabWrites(other)
-    await flushPromises()
-    expect(dialog()).not.toBeNull()
-    other.diet.plans = { '2026-10-19': foods.filter((f) => f.id !== 'fish') }
-    otherTabWrites(other)
-    await flushPromises()
-    expect(dialog()).toBeNull()
-  })
-
-  it('closes if the week changes under it', async () => {
-    await mountConfig()
-    await openEdit('Fish')
-    usePlannerStore().nextWeek()
-    await flushPromises()
-    expect(dialog()).toBeNull()
-  })
-})
-
 describe('config mode and weekly plans', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] })
@@ -1679,7 +1172,7 @@ describe('config mode and weekly plans', () => {
     expect(done.text()).toBe('Done')
     expect(done.classes()).toContain('sr-only')
     expect(wrapper.findAll('[data-slot="bar-action"]').map((b) => b.text())).not.toContain('Done')
-    expect(wrapper.find('button[aria-label="Edit Squats"]').exists()).toBe(true)
+    expect(wrapper.find('button[aria-label="Edit Squats"]').exists()).toBe(false)
     expect(wrapper.find('button[aria-label="Remove Fish"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="add-food"]').exists()).toBe(true)
   })
@@ -1800,21 +1293,34 @@ describe('config mode and weekly plans', () => {
     expect(rowCells('Squats')).toHaveLength(7)
   })
 
-  it('closes the edit dialog if the week changes under it', async () => {
+  it('opens Add as a page with no bar, and comes back with focus on that Add button (K104)', async () => {
     await mountConfig()
-    await openEdit('Squats')
-    expect(dialog()).not.toBeNull()
-    usePlannerStore().nextWeek()
-    await flushPromises()
-    expect(dialog()).toBeNull()
+    const add = await openAdd('food')
+    expect(location.hash).toBe('#/new/diet')
+    expect(wrapper.find('[data-slot="bar"]').exists()).toBe(false)
+    expect(add.get('h1').text()).toBe('New food')
+    await add.get('[data-testid="new-name-field"]').setValue('Beans')
+    await submit(add)
+    expect(location.hash).toBe('')
+    expect(document.activeElement).toBe(wrapper.get('[data-testid="add-food"]').element)
+    // Signing out from the page lands on the sign-in screen, and the address forgets it.
+    await openAdd()
+    await useSessionStore().logout()
+    await settle()
+    expect(location.hash).toBe('')
+    expect(wrapper.find('[data-testid="new-item-page"]').exists()).toBe(false)
+    // Signed out, B, H and L are the page's, not the app's (K105).
+    const back = vi.spyOn(history, 'back')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', cancelable: true }))
+    expect(back).not.toHaveBeenCalled()
   })
 
-  it('adds an exercise with sets from its dialog', async () => {
+  it('adds an exercise with sets from the new item page (K104)', async () => {
     await mountConfig()
     const add = await openAdd()
-    await add.get('#add-exercise-name').setValue('Swings')
-    await add.get('#add-exercise-sets').setValue('4x')
-    await add.get('#add-exercise-reps').setValue('20')
+    await add.get('[data-testid="new-name-field"]').setValue('Swings')
+    await add.get('input[data-field="sets"]').setValue('4x')
+    await add.get('input[data-field="reps"]').setValue('20')
     await submit(add)
     expect(chips('Swings')).toBe('4 × 20')
   })

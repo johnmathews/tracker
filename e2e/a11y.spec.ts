@@ -117,7 +117,9 @@ test.describe('the app passes axe', () => {
       await expectNoAxeViolations(page)
     })
 
-    test(`a cardio item’s page, and the Edit cardio dialog (K90), ${theme}`, async ({ page }) => {
+    test(`a cardio item’s page, in Edit plan with its Name and Remove (K90, K104), ${theme}`, async ({
+      page,
+    }) => {
       await page.setViewportSize({ width: 1280, height: 900 })
       await openApp(page, { theme })
       await page.getByTestId('cardio-grid').getByRole('link', { name: 'Running' }).click()
@@ -127,8 +129,18 @@ test.describe('the app passes axe', () => {
       await page.goBack()
       await page.getByTestId('cardio-grid').waitFor()
       await callUpBar(page)
-      await page.getByTestId('cardio-grid').getByRole('button', { name: 'Edit Cycling' }).click()
-      await page.getByRole('dialog', { name: 'Edit cardio' }).waitFor()
+      await page.getByTestId('cardio-grid').getByRole('link', { name: 'Cycling' }).click()
+      await page.getByRole('textbox', { name: 'Name' }).waitFor()
+      await settle(page)
+      await expectNoAxeViolations(page)
+    })
+
+    test(`the new item page (K104), ${theme}`, async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 900 })
+      await openApp(page, { theme })
+      await callUpBar(page)
+      await page.getByTestId('add-exercise').click()
+      await page.getByRole('textbox', { name: 'Name' }).waitFor()
       await settle(page)
       await expectNoAxeViolations(page)
     })

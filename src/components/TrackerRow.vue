@@ -11,7 +11,7 @@ export const CELL = {
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Pencil, Trash2 } from '@lucide/vue'
+import { Trash2 } from '@lucide/vue'
 import type { Day } from '@/stores/planner'
 import type { Mark, MarkSet } from '@/lib/storage'
 import type { Tracked } from '@/lib/tracker'
@@ -32,11 +32,8 @@ const props = defineProps<{
   details?: string[]
   /** The item's notes in markdown (K43), from its details: the same on every week. */
   note?: string
-  /** Shows an edit button (in config mode) that emits `edit`; the dialog it opens edits the
-   * whole item, its goal included. */
-  editable?: boolean
-  /** Config mode shows the edit button after the name, and the remove button in a cell of its
-   * own at the end of the row. */
+  /** Config mode shows the remove button in a cell of its own at the end of the row. The name
+   * links to the item's page in both modes, where Edit plan edits it (K104). */
   configMode: boolean
   days: Day[]
   /** Each day's mark, Monday first; `null` is an empty box. */
@@ -47,7 +44,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   toggle: [day: number]
   remove: []
-  edit: []
 }>()
 
 /**
@@ -105,12 +101,12 @@ async function remove(event: MouseEvent): Promise<void> {
 <!--
   One row of the WeekGrid card: the name in body-large 600, a link to the item's page, then the
   chips, and a DayMark per day. No
-  week total (K33): the goal shows only in the item's dialog. In Edit plan the edit IconButton follows
-  the name (its dialog edits everything, goal included) and the remove IconButton ends the row in a
-  cell of its own. The edit button's negative margin keeps the name line's height, and the header
-  is at least 44px tall (an IconButton's target) in both modes, so the row keeps its height (F25).
+  week total (K33): the goal shows on the item's page. In Edit plan the remove IconButton ends the
+  row in a cell of its own, and the name, a link to the item's page in both modes, is the way to
+  edit it there (K104). The header is at least 44px tall (an IconButton's target) in both modes, so
+  the row keeps its height (F25).
   The name's link is its cell's widget (Enter opens the page, F9); the note's button and Edit
-  plan's controls stay out of the Tab order until F2 on their cell (or Enter, on the Remove cell)
+  plan's Remove stays out of the Tab order until F2 on their cell (or Enter, on the Remove cell)
   lets them in, and Escape leaves them (gridNav), so each grid stays one tab stop.
 
   Folded, the name spans the seven days on the row's first line, the
@@ -142,15 +138,6 @@ async function remove(event: MouseEvent): Promise<void> {
                 data-testid="item-name"
                 >{{ item.name }}</a
               >
-              <IconButton
-                v-if="configMode && editable"
-                :label="`Edit ${item.name}`"
-                class="-my-[calc(var(--edit-ib)/4)] size-(--edit-ib) shrink-0 [&_svg]:size-(--edit-ib-icon)"
-                data-noprint
-                @click="emit('edit')"
-              >
-                <Pencil />
-              </IconButton>
             </span>
             <Chip
               v-for="d in details"

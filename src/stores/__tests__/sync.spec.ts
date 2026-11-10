@@ -220,7 +220,7 @@ describe('sync', () => {
     expect(cached().settings).toEqual({ ...settings, itemSections: { exercise: arranged } })
     // Back to the default: sent as {}, so the server forgets the old one rather than keep it.
     planner.setArrangement('exercise', {
-      order: ['notes', 'details', 'plan', 'history'],
+      order: ['plan', 'notes', 'details', 'history'],
       hidden: [],
     })
     await settle()
@@ -231,7 +231,7 @@ describe('sync', () => {
 
   it('takes the server’s arrangement on a read', async () => {
     const arranged: Arrangement = {
-      order: ['plan', 'notes', 'details', 'history'],
+      order: ['notes', 'details', 'plan', 'history'],
       hidden: ['history'],
     }
     api.accounts.get(USER)!.settings = {
@@ -1112,7 +1112,7 @@ describe('diff', () => {
 
   it('finds a changed item-page arrangement, and none when it is the same', () => {
     const arranged: ItemSections = {
-      exercise: { order: ['plan', 'notes', 'details', 'history'], hidden: [] },
+      exercise: { order: ['notes', 'details', 'plan', 'history'], hidden: [] },
     }
     const local = { ...empty(), settings: { ...settings, itemSections: arranged } }
     expect(diff(empty(), local)).toEqual([{ kind: 'settings' }])

@@ -12,7 +12,7 @@ Size: 20px inside buttons and icon buttons, 16px beside text. An icon never carr
 | settings | Opens Settings |
 | x | Closes a dialog or popover; clears a search |
 | plus, minus | Stepper buttons; add a row |
-| pencil | Edit a row |
+| pencil | Edit notes and Add notes on an item's page |
 | trash-2 | Remove a row (always confirmed) |
 | search | Search field |
 | cloud-off | Offline banner |

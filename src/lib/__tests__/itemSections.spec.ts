@@ -56,9 +56,10 @@ const ARRANGED: Arrangement = {
 describe('arranging a type’s page', () => {
   it('reads the default for a type with none, as a copy', () => {
     const a = arrangementOf({}, 'exercise')
-    expect(a).toEqual({ order: ['notes', 'details', 'plan', 'history'], hidden: [] })
+    // This week's plan first (K104).
+    expect(a).toEqual({ order: ['plan', 'notes', 'details', 'history'], hidden: [] })
     a.order.reverse()
-    expect(arrangementOf({}, 'exercise').order[0]).toBe('notes')
+    expect(arrangementOf({}, 'exercise').order[0]).toBe('plan')
     expect(arrangementOf({ food: ARRANGED }, 'food')).toEqual(ARRANGED)
     expect(arrangementOf({ food: ARRANGED }, 'exercise').hidden).toEqual([])
   })
@@ -74,9 +75,9 @@ describe('arranging a type’s page', () => {
 
   it('moves a section one place, and not past either end', () => {
     const base = arrangementOf({}, 'exercise')
-    expect(moveSection(base, 'history', -1).order).toEqual(['notes', 'details', 'history', 'plan'])
-    expect(moveSection(base, 'notes', 1).order).toEqual(['details', 'notes', 'plan', 'history'])
-    expect(moveSection(base, 'notes', -1)).toEqual(base)
+    expect(moveSection(base, 'history', -1).order).toEqual(['plan', 'notes', 'history', 'details'])
+    expect(moveSection(base, 'plan', 1).order).toEqual(['notes', 'plan', 'details', 'history'])
+    expect(moveSection(base, 'plan', -1)).toEqual(base)
     expect(moveSection(base, 'history', 1)).toEqual(base)
     expect(base.order).toEqual(DEFAULT_ORDER)
   })

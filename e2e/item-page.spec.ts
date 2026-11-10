@@ -20,10 +20,10 @@ test.describe('desktop', () => {
     await expect(h1).toBeFocused()
     await expect(page.getByText('Exercise', { exact: true })).toBeVisible()
     await expect(page.getByTestId('item-chip')).toHaveText(['3 × 12'])
-    // Layout A (K65): rows like Settings, in the order Notes, Details, This week's plan, Recent
-    // weeks; each heading in the week's 320u name column, its content to the right of it.
+    // Layout A (K65): rows like Settings, in the order This week's plan, Notes, Details, Recent
+    // weeks (K104); each heading in the week's 320u name column, its content to the right of it.
     const heads = page.getByRole('heading', { level: 2 })
-    await expect(heads).toHaveText(['Notes', 'Details', 'This week’s plan', 'Recent weeks'])
+    await expect(heads).toHaveText(['This week’s plan', 'Notes', 'Details', 'Recent weeks'])
     const boxes = await Promise.all((await heads.all()).map(async (h) => (await h.boundingBox())!))
     for (const [i, box] of boxes.entries()) {
       expect(Math.abs(box.x - boxes[0]!.x)).toBeLessThan(2)
@@ -31,7 +31,7 @@ test.describe('desktop', () => {
     }
     // u is 1 at 1280×800: the name column is 320px, so the content starts 320px from the heading.
     const lede = (await page.getByTestId('item-plan-line').boundingBox())!
-    const planHead = boxes[2]!
+    const planHead = boxes[0]!
     expect(Math.abs(lede.x - planHead.x - 320)).toBeLessThan(2)
     expect(Math.abs(lede.y - planHead.y)).toBeLessThan(12)
     // No bar on this page.
@@ -121,7 +121,7 @@ test.describe('arranging the sections (K66)', () => {
     await page.keyboard.press('Enter')
     const done = page.getByRole('button', { name: 'Done' })
     await expect(done).toBeFocused()
-    await expect(heads(page)).toHaveText(['Notes', 'Details', 'This week’s plan', 'Recent weeks'])
+    await expect(heads(page)).toHaveText(['This week’s plan', 'Notes', 'Details', 'Recent weeks'])
 
     // Show by Space: the switch keeps focus and turns off.
     const details = page.getByRole('switch', { name: 'Show Details' })
@@ -134,41 +134,41 @@ test.describe('arranging the sections (K66)', () => {
     const up = page.getByRole('button', { name: 'Move Recent weeks up' })
     await up.focus()
     await page.keyboard.press('Enter')
-    await expect(heads(page)).toHaveText(['Notes', 'Details', 'Recent weeks', 'This week’s plan'])
+    await expect(heads(page)).toHaveText(['This week’s plan', 'Notes', 'Recent weeks', 'Details'])
     await expect(up).toBeFocused()
     await page.keyboard.press('Enter')
     await page.keyboard.press('Enter')
-    await expect(heads(page)).toHaveText(['Recent weeks', 'Notes', 'Details', 'This week’s plan'])
+    await expect(heads(page)).toHaveText(['Recent weeks', 'This week’s plan', 'Notes', 'Details'])
     await expect(up).toHaveAttribute('aria-disabled', 'true')
     await expect(page.getByRole('button', { name: 'Move Recent weeks down' })).toBeFocused()
 
     // Escape leaves arranging, with focus back on the button.
     await page.keyboard.press('Escape')
     await expect(arrange).toBeFocused()
-    await expect(heads(page)).toHaveText(['Recent weeks', 'Notes', 'This week’s plan'])
+    await expect(heads(page)).toHaveText(['Recent weeks', 'This week’s plan', 'Notes'])
     await expect(page.getByTestId('item-details')).toHaveCount(0)
 
     // It reached the server, as the account's settings.
     await expect
       .poll(() => server.settings?.itemSections)
       .toEqual({
-        exercise: { order: ['history', 'notes', 'details', 'plan'], hidden: ['details'] },
+        exercise: { order: ['history', 'plan', 'notes', 'details'], hidden: ['details'] },
       })
 
     // Every exercise's page takes it; a food's page doesn't.
     await page.getByRole('link', { name: 'Back to the week' }).click()
     await nameOf(page, 'Squats').click()
-    await expect(heads(page)).toHaveText(['Recent weeks', 'Notes', 'This week’s plan'])
+    await expect(heads(page)).toHaveText(['Recent weeks', 'This week’s plan', 'Notes'])
     await page.goto('/#/item/diet/veg')
     await expect(page.getByRole('heading', { level: 1, name: 'Vegetables' })).toBeVisible()
-    await expect(heads(page)).toHaveText(['Notes', 'Details', 'This week’s plan', 'Recent weeks'])
+    await expect(heads(page)).toHaveText(['This week’s plan', 'Notes', 'Details', 'Recent weeks'])
 
     // It survives a reload, read back from the server.
     await page.goto('/#/item/exercise/sq')
     await page.reload()
     await expect(page.getByRole('heading', { level: 1, name: 'Squats' })).toBeVisible()
     await settle(page)
-    await expect(heads(page)).toHaveText(['Recent weeks', 'Notes', 'This week’s plan'])
+    await expect(heads(page)).toHaveText(['Recent weeks', 'This week’s plan', 'Notes'])
   })
 })
 
@@ -181,7 +181,7 @@ test.describe('phone, 390px', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Kettlebell halos' })).toBeFocused()
     await settle(page)
     const heads = await page.getByRole('heading', { level: 2 }).allTextContents()
-    expect(heads).toEqual(['Notes', 'Details', 'This week’s plan', 'Recent weeks'])
+    expect(heads).toEqual(['This week’s plan', 'Notes', 'Details', 'Recent weeks'])
     // Each heading over its content: the plan's line starts under its heading, not beside it.
     const plan = (await page
       .getByRole('heading', { level: 2, name: 'This week’s plan' })

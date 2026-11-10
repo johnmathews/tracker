@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
-import { mount, type VueWrapper } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import ItemPage from '@/components/ItemPage.vue'
+import { ConfirmHost } from '@/components/ui/confirm-dialog'
 import { usePlannerStore } from '@/stores/planner'
 import { useCardioStore } from '@/stores/cardio'
 import { useDietStore } from '@/stores/diet'
@@ -109,13 +110,13 @@ describe('the head', () => {
     expect(document.activeElement).not.toBe(wrapper!.get('h1').element)
   })
 
-  it('has the sections as rows in layout A’s order, each labelled by its heading (K65)', () => {
+  it('has the sections as rows in layout A’s order, the plan first, each labelled by its heading (K65, K104)', () => {
     mountPage()
     const sections = page().findAll('section')
     expect(sections.map((s) => s.get('h2').text())).toEqual([
+      'This week’s plan',
       'Notes',
       'Details',
-      'This week’s plan',
       'Recent weeks',
     ])
     for (const s of sections) {
@@ -712,7 +713,7 @@ describe('arranging the sections (K66)', () => {
     // A food's page has its own, still the default.
     wrapper!.unmount()
     mountPage('diet', 'fish')
-    expect(headings()).toEqual(['Notes', 'Details', 'This week’s plan', 'Recent weeks'])
+    expect(headings()).toEqual(['This week’s plan', 'Notes', 'Details', 'Recent weeks'])
   })
 
   it('lists every section with Show, Move up and Move down; focus stays on the button', async () => {
@@ -780,29 +781,29 @@ describe('arranging the sections (K66)', () => {
     control('Move Recent weeks up').element.focus()
     await control('Move Recent weeks up').trigger('click')
     await nextTick()
-    expect(headings()).toEqual(['Notes', 'Details', 'Recent weeks', 'This week’s plan'])
+    expect(headings()).toEqual(['This week’s plan', 'Notes', 'Recent weeks', 'Details'])
     expect(document.activeElement).toBe(control('Move Recent weeks up').element)
     await control('Move Recent weeks up').trigger('click')
     await control('Move Recent weeks up').trigger('click')
     await nextTick()
-    expect(headings()).toEqual(['Recent weeks', 'Notes', 'Details', 'This week’s plan'])
+    expect(headings()).toEqual(['Recent weeks', 'This week’s plan', 'Notes', 'Details'])
     // At the top its Move up is at an end, so focus goes to its Move down.
     expect(control('Move Recent weeks up').attributes('aria-disabled')).toBe('true')
     expect(document.activeElement).toBe(control('Move Recent weeks down').element)
     // A press at an end does nothing.
     await control('Move Recent weeks up').trigger('click')
-    await control('Move This week’s plan down').trigger('click')
-    expect(headings()).toEqual(['Recent weeks', 'Notes', 'Details', 'This week’s plan'])
+    await control('Move Details down').trigger('click')
+    expect(headings()).toEqual(['Recent weeks', 'This week’s plan', 'Notes', 'Details'])
     expect(usePlannerStore().arrangementFor('exercise').order).toEqual([
       'history',
+      'plan',
       'notes',
       'details',
-      'plan',
     ])
-    await control('Move Notes down').trigger('click')
+    await control('Move This week’s plan down').trigger('click')
     await nextTick()
-    expect(document.activeElement).toBe(control('Move Notes down').element)
-    expect(headings()).toEqual(['Recent weeks', 'Details', 'Notes', 'This week’s plan'])
+    expect(document.activeElement).toBe(control('Move This week’s plan down').element)
+    expect(headings()).toEqual(['Recent weeks', 'Notes', 'This week’s plan', 'Details'])
   })
 
   it('leaves arranging on Escape, with focus on the button', async () => {
@@ -831,5 +832,146 @@ describe('arranging the sections (K66)', () => {
     expect(wrapper!.get('[data-testid="item-all-hidden"]').text()).toBe(
       'Every section is hidden. Arrange sections to show one.',
     )
+  })
+})
+
+describe('in Edit plan: the name and Remove on the page (K104)', () => {
+  let host: VueWrapper | undefined
+  beforeEach(() => {
+    usePlannerStore().setConfigMode(true)
+    host = mount(ConfirmHost, { attachTo: document.body })
+  })
+  afterEach(() => {
+    host?.unmount()
+    host = undefined
+    history.replaceState(null, '', '/')
+  })
+
+  const nameField = () => wrapper!.get<HTMLInputElement>('[data-testid="item-name-field"]')
+  /** Answers the open question with the button of this name. */
+  async function answer(label: string): Promise<void> {
+    await flushPromises()
+    const dialog = document.querySelector<HTMLElement>('[role="alertdialog"]')!
+    ;[...dialog.querySelectorAll('button')].find((b) => b.textContent === label)!.click()
+    await flushPromises()
+  }
+
+  it('turns the title into a Name field, drops the chips, and ends with Remove', () => {
+    mountPage()
+    expect(nameField().element.value).toBe('Kettlebell swings')
+    // The h1 stays for a screen reader and for focus, out of sight.
+    expect(wrapper!.get('h1').classes()).toContain('sr-only')
+    expect(wrapper!.findAll('[data-testid="item-chip"]')).toHaveLength(0)
+    const sections = page().findAll('section')
+    expect(sections.at(-1)!.attributes('data-testid')).toBe('item-remove')
+    expect(section('remove').text()).toContain(
+      'Takes Kettlebell swings off this week’s plan. Weeks with their own plan keep it, and its marks stay.',
+    )
+    expect(section('remove').get('button').text()).toBe('Remove from this week')
+  })
+
+  it('shows neither outside Edit plan, nor for an item not in the week, nor while arranging', async () => {
+    usePlannerStore().setConfigMode(false)
+    mountPage()
+    expect(wrapper!.find('[data-testid="item-name-field"]').exists()).toBe(false)
+    expect(wrapper!.find('[data-testid="item-remove"]').exists()).toBe(false)
+    expect(wrapper!.get('h1').classes()).not.toContain('sr-only')
+    wrapper!.unmount()
+    usePlannerStore().setConfigMode(true)
+    mountPage('diet', 'nuts') // in an older week's plan only
+    expect(wrapper!.find('[data-testid="item-name-field"]').exists()).toBe(false)
+    expect(wrapper!.find('[data-testid="item-remove"]').exists()).toBe(false)
+    wrapper!.unmount()
+    mountPage()
+    await wrapper!.get('[data-testid="item-arrange"]').trigger('click')
+    expect(wrapper!.find('[data-testid="item-remove"]').exists()).toBe(false)
+  })
+
+  it('renames the item as you type, keeping its plan; an empty name waits with an error', async () => {
+    mountPage()
+    await type(nameField(), 'Swings')
+    expect(stored()).toEqual({ ...KS, name: 'Swings' })
+    await type(nameField(), '   ')
+    expect(stored().name).toBe('Swings')
+    expect(wrapper!.text()).toContain('Enter a name.')
+    expect(nameField().attributes('aria-invalid')).toBe('true')
+    await type(nameField(), 'Two-hand swings ')
+    expect(stored().name).toBe('Two-hand swings')
+    expect(nameField().attributes('aria-invalid')).toBeUndefined()
+  })
+
+  it('renames a cardio item and a food the same way', async () => {
+    mountPage('cardio', 'ru')
+    await type(nameField(), 'Jogging')
+    expect(useCardioStore().items.find((c) => c.id === 'ru')).toEqual({ ...RUN, name: 'Jogging' })
+    wrapper!.unmount()
+    mountPage('diet', 'fish')
+    await type(nameField(), 'Salmon')
+    expect(useDietStore().foods).toEqual([{ ...FISH, name: 'Salmon' }])
+  })
+
+  it('renames an exercise saved without a per-side count as counted per set', async () => {
+    const { perSide: _, ...bare } = KS
+    usePlannerStore().plans['2026-10-19'] = [bare as Exercise]
+    mountPage()
+    await type(nameField(), 'Swings')
+    expect(stored()).toEqual({ ...KS, name: 'Swings' })
+  })
+
+  it('keeps the field as it is when another tab takes the item out of the week', async () => {
+    mountPage()
+    usePlannerStore().removeExercise('ks')
+    await nextTick()
+    // The page shows its latest plan now, read-only, with no Name field.
+    expect(wrapper!.find('[data-testid="item-name-field"]').exists()).toBe(false)
+    expect(wrapper!.get('h1').text()).toBe('Kettlebell swings')
+  })
+
+  it('takes a rename from elsewhere into the field', async () => {
+    mountPage()
+    usePlannerStore().updateExercise('ks', { ...KS, perSide: false, name: 'KB swings' })
+    await nextTick()
+    expect(nameField().element.value).toBe('KB swings')
+    // A change to something else leaves the field alone.
+    usePlannerStore().changeTarget('ks', 1)
+    await nextTick()
+    expect(nameField().element.value).toBe('KB swings')
+  })
+
+  it('asks before Remove; Cancel keeps the item, Remove takes it off and goes to the week', async () => {
+    history.replaceState(null, '', '/#/item/exercise/ks')
+    mountPage()
+    await section('remove').get('button').trigger('click')
+    await flushPromises()
+    const dialog = document.querySelector<HTMLElement>('[role="alertdialog"]')!
+    expect(dialog.querySelector('h2')!.textContent).toBe('Remove Kettlebell swings?')
+    await answer('Cancel')
+    expect(usePlannerStore().exercises.map((e) => e.id)).toEqual(['ks', 'pu'])
+    await section('remove').get('button').trigger('click')
+    await answer('Remove')
+    expect(usePlannerStore().exercises.map((e) => e.id)).toEqual(['pu'])
+    expect(location.hash).toBe('#/')
+  })
+
+  it('removes a cardio item and a food from this week only', async () => {
+    mountPage('cardio', 'ru')
+    await section('remove').get('button').trigger('click')
+    await answer('Remove')
+    expect(useCardioStore().items).toEqual([])
+    expect(useCardioStore().plans['2026-10-12']).toHaveLength(2)
+    wrapper!.unmount()
+    mountPage('diet', 'fish')
+    await section('remove').get('button').trigger('click')
+    await answer('Remove')
+    expect(useDietStore().foods).toEqual([])
+  })
+
+  it('removes nothing when the week changes while it asks', async () => {
+    mountPage()
+    await section('remove').get('button').trigger('click')
+    await flushPromises()
+    usePlannerStore().weekOffset = -1
+    await answer('Remove')
+    expect(usePlannerStore().plans['2026-10-19']!.map((e) => e.id)).toEqual(['ks', 'pu'])
   })
 })

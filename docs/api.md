@@ -269,7 +269,7 @@ The keys are `notes`, `details`, `plan` and `history`. A shape the app never sen
 with 400 `invalid` and nothing changes: `itemSections` not an object, a key that is not a
 registry type id, or a type whose `order` or `hidden` is not a list of strings. Within that shape
 it normalises like the other settings (P29): unknown and repeated section keys drop, missing ones
-follow in the default order, `hidden` keeps known keys in the default order, and a type with the
+follow in the default order (`plan`, `notes`, `details`, `history`, K104), `hidden` keeps known keys in the default order, and a type with the
 default arrangement is left out. `{}` stores the default; the state and the export leave the key
 out then. Reading a stored or exported arrangement never refuses: a type this version's registry
 lacks is dropped, so a newer version's value still reads.

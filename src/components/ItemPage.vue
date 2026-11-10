@@ -10,43 +10,38 @@ import {
   useTemplateRef,
   watch,
 } from 'vue'
-import { ArrowDown, ArrowUp, Check, ChevronLeft, List, Pencil } from '@lucide/vue'
+import { ArrowDown, ArrowUp, Check, ChevronLeft, List, Pencil, Trash2 } from '@lucide/vue'
 import { usePlannerStore } from '@/stores/planner'
 import { useCardioStore } from '@/stores/cardio'
+import { useDietStore } from '@/stores/diet'
 import { useDetailsStore } from '@/stores/details'
 import { useItemSource } from '@/composables/itemSource'
-import { MEASURE_OPTIONS, useExerciseForm } from '@/composables/exerciseForm'
+import { useExerciseForm } from '@/composables/exerciseForm'
 import { useCardioForm } from '@/composables/cardioForm'
+import { useConfirm } from '@/composables/useConfirm'
+import { cardioPlanErrors, exercisePlanErrors, hasPlanErrors } from '@/composables/planErrors'
 import { dayMonth } from '@/lib/dates'
 import { itemHistory, latestPlanWith, weekMonday } from '@/lib/history'
 import { renderNote } from '@/lib/markdown'
 import { detailsIdProblem } from '@/lib/problems'
-import { backToWeek, webHost } from '@/lib/routes'
+import { backToWeek, leaveForWeek, webHost } from '@/lib/routes'
 import {
-  MAX_CARDIO_DURATION,
   MAX_DETAILS_NOTES,
-  MAX_DISTANCE,
-  MAX_DURATION,
   MAX_FIELD,
-  MAX_SETS,
-  MAX_TARGET,
-  MAX_WEIGHT,
-  MIN_TARGET,
   NOTES_COUNT_FROM,
   codePoints,
   type Cardio,
   type Exercise,
 } from '@/lib/storage'
 import { SECTIONS, type Section } from '@/lib/trackerTypes'
+import { ARRANGE_ROW, BODY, FIELDS, H2, LEDE, MOVE, ROW } from '@/lib/itemPage'
 import { moveSection, showSection, shownSections, type SectionKey } from '@/lib/itemSections'
-import PerSideToggle from '@/components/PerSideToggle.vue'
+import PlanFields, { type PlanErrors } from '@/components/PlanFields.vue'
 import RecentWeeks from '@/components/RecentWeeks.vue'
 import { Button } from '@/components/ui/button'
 import { Chip } from '@/components/ui/chip'
 import { IconButton } from '@/components/ui/icon-button'
 import { Switch } from '@/components/ui/switch'
-import { SegmentedControl } from '@/components/ui/segmented-control'
-import { Stepper } from '@/components/ui/stepper'
 import { TextArea } from '@/components/ui/text-area'
 import { TextField } from '@/components/ui/text-field'
 import { TextLink } from '@/components/ui/text-link'
@@ -74,11 +69,20 @@ const LINES = {
 
 const planner = usePlannerStore()
 const cardio = useCardioStore()
+const diet = useDietStore()
 const details = useDetailsStore()
 const source = useItemSource()
 const heading = useTemplateRef<HTMLHeadingElement>('heading')
 const root = useTemplateRef<HTMLElement>('root')
-const ids = { notes: useId(), plan: useId(), weeks: useId(), details: useId(), form: useId() }
+const ids = {
+  notes: useId(),
+  plan: useId(),
+  weeks: useId(),
+  details: useId(),
+  form: useId(),
+  name: useId(),
+  remove: useId(),
+}
 
 const type = computed(() => SECTIONS[props.section])
 const isExercise = computed(() => type.value.id === 'exercise')
@@ -117,17 +121,12 @@ const planLine = computed(() => {
 })
 
 const form = useExerciseForm()
-const { sets, reps, weight, perSide, measure, measureChoice, amountLabel } = form
 /** A cardio item's time and distance (K90). */
 const cardioForm = useCardioForm()
-const { minutes, distance } = cardioForm
-const planErrors = reactive<{
-  sets?: string
-  reps?: string
-  weight?: string
-  minutes?: string
-  distance?: string
-}>({})
+const planKind = computed(() =>
+  isExercise.value ? 'exercise' : isCardio.value ? 'cardio' : ('food' as const),
+)
+const planErrors = reactive<PlanErrors>({})
 /** The plan item as this page last left it: a change from anywhere else reloads the controls. */
 let planSeen = ''
 const planJson = () => JSON.stringify(inWeek.value)
@@ -144,51 +143,27 @@ watch(planJson, (now) => {
 })
 loadPlan()
 
-/** "This is 25 sets. Enter 20 or fewer to change the plan.", or nothing when within the limit. */
-function overLimit(value: number | undefined, max: number, unit: string): string | undefined {
-  if (value === undefined || value <= max) return undefined
-  const fmt = (n: number) => n.toLocaleString('en-US')
-  return `This is ${fmt(value)} ${unit}. Enter ${fmt(max)} or fewer to change the plan.`
-}
-
 /** The cardio item's controls changed: this week's plan takes them, unless a number isn't valid. */
 function applyCardio(): void {
   const item = inWeek.value!
-  planErrors.minutes = overLimit(cardioForm.minutesValue(), MAX_CARDIO_DURATION / 60, 'minutes')
-  planErrors.distance = overLimit(cardioForm.distanceValue(), MAX_DISTANCE, 'km')
-  if (planErrors.minutes || planErrors.distance) return
+  Object.assign(planErrors, cardioPlanErrors(cardioForm))
+  if (hasPlanErrors(planErrors)) return
   cardio.updateCardio(item.id, { ...cardioForm.value(), name: item.name, target: item.target })
   planSeen = planJson()
-}
-
-function onCardioInput(handler: (ev: Event) => void, ev: Event): void {
-  handler(ev)
-  applyCardio()
 }
 
 /** The exercise's controls changed: this week's plan takes them, unless a number isn't valid. */
 function applyPlan(): void {
   const item = inWeek.value!
-  const input = form.value()
-  planErrors.sets = overLimit(input.sets, MAX_SETS, 'sets')
-  planErrors.reps = overLimit(input.duration, MAX_DURATION, 'seconds')
-  planErrors.weight = overLimit(input.weight, MAX_WEIGHT, 'kg')
-  if (planErrors.sets || planErrors.reps || planErrors.weight) return
-  planner.updateExercise(item.id, { ...input, name: item.name, target: item.target })
+  Object.assign(planErrors, exercisePlanErrors(form))
+  if (hasPlanErrors(planErrors)) return
+  planner.updateExercise(item.id, { ...form.value(), name: item.name, target: item.target })
   planSeen = planJson()
 }
 
-function onInput(handler: (ev: Event) => void, ev: Event): void {
-  handler(ev)
-  applyPlan()
-}
-function onMeasure(value: string): void {
-  measureChoice.value = value
-  applyPlan()
-}
-function onPerSide(value: boolean): void {
-  perSide.value = value
-  applyPlan()
+function onPlanChange(): void {
+  if (isCardio.value) applyCardio()
+  else applyPlan()
 }
 /** Times a week, through the dialog's goal action. */
 function onTarget(value: number): void {
@@ -217,6 +192,70 @@ const latestRows = computed<[string, string][]>(() => {
   rows.push(['Times a week', String(item.target)])
   return rows
 })
+
+/* ---- Edit plan: the name and Remove, on the page rather than in a dialog (K104). ---- */
+
+/** In Edit plan, for an item in the week: the title is the Name field and Remove ends the page. */
+const editable = computed(() => planner.configMode && inWeek.value !== null)
+const nameDraft = ref(shown.value!.name)
+const nameError = ref<string | undefined>()
+/** The name as this page last left it: a change from elsewhere replaces the draft. */
+let nameSeen = nameDraft.value
+watch(
+  () => inWeek.value?.name,
+  (now) => {
+    if (now === undefined || now === nameSeen) return
+    nameSeen = nameDraft.value = now
+    nameError.value = undefined
+  },
+)
+
+/** Renames the item in this week's plan as you type; an empty name shows an error and waits. */
+function onName(value: string | number | undefined): void {
+  const text = String(value ?? '')
+  nameDraft.value = text
+  const name = text.trim()
+  if (!name) {
+    nameError.value = 'Enter a name.'
+    return
+  }
+  nameError.value = undefined
+  const item = inWeek.value!
+  if (isExercise.value) {
+    const e = item as Exercise
+    planner.updateExercise(item.id, { ...e, perSide: e.perSide ?? false, name })
+  } else if (isCardio.value) cardio.updateCardio(item.id, { ...(item as Cardio), name })
+  else diet.updateFood(item.id, { name, target: item.target })
+  nameSeen = name
+}
+
+const { confirm } = useConfirm()
+const removeLine = computed(
+  () =>
+    `Takes ${shown.value!.name} off this week’s plan. Weeks with their own plan keep it, and its marks stay.`,
+)
+
+/**
+ * Remove asks first, as the row's Remove does (TrackerRow), then takes the item off the week the
+ * page shows and goes back to it. The week is pinned when asking: past midnight on Sunday the
+ * question no longer applies, and nothing is removed.
+ */
+async function remove(ev: MouseEvent): Promise<void> {
+  const button = ev.currentTarget as HTMLElement
+  const week = planner.weekKey
+  const yes = await confirm({
+    title: `Remove ${shown.value!.name}?`,
+    message:
+      'It comes off this week’s plan. Weeks with their own plan keep it, and its marks stay.',
+    confirmLabel: 'Remove',
+    returnFocus: () => (button.isConnected ? button : null),
+  })
+  if (!yes || planner.weekKey !== week || !inWeek.value) return
+  leaveForWeek()
+  if (isExercise.value) planner.removeExercise(props.itemId)
+  else if (isCardio.value) cardio.removeCardio(props.itemId)
+  else diet.removeFood(props.itemId)
+}
 
 /* ---- Recent weeks ---- */
 
@@ -407,30 +446,6 @@ const linkHost = computed(() => webHost(fieldDrafts.link!))
 const filled = computed(() =>
   type.value.fields.map((f, i) => ({ ...f, value: storedFields.value[i]! })).filter((f) => f.value),
 )
-
-/** The plan's and the details' controls: in columns at least 300u wide, two to a row on a laptop
- * (ItemPage card). */
-const FIELDS =
-  'grid grid-cols-[repeat(auto-fill,minmax(min(100%,calc(var(--u)*300)),1fr))] items-start gap-x-[calc(var(--u)*28)] gap-y-[calc(var(--u)*24)] folded:grid-cols-1 folded:gap-5'
-/**
- * A section of the page, a row like Settings' (K51, K65): a line rule above it, its h2 in the
- * week's name column (320u), its content beside it, 32u above and below. Folded, the heading over
- * its content; on paper the same, with no rule.
- */
-const ROW =
-  'grid grid-cols-[var(--grid-name-w)_minmax(0,1fr)] items-start border-t border-line py-(--set-sec-y) folded:flex folded:flex-col folded:items-stretch folded:gap-4 print:flex print:flex-col print:gap-[calc(var(--u)*18)] print:border-0'
-/**
- * A row while arranging (K66): the same columns, 14u above and below, the heading with its
- * controls under it (on its line, folded) and one word beside it.
- */
-const ARRANGE_ROW =
-  'grid grid-cols-[var(--grid-name-w)_minmax(0,1fr)] items-center border-t border-line py-[calc(var(--u)*14)] folded:flex folded:flex-col folded:items-stretch'
-/** Show, Move up and Move down at Edit plan's row-button size (K54), with the page's icons. */
-const MOVE = 'size-(--edit-ib) [&_svg]:size-(--set-icon)'
-/** A row's content, to the right of its heading. */
-const BODY = 'flex min-w-0 flex-col gap-[calc(var(--u)*20)] folded:gap-4'
-const H2 = 'title-2 text-(length:--set-h2) leading-tight text-ink'
-const LEDE = 'body max-w-[60ch] text-(length:--set-text) leading-normal text-ink-secondary'
 </script>
 
 <!--
@@ -483,11 +498,24 @@ const LEDE = 'body max-w-[60ch] text-(length:--set-text) leading-normal text-ink
         ref="heading"
         tabindex="-1"
         class="title-1 min-w-0 text-(length:--fs-title) leading-tight break-words text-ink focus:outline-none"
+        :class="editable && 'sr-only'"
       >
         {{ shown!.name }}
       </h1>
+      <!-- In Edit plan the title is the Name field, where the name was (K104). -->
+      <TextField
+        v-if="editable"
+        :id="ids.name"
+        :model-value="nameDraft"
+        label="Name"
+        :error="nameError"
+        class="w-full max-w-[max(20rem,calc(var(--u)*560))]"
+        data-noprint
+        data-testid="item-name-field"
+        @update:model-value="onName"
+      />
       <Chip
-        v-for="chip in chips"
+        v-for="chip in editable ? [] : chips"
         :key="chip"
         class="text-(length:--set-label) leading-normal"
         data-testid="item-chip"
@@ -660,89 +688,17 @@ const LEDE = 'body max-w-[60ch] text-(length:--set-text) leading-normal text-ink
         <h2 :id="ids.plan" :class="H2">{{ planHeading }}</h2>
         <div :class="BODY">
           <p :class="LEDE" data-testid="item-plan-line">{{ planLine }}</p>
-          <div v-if="inWeek" :class="FIELDS">
-            <template v-if="isExercise">
-              <TextField
-                :id="`${ids.form}-sets`"
-                :model-value="sets"
-                label="Sets"
-                maxlength="2"
-                inputmode="numeric"
-                :error="planErrors.sets"
-                class="[&_input]:max-w-[max(5rem,calc(var(--u)*96))]"
-                data-field="sets"
-                @input="onInput(form.onSetsInput, $event)"
-              />
-              <SegmentedControl
-                :model-value="measureChoice"
-                label="Measure"
-                :options="MEASURE_OPTIONS"
-                @update:model-value="onMeasure"
-              />
-              <TextField
-                :id="`${ids.form}-reps`"
-                :model-value="reps"
-                :label="amountLabel"
-                inputmode="numeric"
-                maxlength="4"
-                :error="planErrors.reps"
-                class="[&_input]:max-w-[max(5rem,calc(var(--u)*96))]"
-                data-field="reps"
-                @input="onInput(form.onRepsInput, $event)"
-              />
-              <TextField
-                :id="`${ids.form}-weight`"
-                :model-value="weight"
-                label="Weight in kg"
-                inputmode="decimal"
-                placeholder="Bodyweight"
-                :error="planErrors.weight"
-                class="[&_input]:max-w-[max(11rem,calc(var(--u)*170))]"
-                data-field="weight"
-                @input="onInput(form.onWeightInput, $event)"
-              />
-              <PerSideToggle
-                :model-value="perSide"
-                :timed="measure === 'time'"
-                @update:model-value="onPerSide"
-              />
-            </template>
-            <!-- A cardio item's time and distance (K90): either may stay blank. -->
-            <template v-else-if="isCardio">
-              <TextField
-                :id="`${ids.form}-minutes`"
-                :model-value="minutes"
-                label="Minutes"
-                inputmode="decimal"
-                maxlength="7"
-                :error="planErrors.minutes"
-                class="[&_input]:max-w-[max(5rem,calc(var(--u)*96))]"
-                data-field="minutes"
-                @input="onCardioInput(cardioForm.onMinutesInput, $event)"
-              />
-              <TextField
-                :id="`${ids.form}-distance`"
-                :model-value="distance"
-                label="Distance in km"
-                inputmode="decimal"
-                maxlength="7"
-                :error="planErrors.distance"
-                class="[&_input]:max-w-[max(11rem,calc(var(--u)*170))]"
-                data-field="distance"
-                @input="onCardioInput(cardioForm.onDistanceInput, $event)"
-              />
-            </template>
-            <Stepper
-              :id="`${ids.form}-target`"
-              :model-value="inWeek.target"
-              label="Times a week"
-              lower-label="Fewer times a week"
-              raise-label="More times a week"
-              :min="MIN_TARGET"
-              :max="MAX_TARGET"
-              @update:model-value="onTarget"
-            />
-          </div>
+          <PlanFields
+            v-if="inWeek"
+            :kind="planKind"
+            :form="form"
+            :cardio-form="cardioForm"
+            :target="inWeek.target"
+            :errors="planErrors"
+            :id-base="ids.form"
+            @change="onPlanChange"
+            @update:target="onTarget"
+          />
           <dl v-else :class="FIELDS" data-testid="item-latest-plan">
             <div v-for="[label, value] in latestRows" :key="label" class="flex flex-col gap-1">
               <dt class="label text-(length:--set-label) leading-snug text-ink">{{ label }}</dt>
@@ -765,5 +721,22 @@ const LEDE = 'body max-w-[60ch] text-(length:--set-text) leading-normal text-ink
         </div>
       </section>
     </template>
+    <!-- Edit plan's Remove, last on the page in a section of its own (K104). Not one of the
+         sections a type arranges. -->
+    <section
+      v-if="editable && !arranging"
+      :aria-labelledby="ids.remove"
+      :class="ROW"
+      data-noprint
+      data-testid="item-remove"
+    >
+      <h2 :id="ids.remove" :class="H2">Remove</h2>
+      <div :class="BODY">
+        <p :class="LEDE">{{ removeLine }}</p>
+        <Button class="self-start" data-testid="item-remove-button" @click="remove"
+          ><Trash2 :stroke-width="1.5" />Remove from this week</Button
+        >
+      </div>
+    </section>
   </div>
 </template>

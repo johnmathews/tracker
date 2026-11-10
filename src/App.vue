@@ -21,11 +21,21 @@ import { ConfirmHost } from '@/components/ui/confirm-dialog'
 import { dismissConfirm } from '@/composables/useConfirm'
 import { useMediaQuery } from '@/composables/useMediaQuery'
 import { useScreenSprint } from '@/composables/screenSprint'
+import { useShortcuts } from '@/composables/shortcuts'
 import { isDark } from '@/lib/theme'
 import { useAskStore } from '@/stores/ask'
-import { isItemHash, itemHref, markFromWeek, parseItemHash, type ItemRoute } from '@/lib/routes'
+import {
+  isItemHash,
+  itemHref,
+  markFromWeek,
+  parseItemHash,
+  parseNewHash,
+  type ItemRoute,
+} from '@/lib/routes'
 import { itemExists, useItemSource } from '@/composables/itemSource'
 import ItemPage from '@/components/ItemPage.vue'
+import type { Section } from '@/lib/trackerTypes'
+import NewItemPage from '@/components/NewItemPage.vue'
 import { useSessionStore } from '@/stores/session'
 import { useSyncStore } from '@/stores/sync'
 
@@ -70,12 +80,14 @@ const connectId = ref(connectRequest())
 
 /**
  * The page the hash asks for: Settings at `#/settings`, Ask at `#/ask`, an item's page at
- * `#/item/<section>/<id>` (ItemPage card, D5), otherwise the planner.
+ * `#/item/<section>/<id>` (ItemPage card, D5), the new item page at `#/new/<section>` (K104),
+ * otherwise the planner.
  */
-type Page = 'planner' | 'settings' | 'ask' | 'item'
+type Page = 'planner' | 'settings' | 'ask' | 'item' | 'new'
 function pageFor(): Page {
   if (location.hash === '#/settings') return 'settings'
   if (location.hash === '#/ask') return 'ask'
+  if (parseNewHash(location.hash)) return 'new'
   return parseItemHash(location.hash) ? 'item' : 'planner'
 }
 /** Drop the hash from the address bar and history: the page it named doesn't apply. */
@@ -86,6 +98,8 @@ function dropHash(): void {
 if (isItemHash(location.hash) && !parseItemHash(location.hash)) dropHash()
 const page = ref<Page>(pageFor())
 const item = ref<ItemRoute | null>(parseItemHash(location.hash))
+/** The section the new item page adds to. */
+const newSection = ref(parseNewHash(location.hash))
 /** The item whose page was open last, so Back can put focus on its name. */
 let leftItem: ItemRoute | null = null
 /**
@@ -105,26 +119,41 @@ function onHash(): void {
   const before = page.value
   leftItem = item.value ?? leftItem
   item.value = parseItemHash(location.hash)
+  newSection.value = parseNewHash(location.hash)
   page.value = pageFor()
   // Opened from the week in this tab: its Back goes back through history (lib/routes).
-  if (page.value === 'item' && before === 'planner') markFromWeek()
+  if ((page.value === 'item' || page.value === 'new') && before === 'planner') markFromWeek()
 }
 /** Drop the page from the address bar, so a reload opens the week. */
 function forgetPage(): void {
   dropHash()
   item.value = null
+  newSection.value = null
   page.value = 'planner'
 }
 // Back from Settings or Ask, focus returns to the bar button that opened it; back from an item's
-// page, to that item's name in its row (WeekGrid card).
+// page, to that item's name in its row (WeekGrid card); back from the new item page, to its
+// section's Add button, ready for the next (K104).
 const OPENERS: Record<'settings' | 'ask', string> = {
   settings: 'settings-button',
   ask: 'ask-button',
 }
+const ADDS: Record<Section, string> = {
+  exercise: 'add-exercise',
+  cardio: 'add-cardio',
+  diet: 'add-food',
+}
+/** The section the new item page last added to, so Back can put focus on its Add button. */
+let leftNew: Section | null = null
+watch(newSection, (now, before) => {
+  if (before) leftNew = before
+})
 watch(shown, async (now, before) => {
   if (now !== 'planner' || before === 'planner') return
   await nextTick()
-  if (before !== 'item')
+  if (before === 'new')
+    document.querySelector<HTMLElement>(`[data-testid="${ADDS[leftNew!]}"]`)?.focus()
+  else if (before !== 'item')
     document.querySelector<HTMLElement>(`[data-testid="${OPENERS[before]}"]`)?.focus()
   else if (leftItem) {
     const href = itemHref(leftItem.section, leftItem.id)
@@ -222,6 +251,17 @@ watchEffect(() => document.documentElement.classList.toggle('edit-screens', edit
 // The page never rests showing part of two screens: it sprints from one to the next (K38, K99).
 useScreenSprint(computed(() => screens.value || editScreens.value))
 
+// Back and forward through the app's pages, signed in, on every page (K105): H or B goes back, L
+// forward, as the browser's own buttons do. F stays Full screen on the week (K91).
+function signedInHere(): boolean {
+  return session.status === 'signed-in' && !link.value && !confirmLink.value && !connectId.value
+}
+useShortcuts(() =>
+  signedInHere()
+    ? { b: () => history.back(), h: () => history.back(), l: () => history.forward() }
+    : {},
+)
+
 // matchMedia is missing in some environments (jsdom), so "System" falls back to light there.
 const systemDark = useMediaQuery('(prefers-color-scheme: dark)')
 watchEffect(() =>
@@ -308,7 +348,8 @@ onBeforeUnmount(() => {
     @leave="closeLink"
   />
   <template v-else-if="session.status === 'signed-in'">
-    <!-- Settings, Ask and an item's page have no bar: each links back to the week (K52). -->
+    <!-- Settings, Ask, an item's page and the new item page have no bar: each links back to the week
+         (K52, K104). -->
     <AppNavbar v-if="shown === 'planner'" :overlay="screens" />
     <!-- Settings, an item's page and Edit plan are full width on the page's margins, like the week
          (K51, K54, K64). Ask fills the screen beside its side panel and sets its own margins. -->
@@ -327,6 +368,11 @@ onBeforeUnmount(() => {
         <SyncStatus />
         <EmailStatus />
         <SettingsPage />
+      </template>
+      <template v-else-if="shown === 'new' && sync.loaded">
+        <SyncStatus />
+        <EmailStatus />
+        <NewItemPage :key="newSection!" :section="newSection!" />
       </template>
       <template v-else-if="shown === 'item' && sync.loaded">
         <SyncStatus />

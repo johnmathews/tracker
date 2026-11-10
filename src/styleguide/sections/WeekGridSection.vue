@@ -55,7 +55,7 @@ const KEYS: [string, string][] = [
   ['Ctrl+Home, Ctrl+End', 'First and last cell of the grid.'],
   ['Space, Enter', 'Step a day’s mark: great, partial, missed in each drawing, then empty.'],
   ['Enter on a name', 'Opens the item’s own page, in one press.'],
-  ['F2, Escape', 'On a name: into its note and, in Edit plan, its Edit button; Escape back.'],
+  ['F2, Escape', 'Into a cell’s other controls: a note, or Remove in Edit plan. Escape back.'],
 ]
 
 function marksFor(id: string): (Mark | null)[] {
@@ -85,7 +85,6 @@ function remove(id: string): void {
           :days="days"
           :marks-for="marksFor"
           :details-for="(item) => (item as Row).chips"
-          editable
           :config-mode="editing"
           @toggle="(id, day) => cycleDay(log, WEEK, id, day, EXERCISE_CYCLE)"
           @remove="remove"

@@ -1,4 +1,4 @@
-<!-- @dsCard group="Screens" height=4100 subtitle="An exercise's or a food's own page, in rows like Settings: notes, details, this week's plan and recent weeks, shown and ordered per type" -->
+<!-- @dsCard group="Screens" height=5900 subtitle="An item's own page, in rows like Settings: this week's plan, notes, details and recent weeks, shown and ordered per type; in Edit plan the Name field and Remove, and the new item page (K104)" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -107,6 +107,16 @@
   /* The head's first line: Back at the left, Arrange sections (a quiet Button) at the right. */
   .topline { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
   .btn.quiet { border-color: transparent; }
+  /* Button (primary): the ink fill (K8). */
+  .btn.primary { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+  .btn.primary:hover { background: color-mix(in srgb, var(--ink) 82%, var(--canvas)); }
+  .acts { display: flex; align-items: center; gap: 12px; }
+
+  /* Edit plan and the new item page (K104): the Name field where the name is, up to 560px. */
+  .namefield { width: 100%; max-width: 560px; }
+  .titleline .namefield { flex: 1 1 100%; }
+  .page > .namefield { margin: 12px 0 28px; }
+  h1.type.label { font-weight: 600; }
   .btn.quiet[data-arranging="true"] { border-color: var(--control-border); }
 
   /* Arranging (K66): every section as its heading with Show, Move up and Move down under it, and
@@ -177,6 +187,21 @@
     <p class="type label">Exercise</p>
     <div class="titleline"><h1 class="title-1" tabindex="-1">Kettlebell swings</h1><span class="chip label">3 × 15</span><span class="chip label">16 kg</span></div>
 
+    <section class="sec" aria-labelledby="s-plan">
+      <h2 class="title-2" id="s-plan">This week’s plan</h2>
+      <div class="content">
+        <p class="lede">Changes this week’s plan, and the weeks after it that have no plan of their own.</p>
+        <div class="fields">
+        <div class="field"><label class="label" for="p-sets">Sets</label><input id="p-sets" class="num" inputmode="numeric" maxlength="2" value="3"></div>
+        <div class="field"><span class="label" id="p-measure">Measure</span><div class="seg" role="group" aria-labelledby="p-measure"><button type="button" aria-pressed="true">Reps</button><button type="button" tabindex="-1" aria-pressed="false">Time</button></div></div>
+        <div class="field"><label class="label" for="p-reps">Reps</label><input id="p-reps" class="num" inputmode="numeric" maxlength="4" value="15"></div>
+        <div class="field"><label class="label" for="p-kg">Weight in kg</label><input id="p-kg" class="weight" inputmode="decimal" placeholder="Bodyweight" value="16"></div>
+        <div class="field"><span class="label" id="p-count">Reps count</span><div class="seg" role="group" aria-labelledby="p-count"><button type="button" aria-pressed="true">Per set</button><button type="button" tabindex="-1" aria-pressed="false">Each side</button></div></div>
+        <div class="field"><span class="label" id="p-goal">Times a week</span><div class="stepper" role="group" aria-labelledby="p-goal"><button type="button" aria-label="Fewer times a week" data-step="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></button><output class="value" aria-live="polite">3</output><button type="button" aria-label="More times a week" data-step="1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button></div></div>
+        </div>
+      </div>
+    </section>
+
     <section class="sec" aria-labelledby="s-notes">
       <h2 class="title-2" id="s-notes">Notes</h2>
       <div class="content notes" data-editing="false">
@@ -210,26 +235,71 @@ Move to 20 kg once all three sets feel easy. [Form video](https://youtube.com/wa
       </div>
     </section>
 
-    <section class="sec" aria-labelledby="s-plan">
-      <h2 class="title-2" id="s-plan">This week’s plan</h2>
-      <div class="content">
-        <p class="lede">Changes this week’s plan, and the weeks after it that have no plan of their own.</p>
-        <div class="fields">
-        <div class="field"><label class="label" for="p-sets">Sets</label><input id="p-sets" class="num" inputmode="numeric" maxlength="2" value="3"></div>
-        <div class="field"><span class="label" id="p-measure">Measure</span><div class="seg" role="group" aria-labelledby="p-measure"><button type="button" aria-pressed="true">Reps</button><button type="button" tabindex="-1" aria-pressed="false">Time</button></div></div>
-        <div class="field"><label class="label" for="p-reps">Reps</label><input id="p-reps" class="num" inputmode="numeric" maxlength="4" value="15"></div>
-        <div class="field"><label class="label" for="p-kg">Weight in kg</label><input id="p-kg" class="weight" inputmode="decimal" placeholder="Bodyweight" value="16"></div>
-        <div class="field"><span class="label" id="p-count">Reps count</span><div class="seg" role="group" aria-labelledby="p-count"><button type="button" aria-pressed="true">Per set</button><button type="button" tabindex="-1" aria-pressed="false">Each side</button></div></div>
-        <div class="field"><span class="label" id="p-goal">Times a week</span><div class="stepper" role="group" aria-labelledby="p-goal"><button type="button" aria-label="Fewer times a week" data-step="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></button><output class="value" aria-live="polite">3</output><button type="button" aria-label="More times a week" data-step="1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button></div></div>
-        </div>
-      </div>
-    </section>
-
     <section class="sec" aria-labelledby="s-weeks">
       <h2 class="title-2" id="s-weeks">Recent weeks</h2>
       <div class="content" id="weeks"></div>
     </section>
   </main>
+</div>
+
+<div class="gap"></div>
+<p class="variant label">In Edit plan: the Name field and Remove</p>
+<div class="stage">
+  <div class="page">
+    <div class="topline"><a class="back" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span>Back to the week</span></a><button type="button" class="btn quiet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/></svg><span>Arrange sections</span></button></div>
+    <p class="type label">Exercise</p>
+    <div class="titleline"><h1 class="title-1 vh" tabindex="-1">Kettlebell swings</h1><div class="field namefield"><label class="label" for="ep-name">Name</label><input id="ep-name" value="Kettlebell swings"></div></div>
+    <section class="sec" aria-labelledby="ep-remove">
+      <h2 class="title-2" id="ep-remove">Remove</h2>
+      <div class="content">
+        <p class="lede">Takes Kettlebell swings off this week’s plan. Weeks with their own plan keep it, and its marks stay.</p>
+        <button type="button" class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg><span>Remove from this week</span></button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="gap"></div>
+<p class="variant label">The new item page (K104)</p>
+<div class="stage">
+  <form class="page" onsubmit="return false">
+    <div class="topline"><a class="back" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span>Back to the week</span></a><div class="acts"><button type="button" class="btn quiet">Cancel</button><button type="submit" class="btn primary">Add exercise</button></div></div>
+    <h1 class="type label">New exercise</h1>
+    <div class="field namefield"><label class="label" for="n-name">Name</label><input id="n-name" value=""></div>
+
+    <section class="sec" aria-labelledby="n-plan">
+      <h2 class="title-2" id="n-plan">This week’s plan</h2>
+      <div class="content">
+        <p class="lede">Adds it to this week’s plan, and the weeks after it that have no plan of their own.</p>
+        <div class="fields">
+        <div class="field"><label class="label" for="n-sets">Sets</label><input id="n-sets" class="num" inputmode="numeric" maxlength="2" value="1"></div>
+        <div class="field"><span class="label" id="n-measure">Measure</span><div class="seg" role="group" aria-labelledby="n-measure"><button type="button" aria-pressed="true">Reps</button><button type="button" tabindex="-1" aria-pressed="false">Time</button></div></div>
+        <div class="field"><label class="label" for="n-reps">Reps</label><input id="n-reps" class="num" inputmode="numeric" maxlength="4" value="1"></div>
+        <div class="field"><label class="label" for="n-kg">Weight in kg</label><input id="n-kg" class="weight" inputmode="decimal" placeholder="Bodyweight" value=""></div>
+        <div class="field"><span class="label" id="n-count">Reps count</span><div class="seg" role="group" aria-labelledby="n-count"><button type="button" aria-pressed="true">Per set</button><button type="button" tabindex="-1" aria-pressed="false">Each side</button></div></div>
+        <div class="field"><span class="label" id="n-goal">Times a week</span><div class="stepper" role="group" aria-labelledby="n-goal"><button type="button" aria-label="Fewer times a week" data-step="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></button><output class="value" aria-live="polite">3</output><button type="button" aria-label="More times a week" data-step="1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec" aria-labelledby="n-notes">
+      <h2 class="title-2" id="n-notes">Notes</h2>
+      <div class="content">
+        <button type="button" class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg><span>Add notes</span></button>
+      </div>
+    </section>
+
+    <section class="sec" aria-labelledby="n-details">
+      <h2 class="title-2" id="n-details">Details</h2>
+      <div class="content">
+        <div class="fields">
+          <div class="field"><label class="label" for="n-equipment">Equipment</label><input id="n-equipment" value=""></div>
+          <div class="field"><label class="label" for="n-works">Works</label><input id="n-works" value=""></div>
+          <div class="field wide"><label class="label" for="n-link">Link</label><input id="n-link" value=""></div>
+        </div>
+      </div>
+    </section>
+  </form>
 </div>
 
 <div class="gap"></div>
@@ -301,7 +371,7 @@ Good with yoghurt in the morning, or on their own after training.</textarea>
   const TITLES = { notes: 'Notes', details: 'Details', plan: 'This week’s plan', history: 'Recent weeks' }
   const UP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>'
   const DOWN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>'
-  const st = { order: ['history', 'notes', 'details', 'plan'], hidden: new Set(['details']) }
+  const st = { order: ['history', 'plan', 'notes', 'details'], hidden: new Set(['details']) }
   const box = document.getElementById('arrange')
   function draw(focus) {
     box.innerHTML = st.order.map((k, i) => {

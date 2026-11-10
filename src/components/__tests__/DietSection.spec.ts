@@ -37,11 +37,16 @@ function cells(name: string) {
   return diet().findAll(`button[aria-label^="${name},"]`)
 }
 
-/** Opens the Add food dialog from the button under the grid (K54); Reka renders it on document.body. */
-async function openAddFood(): Promise<HTMLElement> {
+/** Lets the hash change and the page it opens settle. */
+async function settle(): Promise<void> {
+  for (let i = 0; i < 4; i++) await new Promise((resolve) => setTimeout(resolve, 0))
+}
+
+/** Opens the new item page from Add food, under the grid (K104). */
+async function openAddFood() {
   await wrapper.get('[data-testid="add-food"]').trigger('click')
-  await flushPromises()
-  return document.querySelector<HTMLElement>('[role="dialog"]')!
+  await settle()
+  return wrapper.get('[data-testid="new-item-page"]')
 }
 
 describe('DietSection', () => {
@@ -96,12 +101,11 @@ describe('DietSection', () => {
   it('adds a food, syncs it, and removes one after confirmation', async () => {
     await mountConfig()
     const add = await openAddFood()
-    expect(add.querySelector('h2')!.textContent).toBe('Add food')
-    add.querySelector<HTMLInputElement>('#add-food-name')!.value = 'Beans'
-    add.querySelector('#add-food-name')!.dispatchEvent(new Event('input'))
-    add.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }))
-    await flushPromises()
-    expect(document.querySelector('[role="dialog"]')).toBeNull()
+    expect(add.get('[data-testid="new-add"]').text()).toBe('Add food')
+    await add.get('[data-testid="new-name-field"]').setValue('Beans')
+    await add.get('form').trigger('submit')
+    await settle()
+    expect(wrapper.find('[data-testid="new-item-page"]').exists()).toBe(false)
     expect(diet().findAll('[data-testid="item-name"]').at(-1)!.text()).toBe('Beans')
     expect(useDietStore().foods.at(-1)!.target).toBe(3)
     await flushPromises()
@@ -116,31 +120,6 @@ describe('DietSection', () => {
     ;[...dialog.querySelectorAll('button')].find((b) => b.textContent === 'Remove')!.click()
     await flushPromises()
     expect(cells('Nuts')).toHaveLength(0)
-  })
-
-  it('ignores an empty food name', async () => {
-    await mountConfig()
-    const add = await openAddFood()
-    add.querySelector<HTMLInputElement>('#add-food-name')!.value = '   '
-    add.querySelector('#add-food-name')!.dispatchEvent(new Event('input'))
-    add.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }))
-    await flushPromises()
-    expect(document.querySelector('[role="dialog"]')).not.toBeNull()
-    expect(cells('Vegetables')).toHaveLength(7)
-    // The header row and the four foods; foods have no Picked row (WeekGrid card).
-    expect(diet().findAll('[role="row"]')).toHaveLength(5)
-  })
-
-  it('sets a food goal in its Edit food dialog', async () => {
-    await mountConfig()
-    await diet().get('button[aria-label="Edit Fish"]').trigger('click')
-    await flushPromises()
-    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!
-    dialog.querySelector<HTMLButtonElement>('button[aria-label="Fewer times a week"]')!.click()
-    await flushPromises()
-    dialog.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }))
-    await flushPromises()
-    expect(useDietStore().foods[2]!.target).toBe(1)
   })
 
   it('adopts another tab’s diet changes', async () => {

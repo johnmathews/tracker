@@ -49,6 +49,7 @@ the item exists.
 **The item page's sections** (K66, P29). `src/lib/itemSections.ts` holds which of the page's
 sections (`notes`, `details`, `plan`, `history`) each type's pages show, and in what order:
 `{order, hidden}` per type id, every key once in `order`, `hidden` a subset in the default order.
+The default order is `plan`, `notes`, `details`, `history` (K104 put the plan first).
 `normaliseItemSections` drops unknown, repeated and non-string keys, appends missing ones in the
 default order, drops a type the registry lacks, and leaves out a type with the default
 arrangement. `api/src/tracker_api/item_sections.py` normalises the same way, and
@@ -89,19 +90,23 @@ and `IconButton` primitives) take props, emit events, and serve every section.
 `TrackerGrid` runs the grid's keyboard model (`useGridNav`, §6.5) and links each name to its item's
 page. `TrackerRow` asks the
 `ConfirmDialog` (through `useConfirm`, §6.4) before emitting `remove`, and names where focus goes
-once the row has gone. `ExerciseGrid`, `CardioSection` and `DietSection` wire them to their store. `EditExerciseDialog` (which also adds an exercise when given none, K54) takes its field
-state and input cleaning through `useExerciseForm` (`src/composables/exerciseForm.ts`) and the
-`PerSideToggle` segmented control. `EditCardioDialog` and the item page take a cardio item's
-Minutes and Distance in km through `useCardioForm` (`src/composables/cardioForm.ts`), which stores
-the minutes as seconds. `src/lib/problems.ts` turns a sign-in, sign-up, link or
+once the row has gone. `ExerciseGrid`, `CardioSection` and `DietSection` wire them to their store,
+and their Add buttons open the new item page (K104). The item page and the new item page share the
+plan's controls, `PlanFields.vue`. It takes an exercise's field state and input cleaning through
+`useExerciseForm` (`src/composables/exerciseForm.ts`) and the `PerSideToggle` segmented control,
+and a cardio item's Minutes and Distance in km through `useCardioForm`
+(`src/composables/cardioForm.ts`), which stores the minutes as seconds. `planErrors.ts` (in
+`src/composables/`) says when a number is over its limit, and `src/lib/itemPage.ts` holds the two
+pages' row and column classes. `src/lib/problems.ts` turns a sign-in, sign-up, link or
 sign-out refusal into a sentence for the forms, and `describeConnectProblem` does the same for the consent screen; `src/composables/importSummary.ts` says what an import would add,
 for Settings → Import… and the first-login prompt.
 
 ```
-App.vue                 picks the screen (a link, planner, Settings, an item's page, Ask,
-│                       sign-up, reset or sign-in), the .dark class, clock refresh, sync
-│                       triggers (focus, visibility, online, minute tick, storage), the
-│                       planner-screens class (§6.6), and the one ConfirmHost
+App.vue                 picks the screen (a link, planner, Settings, an item's page, the new
+│                       item page, Ask, sign-up, reset or sign-in), the .dark class, clock
+│                       refresh, sync triggers (focus, visibility, online, minute tick,
+│                       storage), the planner-screens class (§6.6), the one ConfirmHost, and
+│                       H or B for back and L for forward on every page (K105)
 ├── ConfirmEmail.vue    a confirm-your-email link (#/confirm/<t>), signed in or out: confirms it
 ├── PasswordForm.vue    an invite or reset link (#/invite/<t>, #/reset/<t>): choose a password
 ├── SignupForm.vue      #/signup: email and password twice; field and form-level refusals
@@ -131,11 +136,18 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 │                       Conversation, kept per device), the Transcript and the question box with
 │                       the QuotaChip; deleting asks in a ConfirmDialog of its own
 ├── ItemPage.vue        the ItemPage card, at #/item/<section>/<id> (K64, K65): Back to the week
-│   │                   and Arrange sections, the type, the name and its chips; then rows like
-│   │                   Settings: Notes, Details, the week's plan (or the latest, read-only) and
-│   │                   Recent weeks, as the type's arrangement shows them (K66)
+│   │                   and Arrange sections, the type, the name and its chips (in Edit plan the
+│   │                   Name field, K104); then rows like Settings: the week's plan (or the
+│   │                   latest, read-only), Notes, Details and Recent weeks, as the type's
+│   │                   arrangement shows them (K66, K104); in Edit plan Remove last
+│   ├── PlanFields.vue  the plan's controls: an exercise's, a cardio item's or a food's, with
+│   │                   Times a week
 │   └── RecentWeeks.vue the RecentWeeks card: up to eight weeks, newest first, a met week's count
 │                       in pen
+├── NewItemPage.vue     the new item page, at #/new/<section> (K104): Back to the week, Cancel and
+│                       Add exercise; "New exercise" and the Name field; then the plan
+│                       (PlanFields), Notes and Details as the type's arrangement shows them;
+│                       nothing saved until Add
 ├── SyncStatus.vue      loading, offline and conflict Banners above the planner
 ├── EmailStatus.vue     "Confirm your email." Banner, with Send it again, until it is confirmed
 ├── ImportPrompt.vue    this browser's log from before accounts, offered once (§7)
@@ -146,32 +158,22 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 ├── ExerciseGrid.vue    the Exercises section: SectionHeader (the section's heading; in config
 │   │                   mode with the Exercises a day Stepper centred on its line while Daily
 │   │                   goal is on, K62, K85)
-│   ├── TrackerGrid.vue a <table> (WeekGrid card): day names, one TrackerRow per item, and
-│   │   │               the days that met the daily pick
-│   │   └── TrackerRow.vue  name (a link to the item's page) and chips on one line, the
-│   │                       item's notes under them, from the details store (a button
-│   │                       opening a Popover, K43); 7 × DayMark; in config
-│   │                       mode the edit IconButton after the name, and the remove
-│   │                       IconButton in a last cell of its own
-│   └── EditExerciseDialog.vue  Dialog: Name; sets, Measure (Reps or Time), reps or seconds;
-│                           PerSideToggle, weight (kg), Times a week (the goal); then Note (K55),
-│                           the item's notes for every week (the details store);
-│                           Edit exercise, or Add exercise from the button under the grid (K54)
+│   └── TrackerGrid.vue a <table> (WeekGrid card): day names, one TrackerRow per item, and
+│       │               the days that met the daily pick
+│       └── TrackerRow.vue  name (a link to the item's page) and chips on one line, the
+│                           item's notes under them, from the details store (a button
+│                           opening a Popover, K43); 7 × DayMark; in config
+│                           mode the remove IconButton in a last cell of its own
 ├── CardioSection.vue   the Cardio section (K90): SectionHeader with no Stepper (no daily
 │   │                   target), kept with its grid; on the screens "Back to Exercises" on its
 │   │                   title line and "Go to Food" at its foot (K42)
-│   ├── TrackerGrid.vue wired to cardio: a time and a distance as chips; no day turns green
-│   └── EditCardioDialog.vue  Dialog: Name; Minutes, Distance in km, Times a week; then Note;
-│                           Edit cardio, or Add cardio from the button under the grid (K54)
+│   └── TrackerGrid.vue wired to cardio: a time and a distance as chips; no day turns green
 └── DietSection.vue     the Food section: SectionHeader (the week centred as the title, then the
                         heading; in config mode the heading alone, with the Foods a day Stepper
                         centred on its line while Daily goal is on, K62, K85), kept
                         with its grid, whose days that met foods a day turn green (K57); on the
                         screens, the "Back to Cardio" arrow (K42)
-    ├── TrackerGrid.vue wired to diet: no chips
-    └── EditFoodDialog.vue  Dialog: Name, Times a week (the goal), then Note (the food's notes
-                            for every week); Edit food, or
-                            Add food from the button under the grid (K54)
+    └── TrackerGrid.vue wired to diet: no chips
 ```
 
 ## 2. Weekly plans
@@ -252,8 +254,8 @@ card's words).
 store like the planner's. It reads `planner.weekKey`, so week navigation moves every
 section. It derives `foods`, `dayCounts`, `grandTotal` and `goalsMet`, and
 offers `isEaten`, `totalFor`, `toggle`, `changeTarget` (0–7), `addFood` (a name, or a name with
-its goal from the Add food dialog; goal 3 when none is given; the new id, or `null` for an empty
-name), `updateFood` (name and goal from the Edit food dialog, `false` for an empty name or a food
+its goal from the new item page; goal 3 when none is given; the new id, or `null` for an empty
+name), `updateFood` (name and goal, which the item's page renames through, `false` for an empty name or a food
 not in the week), `removeFood`, `adopt`, `adoptWeek` and `clear`. Food goals work
 like exercise goals (met once the count reaches a non-zero goal). The daily target, foods a day,
 is the planner store's `foodPick`, with the other settings (K57).
@@ -278,8 +280,8 @@ the store drops an empty document. The sync store fills it through `adopt` and s
 like the plans (§7). It offers:
 
 - `get(section, id)` (a frozen `{}` when there are none), `notesOf` and `fieldOf(section, id, key)`;
-- `canSetNotes(section, id, text)`, which a dialog asks before it saves anything (`id` null for an
-  item not added yet);
+- `canSetNotes(section, id, text)`, which the new item page asks before it adds anything (`id` null
+  for an item not added yet);
 - `setNotes` and `setField`, which store the document as the API would and return `false`, changing
   nothing, over a limit (§4), over 32 KB, for a bad field key, a 33rd field or an id the API can't
   name;
@@ -441,14 +443,13 @@ API's replies, follow the API's rules exactly ([api.md](api.md) §3):
 - Any other key is dropped, and an empty `fields` is left out.
 - A document over 32 KB as compact UTF-8 JSON (`detailsFit`) drops out of a map, as does an item id
   over 128 characters or `__proto__`. 20,000 characters of a multi-byte script can pass 32 KB, so
-  the dialogs and the item page say "These notes are too long to save" for that case.
+  the item page and the new item page say "These notes are too long to save" for that case.
 
 The notes render with `src/lib/markdown.ts` (markdown-it, raw HTML off, no images, headings, tables
 or rules). The row shows one line of inline formatting, where a link is its underlined text. The
 whole note opens in a Popover that scrolls when it is taller than the window, and the item page
 shows it whole. Links there open in a new tab with `rel="noopener noreferrer"`. The notes are
-edited on the item page and in the Note field of the Edit exercise, Edit cardio and Edit food
-dialogs. The
+edited on the item page, and a new item's on the new item page (K104). The
 field counts from 19,000 characters (`NOTES_COUNT_FROM`), and a blank one clears the notes.
 
 `parseSettings` accepts any `#rrggbb` accent (K3a, K13), clamps the daily pick to
@@ -569,12 +570,13 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
   option A of the mockup `261101-item-page`, rows like Settings (K65; K64 first built option B).
   Under the head (Back to the week, the type, "Exercise", and the name in `title-1` with its
   chips), each section is a row with its heading in the week's 320u name column
-  (`--grid-name-w`), its content to the right and a `line` rule above it, in this order:
+  (`--grid-name-w`), its content to the right and a `line` rule above it, in this order (K104 put
+  the plan first):
+  - the plan, its controls (`PlanFields.vue`) in columns at least 300u wide;
   - Notes, at the page's text size (`--set-text`), read as markdown, with Add notes or Edit notes
     turning them into a field that saves as you type, and Done or Escape turning it back;
   - Details, the type's fields, saving as you type, where a web address in Link adds "Open
     youtube.com in a new tab";
-  - the plan, its controls in columns at least 300u wide;
   - Recent weeks (`RecentWeeks.vue`), up to eight weeks ending with the opened week, never before
     the item's first plan. Every mark counts toward a week's count, missed included (K9, K65).
 
@@ -598,17 +600,36 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
   October" for another week. An item not in that week (an old address, or an item since removed)
   shows "Latest plan", read-only, from the latest week whose own plan holds it.
 
+  **In Edit plan** (K104) the page is the one place an item changes. The `<h1>` is visually hidden
+  and a Name field takes its place, renaming the item in this week's plan as you type
+  (`updateExercise`, `updateCardio`, `updateFood`); an empty name shows "Enter a name." and waits.
+  The chips go. A Remove row ends the page, outside the arrangement: a line saying what it does and
+  "Remove from this week", which asks the row's question through `useConfirm`, notes the week, and
+  removes the item and leaves for the week (`leaveForWeek`) only when that week still shows.
+
+  **The new item page** (`NewItemPage.vue`, K104), at `#/new/<section>`, is what Edit plan's Add
+  opens. It shares the item page's `data-slot`, so it takes the same sizes. The head's first line
+  has Back to the week, then Cancel and "Add exercise"; then "New exercise" (the `<h1>`, in `label`
+  style) and an empty Name field, which takes focus. The plan always shows and Recent weeks never;
+  Notes and Details follow the type's arrangement. A new exercise starts at one set of one rep
+  (`NEW_EXERCISE_AMOUNT`), three times a week. The page is a form: nothing reaches a store until Add,
+  which checks every field (focus on the first error), then calls the store's `add…` action, sets
+  the notes and fields on the new id, and leaves for the week.
+
 - **The page's address and focus.** App opens the page for an address whose section is a registry
   section and whose id the API could name, once the data shows the item is in the visible week or
   in some week's plan. Any other `#/item/…` address opens the week and drops the hash, as does an
   item another tab removed from every plan. Arriving moves focus to the item's name. Opened from the
   week, the page marks its history entry (`markFromWeek`), so Back to the week goes back through
   history and the browser's Back agrees. Opened from an address, Back replaces the entry with the
-  week. Either way focus returns to that item's name in its row. Signing out on the page drops the
+  week. Either way focus returns to that item's name in its row. The new item page's
+  `#/new/<section>` (`newItemHref`, `parseNewHash`) works the same way: Back, Cancel, Add and an
+  item page's Remove all leave through `leaveForWeek` (`src/lib/routes.ts`), and back on the week
+  focus goes to the section's Add button. Signing out on the page drops the
   hash, as on Settings.
 - **The name is a link.** In the week and in Edit plan, each row's name is an `<a href>` to its
   item's page (`data-slot="item-link"`). It looks as it always has, underlines under the pointer and
-  prints as plain text. The pencil still opens the quick Edit dialog. In the grid the link is the
+  prints as plain text. There is no Edit button: the page is where an item changes (K104). In the grid the link is the
   name cell's widget, so Enter opens the page in one press, and F2 reaches the cell's other controls
   (§6.5).
 - **Config mode and normal mode.** Normal mode, the default on every load, only marks cells. A
@@ -616,20 +637,20 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
   config mode (Edit plan), where the bar is in view. Another long press, E, Esc or the hidden
   button (reading "Done") turns it off; the bar has no Done (K91). `useShortcuts`
   (`src/composables/shortcuts.ts`) carries the week's keys: E, Esc (full screen first, then Edit
-  plan), F full screen, P print and S Settings. `ownedElsewhere` leaves a key alone in a field,
+  plan), F full screen, P print and S Settings. `App.vue` adds H or B for back and L for forward,
+  signed in, on every page (K105). `ownedElsewhere` leaves a key alone in a field,
   with Ctrl, ⌘ or Alt, repeating, mid-composition, or while a dialog or popover is open. Edit plan
   shows the
-  edit and remove IconButtons, an "Add exercise" and an "Add food" button under the grids, and
+  remove IconButtons, "Add exercise", "Add cardio" and "Add food" buttons under the grids, and
   the daily targets centred on each title line, under the bar's week: a Stepper at max(44px, 40u)
   reading "4 per day", its label ("Exercises a day", "Foods a day") for a screen reader only
-  (K56, K62, K63). The week beside the titles is left out there. An item is added in its dialog and changed
-  in its dialog or on its page (Add or Edit exercise, Add or Edit food; K54, K64), so rows have no Stepper; the remove button ends each
+  (K56, K62, K63). The week beside the titles is left out there. An item is added on the new item page and changed
+  on its page (K64, K104), so rows have no Stepper; the remove button ends each
   row, in a "Remove" column after the days. The mode is not saved, so the
   app always opens ready for ticking.
 - **Exercises and foods are editable.** The handoff had no way to change an item after adding it.
-  An Edit IconButton (`pencil`) on each exercise row opens `EditExerciseDialog` (and on each food
-  row `EditFoodDialog`: name, Times a week and Note), on the Dialog primitive (Reka UI),
-  which traps focus, closes on Escape and returns focus to the button. Sets and
+  The item's page changes everything about it: its plan in both modes, and in Edit plan its name
+  and Remove (K104). The Edit dialogs of K54 are gone. Sets and
   weight can be left empty (an empty weight shows a grey "Bodyweight" placeholder; no field is
   marked optional), weight in kg; the sets/reps chip and the weight chip are separate so they
   wrap in the narrow name column.
@@ -786,8 +807,8 @@ Each grid is one tab stop, following the WAI-ARIA grid pattern with a roving tab
 - **Keys.** Arrows move cell by cell over the names and days, and never
   wrap. Home and End go along the row, Ctrl+Home and Ctrl+End to the grid's ends. An `aria-hidden`
   cell is skipped.
-- **Controls in a cell.** The other controls in a cell (the note's button, and in Edit plan the Edit
-  button in the name cell and Remove in the last cell) stay out of the Tab order. F2 on the cell
+- **Controls in a cell.** The other controls in a cell (the note's button, and in Edit plan Remove
+  in the last cell) stay out of the Tab order. F2 on the cell
   lets them in, as does Enter on a cell without a widget (Remove's). Tab moves among them, and
   Escape puts focus back on the cell, or on its widget: the name's link, in a name cell.
 
@@ -847,8 +868,9 @@ wide) and `short:` (landscape, 540px tall or less).
   they switch to `--n` (1 on a phone, up to 1.4). Components set `text-(length:--fs-name)` beside a
   type class, so the class keeps the font and weight and the size follows the screen. The other
   families: `--bar-*` sizes the Header and its BarActions (K47); `--set-*` the Settings and Ask
-  pages' and the dialogs' type and controls (K51, K55); `--edit-ib`, `--edit-ib-icon`, `--grid-edit-w` and
-  `--grid-remove-w` Edit plan's row buttons and their columns (K54). Outside the planner's screens
+  pages' and the dialogs' type and controls (K51, K55); `--edit-ib`, `--edit-ib-icon` and
+  `--grid-remove-w` Edit plan's row buttons and the Remove column (K54; K104 dropped the edit
+  button's `--grid-edit-w`). Outside the planner's screens
   (Edit plan) `--grid-row-min` and `--grid-row-max` are a fixed max(76px, 100u), since that page
   scrolls rather than filling the window.
 - **The grid.** `TrackerGrid` makes the table `display: grid` with its row groups and rows
@@ -1053,8 +1075,7 @@ A write that would 404 for good must therefore never be queued: it would hold th
 That is a details write for an id the path can't name. Starlette decodes `%2F` before routing, so
 `PUT /api/details/exercise/a%2Fb` gets 404 `not-found`, and the browser folds `.` and `..` out of
 a path. `isDetailsId` (`src/lib/storage.ts`) is `isItemId` without a `/` and not `.` or `..`. The
-details store's setters refuse any other id (false, so nothing is queued), and the item page and
-the edit dialogs say "This item’s notes can’t be saved: its id has a slash in it." (or "…details…",
+details store's setters refuse any other id (false, so nothing is queued), and the item page says "This item’s notes can’t be saved: its id has a slash in it." (or "…details…",
 or "its id isn’t one the server takes" for the rest). A `-v3` lift queues nothing for one, and
 `sendDetails` drops one already queued by older code as refused. The API's details route refuses
 the same ids with 400 `invalid` (`check_details_id`, [api.md](api.md) §3). The app makes no such

@@ -132,7 +132,7 @@ hand.
 clock is fixed to Wednesday 21 October 2026, so every run sees the same week.
 
 - `a11y.spec.ts`: axe (WCAG 2.0–2.2 A and AA plus best practice) on the style guide in both themes,
-  and on the app's (its mocked week holds every kind of mark) week view, the bar called up, Edit plan, open Settings, an item's page (desktop with its notes being edited, folded at 390px, and while arranging at both sizes, with nothing scrolling sideways), the Ask page (an answer with the history beside it, its Delete all question open, and at 375px with the history drawer open), the folded week at 375px,
+  and on the app's (its mocked week holds every kind of mark) week view, the bar called up, Edit plan, open Settings, an item's page (desktop with its notes being edited, folded at 390px, and while arranging at both sizes, with nothing scrolling sideways), a cardio item's page in Edit plan with its Name field and Remove, the new item page (K104), the Ask page (an answer with the history beside it, its Delete all question open, and at 375px with the history drawer open), the folded week at 375px,
   sign-in, and create an account (empty and with errors showing), in light and dark; and the focus ring's shape, a solid 2px outline at 2px offset. Two
   "dark really is dark" tests guard the audit: on the style guide and on the app, the `.dark` class
   must be set and `--canvas` must differ from light, so a dark audit can never quietly re-run
@@ -151,8 +151,8 @@ clock is fixed to Wednesday 21 October 2026, so every run sees the same week.
   Escape (K43), and a long note opening in a panel that fits the window and scrolls. The mocked
   state (`e2e/support.ts`) has details with notes for Push-ups and Kettlebell halos, so the axe
   checks cover the note line too.
-- `item-page.spec.ts`: a press on a name opens its page, laid out in rows (Notes, Details, This
-  week's plan, Recent weeks, each heading in the 320px name column, K65), and Back returns with
+- `item-page.spec.ts`: a press on a name opens its page, laid out in rows (This week's plan, Notes,
+  Details, Recent weeks, each heading in the 320px name column, K65, K104), and Back returns with
   focus on the name. Enter on a name's cell opens it in one press. A note typed on the page shows
   in the row on every week, and a plan change in this week's row. Recent weeks match the log, print
   keeps the head, the notes and the details only, and at 390px the page folds to one column in the
@@ -193,8 +193,11 @@ listed in [api.md](api.md) §10):
 - `src/lib/__tests__/plans.spec.ts`: which week's plan a week shows (own, carried forward, earliest,
   none) and plan copies.
 - `src/composables/__tests__/exerciseForm.spec.ts`: digits-only sets/reps and decimal weight
-  cleaning, loading and resetting the shared exercise form. The cardio form (`cardioForm.ts`) is
-  covered through `CardioSection.spec.ts` and `ItemPage.spec.ts`.
+  cleaning, loading and resetting the shared exercise form, a new exercise's one set of one rep
+  (K104), an exercise saved without sets or reps loading as it is, a cleared field left out, and
+  the Measure and per-side handlers.
+- `src/composables/__tests__/cardioForm.spec.ts`: the cardio form (K90): empty for a new item, and
+  an item's minutes loaded to two places and reported as seconds.
 - `src/lib/__tests__/markdown.spec.ts`: a note's markdown (K43): emphasis, code, lists and links
   opening a new tab; raw HTML, script links and images never rendered; headings and rules left as
   text; and the row's one line, where a link is its text.
@@ -235,8 +238,9 @@ listed in [api.md](api.md) §10):
   when nothing is planned), the latest plan holding an item, a week's count and whether it met its
   goal, and the line over the weeks in words.
 - `src/lib/__tests__/routes.spec.ts`: the item page's address written and read back, addresses that
-  name no section or no good id, the history mark for a page opened from the week, Back going back
-  through history or replacing the entry, a modified press left to the browser, and `webHost`.
+  name no section or no good id, the new item page's `#/new/<section>` (K104), the history mark for
+  a page opened from the week, Back and `leaveForWeek` going back through history or replacing the
+  entry, a modified press left to the browser, and `webHost`.
 - `src/lib/__tests__/tracker.spec.ts`: the shared tick-per-day helpers (totals, day counts, goals
   met, toggling, ids), including that `toggleDay` changes a reactive log through its proxy.
 - `src/lib/__tests__/api.spec.ts`: how every kind of reply becomes a typed result (success, 204,
@@ -399,22 +403,21 @@ listed in [api.md](api.md) §10):
 - `src/components/__tests__/App.spec.ts`: the mounted app in jsdom. Covers rendering, the today
   column, stepping a cell through its marks with `aria-pressed` (a food only on and off), the goal stepper and its bounds,
   navigation, confirm-before-remove, print, the visibility and one-minute clock refresh, another
-  tab's writes to the cache, the Add exercise and Add food dialogs, the Settings page (the hash, focus on arrival and on the way back; no Ink setting, and a saved accent kept as it is), and the
+  tab's writes to the cache, Add opening the new item page with no bar and coming back with focus on that Add button (K104), the Settings page (the hash, focus on arrival and on the way back; no Ink setting, and a saved accent kept as it is), and the
   theme: the `dark` class following the OS (with a stubbed `matchMedia`), the theme control and
-  its persistence. Also the weight and sets fields, the edit dialog (found by `role="dialog"` on
-  `document.body`, where Reka's portal renders it), normal mode hiding every editing control, export (with
+  its persistence. Also adding an exercise with sets from the new item page, Edit plan's rows with
+  no Stepper and no Edit button (K104), normal mode hiding every editing control, export (with
   `URL.createObjectURL` stubbed) and import through the file input (summary, confirm, cancel,
   errors), Edit plan's daily targets (centred on each title line, reading "per day", 1–8,
   synced), and no Copy plan button (K58). Also an item's page: each name a link in both grids and
   Edit plan, the page with no bar and focus on its name, Back through history or replacing an
   address with focus on the name again, an address naming no item, an old address showing the
   latest plan, waiting for the data, signing out on the page, another tab removing the item, and a
-  note, a field or a plan change typed there showing on the week. The dialogs' Note field saves
-  the notes for every week, counts near the limit and keeps everything when they're too big to
-  save. Tests that
+  note, a field or a plan change typed there showing on the week, and a food's goal set lower
+  there. Tests that
   edit the plan mount with `mountConfig()`, which turns config mode on. Queries that would also
   match the diet grid scope to `[data-testid="exercise-grid"]`; the rest rely on exercise-only
-  labels or on the exercise form coming first in the DOM. Every mount is signed in as alice through
+  labels. Every mount is signed in as alice through
   `signedIn()`.
 - `src/components/__tests__/Auth.spec.ts`: the sign-in form and its messages, an ended session, a
   double submit, creating an account (the link from sign-in, signing in by email, matching
@@ -426,9 +429,9 @@ listed in [api.md](api.md) §10):
 - `src/components/__tests__/Planner.spec.ts`: the planner on the design system's marks, in the
   mounted app: a day that meets the daily pick (its name in pen, underlined, and its words, K30, K60),
   today (full-date names with "today", `aria-current`, no band, K36), rows with no goal or total
-  (K33), Edit plan's rows (Edit in the name
-  cell, Remove in its own last column, stable row height, focus after a removal), the keyboard (one tab stop per grid,
-  arrows, the skip link, the arrows between the screens, Edit plan's controls reached with F2), an
+  (K33), Edit plan's rows (only the name in the
+  name cell, K104; Remove in its own last column, stable row height, focus after a removal), the keyboard (one tab stop per grid,
+  arrows, the skip link, the arrows between the screens, the name as its cell's one control in Edit plan), an
   item's note on its own line, parked behind its cell and the same on every week (K43), and headings
   and print attributes. The layouts themselves (filling, folding, the out-of-sight navbar) depend on media
   queries jsdom doesn't apply, so the e2e suite covers them.
@@ -441,9 +444,17 @@ listed in [api.md](api.md) §10):
   arriving while editing), details (the type's fields, the 500 limit, the Link's "Open … in a new
   tab", printing filled fields), this week's plan (each change applied at once, a number that isn't
   valid, another week, a food's goal, a cardio item's Minutes and Distance in km with their limits,
-  K90), an item not in the week (its latest plan, read-only),
+  K90), an item not in the week (its latest plan, read-only), Edit plan (K104: the Name field
+  in the title's place, renaming as you type for every type, "Enter a name." while empty, a rename
+  from elsewhere, and Remove asking first, going back to the week, and doing nothing when the week
+  changes while it asks),
   recent weeks, and arranging (K66: the shown sections in the type's order, Show, Move up and
   Move down, focus kept on the moved section's button, the ends, Escape, every section hidden).
+- `src/components/__tests__/NewItemPage.spec.ts`: the new item page (K104): an empty Name, one set
+  of one rep three times a week, the type's arrangement with the plan always shown, another week's
+  heading and line, adding an exercise (timed and each side too), a cardio item and a food with
+  their notes and details, nothing added without a name, over a number's limit or with notes or a
+  detail too long (focus on the field), and Cancel going back through history.
 - `src/components/__tests__/RecentWeeks.spec.ts`: the list labelled by its heading, newest first,
   "This week" and the dates read aloud, the marks as pictures hidden from a screen reader, each line
   as one sentence, the count against the goal with a met week in pen and underlined, and the line
@@ -458,7 +469,8 @@ listed in [api.md](api.md) §10):
   the bar led by the week in `title-1` with no wordmark and "This week" first among the actions,
   no Edit plan or Done BarAction and the keyboard's hidden "Edit plan" ("Done" in Edit plan)
   after "Skip to today", the week's keys (E in and out, Esc out of full screen and then Edit plan,
-  F, P and S, and none in a field, with a modifier, repeating or under a dialog; K91),
+  F, P and S, and none in a field, with a modifier, repeating or under a dialog; K91), H and B
+  back and L forward on every page (K105),
   a long press turning Edit plan on and a second one off (by mouse or finger; not when let go
   early, moved, cancelled, held with another button, or in a field, popover, dialog or the bar),
   the held day cell or button left unpressed, a later click not swallowed, a finger's or pen's
@@ -466,14 +478,13 @@ listed in [api.md](api.md) §10):
   of the floating bar, and the four arrows between the three screens, named for where they go
   and each sprinting to its screen (K42, K90).
 - `src/components/__tests__/DietSection.spec.ts`: the diet section in the mounted app: default
-  foods, ticking (totals checked in the store), shared week navigation, add and remove (after
-  a confirmation) and the goal set in the Edit food dialog (in config mode), cross-tab sync.
+  foods, ticking (totals checked in the store), shared week navigation, Add food opening the new
+  item page and adding there (K104), remove (after a confirmation), cross-tab sync.
 - `src/components/__tests__/CardioSection.spec.ts`: the Cardio section in the mounted app (K90):
   between Exercises and Food and empty for an account with none, the time and distance chips, no
-  day turning green and no daily target in Edit plan, the exercise's marks, Add cardio and Edit
-  cardio (cleaned Minutes and Distance in km, a blank amount left out, notes, too-big notes, an id
-  with a slash, Cancel and Close), removing after a confirmation, and the dialog closing when
-  another tab removes the item or the week changes.
+  day turning green and no daily target in Edit plan, the exercise's marks, Add cardio opening
+  the new item page (K104: cleaned Minutes and Distance in km, notes), and removing after a
+  confirmation.
 
 `vitest.config.ts` sets coverage thresholds (100% lines and functions, 99% statements, 98%
 branches), so `npm run test:coverage` and CI fail when coverage drops below them. Coverage covers

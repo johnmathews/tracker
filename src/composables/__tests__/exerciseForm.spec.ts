@@ -33,16 +33,45 @@ describe('useExerciseForm', () => {
       target: 3,
     })
     expect(form.sets.value).toBe('3')
+    // A new exercise: one set of one rep (K104).
     form.load()
     expect(form.notes.value).toBe('')
+    expect(form.sets.value).toBe('1')
+    expect(form.reps.value).toBe('1')
     expect(form.value()).toStrictEqual({
       name: '',
-      sets: undefined,
-      reps: 0,
+      sets: 1,
+      reps: 1,
       perSide: false,
       weight: undefined,
       target: 3,
     })
+  })
+
+  it('loads an exercise saved without sets or reps as it is, not as a new one', () => {
+    const form = useExerciseForm()
+    form.load({ id: 'wk', name: 'Walk', reps: 0, target: 3 })
+    expect(form.sets.value).toBe('')
+    expect(form.reps.value).toBe('')
+  })
+
+  it('reports a cleared field as left out: no sets, no reps, no weight', () => {
+    const form = useExerciseForm()
+    form.load()
+    form.sets.value = ''
+    form.reps.value = ''
+    expect(form.value()).toMatchObject({ sets: undefined, reps: 0, weight: undefined })
+  })
+
+  it('chooses the measure and the per-side count through its handlers', () => {
+    const form = useExerciseForm()
+    form.load()
+    form.onMeasure('time')
+    form.onPerSide(true)
+    expect(form.value()).toMatchObject({ reps: 0, duration: 1, perSide: true })
+    form.onMeasure('reps')
+    expect(form.value()).toMatchObject({ reps: 1, perSide: true })
+    expect(form.value()).not.toHaveProperty('duration')
   })
 
   it('loads a timed exercise as Time and reports seconds as its duration, never reps', () => {

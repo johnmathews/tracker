@@ -17,7 +17,7 @@ import { IconButton } from '@/components/ui/icon-button'
 import { dialogPanelVariants, scrimVariants } from '.'
 
 const props = defineProps<{
-  /** Sentence case, naming the task: "Edit exercise". Labels the dialog. */
+  /** Sentence case, naming the task: "Add a token". Labels the dialog. */
   title: string
   /** Optional words under the title; when given, they describe the dialog. */
   description?: string

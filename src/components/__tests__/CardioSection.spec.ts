@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import App from '@/App.vue'
 import { useCardioStore } from '@/stores/cardio'
 import { useDetailsStore } from '@/stores/details'
 import { usePlannerStore } from '@/stores/planner'
-import { CACHE_PREFIX, type SyncState } from '@/stores/sync'
+import type { SyncState } from '@/stores/sync'
 import type { FakeApi } from '@/lib/__tests__/fakeApi'
 import { USER, emptyState, signedIn } from '@/lib/__tests__/signedIn'
 
@@ -55,28 +55,16 @@ function cells(name: string) {
   return grid().findAll(`button[aria-label^="${name},"]`)
 }
 
-/** The open dialog: Reka renders it in a portal on document.body. */
-function dialog(): DOMWrapper<HTMLElement> | null {
-  const el = document.querySelector<HTMLElement>('[role="dialog"]')
-  return el ? new DOMWrapper(el) : null
+/** Lets the hash change and the page it opens settle. */
+async function settle(): Promise<void> {
+  for (let i = 0; i < 4; i++) await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
-async function openAdd(): Promise<DOMWrapper<HTMLElement>> {
+/** Opens the new item page from Add cardio, under the grid (K104). */
+async function openAdd() {
   await wrapper.get('[data-testid="add-cardio"]').trigger('click')
-  await flushPromises()
-  return dialog()!
-}
-
-async function openEdit(name: string): Promise<DOMWrapper<HTMLElement>> {
-  await grid().get(`button[aria-label="Edit ${name}"]`).trigger('click')
-  await flushPromises()
-  return dialog()!
-}
-
-function otherTabWrites(state: SyncState): void {
-  const key = CACHE_PREFIX + USER
-  localStorage.setItem(key, JSON.stringify(state))
-  window.dispatchEvent(new StorageEvent('storage', { key, storageArea: localStorage }))
+  await settle()
+  return wrapper.get('[data-testid="new-item-page"]')
 }
 
 describe('CardioSection (K90)', () => {
@@ -140,20 +128,21 @@ describe('CardioSection (K90)', () => {
   it('adds an item with a time and a distance, syncs it, and removes one after confirmation', async () => {
     await mountConfig(withCardio())
     const add = await openAdd()
-    expect(add.get('h2').text()).toBe('Add cardio')
+    expect(add.get('[data-testid="new-add"]').text()).toBe('Add cardio')
     const labels = add
       .findAll('input')
       .map((i) => add.get(`label[for="${i.attributes('id')}"]`).text())
-    expect(labels).toEqual(['Name', 'Minutes', 'Distance in km', 'Times a week'])
-    await add.get('#add-cardio-name').setValue('Swimming')
-    await add.get('#add-cardio-minutes').setValue('45x')
-    expect(add.get<HTMLInputElement>('#add-cardio-minutes').element.value).toBe('45')
-    await add.get('#add-cardio-distance').setValue('1,5')
-    expect(add.get<HTMLInputElement>('#add-cardio-distance').element.value).toBe('1.5')
-    await add.get('#add-cardio-notes').setValue('Front crawl')
+    expect(labels).toEqual(['Name', 'Minutes', 'Distance in km', 'Times a week', 'Route', 'Link'])
+    await add.get('[data-testid="new-name-field"]').setValue('Swimming')
+    await add.get('input[data-field="minutes"]').setValue('45x')
+    expect(add.get<HTMLInputElement>('input[data-field="minutes"]').element.value).toBe('45')
+    await add.get('input[data-field="distance"]').setValue('1,5')
+    expect(add.get<HTMLInputElement>('input[data-field="distance"]').element.value).toBe('1.5')
+    await add.get('[data-testid="new-notes-button"]').trigger('click')
+    await add.get('textarea').setValue('Front crawl')
     await add.get('form').trigger('submit')
-    await flushPromises()
-    expect(dialog()).toBeNull()
+    await settle()
+    expect(wrapper.find('[data-testid="new-item-page"]').exists()).toBe(false)
     const swim = useCardioStore().items.at(-1)!
     expect(swim).toEqual({
       id: swim.id,
@@ -174,133 +163,5 @@ describe('CardioSection (K90)', () => {
     ;[...confirm.querySelectorAll('button')].find((b) => b.textContent === 'Remove')!.click()
     await flushPromises()
     expect(names()).toEqual(['Cycling', 'Swimming'])
-  })
-
-  it('keeps the Add cardio dialog open on an empty name', async () => {
-    await mountConfig()
-    const add = await openAdd()
-    await add.get('#add-cardio-name').setValue('   ')
-    await add.get('form').trigger('submit')
-    await flushPromises()
-    expect(dialog()).not.toBeNull()
-    expect(useCardioStore().items).toEqual([])
-  })
-
-  it('edits an item’s time, distance and goal, keeping its marks; blank clears an amount', async () => {
-    await mountConfig(withCardio())
-    await cells('Cycling')[0]!.trigger('click')
-    const edit = await openEdit('Cycling')
-    expect(edit.get('h2').text()).toBe('Edit cardio')
-    expect(edit.get<HTMLInputElement>('#edit-cardio-minutes').element.value).toBe('30')
-    expect(edit.get<HTMLInputElement>('#edit-cardio-distance').element.value).toBe('')
-    await edit.get('#edit-cardio-minutes').setValue('')
-    await edit.get('#edit-cardio-distance').setValue('20')
-    await edit.get('button[aria-label="More times a week"]').trigger('click')
-    await edit.get('form').trigger('submit')
-    await flushPromises()
-    expect(dialog()).toBeNull()
-    expect(useCardioStore().items[0]).toEqual({
-      id: 'cy',
-      name: 'Cycling',
-      distance: 20,
-      target: 3,
-    })
-    expect(cells('Cycling')[0]!.attributes('aria-pressed')).toBe('true')
-  })
-
-  it('opens with the item’s notes and odd minutes, and keeps everything when the notes are too big', async () => {
-    const cache = withCardio()
-    cache.cardio.plans[WEEK]![0] = { ...CYCLING, duration: 1830 }
-    await mountConfig(cache)
-    useDetailsStore().setNotes('cardio', 'cy', 'Easy spin')
-    const edit = await openEdit('Cycling')
-    expect(edit.get<HTMLInputElement>('#edit-cardio-minutes').element.value).toBe('30.5')
-    const notes = edit.get<HTMLTextAreaElement>('#edit-cardio-notes')
-    expect(notes.element.value).toBe('Easy spin')
-    await edit.get('#edit-cardio-name').setValue('Ride')
-    await notes.setValue('語'.repeat(12_000))
-    await edit.get('form').trigger('submit')
-    await flushPromises()
-    expect(edit.find('#edit-cardio-notes-error').exists()).toBe(true)
-    expect(useCardioStore().items[0]!.name).toBe('Cycling')
-    expect(useDetailsStore().notesOf('cardio', 'cy')).toBe('Easy spin')
-    // The notes count shows near the limit.
-    await notes.setValue('x'.repeat(19_000))
-    expect(edit.find('#edit-cardio-notes-count').exists()).toBe(true)
-  })
-
-  it('leaves a newer note alone when its own is untouched', async () => {
-    await mountConfig(withCardio())
-    useDetailsStore().setNotes('cardio', 'cy', 'Easy spin')
-    const edit = await openEdit('Cycling')
-    useDetailsStore().adoptItem('cardio', 'cy', { notes: 'From the phone' })
-    await edit.get('#edit-cardio-name').setValue('Ride')
-    await edit.get('form').trigger('submit')
-    await flushPromises()
-    expect(useCardioStore().items[0]!.name).toBe('Ride')
-    expect(useDetailsStore().notesOf('cardio', 'cy')).toBe('From the phone')
-  })
-
-  it('says an item’s note can’t be saved when its id has a slash', async () => {
-    const cache = withCardio()
-    cache.cardio.plans[WEEK]!.push({ id: 'a/b', name: 'Slashed', target: 1 })
-    await mountConfig(cache)
-    const edit = await openEdit('Slashed')
-    await edit.get('#edit-cardio-notes').setValue('Note')
-    await edit.get('form').trigger('submit')
-    await flushPromises()
-    expect(edit.get('#edit-cardio-notes-error').text()).toBe(
-      'This item’s notes can’t be saved: its id has a slash in it.',
-    )
-  })
-
-  it('closes on Close without saving', async () => {
-    await mountConfig(withCardio())
-    const edit = await openEdit('Running')
-    await edit.get('#edit-cardio-name').setValue('Jog')
-    await edit.get('button[aria-label="Close"]').trigger('click')
-    await flushPromises()
-    expect(dialog()).toBeNull()
-    expect(useCardioStore().items[1]!.name).toBe('Running')
-  })
-
-  it('closes on Cancel without saving', async () => {
-    await mountConfig(withCardio())
-    const edit = await openEdit('Running')
-    await edit.get('#edit-cardio-name').setValue('Jog')
-    await edit
-      .findAll('button')
-      .find((b) => b.text() === 'Cancel')!
-      .trigger('click')
-    await flushPromises()
-    expect(dialog()).toBeNull()
-    expect(useCardioStore().items[1]!.name).toBe('Running')
-  })
-
-  it('closes when another tab deletes the item, but not for a different one', async () => {
-    await mountConfig(withCardio())
-    await openEdit('Cycling')
-    const other = withCardio()
-    other.cardio.plans = { [WEEK]: [CYCLING] }
-    otherTabWrites(other)
-    await flushPromises()
-    expect(dialog()).not.toBeNull()
-    other.cardio.plans = { [WEEK]: [RUNNING] }
-    otherTabWrites(other)
-    await flushPromises()
-    expect(dialog()).toBeNull()
-    expect(names()).toEqual(['Running'])
-  })
-
-  it('closes its dialogs if the week changes under them', async () => {
-    await mountConfig(withCardio())
-    await openEdit('Cycling')
-    usePlannerStore().nextWeek()
-    await flushPromises()
-    expect(dialog()).toBeNull()
-    await openAdd()
-    usePlannerStore().prevWeek()
-    await flushPromises()
-    expect(dialog()).toBeNull()
   })
 })

@@ -36,6 +36,20 @@ export function parseItemHash(hash: string): ItemRoute | null {
   return isSection(section) && isItemId(id) ? { section, id } : null
 }
 
+/** The new item page's address, `#/new/<section>` (K104): Edit plan's Add opens it. */
+const NEW = /^#\/new\/([^/]+)$/
+
+/** The address of the page that adds an item to a section. */
+export function newItemHref(section: Section): string {
+  return `#/new/${section}`
+}
+
+/** The section a new-item address names, or null for any other address. */
+export function parseNewHash(hash: string): Section | null {
+  const section = NEW.exec(hash)?.[1]
+  return isSection(section) ? section : null
+}
+
 /** On an item page's history entry: the entry before it is the week, in this tab. */
 const FROM_WEEK = 'trackerFromWeek'
 
@@ -60,6 +74,15 @@ export function cameFromWeek(): boolean {
 export function backToWeek(ev: MouseEvent): void {
   if (ev.ctrlKey || ev.metaKey || ev.shiftKey) return
   ev.preventDefault()
+  leaveForWeek()
+}
+
+/**
+ * Back to the week from an item's page or the new item page, as its "Back to the week" does: back
+ * through history when opened from the week in this tab, else this entry becomes the week. Used
+ * after Remove, Add and Cancel too (K104).
+ */
+export function leaveForWeek(): void {
   if (cameFromWeek()) history.back()
   else location.replace('#/')
 }

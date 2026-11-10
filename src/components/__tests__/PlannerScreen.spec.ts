@@ -288,6 +288,35 @@ describe('the planner’s screens (K24–K27)', () => {
       }
     })
 
+    it('H and B go back and L goes forward, on every page (K105)', async () => {
+      const back = vi.spyOn(history, 'back').mockImplementation(() => {})
+      const forward = vi.spyOn(history, 'forward').mockImplementation(() => {})
+      try {
+        mountApp()
+        await press('h')
+        await press('B')
+        await press('l')
+        expect(back).toHaveBeenCalledTimes(2)
+        expect(forward).toHaveBeenCalledOnce()
+        // On Settings too, where the week's own keys don't reach.
+        location.hash = '#/settings'
+        window.dispatchEvent(new HashChangeEvent('hashchange'))
+        await flushPromises()
+        expect((await press('b')).defaultPrevented).toBe(true)
+        expect(back).toHaveBeenCalledTimes(3)
+        // Never while typing.
+        const field = document.createElement('input')
+        document.body.append(field)
+        await press('h', {}, field)
+        field.remove()
+        expect(back).toHaveBeenCalledTimes(3)
+      } finally {
+        history.replaceState(null, '', location.pathname)
+        back.mockRestore()
+        forward.mockRestore()
+      }
+    })
+
     it('leaves a key alone in a field, with a modifier, repeating, or while a dialog is open', async () => {
       mountApp()
       const field = document.createElement('input')
@@ -396,16 +425,16 @@ describe('the planner’s screens (K24–K27)', () => {
   it('never presses the button held in Edit plan to leave it', async () => {
     mountApp()
     await longPress()
-    // Hold an item's edit button: Edit plan goes off, and its dialog never opens.
-    const editPushUps = wrapper.get('button[aria-label="Edit Push-ups"]').element
-    await hold(editPushUps, HOLD_MS)
+    // Hold an item's Remove button: Edit plan goes off, and its question never opens.
+    const removePushUps = wrapper.get('button[aria-label="Remove Push-ups"]').element
+    await hold(removePushUps, HOLD_MS)
     expect(editing()).toBe(false)
     // Leaving Edit plan takes the button away, so the release lands on what is under the
     // pointer now: the week. That click is swallowed too.
-    expect(editPushUps.isConnected).toBe(false)
+    expect(removePushUps.isConnected).toBe(false)
     const under = dayCell().element
     await release(under)
-    expect(document.querySelector('[role="dialog"]')).toBeNull()
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull()
     expect(under.getAttribute('aria-pressed')).toBe('false')
   })
 

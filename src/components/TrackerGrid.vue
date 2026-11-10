@@ -23,8 +23,6 @@ const props = defineProps<{
   detailsFor?: (item: Tracked) => string[]
   /** Each item's notes, from its details (the same on every week); none when not given. */
   noteFor?: (item: Tracked) => string
-  /** Adds an edit button to each row in config mode, which emits `edit`. */
-  editable?: boolean
   configMode: boolean
   /**
    * Which days reach the section's daily pick (K30, K57). A met day's name turns pen and is
@@ -36,7 +34,6 @@ const props = defineProps<{
 defineEmits<{
   toggle: [id: string, day: number]
   remove: [id: string]
-  edit: [id: string]
 }>()
 
 defineSlots<{
@@ -46,17 +43,17 @@ defineSlots<{
 
 /**
  * The column template on screen (WeekGrid card): the names and the seven days, and in Edit plan
- * the names widened by the edit button and its gap, and a Remove column (no Week column, K33),
+ * a Remove column (no Week column, K33),
  * both from main.css's sizes (K54).
  * Folded there are only the seven days. On paper the colgroup's widths apply instead.
  */
 const columns = computed(() =>
   props.configMode
-    ? 'screen:grid-cols-[calc(var(--grid-name-w)+var(--grid-edit-w))_repeat(7,minmax(0,1fr))_var(--grid-remove-w)]'
+    ? 'screen:grid-cols-[var(--grid-name-w)_repeat(7,minmax(0,1fr))_var(--grid-remove-w)]'
     : 'screen:grid-cols-[var(--grid-name-w)_repeat(7,minmax(0,1fr))]',
 )
 // One tab stop for the whole grid, on today's DayMark in the first row (see gridNav for the keys
-// and for Edit plan's controls in the row headers).
+// and for Edit plan's Remove cells).
 const table = ref<HTMLTableElement | null>(null)
 useGridNav(table, {
   widget: '[data-slot="day-mark-button"], [data-slot="item-link"]',
@@ -78,8 +75,8 @@ useGridNav(table, {
   Nothing scrolls sideways. On paper it is a
   table again, at the colgroup's widths and DayMark's fixed size.
 
-  Edit plan widens the name column by exactly the edit button it gains and adds a Remove column
-  after the days, so each row keeps its height (F25); its rows are a fixed 100u (K54).
+  Edit plan adds a Remove column after the days, and the name column stays as wide as the week's
+  (K104: no Edit button); its rows are a fixed 100u (K54).
 
   Keyboard (F15): the WAI-ARIA grid, one tab stop per grid (useGridNav). A day cell's focus is its
   DayMark and a name cell's its name's link, each the cell's one widget (Enter on a name opens the
@@ -97,7 +94,7 @@ useGridNav(table, {
     <!-- Paper's column widths; on screen the grid's template sets them, and a colgroup would be
          a grid item. -->
     <colgroup class="screen:hidden">
-      <col :class="configMode ? 'w-63' : 'w-50'" />
+      <col class="w-50" />
       <col v-for="d in days" :key="d.key" />
       <col v-if="configMode" class="w-14" />
     </colgroup>
@@ -161,14 +158,12 @@ useGridNav(table, {
         :href="itemHref(section, it.id)"
         :details="detailsFor?.(it)"
         :note="noteFor?.(it)"
-        :editable="editable"
         :config-mode="configMode"
         :days="days"
         :marks="marksFor(it.id)"
         :mark-set="markSet"
         @toggle="$emit('toggle', it.id, $event)"
         @remove="$emit('remove', it.id)"
-        @edit="$emit('edit', it.id)"
       />
     </tbody>
   </table>

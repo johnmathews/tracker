@@ -4,8 +4,11 @@ import {
   cameFromWeek,
   isItemHash,
   itemHref,
+  leaveForWeek,
   markFromWeek,
+  newItemHref,
   parseItemHash,
+  parseNewHash,
   webHost,
 } from '@/lib/routes'
 
@@ -45,6 +48,41 @@ describe('an item’s address (#/item/<section>/<id>)', () => {
   it('knows an item address by its start, good or not', () => {
     expect(isItemHash('#/item/food/pu')).toBe(true)
     expect(isItemHash('#/settings')).toBe(false)
+  })
+})
+
+describe('the new item page’s address (#/new/<section>, K104)', () => {
+  it('names the section, and reads it back', () => {
+    expect(newItemHref('cardio')).toBe('#/new/cardio')
+    expect(parseNewHash('#/new/cardio')).toBe('cardio')
+    expect(parseNewHash(newItemHref('diet'))).toBe('diet')
+  })
+
+  it('reads nothing from any other address', () => {
+    for (const hash of [
+      '',
+      '#/',
+      '#/new',
+      '#/new/',
+      '#/new/food',
+      '#/new/exercise/x',
+      '#/item/exercise/pu',
+    ])
+      expect(parseNewHash(hash)).toBeNull()
+  })
+})
+
+describe('leaving a page for the week (K104)', () => {
+  it('goes back through history when the week opened it, else replaces this entry', () => {
+    const back = vi.spyOn(history, 'back').mockImplementation(() => {})
+    history.replaceState(null, '', '/#/new/exercise')
+    leaveForWeek()
+    expect(location.hash).toBe('#/')
+    expect(back).not.toHaveBeenCalled()
+    history.replaceState(null, '', '/#/new/exercise')
+    markFromWeek()
+    leaveForWeek()
+    expect(back).toHaveBeenCalledOnce()
   })
 })
 

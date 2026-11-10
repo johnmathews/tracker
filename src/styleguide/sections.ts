@@ -151,7 +151,8 @@ export const SECTIONS: readonly StyleGuideSection[] = [
   {
     id: 'sg-dialog',
     title: 'Dialog',
-    summary: 'A modal panel for one focused task, such as editing an exercise, over a dimmed page.',
+    summary:
+      'A modal panel for one focused task over a dimmed page. Nothing in the app opens one since K104.',
     component: DialogSection,
   },
   {
@@ -200,7 +201,7 @@ export const SECTIONS: readonly StyleGuideSection[] = [
     id: 'sg-week-grid',
     title: 'WeekGrid',
     summary:
-      'One week, Monday to Sunday, as a grid: a row per exercise or food, a DayMark per day, and the week’s total at the end of each row.',
+      'One week, Monday to Sunday, as a grid: a row per item, its name a link to its page, and a DayMark per day.',
     component: WeekGridSection,
   },
   {
@@ -214,7 +215,7 @@ export const SECTIONS: readonly StyleGuideSection[] = [
     id: 'sg-item-page',
     title: 'ItemPage',
     summary:
-      'An exercise’s or a food’s own page: its notes fill the page, with this week’s plan, its recent weeks and its details in a column beside them.',
+      'An item’s own page, in rows like Settings: this week’s plan first, then its notes, details and recent weeks. In Edit plan it also renames, removes and adds.',
     component: ItemPageSection,
   },
   {

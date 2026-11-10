@@ -1,6 +1,6 @@
 The small form for writing or changing the note on one day of one exercise, set in the serif italic that marks the person's own words.
 
-**Design only.** A note on one day has no storage yet: day notes are a separate feature unit built after the design system (K6). This card gives that feature its look and behaviour; nothing in the app opens it today. An item's own notes are another thing: one copy per exercise or food for every week, stored with its details and edited in its Edit dialog and on its page (ItemPage card, K64), whose notes field takes this card's skin.
+**Design only.** A note on one day has no storage yet: day notes are a separate feature unit built after the design system (K6). This card gives that feature its look and behaviour; nothing in the app opens it today. An item's own notes are another thing: one copy per exercise or food for every week, stored with its details and edited on its page (ItemPage card, K64, K104), whose notes field takes this card's skin.
 
 ## Use
 

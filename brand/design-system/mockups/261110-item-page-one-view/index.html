@@ -1,0 +1,246 @@
+<title>One page for an item, in the week and in Edit plan</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="tokens.css">
+<!--
+  A mockup (design-system skill, references/mockups.md). Pressing an item's name opens its page
+  (ItemPage card) in the week and in Edit plan alike; the Edit and Add dialogs go, and Edit plan's
+  pencil with them. The page puts This week's plan first. In Edit plan it also renames, removes and
+  adds. One question: where the Name field, Remove and Add sit on the page. The stages are drawn by
+  the script at the foot from the ItemPage card's own styles (its preview.html), at a 1280×800
+  screen (u = 1), scaled to fit; `.folded` is the card's phone layout.
+-->
+<style>
+  body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font-sans); }
+  .mockup-page {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: var(--space-8, 32px) var(--space-16, 64px);
+    max-width: 1200px; margin: 0 auto; display: grid; gap: var(--space-12, 48px);
+  }
+  .mockup-head { display: grid; gap: var(--space-2, 8px); max-width: 70ch; }
+  .mockup-head h1, .option h2, .option h3 { margin: 0; text-wrap: balance; }
+  .mockup-head p, .option p { margin: 0; }
+  .mockup-meta { color: var(--ink-secondary); }
+  .list { margin: 0; padding-left: 1.2em; display: grid; gap: var(--space-1, 4px); }
+  .option { display: grid; gap: var(--space-4, 16px); }
+  .option-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2, 8px) var(--space-3, 12px); }
+  .option-tag { color: var(--ink-secondary); }
+  .option[data-recommended] .option-tag::after { content: " · Recommended"; color: var(--ink); }
+  .panes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--space-4, 16px); }
+  .pane { min-width: 0; background: var(--canvas); color: var(--ink); border: 1px solid var(--line);
+          border-radius: var(--radius-lg, 10px); padding: var(--space-4, 16px); overflow: hidden; }
+  .pane-label { color: var(--ink-secondary); margin: 0 0 var(--space-3, 12px); }
+  .phones { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+  .phones .device { max-width: 300px; flex: 1 1 220px; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  /* A device: the page at its real width, scaled to fit the pane (the script sets the scale). */
+  .device { position: relative; width: 100%; }
+  .device > .screen { position: absolute; top: 0; left: 0; transform-origin: 0 0; border: 1px solid var(--line);
+                      border-radius: var(--radius-lg); background: var(--canvas); color: var(--ink); overflow: hidden; }
+  .device.phone > .screen { border-radius: 28px; border-width: 2px; }
+
+  /* ---- The ItemPage card's styles (its preview.html), at u = 1. ---- */
+  .ip { padding: 28px 48px 64px; display: flex; flex-direction: column; font-variant-numeric: tabular-nums; }
+  .ip svg { flex: none; }
+  .ip .topline { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .ip .acts { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .ip .back { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-size: 19px; line-height: 26px; text-decoration: underline; text-underline-offset: 4px; }
+  .ip .back svg { width: 26px; height: 26px; }
+  .ip .type { margin: 16px 0 0; color: var(--ink-secondary); font-size: 19px; line-height: 25px; }
+  .ip .titleline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 4px 0 28px; }
+  .ip h1 { margin: 0; font-size: 40px; line-height: 46px; }
+  .ip .chip { background: var(--tile); color: var(--ink-secondary); border-radius: var(--radius-sm); padding: 2px var(--space-2); font-size: 19px; line-height: 26px; white-space: nowrap; }
+  .ip .namefield { margin: 12px 0 28px; max-width: 560px; }
+  .ip .sec { display: grid; grid-template-columns: 320px minmax(0, 1fr); align-items: start; padding: 32px 0; border-top: 1px solid var(--line); }
+  .ip .sec > .content { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+  .ip h2 { margin: 0; font-size: 27px; line-height: 34px; }
+  .ip .lede { margin: 0; max-width: 60ch; color: var(--ink-secondary); font-size: 19px; line-height: 28px; }
+  .ip .fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 24px 28px; align-items: start; }
+  .ip .fields > .wide { grid-column: 1 / -1; }
+  .ip .field { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .ip .field > .label { font-size: 19px; line-height: 25px; }
+  .ip input { box-sizing: border-box; height: 60px; width: 100%; padding: 0 15px; border: 1px solid var(--control-border); border-radius: var(--radius-sm); background: var(--panel); color: var(--ink); font: inherit; font-size: 19px; font-variant-numeric: tabular-nums; }
+  .ip input::placeholder { color: var(--ink-secondary); opacity: 1; }
+  .ip input.num { max-width: 96px; }
+  .ip input.weight { max-width: 170px; }
+  .ip input.focus { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .ip .seg { display: inline-flex; align-self: flex-start; border: 1px solid var(--control-border); border-radius: var(--radius-md); }
+  .ip .seg span { display: inline-flex; align-items: center; height: 58px; padding: 0 22px; border-radius: var(--radius-sm); font: 600 19px/25px var(--font-sans); }
+  .ip .seg .on { background: var(--ink); color: var(--on-ink); }
+  .ip .stepper { display: inline-flex; align-self: flex-start; align-items: stretch; height: 60px; border: 1px solid var(--control-border); border-radius: var(--radius-md); }
+  .ip .stepper span { display: inline-flex; align-items: center; justify-content: center; width: 60px; }
+  .ip .stepper svg { width: 26px; height: 26px; }
+  .ip .stepper .value { min-width: 66px; width: auto; font: 600 24px/30px var(--font-sans); }
+  .ip .btn { align-self: flex-start; box-sizing: border-box; height: 60px; padding: 0 22px; display: inline-flex; align-items: center; gap: 10px; border: 1px solid var(--control-border); border-radius: var(--radius-md); background: transparent; color: var(--ink); font: 600 19px/25px var(--font-sans); white-space: nowrap; }
+  .ip .btn svg { width: 26px; height: 26px; }
+  .ip .btn.quiet { border-color: transparent; }
+  .ip .btn.primary { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+  .ip .note-body { max-width: 66ch; font-family: var(--font-serif); font-style: italic; font-size: 19px; line-height: 29px; }
+  .ip .note-body p { margin: 0 0 12px; }
+  .ip .note-body > :last-child { margin-bottom: 0; }
+  .ip .weeks { list-style: none; margin: 0; padding: 0; }
+  .ip .wk { display: flex; gap: 14px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 19px; line-height: 28px; }
+  .ip .wk:last-child { border-bottom: 1px solid var(--line); }
+  .ip .wk .when { min-width: 92px; }
+  .ip .wk .count { color: var(--ink-secondary); }
+  .ip .wk .met { color: var(--pen); font-weight: 600; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 0.22em; }
+  .ip .foot { display: flex; gap: 12px; flex-wrap: wrap; }
+  .ip .mark { outline: 3px dashed var(--pen); outline-offset: 6px; border-radius: var(--radius-sm); }
+
+  /* Folded (a phone): one column, the card's sizes on n. */
+  .ip.folded { padding: 20px 16px 48px; }
+  .ip.folded .back, .ip.folded .lede, .ip.folded .wk { font-size: 18px; line-height: 26px; }
+  .ip.folded .back svg, .ip.folded .btn svg { width: 22px; height: 22px; }
+  .ip.folded .type, .ip.folded .field > .label, .ip.folded .chip { font-size: 16px; line-height: 22px; }
+  .ip.folded h1 { font-size: 30px; line-height: 36px; }
+  .ip.folded h2 { font-size: 22px; line-height: 28px; }
+  .ip.folded .titleline, .ip.folded .namefield { margin-bottom: 20px; }
+  .ip.folded .sec { display: flex; flex-direction: column; gap: 16px; padding: 24px 0; }
+  .ip.folded .sec > .content { gap: 16px; }
+  .ip.folded .note-body { font-size: 18px; line-height: 28px; }
+  .ip.folded .fields { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .ip.folded input, .ip.folded .stepper, .ip.folded .btn { height: 48px; }
+  .ip.folded input { font-size: 18px; }
+  .ip.folded .seg span { height: 46px; padding: 0 16px; font-size: 16px; }
+  .ip.folded .stepper span { width: 48px; }
+  .ip.folded .btn { font-size: 16px; padding: 0 14px; }
+  .ip.folded .acts { gap: 4px; }
+</style>
+
+<main class="mockup-page">
+  <header class="mockup-head">
+    <p class="caption mockup-meta">Mockup · 2026-11-10 · Tracker</p>
+    <h1 class="title-1">One page for an item, in the week and in Edit plan</h1>
+    <p class="body">Pressing an item's name opens its page, in the week and in Edit plan alike. The Edit and Add dialogs go, and Edit plan's pencil goes with them. The question is where the page puts the three things only the dialogs did: <strong>the name</strong>, <strong>Remove</strong> and <strong>Add</strong>. The dashed outline marks them on each picture.</p>
+    <p class="body">What is the same in both options:</p>
+    <ul class="list body">
+      <li><strong>This week's plan comes first</strong>, then Notes, Details and Recent weeks. A type you have already arranged (Arrange sections) keeps its order.</li>
+      <li>In the week the page looks as it does today, plan first. Name, Remove and Add show only in Edit plan.</li>
+      <li>Fields save as you type, as they do now. There is no Save button. A new item is the exception: it exists only once you press <em>Add exercise</em>.</li>
+      <li>Remove asks first, with today's question: "Remove Kettlebell swings? It comes off this week's plan. Weeks with their own plan keep it, and its marks stay." Then the page goes back to Edit plan.</li>
+      <li>Add exercise in Edit plan opens the page empty, with Sets 1, Reps 1 and 3 times a week. Cardio and food work the same way.</li>
+      <li>Remove also stays in the row on Edit plan, as it is now.</li>
+      <li>Round 2: option B is off the page. Its Remove row moved into A.</li>
+    </ul>
+  </header>
+
+  <section class="option" aria-labelledby="w-h">
+    <div class="option-head"><h2 class="title-2" id="w-h">In the week (both options)</h2></div>
+    <p class="body">Today's page with This week's plan moved to the top. Nothing else changes.</p>
+    <div class="panes">
+      <div class="pane" data-theme="light"><p class="label pane-label">Light · 1280×800</p><div class="device" data-w="1280" data-state="week"></div></div>
+      <div class="pane" data-theme="dark"><p class="label pane-label">Dark · phone</p><div class="phones"><div class="device phone" data-w="390" data-state="week"></div></div></div>
+    </div>
+  </section>
+
+  <section class="option" id="a" data-recommended aria-labelledby="a-h">
+    <div class="option-head"><h2 class="title-2" id="a-h">A. In the head, Remove at the foot (decided)</h2><span class="label option-tag">Option A</span></div>
+    <p class="body">In Edit plan the title turns into a Name field, where the name was. Remove is the page's last section, with a line saying what it does. Adding puts Cancel and Add exercise on the top line, so the button is in view while you fill the page. John picked A on 2026-11-10, with Remove at the foot of the page in its own section (K104).</p>
+    <h3 class="title-3">Editing, in Edit plan</h3>
+    <div class="panes">
+      <div class="pane" data-theme="light"><p class="label pane-label">Light · 1280×800</p><div class="device" data-w="1280" data-state="edit" data-option="a"></div></div>
+      <div class="pane" data-theme="dark"><p class="label pane-label">Dark · 1280×800</p><div class="device" data-w="1280" data-state="edit" data-option="a"></div></div>
+    </div>
+    <h3 class="title-3">Adding, in Edit plan</h3>
+    <div class="panes">
+      <div class="pane" data-theme="light"><p class="label pane-label">Light · 1280×800</p><div class="device" data-w="1280" data-state="add" data-option="a"></div></div>
+      <div class="pane" data-theme="dark"><p class="label pane-label">Phone, light and dark</p><div class="phones">
+        <div class="device phone" data-w="390" data-state="edit" data-option="a" data-theme="light"></div>
+        <div class="device phone" data-w="390" data-state="add" data-option="a"></div>
+      </div></div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+(() => {
+  const svg = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`
+  const I = {
+    back: svg('<path d="m15 18-6-6 6-6"/>'),
+    list: svg('<path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/>'),
+    trash: svg('<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><path d="M10 11v6"/><path d="M14 11v6"/>'),
+    pencil: svg('<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/>'),
+    minus: svg('<path d="M5 12h14"/>'),
+    plus: svg('<path d="M5 12h14"/><path d="M12 5v14"/>'),
+  }
+  const field = (label, value, cls = '', extra = '') =>
+    `<div class="field"><span class="label">${label}</span><input class="${cls}" value="${value}" ${extra} tabindex="-1" readonly></div>`
+  const seg = (label, opts) =>
+    `<div class="field"><span class="label">${label}</span><div class="seg">${opts.map((o, i) => `<span class="${i ? '' : 'on'}">${o}</span>`).join('')}</div></div>`
+  const stepper = (n) =>
+    `<div class="field"><span class="label">Times a week</span><div class="stepper"><span>${I.minus}</span><span class="value">${n}</span><span>${I.plus}</span></div></div>`
+
+  function plan(isNew) {
+    const v = isNew ? { sets: 1, reps: 1, kg: '' } : { sets: 3, reps: 15, kg: 16 }
+    return `<section class="sec"><h2 class="title-2">This week’s plan</h2><div class="content">
+      <p class="lede">${isNew ? 'Adds it to this week’s plan, and the weeks after it that have no plan of their own.' : 'Changes this week’s plan, and the weeks after it that have no plan of their own.'}</p>
+      <div class="fields">${field('Sets', v.sets, 'num')}${seg('Measure', ['Reps', 'Time'])}${field('Reps', v.reps, 'num')}${field('Weight in kg', v.kg, 'weight', 'placeholder="Bodyweight"')}${seg('Reps count', ['Per set', 'Each side'])}${stepper(3)}</div>
+    </div></section>`
+  }
+  function notes(isNew) {
+    return `<section class="sec"><h2 class="title-2">Notes</h2><div class="content">${isNew ? '' : '<div class="note-body"><p><strong>Hinge, don’t squat.</strong> The hips drive the bell. The arms only guide it.</p><p>Move to 20 kg once all three sets feel easy.</p></div>'}
+      <span class="btn">${I.pencil}${isNew ? 'Add notes' : 'Edit notes'}</span></div></section>`
+  }
+  function details(isNew) {
+    return `<section class="sec"><h2 class="title-2">Details</h2><div class="content"><div class="fields">
+      ${field('Equipment', isNew ? '' : '16 kg kettlebell')}${field('Works', isNew ? '' : 'Glutes, hamstrings, grip')}</div></div></section>`
+  }
+  function weeks() {
+    const rows = [['This week', '2 of 3', false], ['2 Nov', '3 of 3', true], ['26 Oct', '1 of 3', false]]
+    return `<section class="sec"><h2 class="title-2">Recent weeks</h2><div class="content"><ol class="weeks">${rows.map(([w, c, m]) => `<li class="wk"><span class="when">${w}</span><span class="${m ? 'met' : 'count'}">${c}</span></li>`).join('')}</ol></div></section>`
+  }
+
+  function page(state, option, folded) {
+    const isNew = state === 'add'
+    const edit = state !== 'week'
+    const back = `<a class="back" href="#">${I.back}Back to the week</a>`
+    const arrange = `<span class="btn quiet">${I.list}${folded ? 'Arrange' : 'Arrange sections'}</span>`
+    const nameField = `<div class="field namefield mark"><span class="label">Name</span><input value="${isNew ? '' : 'Kettlebell swings'}" class="${isNew ? 'focus' : ''}" tabindex="-1" readonly></div>`
+    const title = `<div class="titleline"><h1 class="title-1">${isNew ? 'New exercise' : 'Kettlebell swings'}</h1>${isNew ? '' : '<span class="chip label">3 × 15</span><span class="chip label">16 kg</span>'}</div>`
+    const removeRow = `<section class="sec"><h2 class="title-2">Remove</h2><div class="content"><p class="lede">Takes Kettlebell swings off this week’s plan. Weeks with their own plan keep it, and its marks stay.</p><span class="btn mark">${I.trash}Remove from this week</span></div></section>`
+    let acts = arrange, head = title, before = '', after = ''
+    if (edit && option === 'a') {
+      acts = isNew
+        ? `<span class="acts mark"><span class="btn quiet">Cancel</span><span class="btn primary">Add exercise</span></span>`
+        : arrange
+      head = nameField
+      if (!isNew) after = removeRow
+    }
+    if (edit && option === 'b') {
+      if (isNew) acts = ''
+      before = `<section class="sec"><h2 class="title-2">Name</h2><div class="content"><div class="field namefield mark" style="margin:0"><input value="${isNew ? '' : 'Kettlebell swings'}" class="${isNew ? 'focus' : ''}" aria-label="Name" tabindex="-1" readonly></div></div></section>`
+      after = isNew
+        ? `<section class="sec"><span></span><div class="content"><div class="foot mark"><span class="btn quiet">Cancel</span><span class="btn primary">Add exercise</span></div></div></section>`
+        : `<section class="sec"><h2 class="title-2">Remove</h2><div class="content"><p class="lede">Takes Kettlebell swings off this week’s plan. Weeks with their own plan keep it, and its marks stay.</p><span class="btn mark">${I.trash}Remove from this week</span></div></section>`
+    }
+    const typeLine = `<p class="type label">Exercise</p>`
+    const body = isNew ? plan(true) + notes(true) + details(true) : plan(false) + notes(false) + details(false) + weeks()
+    return `<div class="ip${folded ? ' folded' : ''}"><div class="topline">${back}${acts}</div>${typeLine}${head}${before}${body}${after}</div>`
+  }
+
+  const devices = [...document.querySelectorAll('.device')]
+  for (const d of devices) {
+    const w = Number(d.dataset.w)
+    const screen = document.createElement('div')
+    screen.className = 'screen'
+    if (d.dataset.theme) screen.dataset.theme = d.dataset.theme
+    screen.style.width = `${w}px`
+    screen.innerHTML = page(d.dataset.state, d.dataset.option, w < 640)
+    d.append(screen)
+  }
+  function fit() {
+    for (const d of devices) {
+      const screen = d.firstElementChild
+      const scale = d.clientWidth / Number(d.dataset.w)
+      screen.style.transform = `scale(${scale})`
+      d.style.height = `${screen.offsetHeight * scale}px`
+    }
+  }
+  fit()
+  addEventListener('resize', fit)
+  document.fonts?.ready.then(fit)
+  document.addEventListener('click', (e) => { if (e.target.closest('a')) e.preventDefault() })
+})()
+</script>

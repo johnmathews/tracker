@@ -23,6 +23,9 @@ export function decimalOnly(text: string): string {
   return rest.length ? `${whole}.${rest.join('')}` : whole
 }
 
+/** A new exercise's sets and reps (K104). */
+export const NEW_EXERCISE_AMOUNT = 1
+
 /** What a set is counted in: reps, or seconds for a timed exercise such as a plank. */
 export type Measure = 'reps' | 'time'
 
@@ -64,6 +67,14 @@ export function useExerciseForm() {
   function onWeightInput(ev: Event): void {
     weight.value = clean(ev, decimalOnly)
   }
+  /** The Measure SegmentedControl's choice. */
+  function onMeasure(value: string): void {
+    measureChoice.value = value
+  }
+  /** The Reps count toggle: each side, or per set. */
+  function onPerSide(value: boolean): void {
+    perSide.value = value
+  }
 
   function value(): NewExercise {
     const amount = parseInt(reps.value, 10) || 0
@@ -79,12 +90,16 @@ export function useExerciseForm() {
     }
   }
 
-  /** Fill the form from an exercise and its notes; nothing given, the form starts empty. */
+  /**
+   * Fill the form from an exercise and its notes. Nothing given, a new exercise: the name empty,
+   * one set of one rep (K104), so a quick add needs only the name. An exercise saved without sets
+   * or reps loads them empty, as it has them.
+   */
   function load(e?: Exercise, itemNotes = ''): void {
     name.value = e?.name ?? ''
-    sets.value = e?.sets ? String(e.sets) : ''
     measure.value = e?.duration ? 'time' : 'reps'
-    const amount = e?.duration ?? e?.reps
+    const amount = e ? (e.duration ?? e.reps) : NEW_EXERCISE_AMOUNT
+    sets.value = e ? (e.sets ? String(e.sets) : '') : String(NEW_EXERCISE_AMOUNT)
     reps.value = amount ? String(amount) : ''
     weight.value = e?.weight ? String(e.weight) : ''
     perSide.value = e?.perSide ?? false
@@ -106,6 +121,8 @@ export function useExerciseForm() {
     onSetsInput,
     onRepsInput,
     onWeightInput,
+    onMeasure,
+    onPerSide,
     value,
     load,
   }

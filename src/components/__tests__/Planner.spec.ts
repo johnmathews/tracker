@@ -195,14 +195,16 @@ describe('the planner grids (W10)', () => {
       expect(ex().find('[data-testid="row-total"]').exists()).toBe(false)
     })
 
-    it('puts edit in the row header and remove at the end of the row, as IconButtons (F28)', async () => {
+    it('puts remove at the end of the row, as an IconButton, and only the name in its header (F28, K104)', async () => {
       await mountConfig()
-      const edit = ex().get('button[aria-label="Edit Squats"]')
       const remove = ex().get('button[aria-label="Remove Squats"]')
-      expect(edit.attributes('data-slot')).toBe('icon-button')
       expect(remove.attributes('data-slot')).toBe('icon-button')
-      expect(edit.text()).toBe('')
-      const header = edit.element.closest('[role="rowheader"]')!
+      // No Edit button: the name opens the item's page, where Edit plan edits it (K104).
+      const header = ex()
+        .findAll('[data-testid="item-name"]')
+        .find((n) => n.text() === 'Squats')!
+        .element.closest('[role="rowheader"]')!
+      expect(header.querySelector('button')).toBeNull()
       expect(header.querySelector('[role="spinbutton"]')).toBeNull()
       const last = header.closest('tr')!.lastElementChild!
       expect(last.getAttribute('role')).toBe('gridcell')
@@ -211,12 +213,12 @@ describe('the planner grids (W10)', () => {
       // Its column has a header for screen readers.
       const heads = ex().findAll('thead th')
       expect(heads.at(-1)!.text()).toBe('Remove')
-      // Foods are the same: edit after the name, remove at the end.
+      // Foods are the same: remove at the end, nothing after the name.
       const food = diet().get('button[aria-label="Remove Fish"]').element.closest('tr')!
       expect(food.lastElementChild!.contains(food.querySelector('[data-action="remove"]'))).toBe(
         true,
       )
-      expect(food.querySelector('[role="rowheader"] button[aria-label="Edit Fish"]')).not.toBeNull()
+      expect(food.querySelector('[role="rowheader"] button')).toBeNull()
     })
 
     it('drops the Remove column outside Edit plan', async () => {
@@ -255,12 +257,9 @@ describe('the planner grids (W10)', () => {
       await removeRow(ex(), 'Squats', 'Remove')
       expect(marks('Squats')).toHaveLength(0)
       expect(focused()).toBe('Remove Back extensions')
-      // Focus put back on a control lets its cell's controls into the Tab order (gridNav); the
-      // name cell's Edit, a cell of its own, stays parked.
+      // Focus put back on a control lets its cell's controls into the Tab order (gridNav); other
+      // rows' Remove buttons stay parked.
       expect(document.activeElement!.getAttribute('tabindex')).toBeNull()
-      expect(ex().get('button[aria-label="Edit Back extensions"]').attributes('tabindex')).toBe(
-        '-1',
-      )
       expect(ex().get('button[aria-label="Remove Pull-ups"]').attributes('tabindex')).toBe('-1')
     })
 
@@ -390,22 +389,16 @@ describe('the planner grids (W10)', () => {
       expect(name(focused())).toBe('Push-ups, Monday 12 October')
     })
 
-    it('keeps one stop per grid in Edit plan; F2 on a name reaches its controls', async () => {
+    it('keeps one stop per grid in Edit plan; the name is its cell’s one control', async () => {
       await mountConfig()
       expect(tabStops().filter((el) => ex().element.contains(el))).toHaveLength(1)
       ;(marks('Squats')[0]!.element as HTMLElement).focus()
       await press('Home')
       const link = focused()
       expect(link.getAttribute('data-slot')).toBe('item-link')
-      // Enter on the name is its link's (it opens the item's page, F9); F2 lets the controls in.
+      // Enter on the name is its link's (it opens the item's page, F9, where Edit plan edits
+      // it, K104); with no other control in the cell, F2 leaves focus on it.
       await press('F2')
-      expect(name(focused())).toBe('Edit Squats')
-      const header = focused().closest('th')!
-      // The name's link keeps the tab stop (Shift+Tab returns to it), then its controls in order.
-      const inHeader = tabStops().filter((el) => header.contains(el))
-      expect(inHeader[0]).toBe(link)
-      expect(inHeader.slice(1).map((el) => el.getAttribute('aria-label'))).toEqual(['Edit Squats'])
-      await press('Escape')
       expect(focused()).toBe(link)
       expect(tabStops().filter((el) => ex().element.contains(el))).toEqual([link])
       // End reaches the row's Remove cell; Enter there reaches its button.

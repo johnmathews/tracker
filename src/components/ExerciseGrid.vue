@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed } from 'vue'
 import { usePlannerStore } from '@/stores/planner'
 import { useDetailsStore } from '@/stores/details'
-import type { Exercise, Mark } from '@/lib/storage'
+import type { Mark } from '@/lib/storage'
 import { SECTIONS } from '@/lib/trackerTypes'
 import { metDays as daysMet } from '@/lib/tracker'
 import { dayMonth } from '@/lib/dates'
@@ -15,7 +15,7 @@ import TrackerGrid from '@/components/TrackerGrid.vue'
 import { Button } from '@/components/ui/button'
 import { Stepper } from '@/components/ui/stepper'
 import { MAX_DAILY_PICK, MIN_DAILY_PICK } from '@/lib/storage'
-import EditExerciseDialog from '@/components/EditExerciseDialog.vue'
+import { newItemHref } from '@/lib/routes'
 
 const store = usePlannerStore()
 const details = useDetailsStore()
@@ -44,31 +44,10 @@ function noteFor(item: { id: string }): string {
   return details.notesOf('exercise', item.id)
 }
 
-const editing = ref<Exercise | null>(null)
-/** The Add exercise dialog (K54): Edit exercise's dialog with nothing to edit. */
-const adding = ref(false)
-
-function edit(id: string): void {
-  editing.value = store.exercises.find((e) => e.id === id) ?? null
+/** Edit plan's Add opens the new item page (K104), not a dialog. */
+function add(): void {
+  location.hash = newItemHref('exercise')
 }
-
-// Another tab can delete the exercise while its dialog is open here; close it rather than leave
-// a Save that can't apply.
-watch(
-  () => store.exercises,
-  (list) => {
-    if (editing.value && !list.some((e) => e.id === editing.value!.id)) editing.value = null
-  },
-)
-// Saving edits the visible week, so if the week changes under an open dialog (the clock passing
-// midnight on Sunday), close it rather than save into a week the user didn't open it for.
-watch(
-  () => store.weekKey,
-  () => {
-    editing.value = null
-    adding.value = false
-  },
-)
 </script>
 
 <!-- The Exercises section (SectionHeader, WeekGrid and PlannerScreen cards): its heading; in Edit
@@ -113,13 +92,11 @@ watch(
       :marks-for="marksFor"
       :details-for="type.details"
       :note-for="noteFor"
-      editable
       :config-mode="store.configMode"
       :met-days="metDays"
       data-testid="exercise-grid"
       @toggle="store.toggle"
       @remove="store.removeExercise"
-      @edit="edit"
     >
       <template #corner>
         <span class="title-1 text-[24px] leading-7 text-ink">{{ type.label }}</span>
@@ -132,13 +109,13 @@ watch(
       class="grid grid-cols-[1fr_auto_1fr] items-center full:mt-[calc(var(--u)*10)] edit:mt-[calc(var(--u)*24)]"
       data-noprint
     >
-      <!-- Adding opens the same dialog as editing (K54), at the page's control size. -->
+      <!-- Add opens the new item page (K104), at the page's control size. -->
       <Button
         v-if="store.configMode"
         class="col-start-1 h-(--set-control) justify-self-start px-(--set-control-pad) text-(length:--set-label) [&_svg]:size-(--set-icon)"
         data-add
         data-testid="add-exercise"
-        @click="adding = true"
+        @click="add"
         ><Plus :stroke-width="1.5" />Add exercise</Button
       >
       <IconButton
@@ -149,7 +126,5 @@ watch(
         ><ChevronDown :size="24"
       /></IconButton>
     </div>
-    <EditExerciseDialog v-if="editing" :exercise="editing" @close="editing = null" />
-    <EditExerciseDialog v-if="adding" @close="adding = false" />
   </section>
 </template>

@@ -720,8 +720,11 @@ def test_settings_carry_each_types_item_page_arrangement(
     sent = {
         **SETTINGS,
         "itemSections": {
-            "exercise": {"order": ["history", "map", "notes", "notes"], "hidden": ["details"]},
-            "food": {"order": ["notes", "details", "plan", "history"], "hidden": []},
+            "exercise": {
+                "order": ["history", "map", "notes", "notes", "details"],
+                "hidden": ["details"],
+            },
+            "food": {"order": ["plan", "notes", "details", "history"], "hidden": []},
         },
     }
     saved = {**SETTINGS, "itemSections": {"exercise": ARRANGED}}
