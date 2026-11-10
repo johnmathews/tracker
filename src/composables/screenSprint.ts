@@ -95,6 +95,27 @@ export function sprintTarget(
   return null
 }
 
+/**
+ * Whether a wheel step over `target` would scroll an area inside the page rather than the page:
+ * an element that scrolls on its own (`overflow-y` auto or scroll) and has room to go `way`.
+ */
+export function scrollsInside(target: EventTarget | null, way: number): boolean {
+  for (let el = target instanceof Element ? target : null; el; el = el.parentElement) {
+    if (el === document.body || el === document.documentElement) return false
+    if (!/^(auto|scroll|overlay)$/.test(getComputedStyle(el).overflowY)) continue
+    if (el.scrollHeight <= el.clientHeight) continue
+    if (way > 0 ? el.scrollTop + el.clientHeight < el.scrollHeight - 1 : el.scrollTop > 0)
+      return true
+  }
+  return false
+}
+
+/** A wheel step in pixels: lines are 16px, pages the window (`deltaMode` 1 and 2). */
+function wheelPixels(event: WheelEvent): number {
+  const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1
+  return event.deltaY * unit
+}
+
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 /**
  * A touch screen (a phone, an iPad without a trackpad): there the browser snaps between the
@@ -687,12 +708,16 @@ export function useScreenSprint(enabled: Ref<boolean>) {
    */
   function onWheel(event: WheelEvent): void {
     if (!enabled.value || touchSnaps()) return
+    // The browser's own (K108): a pinch, a sideways swipe (Back and Forward on a Mac), and a step
+    // that scrolls an area inside the page.
+    if (event.ctrlKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return
+    if (scrollsInside(event.target, Math.sign(event.deltaY))) return
     const now = performance.now()
     const gap = now - wheelAt
     let fresh = gap >= WHEEL_MS
     wheelAt = now
     const way = Math.sign(event.deltaY)
-    const size = Math.abs(event.deltaY) * (event.deltaMode === 1 ? 16 : 1)
+    const size = Math.abs(wheelPixels(event))
     if (fresh) spent = false
     if (sprinting() || spent) {
       // A new push the same way, once the sprint has landed (K95). Never during it (K96): the
@@ -721,7 +746,22 @@ export function useScreenSprint(enabled: Ref<boolean>) {
         push = null
         wrap(way)
       }
-    } else push = null
+      return
+    }
+    push = null
+    through(event)
+  }
+
+  /**
+   * A wheel step the screens let through, scrolled by script (K108). Chrome lets a page cancel
+   * only a scroll sequence's first wheel event; once one goes through, the rest come uncancellable,
+   * so a swipe's momentum couldn't be swallowed after its sprint (K94) and drifted into another.
+   * Cancelling every step keeps the next one cancellable. One that already isn't is the browser's.
+   */
+  function through(event: WheelEvent): void {
+    if (!event.cancelable) return
+    event.preventDefault()
+    window.scrollBy({ top: wheelPixels(event), behavior: 'instant' })
   }
 
   function onTouchStart(event: TouchEvent): void {

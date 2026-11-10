@@ -272,7 +272,9 @@ listed in [api.md](api.md) §10):
   inside a screen, on in the direction of travel across a line, to the larger screen with no
   direction, and only past a step when given one) and the composable: a moving scroll sprinting at
   once, a short one after a pause, a finger waiting to lift, the wheel swallowed during and after
-  but let through the other way, the eased `sprintTo`, a resize, reduced motion, switching off,
+  but let through the other way, every step let through cancelled and scrolled by script while a
+  pinch, a sideways swipe, an inner scroll area and an uncancellable step stay the browser's
+  (`wheeled()`, `scrollsInside`, K108), the eased `sprintTo`, a resize, reduced motion, switching off,
   the fixed week's height taken off the window, or Edit plan's sticky bar where the week isn't
   fixed, and a touch screen left to the browser's snapping, with snapping off during a sprint;
   on a touch screen, the copies beyond each end, resting on the real screen after a swipe onto one
@@ -284,7 +286,7 @@ listed in [api.md](api.md) §10):
   back, with snapping off while it would, a shorter drag or a fling left to the browser, a still
   finger counting as slow, a touch stopping the glide, snapping back on when it lands or after
   `GLIDE_MS`, and a jump when motion is reduced (K38, K40, K45, K88, K89, K98, K99, K100, K101,
-  K102, K103).
+  K102, K103, K108).
 - `src/composables/__tests__/fullscreen.spec.ts`: full screen unsupported (an iPhone), entering and
   leaving it, and a refusal leaving the page as it is (K34).
 - `src/styles/__tests__/print.spec.ts`: the print block's literal colours match `tokens.json`'s light

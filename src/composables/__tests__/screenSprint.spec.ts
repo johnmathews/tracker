@@ -161,6 +161,8 @@ describe('MomentumWatch (K95)', () => {
 
 describe('useScreenSprint', () => {
   let scrollTo: ReturnType<typeof vi.fn<(options: ScrollToOptions) => void>>
+  /** The wheel steps the screens scroll themselves (K108); the test still moves the page. */
+  let scrollBy: ReturnType<typeof vi.fn<(options: ScrollToOptions) => void>>
 
   /** Puts the window at `y`, as a scroll would. */
   function scrollToY(y: number): void {
@@ -221,6 +223,17 @@ describe('useScreenSprint', () => {
     return event
   }
 
+  /**
+   * What became of a wheel step (K108): scrolled by script ('through'), held back ('held'), or
+   * left to the browser ('browser').
+   */
+  function wheeled(deltaY = 10): 'through' | 'held' | 'browser' {
+    const before = scrollBy.mock.calls.length
+    const event = wheel(deltaY)
+    if (scrollBy.mock.calls.length > before) return 'through'
+    return event.defaultPrevented ? 'held' : 'browser'
+  }
+
   beforeEach(() => {
     vi.useFakeTimers({
       toFake: [
@@ -238,6 +251,8 @@ describe('useScreenSprint', () => {
       Object.defineProperty(window, 'scrollY', { configurable: true, value: o.top })
     })
     window.scrollTo = scrollTo as unknown as typeof window.scrollTo
+    scrollBy = vi.fn<(options: ScrollToOptions) => void>()
+    window.scrollBy = scrollBy as unknown as typeof window.scrollBy
     screens()
   })
 
@@ -875,16 +890,90 @@ describe('useScreenSprint', () => {
     expect(html.style.scrollSnapType).toBe('')
   })
 
+  describe('the screens scroll the wheel themselves (K108)', () => {
+    function step(init: WheelEventInit, target: EventTarget = window): WheelEvent {
+      const event = new WheelEvent('wheel', { cancelable: true, bubbles: true, ...init })
+      target.dispatchEvent(event)
+      return event
+    }
+
+    it('cancels a step it lets through and scrolls it by script, so the next stays cancellable', () => {
+      const wrapper = holder()
+      expect(step({ deltaY: 3 }).defaultPrevented).toBe(true)
+      expect(scrollBy).toHaveBeenLastCalledWith({ top: 3, behavior: 'instant' })
+      expect(step({ deltaY: -2 }).defaultPrevented).toBe(true) // turned round: through, by script
+      expect(scrollBy).toHaveBeenLastCalledWith({ top: -2, behavior: 'instant' })
+      // Lines and pages, as a mouse wheel may send them.
+      vi.advanceTimersByTime(WHEEL_MS)
+      step({ deltaY: 3, deltaMode: 1 })
+      expect(scrollBy).toHaveBeenLastCalledWith({ top: 48, behavior: 'instant' })
+      vi.advanceTimersByTime(WHEEL_MS)
+      step({ deltaY: 1, deltaMode: 2 })
+      expect(scrollBy).toHaveBeenLastCalledWith({ top: 800, behavior: 'instant' })
+      wrapper.unmount()
+    })
+
+    it('swallows a swipe’s momentum after the sprint, so it never drifts into a second one', () => {
+      const wrapper = holder()
+      step({ deltaY: 3 })
+      scrollToY(600) // the swipe crosses the line: a sprint to Food
+      const scrolled = scrollBy.mock.calls.length
+      // The momentum goes on arriving through the sprint and after it lands, never still for long.
+      coast(SPRINT_MS + 50, 4)
+      expect(at_()).toBe(1300)
+      // Its tail, still dying away: held back, and never scrolled by script.
+      for (let i = 0; i < 12; i++) {
+        vi.advanceTimersByTime(16)
+        expect(step({ deltaY: 1 }).defaultPrevented).toBe(true)
+      }
+      expect(scrollBy.mock.calls.length).toBe(scrolled)
+      expect(at_()).toBe(1300)
+      wrapper.unmount()
+    })
+
+    it('leaves a pinch, a sideways swipe and an uncancellable step to the browser', () => {
+      const wrapper = holder()
+      expect(step({ deltaY: 5, ctrlKey: true }).defaultPrevented).toBe(false)
+      expect(step({ deltaX: 20, deltaY: 3 }).defaultPrevented).toBe(false)
+      vi.advanceTimersByTime(WHEEL_MS)
+      expect(step({ deltaY: 3, cancelable: false }).defaultPrevented).toBe(false)
+      expect(scrollBy).not.toHaveBeenCalled()
+      wrapper.unmount()
+    })
+
+    it('leaves a step over an area that can scroll that way to the browser', () => {
+      const wrapper = holder()
+      const area = document.createElement('div')
+      area.style.overflowY = 'auto'
+      Object.defineProperty(area, 'scrollHeight', { value: 400, configurable: true })
+      Object.defineProperty(area, 'clientHeight', { value: 100 })
+      const inner = document.createElement('p')
+      area.append(inner)
+      document.body.append(area)
+      expect(step({ deltaY: 3 }, inner).defaultPrevented).toBe(false)
+      // At its foot it can't go further down, so the page takes the step.
+      area.scrollTop = 300
+      vi.advanceTimersByTime(WHEEL_MS)
+      expect(step({ deltaY: 3 }, inner).defaultPrevented).toBe(true)
+      expect(step({ deltaY: -3 }, inner).defaultPrevented).toBe(false) // up, it can
+      // An area set to scroll with nothing to scroll is the page's.
+      Object.defineProperty(area, 'scrollHeight', { value: 100 })
+      vi.advanceTimersByTime(WHEEL_MS)
+      expect(step({ deltaY: -3 }, inner).defaultPrevented).toBe(true)
+      wrapper.unmount()
+    })
+  })
+
   it('swallows the wheel during a sprint and until it is quiet after', () => {
     const wrapper = holder()
-    expect(wheel().defaultPrevented).toBe(false)
+    expect(wheeled()).toBe('through')
     scrollToY(600)
-    expect(wheel().defaultPrevented).toBe(true)
+    expect(wheeled()).toBe('held')
     coast(SPRINT_MS + 50)
     expect(at_()).toBe(1300)
-    expect(wheel(1).defaultPrevented).toBe(true) // the fling's momentum, still arriving
+    expect(wheeled(1)).toBe('held') // the fling's momentum, still arriving
     vi.advanceTimersByTime(WHEEL_MS)
-    expect(wheel().defaultPrevented).toBe(false)
+    expect(wheeled()).toBe('through')
     wrapper.unmount()
   })
 
@@ -893,7 +982,7 @@ describe('useScreenSprint', () => {
     wheel()
     scrollToY(600) // down to Food
     expect(sprinting()).toBe(true)
-    expect(wheel(-10).defaultPrevented).toBe(false) // turned round mid-sprint
+    expect(wheeled(-10)).toBe('through') // turned round mid-sprint
     expect(sprinting()).toBe(false) // stopped where it was
     const held = scrollTo.mock.calls.length
     vi.advanceTimersByTime(SPRINT_MS)
@@ -903,20 +992,20 @@ describe('useScreenSprint', () => {
     scrollToY(window.scrollY + 40)
     coast(SPRINT_MS + 50)
     expect(at_()).toBe(1300)
-    expect(wheel(1).defaultPrevented).toBe(true)
+    expect(wheeled(1)).toBe('held')
     // The other way, while the wheel is still busy: not held back.
-    expect(wheel(-10).defaultPrevented).toBe(false)
-    expect(wheel(-10).defaultPrevented).toBe(false)
+    expect(wheeled(-10)).toBe('through')
+    expect(wheeled(-10)).toBe('through')
     wrapper.unmount()
   })
 
   it('holds back a wheel with no way to it, as it does the sprint’s own way', () => {
     const wrapper = holder()
     sprintTo(window.scrollY) // a sprint that goes nowhere: no way to turn back from
-    expect(wheel(0).defaultPrevented).toBe(true)
-    expect(wheel(-10).defaultPrevented).toBe(false)
+    expect(wheeled(0)).toBe('held')
+    expect(wheeled(-10)).toBe('through')
     sprintTo(window.scrollY)
-    expect(wheel(10).defaultPrevented).toBe(false)
+    expect(wheeled(10)).toBe('through')
     wrapper.unmount()
   })
 
@@ -985,7 +1074,7 @@ describe('useScreenSprint', () => {
     scrollToY(700)
     vi.advanceTimersByTime(REST_MS)
     expect(scrollTo).not.toHaveBeenCalled()
-    expect(wheel().defaultPrevented).toBe(false)
+    expect(wheeled()).toBe('browser')
     enabled.value = true
     await nextTick()
     wrapper.unmount()
@@ -1184,7 +1273,7 @@ describe('useScreenSprint', () => {
       expect(copy()).toBeNull() // 10px: not yet a step
       wheel(30)
       expect(copy()).not.toBeNull()
-      expect(wheel(-10).defaultPrevented).toBe(true) // a wrap runs to its end
+      expect(wheeled(-10)).toBe('held') // a wrap runs to its end
       expect(landed()).toBe(0)
       wrapper.unmount()
     })
@@ -1195,8 +1284,8 @@ describe('useScreenSprint', () => {
       wheel(40)
       coast(SPRINT_MS + 50, 30)
       expect(at_()).toBe(0)
-      expect(wheel(1).defaultPrevented).toBe(true) // the wrap's own momentum, still swallowed
-      expect(wheel(-40).defaultPrevented).toBe(true) // turned round at the top: wraps back up
+      expect(wheeled(1)).toBe('held') // the wrap's own momentum, still swallowed
+      expect(wheeled(-40)).toBe('held') // turned round at the top: wraps back up
       expect(landed()).toBe(1300)
       wrapper.unmount()
     })
@@ -1208,7 +1297,7 @@ describe('useScreenSprint', () => {
       coast(SPRINT_MS + 50, 30)
       expect(at_()).toBe(0) // wrapped to the top
       // The same gesture's momentum going on, however long: swallowed, no second screen.
-      for (const d of [2, 2, 1, 1, 1, 1]) expect(wheel(d).defaultPrevented).toBe(true)
+      for (const d of [2, 2, 1, 1, 1, 1]) expect(wheeled(d)).toBe('held')
       expect(copy()).toBeNull()
       expect(sprinting()).toBe(false)
       wrapper.unmount()
@@ -1220,7 +1309,7 @@ describe('useScreenSprint', () => {
       wheel(100)
       expect(landed()).toBe(0) // the wheel was still while it ran
       // A new notch: let through, and the page is not at the end it goes past, so it scrolls.
-      expect(wheel(100).defaultPrevented).toBe(false)
+      expect(wheeled(100)).toBe('through')
       expect(copy()).toBeNull()
       wrapper.unmount()
     })
@@ -1232,7 +1321,7 @@ describe('useScreenSprint', () => {
       scrollToY(600) // down to Food
       expect(sprinting()).toBe(true)
       vi.advanceTimersByTime(CLICK_GAP_MS)
-      expect(wheel(40).defaultPrevented).toBe(true) // a click mid-sprint: swallowed
+      expect(wheeled(40)).toBe('held') // a click mid-sprint: swallowed
       expect(landed()).toBe(1300) // Food, and no further
       expect(copy()).toBeNull()
       wrapper.unmount()
@@ -1246,7 +1335,7 @@ describe('useScreenSprint', () => {
       for (const d of [2, 8, 14]) wheel(d) // a new swipe starting before it lands
       vi.advanceTimersByTime(150)
       expect(sprinting()).toBe(false)
-      expect(wheel(20).defaultPrevented).toBe(false) // still growing, now landed: a new push
+      expect(wheeled(20)).toBe('through') // still growing, now landed: a new push
       wrapper.unmount()
     })
 
@@ -1257,9 +1346,9 @@ describe('useScreenSprint', () => {
       coast(SPRINT_MS + 50, 40)
       expect(at_()).toBe(0)
       // The momentum cut off by a new swipe: steps drop, then grow.
-      for (const d of [2, 1]) expect(wheel(d).defaultPrevented).toBe(true)
-      expect(wheel(8).defaultPrevented).toBe(true)
-      expect(wheel(14).defaultPrevented).toBe(false) // the second step up: a new push
+      for (const d of [2, 1]) expect(wheeled(d)).toBe('held')
+      expect(wheeled(8)).toBe('held')
+      expect(wheeled(14)).toBe('through') // the second step up: a new push
       wrapper.unmount()
     })
 
@@ -1277,9 +1366,9 @@ describe('useScreenSprint', () => {
       at(1000)
       wheel(40) // the gesture starts above the foot
       at(1300)
-      expect(wheel(40).defaultPrevented).toBe(false)
+      expect(wheeled(40)).toBe('through')
       vi.advanceTimersByTime(WHEEL_MS)
-      expect(wheel(-40).defaultPrevented).toBe(false) // up from the foot: an ordinary scroll
+      expect(wheeled(-40)).toBe('through') // up from the foot: an ordinary scroll
       wheel(0)
       expect(copy()).toBeNull()
       wrapper.unmount()

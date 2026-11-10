@@ -852,7 +852,13 @@ push moves one screen (K94, K95). Once a wheel gesture (events less than 150ms a
 one, it is `spent` and its momentum is swallowed, but `MomentumWatch` still looks for a new push
 in it: steps that fall below 70% of their peak and then rise twice, or a mouse wheel's click after
 100ms of silence, judged by speed (px a ms) so steps the browser sends merged mid-sprint can't
-pass for one. A new push moves on once the sprint has landed; nothing queues while one runs (K96). A wheel the other way stops the sprint and scrolls back (K89). After a resize or rotation, the page
+pass for one. A new push moves on once the sprint has landed; nothing queues while one runs (K96).
+The screens scroll the wheel themselves (K108): a step they let through is cancelled and scrolled
+by `window.scrollBy`, because Chrome lets a page cancel only a scroll sequence's first wheel event
+and sends the rest uncancellable once that one goes through, which left a swipe's momentum free to
+drift the page into a second sprint. A pinch (Ctrl), a mostly sideways step (a Mac's Back and
+Forward), a step over an inner area that can scroll that way, and one already uncancellable stay
+the browser's (`ownWheel`). A wheel the other way stops the sprint and scrolls back (K89). After a resize or rotation, the page
 settles on the screen that fills more of the window (K40). It replaced `scroll-snap-type: y mandatory`, which a mouse wheel couldn't
 cross from the end of a tall screen. On a touch screen (`(hover: none) and (pointer: coarse)`) the
 script mostly stands aside and main.css snaps instead (K98): `mandatory` with `scroll-snap-stop: always`, so

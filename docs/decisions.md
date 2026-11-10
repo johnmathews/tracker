@@ -575,3 +575,18 @@ The mockup is `brand/design-system/mockups/261110-profile-menu`.
 | ---- | -------- | --- |
 | K106 | The bar ends with a BarAction "Profile" (Lucide `circle-user-round`), the last Tab stop. It opens a Menu (a new component on Reka UI's DropdownMenu) under it, right edges aligned: "Signed in as" and the email, then "Profile" and "Sign out". Profile is a page of its own at `#/profile`, on the SettingsPage's frame: Back to the week, "Profile", then Account (Signed in as, Sign out), Your goals and Your limits. Amends K49 (Full screen is no longer the last action) | John picked option A over the initial in a ring: every action in the bar keeps its name (K47). He took the page as drawn |
 | K107 | My goals moves from Settings to Profile, and a second note, Your limits ("What you have to work around": injuries, equipment, time, food), joins it. Each holds up to 1,000 characters and saves when typing pauses. Ask and the MCP read both. Settings drops Your goals and Account; Daily goal keeps its switch in a section of its own. Amends K53, K74 and K85 | John chose one home for what the AI knows about a person over a second, separate profile text beside My goals |
+
+### 4.28 A trackpad's momentum, cancelled (2026-11-10)
+
+John: "its difficult to only scroll 1 tracker using the macbook trackpad. the momentum carries the
+scroll across 2 trackers not just 1 even with a little scroll movement." Two traces of his
+trackpad in Chrome showed why: Chrome lets a page cancel only the first wheel event of a scroll
+sequence, and sends the rest uncancellable when that one goes through. The screens let it through,
+so K94's swallowing could not stop the momentum. It drifted the page about 34px past the screen a
+sprint had landed on, and the scroll that followed sprinted again. With reduced motion the sprint
+is a jump and takes in none of the momentum, so every swipe did it.
+
+| ID   | Decision | Why |
+| ---- | -------- | --- |
+| K108 | On the planner's screens with a mouse or trackpad, every wheel step the screens let through is cancelled and scrolled by script (`window.scrollBy`, the step's pixels), so every step of a swipe stays cancellable and its momentum is swallowed after a sprint (K94). Left to the browser: a pinch (Ctrl held), a step more sideways than up or down (Back and Forward on a Mac), a step over an area inside the page that can scroll that way, and a step the browser already sends uncancellable. Touch screens are unchanged (K98) | John's traces: the first step `cancelable`, every later one not; one swipe, two sprints. A script that only reacted to the drift would have shown the page drifting and jumping back |
+
