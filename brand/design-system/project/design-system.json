@@ -197,9 +197,9 @@
   ],
   "lastChange": {
     "by": "John Mathews",
-    "at": "2026-11-10T19:52:31Z",
+    "at": "2026-11-10T20:13:21Z",
     "via": "Claude Code",
-    "note": "One page for an item (K104): ItemPage puts This week's plan first, renames and removes in Edit plan, and adds as the new item page; Edit plan's pencil and the Edit and Add dialogs are gone. H or B back, L forward (K105)."
+    "note": "A Profile action ends the Header and opens the new Menu: Signed in as, Profile and Sign out (K106). The new ProfilePage holds the account, Your goals and Your limits; SettingsPage keeps Appearance, Daily goal, Your data and Connections (K107)."
   },
 
   "layout": "files",
