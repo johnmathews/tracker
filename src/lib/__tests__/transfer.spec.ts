@@ -143,7 +143,7 @@ describe('buildExport', () => {
       exercise,
       cardio: { plans: {}, log: {}, details: {} },
       diet: { plans: {}, log: {}, details: {} },
-      settings: { accent: '#0a84ff', dailyPick: 4, foodPick: 3, goals: 'Run 5 km.' },
+      settings: { accent: '#0a84ff', dailyPick: 4, foodPick: 3, goals: 'Run 5 km.', limits: '' },
       now: new Date('2026-10-24T09:30:00.000Z'),
     })
     expect(file).toEqual({
@@ -153,7 +153,7 @@ describe('buildExport', () => {
       exercise,
       cardio: { plans: {}, log: {}, details: {} },
       diet: { plans: {}, log: {}, details: {} },
-      settings: { accent: '#0a84ff', dailyPick: 4, foodPick: 3, goals: 'Run 5 km.' },
+      settings: { accent: '#0a84ff', dailyPick: 4, foodPick: 3, goals: 'Run 5 km.', limits: '' },
     })
   })
 
@@ -163,7 +163,7 @@ describe('buildExport', () => {
       exercise: cache,
       cardio: cache,
       diet: cache,
-      settings: { accent: '#0a84ff', dailyPick: 4, foodPick: 3, goals: '' },
+      settings: { accent: '#0a84ff', dailyPick: 4, foodPick: 3, goals: '', limits: '' },
     })
     expect(file.exercise).toEqual({ plans: {}, log: {}, details: {} })
     expect(file.cardio).toEqual({ plans: {}, log: {}, details: {} })
@@ -179,7 +179,7 @@ describe('buildExport', () => {
       cardio: { plans: {}, log: {}, details: {} },
       diet: { plans: {}, log: {}, details: {} },
     }
-    const settings = { accent: '#0a84ff', dailyPick: 4, foodPick: 3, goals: '' }
+    const settings = { accent: '#0a84ff', dailyPick: 4, foodPick: 3, goals: '', limits: '' }
     expect(buildExport({ ...base, settings: { ...settings, itemSections } }).settings).toEqual({
       ...settings,
       itemSections,
@@ -213,6 +213,7 @@ describe('buildExport', () => {
         dailyPick: 2,
         foodPick: 2,
         goals: 'Fish twice a week.',
+        limits: '',
         itemSections: { food: { order: ['notes', 'details', 'plan', 'history'], hidden: [] } },
       },
     } satisfies ExportData
@@ -248,7 +249,7 @@ describe('downloadExport', () => {
       exercise: { plans: {}, log: {}, details: {} },
       cardio: { plans: {}, log: {}, details: {} },
       diet: { plans: {}, log: {}, details: {} },
-      settings: { accent: '#30d158', dailyPick: 3, foodPick: 2, goals: '' },
+      settings: { accent: '#30d158', dailyPick: 3, foodPick: 2, goals: '', limits: '' },
     })
     downloadExport(file, new Date(2026, 9, 24))
     expect(click).toHaveBeenCalledOnce()

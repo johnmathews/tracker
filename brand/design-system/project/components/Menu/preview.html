@@ -1,0 +1,82 @@
+<!-- @dsCard group="Overlays" height=820 subtitle="A short list of actions under its trigger: the account menu, Signed in as, then Profile and Sign out" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Menu — preview</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: var(--space-6) var(--space-4); background: var(--canvas); color: var(--ink); font-family: var(--font-sans); }
+  section { margin: 0 0 var(--space-6); }
+  section:last-of-type { margin-bottom: 0; }
+  h2 { margin: 0 0 var(--space-2); }
+
+  /* The end of the Header, with the trigger last; the menu hangs under it, right edges aligned. */
+  .bar-end { display: flex; justify-content: flex-end; }
+  .anchor { position: relative; display: flex; flex-direction: column; align-items: flex-end; }
+
+  /* The trigger: a BarAction as its card draws it at u = 1. While open it keeps a tile fill. */
+  .bar-action { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+    min-width: 96px; min-height: 44px; padding: 10px 12px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); cursor: pointer; }
+  .bar-action svg { width: 32px; height: 32px; flex: none; }
+  .bar-action .name { font: 600 17px/22px var(--font-sans); white-space: nowrap; }
+  .bar-action:hover, .bar-action[aria-expanded="true"] { background: var(--tile); }
+
+  /* The menu: panel, line border, radius-lg, the overlay shadow, space-2 padding, 288px wide. */
+  .menu { width: 288px; max-width: 100%; margin-top: var(--space-2); padding: var(--space-2); background: var(--panel); color: var(--ink);
+    border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-overlay); text-align: left; }
+  .who { margin: 0; padding: var(--space-2) var(--space-3) var(--space-3); border-bottom: 1px solid var(--line); }
+  .who .caption { display: block; color: var(--ink-secondary); }
+  .who .label { display: block; overflow-wrap: anywhere; }
+  .items { list-style: none; margin: var(--space-2) 0 0; padding: 0; display: grid; gap: 2px; }
+  .item { display: flex; align-items: center; gap: var(--space-3); width: 100%; min-height: 48px; padding: 0 var(--space-3);
+    border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); cursor: pointer; text-align: left; }
+  .item svg { width: 22px; height: 22px; flex: none; }
+  .item:hover, .item[data-highlighted] { background: var(--tile); }
+  .item:focus-visible, .item.is-focus { outline: 2px solid var(--focus); outline-offset: 2px; }
+  @media (prefers-reduced-motion: no-preference) {
+    .bar-action, .item { transition: background-color 120ms ease-out; }
+  }
+</style>
+</head>
+<body>
+<section aria-labelledby="h-closed">
+  <h2 class="label" id="h-closed">Closed: the trigger, last in the Header</h2>
+  <div class="bar-end">
+    <button type="button" class="bar-action" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.925 20.056a6 6 0 0 0-11.851.001"/><circle cx="12" cy="11" r="4"/><circle cx="12" cy="12" r="10"/></svg><span class="name">Profile</span></button>
+  </div>
+</section>
+
+<section aria-labelledby="h-open">
+  <h2 class="label" id="h-open">Open, the pointer on Profile</h2>
+  <div class="bar-end">
+    <div class="anchor">
+      <button type="button" class="bar-action" aria-haspopup="menu" aria-expanded="true" aria-controls="menu-open" id="trigger-open"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.925 20.056a6 6 0 0 0-11.851.001"/><circle cx="12" cy="11" r="4"/><circle cx="12" cy="12" r="10"/></svg><span class="name">Profile</span></button>
+      <div class="menu" role="menu" id="menu-open" aria-labelledby="trigger-open" aria-describedby="who-open">
+        <p class="who" id="who-open"><span class="caption">Signed in as</span><span class="label">alex@example.com</span></p>
+        <div class="items" role="none">
+          <button type="button" class="item label" role="menuitem" data-highlighted><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>Profile</button>
+          <button type="button" class="item label" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/></svg>Sign out</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="h-focus">
+  <h2 class="label" id="h-focus">Keyboard focus on Sign out</h2>
+  <div class="bar-end">
+    <div class="anchor">
+      <button type="button" class="bar-action" aria-haspopup="menu" aria-expanded="true" aria-controls="menu-focus" id="trigger-focus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.925 20.056a6 6 0 0 0-11.851.001"/><circle cx="12" cy="11" r="4"/><circle cx="12" cy="12" r="10"/></svg><span class="name">Profile</span></button>
+      <div class="menu" role="menu" id="menu-focus" aria-labelledby="trigger-focus" aria-describedby="who-focus">
+        <p class="who" id="who-focus"><span class="caption">Signed in as</span><span class="label">alex@example.com</span></p>
+        <div class="items" role="none">
+          <button type="button" class="item label" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>Profile</button>
+          <button type="button" class="item label is-focus" role="menuitem" data-highlighted><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/></svg>Sign out</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+</body>
+</html>

@@ -31,7 +31,7 @@ async function mountApp({
 }: { ask?: boolean; goals?: string; hash?: string } = {}): Promise<VueWrapper> {
   if (hash) history.replaceState(null, '', `/${hash}`)
   const settings =
-    goals === undefined ? null : { accent: '#30d158', dailyPick: 3, foodPick: 2, goals }
+    goals === undefined ? null : { accent: '#30d158', dailyPick: 3, foodPick: 2, goals, limits: '' }
   api = signedIn({ ...emptyState(), settings })
   api.accounts.get(USER)!.settings = settings
   api.ask = ask
@@ -219,7 +219,7 @@ describe('the Ask page', () => {
     await mountApp({ goals: 'Ten pull-ups in a row by March.', hash: '#/ask' })
     const empty = wrapper.get('[data-testid="ask-empty"]')
     expect(empty.text()).toContain(
-      'Ask about your exercises, cardio and food: whether you’re doing enough for your goals, how steady the weeks are, what to change. The answer reads your plans and marks for the last eight weeks, and your goals in Settings.',
+      'Ask about your exercises, cardio and food: whether you’re doing enough for your goals, how steady the weeks are, what to change. The answer reads your plans and marks for the last eight weeks, and your goals and limits in Profile.',
     )
     expect(empty.text()).not.toContain('Add your goals')
     expect(empty.findAll('button').map((b) => b.text())).toEqual([
@@ -288,10 +288,10 @@ describe('the Ask page', () => {
     const empty = wrapper.get('[data-testid="ask-empty"]')
     expect(empty.text()).toContain('for the last eight weeks.')
     expect(empty.text()).toContain(
-      'Your goals in Settings are empty, so answers can only compare you with the times a week you set.',
+      'Your goals in Profile are empty, so answers can only compare you with the times a week you set.',
     )
     expect(empty.get('a').text()).toBe('Add your goals')
-    expect(empty.get('a').attributes('href')).toBe('#/settings')
+    expect(empty.get('a').attributes('href')).toBe('#/profile')
   })
 
   it('says so on a new account too, which has no settings saved at all', async () => {

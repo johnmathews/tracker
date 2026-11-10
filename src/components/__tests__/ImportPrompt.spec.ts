@@ -97,6 +97,7 @@ describe('the first-login import prompt', () => {
       dailyPick: 2,
       foodPick: 2,
       goals: '',
+      limits: '',
     })
     expect(prompt().get('h2').text()).toBe('Added to your account')
     expect(prompt().get('[role="status"]').text()).toContain('now part of your account')
@@ -182,7 +183,7 @@ describe('the first-login import prompt', () => {
     account.plans.exercise['2026-10-12'] = { items: [SQUATS], rev: 1 }
     account.ticks.exercise['2026-10-12'] = { sq: 0b101 }
     account.ticks.diet[WEEK] = { veg: 1 }
-    account.settings = { accent: '#30d158', dailyPick: 3, foodPick: 2, goals: '' }
+    account.settings = { accent: '#30d158', dailyPick: 3, foodPick: 2, goals: '', limits: '' }
     localStorage.removeItem(CACHE_PREFIX + USER) // so the first state shown is the server's
     await mountApp()
     expect(prompt().exists()).toBe(false)

@@ -78,7 +78,7 @@ test.describe('no sideways scroll at 375px', () => {
     await openApp(page, { ask: true })
     await callUpBar(page)
     await page.getByRole('button', { name: 'Ask', exact: true }).click()
-    await page.getByText('Your goals in Settings are empty').waitFor()
+    await page.getByText('Your goals in Profile are empty').waitFor()
     await expectNoSidewaysScroll(page)
   })
 
@@ -87,6 +87,23 @@ test.describe('no sideways scroll at 375px', () => {
     await callUpBar(page)
     await page.getByRole('button', { name: 'Settings' }).click()
     await page.getByRole('heading', { level: 1, name: 'Settings' }).waitFor()
+    await expectNoSidewaysScroll(page)
+  })
+
+  test('the profile menu and the Profile page', async ({ page }) => {
+    await openApp(page)
+    await callUpBar(page)
+    await page.getByRole('button', { name: 'Profile' }).click()
+    const menu = page.getByRole('menu')
+    await menu.waitFor()
+    // The menu stays inside the screen, 16px from its edges at most.
+    const box = (await menu.boundingBox())!
+    const width = page.viewportSize()!.width
+    expect(box.x).toBeGreaterThanOrEqual(0)
+    expect(box.x + box.width).toBeLessThanOrEqual(width)
+    await expectNoSidewaysScroll(page)
+    await page.getByRole('menuitem', { name: 'Profile' }).click()
+    await page.getByRole('heading', { level: 1, name: 'Profile' }).waitFor()
     await expectNoSidewaysScroll(page)
   })
 })

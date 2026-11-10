@@ -600,6 +600,52 @@ describe('savedSettings', () => {
     })
   })
 
+  describe('Your limits (K107)', () => {
+    const PICKS = { accent: '#30d158', dailyPick: 3, foodPick: 2 }
+
+    it('start unknown, so they are neither sent nor cached', () => {
+      const s = usePlannerStore()
+      expect([s.limits, s.limitsKnown]).toEqual(['', false])
+      expect(s.portableSettings()).toEqual(PICKS)
+    })
+
+    it('are set normalised, apart from the goals, and count as the person’s settings', () => {
+      const s = usePlannerStore()
+      s.setLimits('  Left knee: no jumping.\n\n')
+      expect([s.limits, s.limitsKnown]).toEqual(['Left knee: no jumping.', true])
+      expect(s.goalsKnown).toBe(false)
+      expect(s.savedSettings()).toEqual({ ...PICKS, limits: 'Left knee: no jumping.' })
+      s.setLimits('')
+      expect(s.portableSettings()).toEqual({ ...PICKS, limits: '' })
+    })
+
+    it('ignore the same text again, and stay unknown when nothing changed', () => {
+      const s = usePlannerStore()
+      s.setLimits('   ')
+      expect(s.limitsKnown).toBe(false)
+      expect(s.savedSettings()).toBeNull()
+    })
+
+    it('are adopted when the settings carry them, and kept when they don’t', () => {
+      const s = usePlannerStore()
+      s.adopt({ plans: {}, log: {} }, { ...PICKS, limits: 'Vegetarian.' })
+      expect([s.limits, s.limitsKnown]).toEqual(['Vegetarian.', true])
+      // A tab from before Your limits: goals, but no limits.
+      s.adopt({ plans: {}, log: {} }, { ...PICKS, goals: 'Run 5 km.' })
+      expect([s.limits, s.goals]).toEqual(['Vegetarian.', 'Run 5 km.'])
+      s.adopt({ plans: {}, log: {} }, { ...PICKS, limits: '' })
+      expect([s.limits, s.limitsKnown]).toEqual(['', true])
+    })
+
+    it('are forgotten on sign-out', () => {
+      const s = usePlannerStore()
+      s.setLimits('Vegetarian.')
+      s.clear()
+      expect([s.limits, s.limitsKnown]).toEqual(['', false])
+      expect(s.portableSettings()).toEqual(PICKS)
+    })
+  })
+
   it('does not count a theme change: the theme is the device’s', async () => {
     const s = usePlannerStore()
     s.setTheme('dark')

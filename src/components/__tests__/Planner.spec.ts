@@ -314,6 +314,8 @@ describe('the planner grids (W10)', () => {
         'Next week',
         'Settings',
         'Print…',
+        // The last action (K106): it opens the profile menu.
+        'Profile',
         'Push-ups, Friday 23 October, today',
         // The PlannerScreen's arrows between the screens (K42); the handle is for a finger only.
         // Cardio's grid, empty until something is planned (K90), has no stop of its own.

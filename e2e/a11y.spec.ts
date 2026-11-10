@@ -80,6 +80,27 @@ test.describe('the app passes axe', () => {
       await expectNoAxeViolations(page)
     })
 
+    test(`the profile menu, open, desktop, ${theme}`, async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 900 })
+      await openApp(page, { theme })
+      await callUpBar(page)
+      await page.getByRole('button', { name: 'Profile' }).click()
+      await page.getByRole('menu').waitFor()
+      await settle(page)
+      await expectNoAxeViolations(page)
+    })
+
+    test(`the Profile page, desktop, ${theme}`, async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 900 })
+      await openApp(page, { theme })
+      await callUpBar(page)
+      await page.getByRole('button', { name: 'Profile' }).click()
+      await page.getByRole('menuitem', { name: 'Profile' }).click()
+      await page.getByRole('heading', { level: 1, name: 'Profile' }).waitFor()
+      await settle(page)
+      await expectNoAxeViolations(page)
+    })
+
     test(`the Ask page with an answer and the history, desktop, ${theme}`, async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 900 })
       await openAsk(page, theme)

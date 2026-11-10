@@ -562,7 +562,7 @@ describe('the Settings page', () => {
         .get(PANEL)
         .findAll('h2')
         .map((h) => h.text()),
-    ).toEqual(['Appearance', 'Your goals', 'Your data', 'Connections', 'Account'])
+    ).toEqual(['Appearance', 'Daily goal', 'Your data', 'Connections'])
     // Marks, then Theme (K59); the daily targets are set in Edit plan (K56).
     expect(
       wrapper
@@ -602,7 +602,7 @@ describe('the Settings page', () => {
   }
 
   it('keeps a saved accent as it is, though nothing shows it any more', async () => {
-    mountWithSettings({ accent: '#ff9f0a', dailyPick: 3, foodPick: 2, goals: '' })
+    mountWithSettings({ accent: '#ff9f0a', dailyPick: 3, foodPick: 2, goals: '', limits: '' })
     await wrapper.get('[data-testid="edit-plan-button"]').trigger('click')
     await wrapper.get('button[aria-label="More exercises a day"]').trigger('click')
     await settle()
@@ -612,6 +612,7 @@ describe('the Settings page', () => {
       dailyPick: 4,
       foodPick: 2,
       goals: '',
+      limits: '',
     })
     expect(document.documentElement.style.getPropertyValue('--user-pen-light')).toBe('')
   })
@@ -765,6 +766,7 @@ describe('export and import', () => {
       dailyPick: 3,
       foodPick: 2,
       goals: '',
+      limits: '',
       itemSections: { exercise: arranged },
     })
   })
@@ -963,7 +965,7 @@ describe('export and import with the sample data', () => {
   const { revs: _dr, detailRevs: _dd, ...diet } = cache.diet
   const { accent, dailyPick, foodPick } = cache.settings as PortableSettings
   // The cache and the file carry the same goals.
-  const { goals } = sample.settings as PortableSettings
+  const { goals, limits } = sample.settings as PortableSettings
 
   /** The sample as alice's cache, a fresh copy each time. */
   function sampleCache(): SyncState {
@@ -1028,7 +1030,7 @@ describe('export and import with the sample data', () => {
     await input.trigger('change')
     await flushPromises()
     expect(wrapper.get('[data-testid="import-summary"]').text()).toBe(
-      'Adds seven weekly plans and 108 marked days, plus the notes and details of three items, the exercises and foods a day and your goals. Existing plans and marks stay as they are.',
+      'Adds seven weekly plans and 108 marked days, plus the notes and details of three items, the exercises and foods a day, your goals and your limits. Existing plans and marks stay as they are.',
     )
     await button('Import').trigger('click')
     await flushPromises()
@@ -1038,7 +1040,7 @@ describe('export and import with the sample data', () => {
     expect(cachedExercise).toEqual(exercise)
     expect(cachedCardio).toEqual(cardio)
     expect(cachedDiet).toEqual(diet)
-    expect(cached().settings).toEqual({ accent, dailyPick, foodPick, goals })
+    expect(cached().settings).toEqual({ accent, dailyPick, foodPick, goals, limits })
     // Every plan, tick and item's details reached the server too.
     const server = api.state(USER) as SyncState
     const { plans, log, details } = server.exercise
@@ -1053,7 +1055,7 @@ describe('export and import with the sample data', () => {
       log: server.diet.log,
       details: server.diet.details,
     }).toEqual(diet)
-    expect(server.settings).toEqual({ accent, dailyPick, foodPick, goals })
+    expect(server.settings).toEqual({ accent, dailyPick, foodPick, goals, limits })
     // The theme is per device, so it never left this browser.
     expect(localStorage.getItem('tracker-settings-v1')).toBeNull()
   })
@@ -1246,6 +1248,7 @@ describe('config mode and weekly plans', () => {
       dailyPick: 1,
       foodPick: 8,
       goals: '',
+      limits: '',
     })
   })
 

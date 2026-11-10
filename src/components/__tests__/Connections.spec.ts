@@ -124,14 +124,14 @@ afterEach(() => {
 })
 
 describe('Settings › Connections', () => {
-  it('is a row between Your data and Account', async () => {
+  it('is the last row, after Your data (K106)', async () => {
     await openSettings()
     expect(
       wrapper
         .get('[data-testid="settings-page"]')
         .findAll('h2')
         .map((h) => h.text()),
-    ).toEqual(['Appearance', 'Your goals', 'Your data', 'Connections', 'Account'])
+    ).toEqual(['Appearance', 'Daily goal', 'Your data', 'Connections'])
     expect(
       section()
         .findAll('h3')

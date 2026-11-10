@@ -102,14 +102,26 @@ describe('sync', () => {
   })
 
   it('loads from the server when the device has no cache', async () => {
-    api.accounts.get(USER)!.settings = { accent: '#0a84ff', dailyPick: 5, foodPick: 4, goals: '' }
+    api.accounts.get(USER)!.settings = {
+      accent: '#0a84ff',
+      dailyPick: 5,
+      foodPick: 4,
+      goals: '',
+      limits: '',
+    }
     const sync = useSyncStore()
     sync.start(USER, lost)
     expect(sync.loaded).toBe(false)
     await flushPromises()
     expect(sync.loaded).toBe(true)
     expect(usePlannerStore().accent).toBe('#0a84ff')
-    expect(cached().settings).toEqual({ accent: '#0a84ff', dailyPick: 5, foodPick: 4, goals: '' })
+    expect(cached().settings).toEqual({
+      accent: '#0a84ff',
+      dailyPick: 5,
+      foodPick: 4,
+      goals: '',
+      limits: '',
+    })
   })
 
   it('ignores a cache it cannot read', async () => {
@@ -181,6 +193,7 @@ describe('sync', () => {
       dailyPick: 4,
       foodPick: 2,
       goals: '',
+      limits: '',
     })
     expect(cached().settings).toEqual({ accent: '#30d158', dailyPick: 4, foodPick: 2 })
   })
@@ -194,6 +207,7 @@ describe('sync', () => {
       dailyPick: 3,
       foodPick: 4,
       goals: '',
+      limits: '',
     })
     expect(cached().settings).toEqual({ accent: '#30d158', dailyPick: 3, foodPick: 4 })
   })
@@ -215,6 +229,7 @@ describe('sync', () => {
     expect(api.accounts.get(USER)!.settings).toEqual({
       ...settings,
       goals: '',
+      limits: '',
       itemSections: { exercise: arranged },
     })
     expect(cached().settings).toEqual({ ...settings, itemSections: { exercise: arranged } })
@@ -225,7 +240,7 @@ describe('sync', () => {
     })
     await settle()
     expect(api.calls.at(-1)).toMatchObject({ body: { ...settings, itemSections: {} } })
-    expect(api.accounts.get(USER)!.settings).toEqual({ ...settings, goals: '' })
+    expect(api.accounts.get(USER)!.settings).toEqual({ ...settings, goals: '', limits: '' })
     expect(cached().settings).toEqual(settings)
   })
 
@@ -239,6 +254,7 @@ describe('sync', () => {
       dailyPick: 3,
       foodPick: 2,
       goals: '',
+      limits: '',
       itemSections: { food: arranged },
     }
     const { planner } = await start(emptyState())
@@ -519,7 +535,11 @@ describe('sync', () => {
         goals: 'Run 5 km by March.',
         itemSections: {},
       })
-      expect(api.accounts.get(USER)!.settings).toEqual({ ...PICKS, goals: 'Run 5 km by March.' })
+      expect(api.accounts.get(USER)!.settings).toEqual({
+        ...PICKS,
+        goals: 'Run 5 km by March.',
+        limits: '',
+      })
       expect(cached().settings).toEqual({ ...PICKS, goals: 'Run 5 km by March.' })
       // The same text again is no change, so nothing more is sent.
       planner.setGoals('Run 5 km by March.')
@@ -528,7 +548,7 @@ describe('sync', () => {
     })
 
     it('keeps its goals when a tab on older code writes the cache without them', async () => {
-      api.accounts.get(USER)!.settings = { ...PICKS, goals: 'Lose 3 kg.' }
+      api.accounts.get(USER)!.settings = { ...PICKS, goals: 'Lose 3 kg.', limits: '' }
       const { sync, planner } = await start()
       expect(planner.goals).toBe('Lose 3 kg.')
       const other = emptyState()
@@ -543,13 +563,13 @@ describe('sync', () => {
       // The next settings write still carries them.
       planner.changeFoodPick(1)
       await settle()
-      const sent = { ...PICKS, dailyPick: 5, foodPick: 3, goals: 'Lose 3 kg.' }
+      const sent = { ...PICKS, dailyPick: 5, foodPick: 3, goals: 'Lose 3 kg.', limits: '' }
       expect(api.calls.at(-1)!.body).toEqual({ ...sent, itemSections: {} })
       expect(api.accounts.get(USER)!.settings).toEqual(sent)
     })
 
     it('never sends goals it has not read, when it starts from an older tab’s cache', async () => {
-      api.accounts.get(USER)!.settings = { ...PICKS, goals: 'Lose 3 kg.' }
+      api.accounts.get(USER)!.settings = { ...PICKS, goals: 'Lose 3 kg.', limits: '' }
       api.offline = true // the cache is all this tab has
       const old = emptyState()
       old.settings = { ...PICKS } as SyncState['settings']
@@ -563,10 +583,60 @@ describe('sync', () => {
       await sync.refresh()
       const put = api.calls.find((c) => c.method === 'PUT' && c.path === '/settings')!
       expect(put.body).toEqual({ ...PICKS, dailyPick: 4, itemSections: {} })
-      const saved = { ...PICKS, dailyPick: 4, goals: 'Lose 3 kg.' }
+      const saved = { ...PICKS, dailyPick: 4, goals: 'Lose 3 kg.', limits: '' }
       expect(api.accounts.get(USER)!.settings).toEqual(saved)
       expect(planner.goals).toBe('Lose 3 kg.')
       expect(cached().settings).toEqual(saved)
+    })
+  })
+
+  describe('Your limits (K107)', () => {
+    const PICKS = { accent: '#30d158', dailyPick: 3, foodPick: 2 }
+
+    it('sends the limits the person sets, in one settings write', async () => {
+      const { planner } = await start(emptyState())
+      planner.setLimits(' Left knee: no jumping.\n')
+      await settle()
+      expect(api.paths('PUT')).toEqual(['PUT /settings'])
+      expect(api.calls.at(-1)!.body).toEqual({
+        ...PICKS,
+        limits: 'Left knee: no jumping.',
+        itemSections: {},
+      })
+      expect(api.accounts.get(USER)!.settings).toMatchObject({ limits: 'Left knee: no jumping.' })
+      expect(cached().settings).toEqual({ ...PICKS, limits: 'Left knee: no jumping.' })
+    })
+
+    it('keeps its limits when a tab from before them writes the cache with goals only', async () => {
+      api.accounts.get(USER)!.settings = { ...PICKS, goals: 'Run 5 km.', limits: 'Vegetarian.' }
+      const { sync, planner } = await start()
+      expect(planner.limits).toBe('Vegetarian.')
+      const other = emptyState()
+      other.settings = { ...PICKS, dailyPick: 5, goals: 'Run 5 km.' } as SyncState['settings']
+      localStorage.setItem(CACHE_PREFIX + USER, JSON.stringify(other))
+      sync.onStorage(CACHE_PREFIX + USER)
+      await settle()
+      expect([planner.dailyPick, planner.limits]).toEqual([5, 'Vegetarian.'])
+      planner.changeFoodPick(1)
+      await settle()
+      expect(api.calls.at(-1)!.body).toMatchObject({ limits: 'Vegetarian.' })
+    })
+
+    it('never sends limits it has not read, when it starts from an older tab’s cache', async () => {
+      api.accounts.get(USER)!.settings = { ...PICKS, goals: '', limits: 'Vegetarian.' }
+      api.offline = true
+      const old = emptyState()
+      old.settings = { ...PICKS, goals: '' } as SyncState['settings']
+      const { sync, planner } = await start(old)
+      planner.changeDailyPick(1)
+      await settle()
+      expect(cached().settings).toEqual({ ...PICKS, dailyPick: 4, goals: '' })
+      api.offline = false
+      await sync.refresh()
+      const put = api.calls.find((c) => c.method === 'PUT' && c.path === '/settings')!
+      expect('limits' in (put.body as object)).toBe(false)
+      expect(api.accounts.get(USER)!.settings).toMatchObject({ limits: 'Vegetarian.' })
+      expect(planner.limits).toBe('Vegetarian.')
     })
   })
 
@@ -946,7 +1016,7 @@ describe('importFile', () => {
       details: {},
     },
     diet: { plans: {}, log: {}, details: {} },
-    settings: { accent: '#0a84ff', dailyPick: 5, foodPick: 4, goals: '' },
+    settings: { accent: '#0a84ff', dailyPick: 5, foodPick: 4, goals: '', limits: '' },
   }
 
   it('sends pending writes first, imports on the server, then shows the merged state', async () => {
@@ -992,7 +1062,7 @@ describe('importFile', () => {
 
   it('fills empty goals from the file, and keeps goals already saved', async () => {
     const picks = { accent: '#ff9f0a', dailyPick: 2, foodPick: 2 }
-    api.accounts.get(USER)!.settings = { ...picks, goals: '' }
+    api.accounts.get(USER)!.settings = { ...picks, goals: '', limits: '' }
     const { sync, planner } = await start()
     const file = { ...data, settings: { ...data.settings!, goals: 'Run 5 km by March.' } }
     expect(await sync.importFile(file)).toMatchObject({ ok: true, added: { settings: true } })
@@ -1000,7 +1070,23 @@ describe('importFile', () => {
     const other = { ...file, settings: { ...file.settings, goals: 'Something else.' } }
     expect(await sync.importFile(other)).toMatchObject({ ok: true, added: { settings: false } })
     expect(planner.goals).toBe('Run 5 km by March.')
-    expect(api.accounts.get(USER)!.settings).toEqual({ ...picks, goals: 'Run 5 km by March.' })
+    expect(api.accounts.get(USER)!.settings).toEqual({
+      ...picks,
+      goals: 'Run 5 km by March.',
+      limits: '',
+    })
+  })
+
+  it('fills empty limits from the file, and keeps limits already saved', async () => {
+    const picks = { accent: '#ff9f0a', dailyPick: 2, foodPick: 2, goals: '' }
+    api.accounts.get(USER)!.settings = { ...picks, limits: '' }
+    const { sync, planner } = await start()
+    const file = { ...data, settings: { ...data.settings!, limits: 'Vegetarian.' } }
+    expect(await sync.importFile(file)).toMatchObject({ ok: true, added: { settings: true } })
+    expect(planner.limits).toBe('Vegetarian.')
+    const other = { ...file, settings: { ...file.settings, limits: 'Something else.' } }
+    expect(await sync.importFile(other)).toMatchObject({ ok: true, added: { settings: false } })
+    expect(planner.limits).toBe('Vegetarian.')
   })
 
   it('reports being offline and changes nothing', async () => {
@@ -1086,7 +1172,7 @@ describe('importFile', () => {
 })
 
 describe('diff', () => {
-  const settings = { accent: '#30d158', dailyPick: 3, foodPick: 2, goals: '' }
+  const settings = { accent: '#30d158', dailyPick: 3, foodPick: 2, goals: '', limits: '' }
   const empty = () => ({
     exercise: { plans: {}, log: {}, details: {} },
     cardio: { plans: {}, log: {}, details: {} },
@@ -1101,6 +1187,12 @@ describe('diff', () => {
   it('finds changed goals', () => {
     const local = empty()
     local.settings.goals = 'Run 5 km.'
+    expect(diff(empty(), local)).toEqual([{ kind: 'settings' }])
+  })
+
+  it('finds changed limits', () => {
+    const local = empty()
+    local.settings.limits = 'Vegetarian.'
     expect(diff(empty(), local)).toEqual([{ kind: 'settings' }])
   })
 
@@ -1198,5 +1290,18 @@ describe('normaliseState', () => {
     // A tab from before My goals, or a damaged value: not known, so never "none".
     expect(state(picks)).toEqual(picks)
     expect(state({ ...picks, goals: 7 })).toEqual(picks)
+  })
+
+  it('keeps limits only when the settings carry them as text', () => {
+    const state = (settings: unknown) =>
+      normaliseState({ exercise: {}, diet: {}, settings })!.settings
+    const picks = { accent: '#30d158', dailyPick: 3, foodPick: 2 }
+    expect(state({ ...picks, limits: ' Vegetarian. ' })).toEqual({
+      ...picks,
+      limits: 'Vegetarian.',
+    })
+    expect(state({ ...picks, limits: '' })).toEqual({ ...picks, limits: '' })
+    // A tab from before Your limits, or a damaged value: not known, so never "none".
+    expect(state({ ...picks, limits: 7 })).toEqual(picks)
   })
 })

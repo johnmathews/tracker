@@ -168,7 +168,7 @@ describe('the planner’s screens (K24–K27)', () => {
     expect(bar().findAll('[data-slot="bar-action"]')[0]!.text()).toBe('This week')
   })
 
-  it('ends the actions with Full screen where the browser has one, in Edit plan too (K49, K91)', async () => {
+  it('has Full screen where the browser has one, just before Profile, in Edit plan too (K49, K91, K106)', async () => {
     Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: true })
     Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: null })
     try {
@@ -177,9 +177,9 @@ describe('the planner’s screens (K24–K27)', () => {
         bar()
           .findAll('[data-slot="bar-action"]')
           .map((b) => b.text())
-      expect(actions().at(-1)).toBe('Full screen')
+      expect(actions().slice(-2)).toEqual(['Full screen', 'Profile'])
       await wrapper.get('[data-testid="edit-plan-button"]').trigger('click')
-      expect(actions().at(-1)).toBe('Full screen')
+      expect(actions().slice(-2)).toEqual(['Full screen', 'Profile'])
       // Full screen on: the button says how to leave it.
       Object.defineProperty(document, 'fullscreenElement', {
         configurable: true,

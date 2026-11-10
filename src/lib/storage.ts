@@ -133,8 +133,10 @@ export type Settings = {
    * day turns green, and Ask and the AI connections get no daily target; the picks are kept.
    */
   dailyGoal: boolean
-  /** My goals: the person's own words about what they are aiming for; only Ask reads them. */
+  /** My goals: the person's own words about what they are aiming for; Ask and the MCP read them. */
   goals: string
+  /** Your limits (K107): what the person has to work around; read like the goals. */
+  limits: string
   theme: Theme
   /** How marked days are drawn; the device's choice. */
   markSet: MarkSet
@@ -173,6 +175,8 @@ export const MAX_DISTANCE = 1000
 export const MAX_NOTES = 500
 /** My goals' length, in characters (code points, as Python counts them). */
 export const MAX_GOALS = 1000
+/** Your limits' length, in characters (code points, as Python counts them; K107). */
+export const MAX_LIMITS = 1000
 /** An item's details: its notes in code points, each field's text in code points, how many fields,
  * and the whole document as the API stores it (compact JSON, UTF-8) in bytes. As the API's. */
 export const MAX_DETAILS_NOTES = 20_000
@@ -193,6 +197,7 @@ export const DEFAULT_SETTINGS: Settings = {
   foodPick: 2,
   dailyGoal: true,
   goals: '',
+  limits: '',
   theme: 'system',
   markSet: 'squiggles',
 }
@@ -293,6 +298,11 @@ export function normaliseNotes(v: unknown): string | undefined {
  */
 export function normaliseGoals(v: unknown): string {
   return cutText(v, MAX_GOALS)
+}
+
+/** Your limits (K107), as `normaliseGoals` reads the goals. The API's `normalise_limits` too. */
+export function normaliseLimits(v: unknown): string {
+  return cutText(v, MAX_LIMITS)
 }
 
 /** `normaliseText`, but '' rather than undefined for nothing usable: Ask's titles and turns. */
@@ -532,7 +542,10 @@ export function parseDietData(
 }
 
 /** The settings that belong to the person rather than the device: not the theme, totals or marks. */
-export type PortableSettings = Pick<Settings, 'accent' | 'dailyPick' | 'foodPick' | 'goals'> & {
+export type PortableSettings = Pick<
+  Settings,
+  'accent' | 'dailyPick' | 'foodPick' | 'goals' | 'limits'
+> & {
   /**
    * Daily goal (K85), left out where it isn't known (a cache, file or tab from before it), which
    * reads as on and, sent to the API, keeps the saved one.
@@ -545,14 +558,18 @@ export type PortableSettings = Pick<Settings, 'accent' | 'dailyPick' | 'foodPick
 /**
  * Portable settings as a tab or its cache knows them. `goals` is absent when the tab hasn't read
  * them from the server or had them from the person: a cache written by a tab from before My goals
- * has none, and sending a stand-in would erase the saved ones (F1). (`dailyGoal` is optional in
- * PortableSettings already, for the same reason.)
+ * has none, and sending a stand-in would erase the saved ones (F1). `limits` is absent the same
+ * way (K107). (`dailyGoal` is optional in PortableSettings already, for the same reason.)
  */
-export type KnownSettings = Omit<PortableSettings, 'goals'> & { goals?: string }
+export type KnownSettings = Omit<PortableSettings, 'goals' | 'limits'> & {
+  goals?: string
+  limits?: string
+}
 
 /**
  * Any `#rrggbb` accent, daily picks for exercises and foods clamped to 1–8, each falling back to
- * its default, Daily goal only when it is a boolean, My goals as `normaliseGoals` reads them, and the item pages' arrangement as
+ * its default, Daily goal only when it is a boolean, My goals and Your limits as `normaliseGoals` and
+ * `normaliseLimits` read them, and the item pages' arrangement as
  * `normaliseItemSections` reads it, left out when every page has the default.
  */
 export function normalisePortableSettings(v: Record<string, unknown>): PortableSettings {
@@ -577,6 +594,7 @@ export function normalisePortableSettings(v: Record<string, unknown>): PortableS
     foodPick,
     ...(typeof v.dailyGoal === 'boolean' ? { dailyGoal: v.dailyGoal } : {}),
     goals: normaliseGoals(v.goals),
+    limits: normaliseLimits(v.limits),
     ...(Object.keys(itemSections).length ? { itemSections } : {}),
   }
 }

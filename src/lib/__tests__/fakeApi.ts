@@ -10,6 +10,7 @@
 import {
   normaliseDetails,
   normaliseGoals,
+  normaliseLimits,
   normalisePortableSettings,
   type Conversation,
   type Days,
@@ -447,6 +448,11 @@ export class FakeApi {
         // As the API: goals that aren't a string are not sent, so the saved ones stay (F1).
         goals:
           typeof body.goals === 'string' ? normaliseGoals(body.goals) : (a.settings?.goals ?? ''),
+        // Your limits the same way (K107).
+        limits:
+          typeof body.limits === 'string'
+            ? normaliseLimits(body.limits)
+            : (a.settings?.limits ?? ''),
         itemSections: 'itemSections' in body ? body.itemSections : a.settings?.itemSections,
       })
       return Response.json(a.settings)
@@ -721,7 +727,7 @@ export class FakeApi {
         }
       }
     }
-    // As the API: saved settings stay, but the file's goals fill empty ones (F17).
+    // As the API: saved settings stay, but the file's goals and limits fill empty ones (F17, K107).
     const merged = mergeSettings(a.settings, parsed.data.settings)
     const settings = JSON.stringify(merged) !== JSON.stringify(a.settings)
     a.settings = merged

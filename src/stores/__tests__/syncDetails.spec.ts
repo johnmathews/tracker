@@ -603,7 +603,7 @@ describe('details in diff and normaliseState', () => {
     exercise,
     cardio,
     diet,
-    settings: { accent: '#30d158', dailyPick: 3, foodPick: 2, goals: '' },
+    settings: { accent: '#30d158', dailyPick: 3, foodPick: 2, goals: '', limits: '' },
   })
 
   it('finds each item whose details changed, were added, or were cleared', () => {

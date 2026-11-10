@@ -4,6 +4,7 @@ import {
   DEFAULT_SETTINGS,
   MARK_SETS,
   MAX_GOALS,
+  MAX_LIMITS,
   SETTINGS_KEY,
   defaultCardio,
   defaultExercises,
@@ -12,6 +13,7 @@ import {
   normaliseCardio,
   normaliseDistance,
   normaliseGoals,
+  normaliseLimits,
   normaliseWeight,
   parseDietData,
   parsePlannerData,
@@ -273,7 +275,7 @@ describe('parseDietData', () => {
 
 describe('normalisePortableSettings', () => {
   it('keeps an item-page arrangement, normalised, and leaves out none or the default (K66)', () => {
-    const base = { accent: '#bf5af2', dailyPick: 4, foodPick: 5, goals: '' }
+    const base = { accent: '#bf5af2', dailyPick: 4, foodPick: 5, goals: '', limits: '' }
     expect(
       normalisePortableSettings({
         ...base,
@@ -299,6 +301,7 @@ describe('parseSettings', () => {
       foodPick: 2,
       dailyGoal: true,
       goals: '',
+      limits: '',
       theme: 'system',
       markSet: 'squiggles',
     })
@@ -316,6 +319,7 @@ describe('parseSettings', () => {
       foodPick: 5,
       dailyGoal: true,
       goals: '',
+      limits: '',
       theme: 'dark',
       markSet: 'squiggles',
     })
@@ -351,6 +355,23 @@ describe('parseSettings', () => {
     }
     expect(parseSettings(JSON.stringify({ markSet: 'stars' })).markSet).toBe('squiggles')
     expect(parseSettings(JSON.stringify({ markSet: 3 })).markSet).toBe('squiggles')
+  })
+})
+
+describe('normaliseLimits', () => {
+  it('trims the ends, keeps the line breaks inside, and cuts at MAX_LIMITS code points', () => {
+    expect(normaliseLimits(' Left knee.\nVegetarian.\n ')).toBe('Left knee.\nVegetarian.')
+    expect(Array.from(normaliseLimits('🦵'.repeat(MAX_LIMITS + 5)))).toHaveLength(MAX_LIMITS)
+    expect(MAX_LIMITS).toBe(1000)
+  })
+
+  it('reads blank text and anything that is not a string as no limits', () => {
+    for (const v of [' \n ', '', null, undefined, 42, ['Knee']]) expect(normaliseLimits(v)).toBe('')
+  })
+
+  it('is read with the portable settings, beside the goals', () => {
+    expect(normalisePortableSettings({ limits: ' Vegetarian. ' }).limits).toBe('Vegetarian.')
+    expect(normalisePortableSettings({}).limits).toBe('')
   })
 })
 

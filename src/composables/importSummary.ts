@@ -15,6 +15,8 @@ export type Additions = {
   settings: boolean
   /** The file's My goals fill goals that are empty (K72): a change on its own. */
   goals: boolean
+  /** The file's limits fill limits that are empty (K107), as the goals do. */
+  limits: boolean
   /** Ask conversations whose id the account doesn't have yet. */
   conversations: number
 }
@@ -61,6 +63,7 @@ export function useImportSummary() {
       settings: data.settings !== null && planner.savedSettings() === null,
       // As mergeSettings: the file's goals fill empty ones, and never replace any.
       goals: !!data.settings?.goals && !planner.goals,
+      limits: !!data.settings?.limits && !planner.limits,
       conversations: (data.conversations ?? []).filter((c) => !here.has(c.id)).length,
     }
   }
@@ -68,12 +71,18 @@ export function useImportSummary() {
   function addsAnything(data: ExportData): boolean {
     const a = additions(data)
     return (
-      a.plans > 0 || a.ticks > 0 || a.details > 0 || a.settings || a.goals || a.conversations > 0
+      a.plans > 0 ||
+      a.ticks > 0 ||
+      a.details > 0 ||
+      a.settings ||
+      a.goals ||
+      a.limits ||
+      a.conversations > 0
     )
   }
 
   function describe(data: ExportData): string {
-    const { plans, ticks, details: items, settings, goals, conversations } = additions(data)
+    const { plans, ticks, details: items, settings, goals, limits, conversations } = additions(data)
     // Notes and fields come once per item (D2), so they count by item. The settings as Edit plan
     // names them: Exercises a day and Foods a day (K56). The file's accent comes too, but nothing
     // shows it any more, so the summary leaves it out.
@@ -81,6 +90,7 @@ export function useImportSummary() {
     if (items) extras.push(`the notes and details of ${countOf(items, 'item')}`)
     if (settings) extras.push('the exercises and foods a day')
     if (goals) extras.push('your goals')
+    if (limits) extras.push('your limits')
     if (conversations) extras.push(`${countOf(conversations, 'conversation')} from Ask`)
     const extra = extras.length ? `, plus ${listed(extras)}` : ''
     return `Adds ${countOf(plans, 'weekly plan')} and ${countOf(ticks, 'marked day')}${extra}. Existing plans and marks stay as they are.`

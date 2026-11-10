@@ -13,6 +13,7 @@ import RadioCardSection from './sections/RadioCardSection.vue'
 import SwitchSection from './sections/SwitchSection.vue'
 import StepperSection from './sections/StepperSection.vue'
 import PopoverSection from './sections/PopoverSection.vue'
+import MenuSection from './sections/MenuSection.vue'
 import DialogSection from './sections/DialogSection.vue'
 import ConfirmDialogSection from './sections/ConfirmDialogSection.vue'
 import InlineMessageSection from './sections/InlineMessageSection.vue'
@@ -147,6 +148,13 @@ export const SECTIONS: readonly StyleGuideSection[] = [
     summary:
       'A small panel attached to the control that opened it; the app has one, Settings, under the settings IconButton in the Header.',
     component: PopoverSection,
+  },
+  {
+    id: 'sg-menu',
+    title: 'Menu',
+    summary:
+      'A short list of actions that opens under the control that pressed it, with an optional line at the top saying whose they are.',
+    component: MenuSection,
   },
   {
     id: 'sg-dialog',

@@ -296,17 +296,19 @@ export function mergeSummary<T>(
 }
 
 /**
- * Saved settings win; the file's apply only where none are saved (`existing` null). The one
- * exception is My goals: the file's fill saved goals that are empty, and never replace ones that
- * aren't (F17). The API's `merge_settings` does the same.
+ * Saved settings win; the file's apply only where none are saved (`existing` null). The
+ * exceptions are My goals and Your limits: the file's fill saved ones that are empty, and never
+ * replace ones that aren't (F17, K107). The API's `merge_settings` does the same.
  */
 export function mergeSettings(
   existing: PortableSettings | null,
   incoming: PortableSettings | null,
 ): PortableSettings | null {
   if (!existing) return incoming
-  if (!existing.goals && incoming?.goals) return { ...existing, goals: incoming.goals }
-  return existing
+  let merged = existing
+  if (!existing.goals && incoming?.goals) merged = { ...merged, goals: incoming.goals }
+  if (!existing.limits && incoming?.limits) merged = { ...merged, limits: incoming.limits }
+  return merged
 }
 
 export function exportFilename(now: Date): string {

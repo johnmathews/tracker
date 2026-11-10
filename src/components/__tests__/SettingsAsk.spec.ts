@@ -3,8 +3,6 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import App from '@/App.vue'
 import { usePlannerStore } from '@/stores/planner'
-import { SESSION_KEY, useSessionStore } from '@/stores/session'
-import { useSyncStore } from '@/stores/sync'
 import type { PortableSettings } from '@/lib/storage'
 import type { FakeApi } from '@/lib/__tests__/fakeApi'
 import { USER, emptyState, signedIn } from '@/lib/__tests__/signedIn'
@@ -42,10 +40,6 @@ async function openSettings({
   await settle()
 }
 
-function goalsBox() {
-  return wrapper.get<HTMLTextAreaElement>('[data-testid="goals"]')
-}
-
 function puts(): unknown[] {
   return api.calls.filter((c) => c.method === 'PUT' && c.path === '/settings').map((c) => c.body)
 }
@@ -68,116 +62,19 @@ afterEach(() => {
   history.replaceState(null, '', '/')
 })
 
-describe('Your goals in Settings', () => {
-  it('sits between Appearance and Your data, labelled, with what reads it', async () => {
+describe('Settings without goals and account (K107)', () => {
+  it('has Appearance, Daily goal, Your data and Connections; goals and Sign out are on Profile', async () => {
     await openSettings()
     const page = wrapper.get('[data-testid="settings-page"]')
     expect(page.findAll('h2').map((h) => h.text())).toEqual([
       'Appearance',
-      'Your goals',
+      'Daily goal',
       'Your data',
       'Connections',
-      'Account',
     ])
-    const field = page.get('[data-slot="text-area"]')
-    expect(field.get('label').text()).toBe('What you’re working towards')
-    expect(field.text()).toContain('Ask reads this when it answers. Nothing else does.')
-    expect(goalsBox().element.value).toBe('Ten pull-ups by March.')
-    expect(goalsBox().attributes('aria-describedby')).toBeTruthy()
-  })
-
-  it('saves once per pause in typing, however many keys (F18)', async () => {
-    await openSettings()
-    for (const text of ['R', 'Ru', 'Run', 'Run 5', 'Run 5 km']) {
-      await goalsBox().setValue(text)
-      await vi.advanceTimersByTimeAsync(200)
-    }
-    expect(puts()).toEqual([])
-    await vi.advanceTimersByTimeAsync(400)
-    await settle()
-    expect(puts()).toEqual([{ ...SENT, goals: 'Run 5 km' }])
-    await goalsBox().setValue('Run 5 km by May')
-    await vi.advanceTimersByTimeAsync(599)
-    await settle()
-    expect(puts()).toHaveLength(1)
-    await vi.advanceTimersByTimeAsync(1)
-    await settle()
-    expect(puts()).toEqual([
-      { ...SENT, goals: 'Run 5 km' },
-      { ...SENT, goals: 'Run 5 km by May' },
-    ])
-    expect(api.accounts.get(USER)!.settings!.goals).toBe('Run 5 km by May')
-  })
-
-  it('saves at once on leaving the box, and leaves the words as typed', async () => {
-    await openSettings()
-    await goalsBox().setValue('Vegetables every day.\n')
-    await goalsBox().trigger('blur')
-    await settle()
-    expect(puts()).toEqual([{ ...SENT, goals: 'Vegetables every day.' }])
-    // The trailing line break the person just typed stays in the box.
-    expect(goalsBox().element.value).toBe('Vegetables every day.\n')
-    // Leaving the box again with nothing new sends nothing.
-    await goalsBox().trigger('blur')
-    await vi.advanceTimersByTimeAsync(600)
-    await settle()
-    expect(puts()).toHaveLength(1)
-  })
-
-  it('saves what was typed when the page closes mid-pause', async () => {
-    await openSettings()
-    await goalsBox().setValue('Feel less stiff.')
-    location.hash = '#/'
-    await settle()
-    expect(puts()).toEqual([{ ...SENT, goals: 'Feel less stiff.' }])
-  })
-
-  it('keeps nothing of a half-typed draft when another tab signs out mid-pause', async () => {
-    await openSettings()
-    await goalsBox().setValue('Half typed')
-    api.signedIn = null
-    localStorage.removeItem(SESSION_KEY)
-    await useSessionStore().onStorage(SESSION_KEY)
-    await vi.advanceTimersByTimeAsync(600)
-    await settle()
-    expect(wrapper.find('[data-testid="settings-page"]').exists()).toBe(false)
-    expect(puts()).toEqual([])
-    // The signed-out stores hold no goals, so nothing can carry them to the next sign-in.
-    expect(usePlannerStore().goals).toBe('')
-    expect(usePlannerStore().goalsKnown).toBe(false)
-  })
-
-  it('shows goals saved elsewhere, but never over words still being typed', async () => {
-    await openSettings()
-    usePlannerStore().adopt({ plans: {}, log: {} }, { ...PICKS, goals: 'From the phone.' })
-    await settle()
-    expect(goalsBox().element.value).toBe('From the phone.')
-    await goalsBox().setValue('Mine, half')
-    usePlannerStore().adopt({ plans: {}, log: {} }, { ...PICKS, goals: 'From the phone, again.' })
-    await settle()
-    expect(goalsBox().element.value).toBe('Mine, half')
-  })
-
-  it('can’t be typed in until the saved goals are known, so it never writes over them (F1)', async () => {
-    // A cache from a tab before My goals, and no server yet.
-    await openSettings({ cache: { ...PICKS }, offline: true })
-    expect(usePlannerStore().goalsKnown).toBe(false)
-    expect(goalsBox().element.disabled).toBe(true)
-    api.offline = false
-    await useSyncStore().refresh()
-    await settle()
-    expect(goalsBox().element.disabled).toBe(false)
-    expect(goalsBox().element.value).toBe('Ten pull-ups by March.')
-  })
-
-  it('takes goals on a new account, which has nothing saved yet', async () => {
-    await openSettings({ saved: null })
-    expect(usePlannerStore().goalsKnown).toBe(false)
-    expect(goalsBox().element.disabled).toBe(false)
-    await goalsBox().setValue('Run 5 km.')
-    await goalsBox().trigger('blur')
-    await settle()
-    expect(api.accounts.get(USER)!.settings).toEqual({ ...PICKS, goals: 'Run 5 km.' })
+    expect(page.find('[data-testid="goals"]').exists()).toBe(false)
+    expect(page.find('[data-testid="signed-in-as"]').exists()).toBe(false)
+    expect(page.findAll('button').some((b) => b.text() === 'Sign out')).toBe(false)
   })
 })
 
@@ -205,7 +102,7 @@ describe('export and import with Ask’s history', () => {
     expect(api.paths('GET /export')).toHaveLength(1)
     const data = await file()
     expect(data.conversations).toEqual([{ ...conversation, turns: [{ ...turn, askedAt: 1 }] }])
-    expect(data.settings).toEqual({ ...PICKS, goals: 'Ten pull-ups by March.' })
+    expect(data.settings).toEqual({ ...PICKS, goals: 'Ten pull-ups by March.', limits: '' })
     expect(wrapper.find('[data-testid="import-notice"]').exists()).toBe(false)
   })
 
@@ -245,15 +142,26 @@ describe('export and import with Ask’s history', () => {
   }
 
   it('counts goals that fill empty ones as a change, names them, and imports them', async () => {
-    await openSettings({ saved: { ...PICKS, goals: '' } })
+    await openSettings({ saved: { ...PICKS, goals: '', limits: '' } })
     await choose({ ...EMPTY, settings: { ...PICKS, dailyPick: 5, goals: 'Run 5 km.' } })
     expect(wrapper.get('[data-testid="import-summary"]').text()).toBe(
       'Adds zero weekly plans and zero marked days, plus your goals. Existing plans and marks stay as they are.',
     )
     await button('Import').trigger('click')
     await settle()
-    expect(api.accounts.get(USER)!.settings).toEqual({ ...PICKS, goals: 'Run 5 km.' })
-    expect(goalsBox().element.value).toBe('Run 5 km.')
+    expect(api.accounts.get(USER)!.settings).toEqual({ ...PICKS, goals: 'Run 5 km.', limits: '' })
+    expect(usePlannerStore().goals).toBe('Run 5 km.')
+  })
+
+  it('counts limits that fill empty ones as a change, names them, and imports them (K107)', async () => {
+    await openSettings({ saved: { ...PICKS, goals: '', limits: '' } })
+    await choose({ ...EMPTY, settings: { ...PICKS, goals: 'Run 5 km.', limits: 'Vegetarian.' } })
+    expect(wrapper.get('[data-testid="import-summary"]').text()).toBe(
+      'Adds zero weekly plans and zero marked days, plus your goals and your limits. Existing plans and marks stay as they are.',
+    )
+    await button('Import').trigger('click')
+    await settle()
+    expect(usePlannerStore().limits).toBe('Vegetarian.')
   })
 
   it('counts the conversations it would add, leaving out the ones already here', async () => {
@@ -303,11 +211,11 @@ describe('Daily goal in Settings (K85)', () => {
   const monday = () =>
     wrapper.get('[data-testid="exercise-grid"]').findAll('[data-testid="day-head"]')[0]!
 
-  it('is the first thing in Your goals, on by default, with what it does', async () => {
+  it('is a section of its own, on by default, with what it does (K107)', async () => {
     await openSettings()
     const section = wrapper
       .findAll('[data-testid="settings-page"] section')
-      .find((s) => s.get('h2').text() === 'Your goals')!
+      .find((s) => s.get('h2').text() === 'Daily goal')!
     expect(section.get('[data-slot="switch"]').element).toBe(dailyGoal().element)
     expect(dailyGoal().text()).toBe('Daily goal')
     expect(dailyGoal().attributes('aria-checked')).toBe('true')
@@ -356,13 +264,19 @@ describe('Daily goal in Settings (K85)', () => {
   })
 
   it('reads an off from the account, and sends it with its next settings write', async () => {
-    await openSettings({ saved: { ...PICKS, dailyGoal: false, goals: '' } })
+    await openSettings({ saved: { ...PICKS, dailyGoal: false, goals: '', limits: '' } })
     expect(dailyGoal().attributes('aria-checked')).toBe('false')
     await toWeek()
     await markMonday(3)
     expect(monday().attributes('data-met')).toBeUndefined()
     usePlannerStore().changeDailyPick(1)
     await settle()
-    expect(puts().at(-1)).toEqual({ ...SENT, dailyPick: 4, dailyGoal: false, goals: '' })
+    expect(puts().at(-1)).toEqual({
+      ...SENT,
+      dailyPick: 4,
+      dailyGoal: false,
+      goals: '',
+      limits: '',
+    })
   })
 })

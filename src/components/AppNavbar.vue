@@ -1,23 +1,29 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, toRef } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, toRef, useTemplateRef } from 'vue'
 import {
   Calendar,
   ChevronLeft,
   ChevronRight,
+  CircleUserRound,
+  LogOut,
   Maximize,
   MessageCircle,
   Minimize,
   Printer,
   Settings,
+  UserRound,
 } from '@lucide/vue'
 import { usePlannerStore } from '@/stores/planner'
 import { useSessionStore } from '@/stores/session'
 import { weekRange } from '@/lib/dates'
 import { BarAction } from '@/components/ui/bar-action'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { Menu, MenuItem } from '@/components/ui/menu'
 import { IconButton } from '@/components/ui/icon-button'
 import { useBarReveal } from '@/composables/barReveal'
 import { useFullscreen } from '@/composables/fullscreen'
 import { useShortcuts } from '@/composables/shortcuts'
+import { useSignOut } from '@/composables/signOut'
 
 const props = defineProps<{
   /**
@@ -71,6 +77,29 @@ function toggleEditPlan(): void {
 /** Settings is a page of its own (#/settings); App shows it on the hash change. */
 function openSettings(): void {
   location.hash = '#/settings'
+}
+
+/** The profile menu (K106): Profile is a page of its own (#/profile), like Settings. */
+function openProfile(): void {
+  location.hash = '#/profile'
+}
+const profileButton = useTemplateRef<InstanceType<typeof BarAction>>('profileButton')
+/** The Profile button, where focus returns once the sign-out question closes. */
+function profileTarget(): HTMLElement | null {
+  return (profileButton.value?.$el as HTMLElement | undefined) ?? null
+}
+/**
+ * Sign out from the menu: at once, or after a question when changes haven't reached the server.
+ * The bar has no room to say why a sign-out failed, so a failure opens the same question with the
+ * reason, from which the person can try again.
+ */
+const signOut = useSignOut()
+async function startSignOut(): Promise<void> {
+  const problem = await signOut.start()
+  if (problem) {
+    signOut.error.value = problem
+    signOut.asking.value = true
+  }
 }
 
 // The week's keys (K91): E in and out of Edit plan, Esc out of full screen and then out of Edit
@@ -211,8 +240,8 @@ function skipToToday(): void {
       </nav>
       <!-- The actions: "This week" first while another week is on screen (K81), then Ask (only
            once the API has said it answers questions, so it never flashes in or out), Settings,
-           Print and Full screen, each naming its key (K91). Folded, they share the second row
-           equally. -->
+           Print and Full screen, each naming its key (K91), and last Profile, which opens the
+           profile menu (K106). Folded, they share the second row equally. -->
       <div class="flex items-stretch gap-(--bar-gap) folded:contents">
         <BarAction
           v-if="otherWeek"
@@ -255,7 +284,35 @@ function skipToToday(): void {
           @click="fullscreen.toggle"
           ><Minimize v-if="fullscreen.active.value" /><Maximize v-else
         /></BarAction>
+        <!-- The bar shows only while someone is signed in (App.vue), so there is a user. -->
+        <Menu header-caption="Signed in as" :header="session.user!">
+          <template #trigger>
+            <BarAction
+              ref="profileButton"
+              label="Profile"
+              class="folded:flex-1 folded:basis-0"
+              data-testid="profile-button"
+              ><CircleUserRound
+            /></BarAction>
+          </template>
+          <MenuItem @select="openProfile"
+            ><template #icon><UserRound /></template>Profile</MenuItem
+          >
+          <MenuItem @select="startSignOut"
+            ><template #icon><LogOut /></template>Sign out</MenuItem
+          >
+        </Menu>
       </div>
     </div>
   </header>
+  <ConfirmDialog
+    v-model:open="signOut.asking.value"
+    title="Sign out now?"
+    :message="signOut.message.value"
+    confirm-label="Sign out"
+    :busy="signOut.busy.value"
+    :error="signOut.error.value"
+    :return-focus="profileTarget"
+    @confirm="signOut.confirm"
+  />
 </template>

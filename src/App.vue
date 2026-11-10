@@ -4,6 +4,7 @@ import { usePlannerStore } from '@/stores/planner'
 import AppNavbar from '@/components/AppNavbar.vue'
 import WeekHeader from '@/components/WeekHeader.vue'
 import SettingsPage from '@/components/SettingsPage.vue'
+import ProfilePage from '@/components/ProfilePage.vue'
 import AskPage from '@/components/AskPage.vue'
 import ExerciseGrid from '@/components/ExerciseGrid.vue'
 import CardioSection from '@/components/CardioSection.vue'
@@ -79,13 +80,14 @@ function connectRequest(): string | null {
 const connectId = ref(connectRequest())
 
 /**
- * The page the hash asks for: Settings at `#/settings`, Ask at `#/ask`, an item's page at
- * `#/item/<section>/<id>` (ItemPage card, D5), the new item page at `#/new/<section>` (K104),
- * otherwise the planner.
+ * The page the hash asks for: Settings at `#/settings`, Profile at `#/profile` (K106), Ask at
+ * `#/ask`, an item's page at `#/item/<section>/<id>` (ItemPage card, D5), the new item page at
+ * `#/new/<section>` (K104), otherwise the planner.
  */
-type Page = 'planner' | 'settings' | 'ask' | 'item' | 'new'
+type Page = 'planner' | 'settings' | 'profile' | 'ask' | 'item' | 'new'
 function pageFor(): Page {
   if (location.hash === '#/settings') return 'settings'
+  if (location.hash === '#/profile') return 'profile'
   if (location.hash === '#/ask') return 'ask'
   if (parseNewHash(location.hash)) return 'new'
   return parseItemHash(location.hash) ? 'item' : 'planner'
@@ -131,11 +133,12 @@ function forgetPage(): void {
   newSection.value = null
   page.value = 'planner'
 }
-// Back from Settings or Ask, focus returns to the bar button that opened it; back from an item's
-// page, to that item's name in its row (WeekGrid card); back from the new item page, to its
-// section's Add button, ready for the next (K104).
-const OPENERS: Record<'settings' | 'ask', string> = {
+// Back from Settings, Profile or Ask, focus returns to the bar button that opened it (Profile's is
+// the menu's trigger, K106); back from an item's page, to that item's name in its row (WeekGrid
+// card); back from the new item page, to its section's Add button, ready for the next (K104).
+const OPENERS: Record<'settings' | 'profile' | 'ask', string> = {
   settings: 'settings-button',
+  profile: 'profile-button',
   ask: 'ask-button',
 }
 const ADDS: Record<Section, string> = {
@@ -348,8 +351,8 @@ onBeforeUnmount(() => {
     @leave="closeLink"
   />
   <template v-else-if="session.status === 'signed-in'">
-    <!-- Settings, Ask, an item's page and the new item page have no bar: each links back to the week
-         (K52, K104). -->
+    <!-- Settings, Profile, Ask, an item's page and the new item page have no bar: each links back
+         to the week (K52, K104, K106). -->
     <AppNavbar v-if="shown === 'planner'" :overlay="screens" />
     <!-- Settings, an item's page and Edit plan are full width on the page's margins, like the week
          (K51, K54, K64). Ask fills the screen beside its side panel and sets its own margins. -->
@@ -373,6 +376,11 @@ onBeforeUnmount(() => {
         <SyncStatus />
         <EmailStatus />
         <NewItemPage :key="newSection!" :section="newSection!" />
+      </template>
+      <template v-else-if="shown === 'profile'">
+        <SyncStatus />
+        <EmailStatus />
+        <ProfilePage />
       </template>
       <template v-else-if="shown === 'item' && sync.loaded">
         <SyncStatus />

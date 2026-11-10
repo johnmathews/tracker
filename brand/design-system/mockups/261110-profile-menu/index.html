@@ -1,0 +1,155 @@
+<title>A profile button in the bar, and a Profile page</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="profile.css">
+<!--
+  A mockup (design-system skill, references/mockups.md). Fill in, top to bottom:
+  1. The question: one sentence, and what stays as it is.
+  2. One <section class="option"> per option, two to four, lettered A, B, C. Mark one
+     data-recommended. Each changes only what the question is about.
+  3. Every proposed value as a --candidate-* custom property on its option (see the style block); everything
+     else from the system's tokens (var(--ink)), type classes (.body, .caption) and real copy.
+  4. The stage: the real screen or component the change lands in, at its real size, once per
+     theme (the two .pane elements). Add a close-up only beside it, never instead of it.
+  5. Measures: one <li data-fg data-bg data-min> per new colour pairing; the page computes them.
+  The frame (.mockup-*) is plain on purpose; the options are the design.
+-->
+<style>
+  body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font-sans); }
+  .mockup-page {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: var(--space-8, 32px) var(--space-16, 64px);
+    max-width: 1200px; margin: 0 auto; display: grid; gap: var(--space-12, 48px);
+  }
+  .mockup-head { display: grid; gap: var(--space-2, 8px); max-width: 70ch; }
+  .mockup-head h1, .option h2 { margin: 0; text-wrap: balance; }
+  .mockup-head p, .option p { margin: 0; }
+  .mockup-meta { color: var(--ink-secondary); }
+  .option { display: grid; gap: var(--space-4, 16px); }
+  .option-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2, 8px) var(--space-3, 12px); }
+  .option-tag { color: var(--ink-secondary); }
+  .option[data-recommended] .option-tag::after { content: " · Recommended"; color: var(--ink); }
+  /* The same stage in light and in dark, side by side; stacked on a phone. Each pane is a
+     data-theme subtree, so the system's own tokens switch inside it. */
+  .panes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--space-4, 16px); }
+  .pane { min-width: 0; background: var(--canvas); color: var(--ink); border: 1px solid var(--line);
+          border-radius: var(--radius-lg, 10px); padding: var(--space-4, 16px); overflow-x: auto; }
+  .pane-label { color: var(--ink-secondary); margin: 0 0 var(--space-3, 12px); }
+  .measures { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); }
+  .measures li { border: 1px solid var(--line); border-radius: var(--radius-sm, 4px); padding: 2px var(--space-2, 8px); font-variant-numeric: tabular-nums; }
+  .measures li[data-pass="no"] { border-color: currentColor; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  .question { display: grid; gap: var(--space-8, 32px); }
+  .question > header { display: grid; gap: var(--space-2, 8px); max-width: 70ch; }
+  .question > header h2, .question > header p { margin: 0; }
+  .panes.one { grid-template-columns: minmax(0, 1fr); }
+  .stack { display: grid; gap: var(--space-3, 12px); align-content: start; }
+  .phones { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: var(--space-4, 16px); }
+  .phone-frame { max-width: 390px; }
+  .notes { margin: 0; padding-left: 1.2em; display: grid; gap: var(--space-1, 4px); max-width: 70ch; }
+</style>
+
+<main class="mockup-page">
+  <header class="mockup-head">
+    <p class="caption mockup-meta">Mockup · 2026-11-10 · Tracker</p>
+    <h1 class="title-1">A profile button in the bar, and a Profile page</h1>
+    <p class="body">The bar gets a profile button at its right end. It opens a small menu: who is signed in, then Profile and Sign out. Profile is a page like Settings. It holds the account and Sign out, your goals (moved from Settings), and a new box for what you have to work around. Ask and the Claude connections read both boxes.</p>
+    <p class="body">Settings then keeps Appearance, Daily goal (the switch moves to a section of its own), Your data and Connections. The week, the bar’s other actions and Edit plan stay as they are.</p>
+    <p class="body">One question: the button’s look. The frames are live: press the profile button to open and close its menu.</p>
+  </header>
+
+  <section class="question" aria-labelledby="q1">
+    <header>
+      <h2 class="title-2" id="q1">1. The profile button</h2>
+      <p class="body">Both options sit last in the bar, so it is the last Tab stop, and open the same menu under the button, right edges aligned. The bar is in view only in Edit plan, so that is where the button is.</p>
+    </header>
+
+    <section class="option" id="a" data-recommended aria-labelledby="a-h">
+      <div class="option-head">
+        <h2 class="title-2" id="a-h">A. An action like the others, named “Profile”</h2>
+        <span class="label option-tag">Option A</span>
+      </div>
+      <p class="body">A BarAction: the Lucide circle-user-round icon over its name, the size of Settings beside it. It reads like the rest of the bar, and its name says what it is.</p>
+      <div class="panes one">
+        <div class="pane stack" data-theme="light"><p class="label pane-label">Light · Edit plan, desktop, menu open</p><div data-pf="bar" data-opt="a" data-open></div></div>
+        <div class="pane stack" data-theme="dark"><p class="label pane-label">Dark · Edit plan, desktop, menu open</p><div data-pf="bar" data-opt="a" data-open></div></div>
+      </div>
+      <div class="phones">
+        <div class="pane stack" data-theme="light"><p class="label pane-label">Light · phone</p><div class="phone-frame" data-pf="bar" data-opt="a" data-phone data-open></div></div>
+        <div class="pane stack" data-theme="dark"><p class="label pane-label">Dark · phone</p><div class="phone-frame" data-pf="bar" data-opt="a" data-phone data-open></div></div>
+      </div>
+      <ul class="measures caption">
+        <li data-fg="var(--ink)" data-bg="var(--panel)" data-min="4.5">Menu items on the panel</li>
+        <li data-fg="var(--ink-secondary)" data-bg="var(--panel)" data-min="4.5">“Signed in as” on the panel</li>
+        <li data-fg="var(--ink)" data-bg="var(--tile)" data-min="4.5">A highlighted item</li>
+      </ul>
+    </section>
+
+    <section class="option" id="b" aria-labelledby="b-h">
+      <div class="option-head">
+        <h2 class="title-2" id="b-h">B. Your initial in a ring</h2>
+        <span class="label option-tag">Option B</span>
+      </div>
+      <p class="body">The first letter of the account, in the serif, in a round button set apart by a hairline, with no name under it (screen readers hear “Profile”). It is the usual web sign for an account, but it is the only action in the bar without a name.</p>
+      <div class="panes one">
+        <div class="pane stack" data-theme="light"><p class="label pane-label">Light · Edit plan, desktop, menu open</p><div data-pf="bar" data-opt="b" data-open></div></div>
+        <div class="pane stack" data-theme="dark"><p class="label pane-label">Dark · Edit plan, desktop, menu closed</p><div data-pf="bar" data-opt="b"></div></div>
+      </div>
+      <div class="phones">
+        <div class="pane stack" data-theme="light"><p class="label pane-label">Light · phone</p><div class="phone-frame" data-pf="bar" data-opt="b" data-phone></div></div>
+        <div class="pane stack" data-theme="dark"><p class="label pane-label">Dark · phone, menu open</p><div class="phone-frame" data-pf="bar" data-opt="b" data-phone data-open></div></div>
+      </div>
+      <ul class="measures caption">
+        <li data-fg="var(--ink)" data-bg="var(--canvas)" data-min="3">The ring on the bar</li>
+      </ul>
+    </section>
+  </section>
+
+  <section class="question" aria-labelledby="q2">
+    <header>
+      <h2 class="title-2" id="q2">2. The Profile page</h2>
+      <p class="body">One proposal, on the Settings page’s frame: Back to the week, the title, then a row per section. Your goals and Your limits save when typing pauses, like My goals today, and each holds up to 1,000 characters. Comment on the page if you want it different.</p>
+    </header>
+    <div class="panes one">
+      <div class="pane stack" data-theme="light"><p class="label pane-label">Light · desktop</p><div data-pf="page"></div></div>
+      <div class="pane stack" data-theme="dark"><p class="label pane-label">Dark · desktop</p><div data-pf="page"></div></div>
+    </div>
+    <div class="phones">
+      <div class="pane stack" data-theme="light"><p class="label pane-label">Light · phone</p><div class="phone-frame" data-pf="page"></div></div>
+      <div class="pane stack" data-theme="dark"><p class="label pane-label">Dark · phone</p><div class="phone-frame" data-pf="page"></div></div>
+    </div>
+  </section>
+</main>
+<script src="profile.js"></script>
+
+<script>
+  // Measures: for each <li data-fg data-bg data-min>, the WCAG contrast of the two colours in each
+  // theme, resolved inside the option (so --candidate-* values apply), written after the label.
+  (() => {
+    const rgb = (value, scope, theme) => {
+      const probe = document.createElement('span')
+      probe.dataset.theme = theme
+      probe.style.color = value
+      scope.append(probe)
+      const parts = getComputedStyle(probe).color.match(/[\d.]+/g).map(Number)
+      probe.remove()
+      return parts.slice(0, 3)
+    }
+    const lum = ([r, g, b]) => [r, g, b]
+      .map((c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4 })
+      .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0)
+    const ratio = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05) }
+    for (const li of document.querySelectorAll('.measures li[data-fg]')) {
+      const scope = li.closest('.option') || document.body
+      const min = Number(li.dataset.min || 0)
+      const results = ['light', 'dark'].map((theme) => {
+        const r = ratio(rgb(li.dataset.fg, scope, theme), rgb(li.dataset.bg, scope, theme))
+        return { theme, r, ok: !min || r >= min }
+      })
+      li.dataset.pass = results.every((x) => x.ok) ? 'yes' : 'no'
+      li.append(`: ${results.map((x) => `${x.theme} ${x.r.toFixed(1)}:1${x.ok ? '' : ' (below ' + min + ':1)'}`).join(', ')}`)
+    }
+  })()
+</script>

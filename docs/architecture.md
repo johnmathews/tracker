@@ -65,7 +65,11 @@ labels, `DAY_NAMES`); `src/lib/theme.ts` holds the theme names and `isDark`. The
 (§6.6) use `src/lib/screens.ts` (a section's screen classes), `useScreenSprint`
 (`src/composables/screenSprint.ts`, never resting across two screens), `useBarReveal`
 (`src/composables/barReveal.ts`, the navbar out of sight) and `useFullscreen`
-(`src/composables/fullscreen.ts`, the browser's full screen).
+(`src/composables/fullscreen.ts`, the browser's full screen). The Profile page and the bar's profile
+menu share `useSignOut` (`src/composables/signOut.ts`: sign out at once, or ask first while changes
+are unsent), and the Profile page's two notes share `useNoteDraft` (`src/composables/noteDraft.ts`:
+a draft saved when typing pauses for 600 ms or the box loses focus, editable only once the note is
+known).
 
 The API has a second client besides the app: agents that connect over MCP (`mcp_server.py`). Their
 tools read through `insights.py` and write through `edits.py`, so they follow the same rules as the
@@ -117,20 +121,24 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 ├── AppNavbar.vue       the Header card: Skip to today and a hidden Edit plan ("Done" in Edit
 │                       plan) for the keyboard; ‹ the week › first, as the page's title (K81);
 │                       then the BarActions This week, Ask (only while the API answers
-│                       questions), Settings, Print… and Full screen (useFullscreen, where the
-│                       browser has one); the week's keys E, Esc, F, P and S (useShortcuts,
-│                       K91); full width, sized by main.css's --bar-* (K47, K49); on the
+│                       questions), Settings, Print…, Full screen (useFullscreen, where the
+│                       browser has one) and Profile, which opens the profile Menu: Signed in
+│                       as, Profile and Sign out (useSignOut, K106); the week's keys E, Esc,
+│                       F, P and S (useShortcuts, K91); full width, sized by main.css's --bar-* (K47, K49); on the
 │                       planner's screens out of sight until a long press or the handle opens
 │                       Edit plan (useBarReveal, §6.6)
 ├── ConnectPage.vue     an OAuth consent link (#/connect/<id>, K73), signed in or out: who is
 │                       asking, email and password, Read only or Read and change, Cancel and
 │                       Connect; then leaves for Claude's callback
 ├── SettingsPage.vue    the SettingsPage card, at #/settings: Back to the week, then Appearance
-│   │                   (Marks, then Theme, K59), Your goals (My goals, saved when typing
-│   │                   pauses), Your data (Export and Import…, see §4), Connections and
-│   │                   Account (who is signed in, Sign out)
+│   │                   (Marks, then Theme, K59), Daily goal (K85), Your data (Export and
+│   │                   Import…, see §4) and Connections
 │   └── ConnectionsSection.vue   the Connections row (K74): the MCP address with Copy and how to
 │                       connect Claude, the Apps connected by OAuth, and the personal Tokens
+├── ProfilePage.vue     the ProfilePage card, at #/profile (K106): Back to the week, then Account
+│                       (who is signed in, Sign out through useSignOut), Your goals and Your
+│                       limits (K107), each a TextArea that saves when typing pauses
+│                       (useNoteDraft, F18)
 ├── AskPage.vue         #/ask (K67–K71, K83, K84): the SidePanel with the HistoryList, and
 │                       beside it Back to the week, the title with the View switch (Document or
 │                       Conversation, kept per device), the Transcript and the question box with
@@ -207,7 +215,8 @@ cardio (with a time, a distance and a goal) and the foods (with goals). Ticks li
 | `plans`                           | the sync store: server and per-user cache | week → `{ id, name, sets?, reps, duration?, perSide?, weight?, target }[]`  |
 | `log`                             | the sync store: server and per-user cache | week Monday `YYYY-MM-DD` → exercise id → seven marks (`Days`, below)        |
 | `accent`, `dailyPick`, `foodPick` | the sync store: server and per-user cache | defaults `#30d158`, `3` and `2`. The accent is kept but draws nothing (K13) |
-| `goals`, `goalsKnown`             | the sync store: server and per-user cache | My goals, `''` by default; only Ask reads them. `goalsKnown` is below       |
+| `goals`, `goalsKnown`             | the sync store: server and per-user cache | My goals, `''` by default; Ask and the MCP read them. `goalsKnown` is below |
+| `limits`, `limitsKnown`           | the sync store: server and per-user cache | Your limits (K107), `''` by default; read and sent like `goals`             |
 | `dailyGoal`, `dailyGoalKnown`     | the sync store: server and per-user cache | Daily goal (K85), `true` by default; sent only once known, like `goals`     |
 | `itemSections`                    | the sync store: server and per-user cache | each type's item-page arrangement (K66); `{}` is every page as it comes     |
 | `theme`                           | `tracker-settings-v1` (the device)        | `system` (default), `light` or `dark`                                       |
@@ -231,19 +240,22 @@ the input names one), `updateExercise` (replaces name, sets, reps or duration, p
 given, the goal, keeping the id and history; `false` for an empty name or an id not in the week).
 An exercise counts reps or time, never both: a duration stores reps as 0. Then `removeExercise`, `setConfigMode`,
 `prevWeek`, `nextWeek`, `thisWeek`, `refreshNow`, `changeDailyPick` and `changeFoodPick` (each
-clamps 1–8), `setGoals` (normalised as the API stores them; the same text again changes
-nothing), `setTheme`, `portableSettings` (the accent, both daily picks and, once known, the
-goals), `savedSettings` (the same, or null while the user has none of their own), `adopt`
+clamps 1–8), `setGoals` and `setLimits` (normalised as the API stores them; the same text again
+changes nothing), `setTheme`, `portableSettings` (the accent, both daily picks and, once known,
+the goals and the limits), `savedSettings` (the same, or null while the user has none of their own), `adopt`
 (replace the data and settings wholesale), `adoptWeek` (replace one week's plan) and `clear` (forget
 the user on sign-out, the details store included, keeping the theme).
 
-**My goals** are the person's own words about what they are aiming for, set in Settings and read
-only by Ask. `goalsKnown` turns true once the goals came from the server, from a cache that
-carried them, or from `setGoals`. Until then `portableSettings` leaves them out, so a tab that
-hasn't read them never sends or caches a stand-in `''` that would erase the saved ones (§7).
-Settings that `adopt` receives without `goals` keep the ones the store has. `setGoals` doesn't
-debounce: the Settings row commits its draft when the person stops typing, so one change is one
-write. The module also re-exports
+**My goals** are the person's own words about what they are aiming for, and **Your limits**
+(K107) what they have to work around: injuries, equipment, time, food. Both are set on the Profile
+page and read by Ask and the MCP's `goals` tool. `goalsKnown` turns true once the goals came from
+the server, from a cache that carried them, or from `setGoals`. Until then `portableSettings`
+leaves them out, so a tab that hasn't read them never sends or caches a stand-in `''` that would
+erase the saved ones (§7). Settings that `adopt` receives without `goals` keep the ones the store
+has. The limits follow the same rules with `limitsKnown`, `setLimits` and their own key, so a
+cache from before them, which carries goals but no limits, can't erase saved limits. Neither
+setter debounces: the Profile page commits a box's draft when the person stops typing, so one
+change is one write. The module also re-exports
 `exerciseDetails` from `src/lib/trackerTypes.ts`, which gives the chips after a name, on its line (K43):
 "3 × 12" or "3 × 8 each side" (or "10 reps a set" and "8 each side" without sets, "3 sets" without
 reps), "3 × 45 s" or "1 min 30 s each side" for a timed exercise (`durationText` in
@@ -453,8 +465,8 @@ edited on the item page, and a new item's on the new item page (K104). The
 field counts from 19,000 characters (`NOTES_COUNT_FROM`), and a blank one clears the notes.
 
 `parseSettings` accepts any `#rrggbb` accent (K3a, K13), clamps the daily pick to
-1–8, reads My goals with `normaliseGoals` (trimmed, cut to 1,000 code points, `''` when blank or
-not a string), accepts only `system`, `light` or `dark` as the theme and only one of `MARK_SETS`
+1–8, reads My goals with `normaliseGoals` and Your limits with `normaliseLimits` (each trimmed, cut
+to 1,000 code points, `''` when blank or not a string), accepts only `system`, `light` or `dark` as the theme and only one of `MARK_SETS`
 as the mark set, falling back to the defaults otherwise. Settings saved before the theme option existed
 load as `system`, and before the mark set existed as `squiggles`.
 
@@ -485,7 +497,7 @@ exported, because it belongs to the device rather than the person. Import… rea
 `format`, or has a `version` other than 1 to 5 (a version 1 file's `true` days read as `"great"`,
 K12; version 4 added notes on plan items, K43; version 5 moved them into `details`). My goals
 came without a new version, as `foodPick` did: an older reader drops the key, and a file without
-it reads as no goals. The `cardio` section came the same way (K90): a file without it reads as no
+it reads as no goals. Your limits (`limits`) came the same way. The `cardio` section came the same way (K90): a file without it reads as no
 cardio. A cardio item keeps `duration` in whole seconds (capped at 86,400) and `distance` in km to 2
 places (capped at 1,000), each only when above zero (`normaliseCardio`, the API's
 `normalise_cardio`).
@@ -510,7 +522,7 @@ applies the same rules):
 - An item with details keeps them whole, and an item without takes the file's.
 - The file's accent and daily pick apply only when the account has no settings of their own yet.
 - The file's My goals fill the account's when those are empty, and never replace goals already
-  saved (K72).
+  saved (K72). Its limits do the same with the account's limits (K107).
 - The file's Ask conversations are added when the account has none with their id; one it has is
   never changed.
 
@@ -524,8 +536,8 @@ a full account) and
 keeps the file ready to try again. The confirm step names how many weeks and marked days the file
 adds, and how many items gain notes or details ("…plus the notes and details of two items"), before
 anything is written (`mergeSummary`, through `useImportSummary`, which the first-login prompt
-shares), and names the rest: the exercises and foods a day, your goals (goals that only fill
-empty ones count as a change on their own), and how many conversations from Ask the account
+shares), and names the rest: the exercises and foods a day, your goals and your limits (each
+filling empty ones counts as a change on its own), and how many conversations from Ask the account
 doesn't have yet (Settings reads the history list first when the file has any). It is computed from the current state, so it stays right if another tab or a settings
 change lands while it is open. Importing the same file twice adds nothing the second time. Adding a week can change what
 an unplanned week carries forward from (§2). The import took its history from the file, so that is
@@ -783,8 +795,9 @@ the properties they animate, so the focus ring never fades in.
 true for the verb, false for Cancel or Escape. One `<ConfirmHost />`, mounted once in `App.vue`,
 shows the open question in a ConfirmDialog (Reka's AlertDialog). A newer question answers an older
 one false. `returnFocus` names where focus goes on closing when the control that asked has gone, as
-after a removal. Removing a row (`TrackerRow`) asks this way. Sign out uses a ConfirmDialog of its own on the Settings page, because it shows the
-unsynced count, a busy state and an error. So do the Ask page's two deletes (one conversation,
+after a removal. Removing a row (`TrackerRow`) asks this way. Sign out uses a ConfirmDialog of its own, on the Profile page and from the bar's profile menu
+(`useSignOut`), because it shows the unsynced count, a busy state and an error. From the menu, a
+sign-out the server refuses opens the same dialog with the reason, since the bar has no room for it. So do the Ask page's two deletes (one conversation,
 or all): Cancel returns focus to the bin that asked (its `data-history-delete`), and a delete moves
 it to the next conversation's bin, else to New conversation.
 
@@ -1019,9 +1032,9 @@ in the outbox:
   `{ details, rev }`, the revision last seen (`detailRevs`). Clearing them sends `{}`. An item
   whose id holds `/`, or is `.` or `..`, can't be named in that path, so it has no details
   (`isDetailsId`, below);
-- `settings`: the accent, both daily picks, My goals and the item pages' arrangement,
-  `PUT /api/settings`. The goals go only when `goalsKnown`; a body without them keeps the saved
-  ones on the server.
+- `settings`: the accent, both daily picks, My goals, Your limits and the item pages'
+  arrangement, `PUT /api/settings`. The goals go only when `goalsKnown` and the limits only when
+  `limitsKnown`; a body without either keeps the saved one on the server.
   `itemSections` always goes, `{}` for the default: the API keeps the saved arrangement when the
   key is missing (a tab on older code), so leaving it out could never reset one.
 
@@ -1100,13 +1113,15 @@ a tab still open on older code words the cache differently (before K57 its setti
 `foodPick`, and before My goals no `goals`), and a write-back would set the two tabs echoing it
 between them, each undoing the other's marks as they were made.
 
-**My goals and older tabs (F1).** A tab from before My goals neither reads nor sends them. Three
-rules keep its writes from erasing them. The API keeps the saved goals when a settings write
+**My goals, Your limits and older tabs (F1).** A tab from before My goals neither reads nor sends
+them, and one from before Your limits neither reads nor sends those. The rules below are written
+for the goals; the limits follow each of them with their own key. Three rules keep an older tab's
+writes from erasing them. The API keeps the saved goals when a settings write
 leaves them out. `normaliseState` keeps `goals` only when a cache or reply carries them as text,
 so adopting that tab's cache keeps the goals this tab has. And a tab that has never read them
 (it started from that tab's cache, offline) sends and caches settings without them until a
-read brings them. The diff compares the goals, so an edit to them is sent. The Settings row
-follows the same rule: its box takes typing only once the goals are known, or once a read from the
+read brings them. The diff compares the goals, so an edit to them is sent. The Profile page's
+boxes follow the same rule: its box takes typing only once the goals are known, or once a read from the
 server found an account with no settings at all (a new one, whose goals are empty), and it saves
 its draft when typing pauses for 600 ms or the box loses focus, so one pause is one write (F18).
 Goals that change elsewhere show in the box unless the person is mid-pause. The cache is validated with the

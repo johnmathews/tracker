@@ -87,7 +87,7 @@ const answering = computed(() => ask.status === 'asking')
 const closed = computed(() => offline.value || ask.capped)
 /**
  * Goals known to be empty, so answers can only compare with the times a week: read and empty, or
- * an account the server says has no settings at all (as the Settings row reads it).
+ * an account the server says has no settings at all (as the Profile page reads it).
  */
 const noGoals = computed(
   () =>
@@ -287,15 +287,15 @@ function deleteFocus(): HTMLElement | null {
             <p class="body text-(length:--set-text) leading-normal text-ink-secondary">
               Ask about your exercises, cardio and food: whether you’re doing enough for your goals,
               how steady the weeks are, what to change. The answer reads your plans and marks for
-              the last eight weeks{{ noGoals ? '.' : ', and your goals in Settings.' }}
+              the last eight weeks{{ noGoals ? '.' : ', and your goals and limits in Profile.' }}
             </p>
             <p
               v-if="noGoals"
               class="body text-(length:--set-text) leading-normal text-ink-secondary"
             >
-              Your goals in Settings are empty, so answers can only compare you with the times a
-              week you set.
-              <TextLink href="#/settings" class="font-semibold">Add your goals</TextLink>
+              Your goals in Profile are empty, so answers can only compare you with the times a week
+              you set.
+              <TextLink href="#/profile" class="font-semibold">Add your goals</TextLink>
             </p>
             <div class="flex flex-wrap gap-[calc(var(--u)*10)]">
               <Button

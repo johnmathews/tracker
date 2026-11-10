@@ -1,4 +1,4 @@
-<!-- @dsCard group="Screens" height=1360 subtitle="Settings as a page of its own, in rows like the week: appearance (marks, theme), your data, account" -->
+<!-- @dsCard group="Screens" height=1360 subtitle="Settings as a page of its own, in rows like the week: appearance (marks, theme), daily goal, your data" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -85,6 +85,10 @@
   .switch[aria-checked="true"] .thumb { left: 19px; background: var(--on-ink); }
 
   .btns .btn { flex: none; }
+  /* Daily goal (K85): the Switch, its hint under it. */
+  .daily { gap: 6px; align-items: flex-start; }
+  .daily .switch { margin-left: -8px; }
+  .daily .hint { font-size: 16px; line-height: 22px; }
   /* A control beside its words (K53), wrapping under them when the row is too narrow. */
   .row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; }
   .row .lede { max-width: 34ch; }
@@ -133,6 +137,14 @@
       </div>
     </section>
 
+    <section aria-labelledby="s-daily">
+      <h2 class="title-2" id="s-daily">Daily goal</h2>
+      <div class="body-col daily">
+        <button type="button" class="switch" role="switch" aria-checked="true" aria-describedby="s-daily-hint"><span class="track"><span class="thumb"></span></span>Daily goal</button>
+        <p class="lede caption hint" id="s-daily-hint">A number of exercises and of foods to reach each day, set in Edit plan. A day that reaches it turns green.</p>
+      </div>
+    </section>
+
     <section aria-labelledby="g-data">
       <h2 class="title-2" id="g-data">Your data</h2>
       <div class="body-col">
@@ -150,16 +162,6 @@
       </div>
     </section>
 
-    <section class="account" aria-labelledby="s-account">
-      <h2 class="title-2" id="s-account">Account</h2>
-      <div class="body-col">
-      <div class="row"><p class="who body">Signed in as <span>alex</span></p>
-      <button type="button" class="btn">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" x2="9" y1="12" y2="12" /></svg>
-        Sign out
-      </button></div>
-      </div>
-    </section>
   </main>
 </div>
 <script>

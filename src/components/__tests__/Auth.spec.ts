@@ -55,8 +55,9 @@ async function settle(): Promise<void> {
   for (let i = 0; i < 4; i++) await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
-async function openSettings(): Promise<void> {
-  await wrapper.get('[data-testid="settings-button"]').trigger('click')
+/** The Profile page, where the account and Sign out live (K106). */
+async function openProfile(): Promise<void> {
+  location.hash = '#/profile'
   await settle()
 }
 
@@ -561,7 +562,7 @@ describe('signing out', () => {
     api = signedIn()
     mountApp()
     await flushPromises()
-    await openSettings()
+    await openProfile()
     expect(wrapper.get('[data-testid="signed-in-as"]').text()).toBe(`Signed in as ${USER}`)
     await button('Sign out').trigger('click')
     await flushPromises()
@@ -577,7 +578,7 @@ describe('signing out', () => {
     await wrapper.findAll('button[aria-label^="Squats,"]')[0]!.trigger('click')
     await flushPromises()
     api.offline = false
-    await openSettings()
+    await openProfile()
     await button('Sign out').trigger('click')
     await settle()
     // Signing out forgets this device's unsent changes, so it asks first.
@@ -603,7 +604,7 @@ describe('signing out', () => {
     await wrapper.get('button[aria-label="More exercises a day"]').trigger('click')
     await flushPromises()
     api.offline = false
-    await openSettings()
+    await openProfile()
     await button('Sign out').trigger('click')
     await settle()
     expect(confirmation()!.text()).toContain(
@@ -627,7 +628,7 @@ describe('signing out', () => {
     api.offline = true
     await wrapper.findAll('button[aria-label^="Squats,"]')[0]!.trigger('click')
     await flushPromises()
-    await openSettings()
+    await openProfile()
     await button('Sign out').trigger('click')
     await settle()
     await confirmButton('Sign out').trigger('click')
@@ -636,7 +637,7 @@ describe('signing out', () => {
       'Can’t reach the server. Check the connection and try again.',
     )
     expect(confirmButton('Sign out').attributes('aria-busy')).toBeUndefined()
-    expect(heading()).toBe('Settings')
+    expect(heading()).toBe('Profile')
   })
 
   it('refuses while offline, and says why', async () => {
@@ -644,15 +645,15 @@ describe('signing out', () => {
     mountApp()
     await flushPromises()
     api.offline = true
-    await openSettings()
+    await openProfile()
     await button('Sign out').trigger('click')
     await flushPromises()
     expect(wrapper.get('[data-testid="sign-out-problem"]').text()).toBe(
       'Can’t reach the server. Check the connection and try again.',
     )
     expect(wrapper.get('[data-testid="sign-out-problem"]').attributes('role')).toBe('alert')
-    // Still signed in, still on the Settings page.
-    expect(heading()).toBe('Settings')
+    // Still signed in, still on the Profile page.
+    expect(heading()).toBe('Profile')
   })
 })
 
@@ -676,7 +677,7 @@ describe('other tabs', () => {
     )
     await flushPromises()
     expect(heading()).toBe('19–25 October')
-    await openSettings()
+    await openProfile()
     expect(wrapper.get('[data-testid="signed-in-as"]').text()).toBe('Signed in as bob')
   })
 })

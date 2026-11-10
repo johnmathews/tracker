@@ -37,7 +37,7 @@ describe('readLegacyData', () => {
       exercise: { ...exercise, details: {} },
       cardio: { plans: {}, log: {}, details: {} },
       diet: { ...diet, details: {} },
-      settings: { accent: '#0a84ff', dailyPick: 5, foodPick: 2, goals: '' },
+      settings: { accent: '#0a84ff', dailyPick: 5, foodPick: 2, goals: '', limits: '' },
     })
   })
 
@@ -80,7 +80,7 @@ describe('readLegacyData', () => {
       exercise: { plans: {}, log: {}, details: {} },
       cardio: { plans: {}, log: {}, details: {} },
       diet: { plans: {}, log: {}, details: {} },
-      settings: { accent: '#bf5af2', dailyPick: 2, foodPick: 2, goals: '' },
+      settings: { accent: '#bf5af2', dailyPick: 2, foodPick: 2, goals: '', limits: '' },
     })
   })
 

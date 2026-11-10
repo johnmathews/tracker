@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, useId, useTemplateRef, watch } from 'vue'
-import { ChevronLeft, Download, LogOut, Upload } from '@lucide/vue'
+import { computed, onMounted, ref, useId, useTemplateRef } from 'vue'
+import { ChevronLeft, Download, Upload } from '@lucide/vue'
 import { usePlannerStore } from '@/stores/planner'
 import { useCardioStore } from '@/stores/cardio'
 import { useDietStore } from '@/stores/diet'
@@ -9,18 +9,9 @@ import { useDetailsStore } from '@/stores/details'
 import { useSessionStore } from '@/stores/session'
 import { useSyncStore } from '@/stores/sync'
 import { request } from '@/lib/api'
-import { describeProblem } from '@/lib/problems'
 import { useImportSummary } from '@/composables/importSummary'
-import {
-  MARK_KINDS,
-  MARK_SETS,
-  MAX_GOALS,
-  isMarkSet,
-  normaliseGoals,
-  type MarkSet,
-} from '@/lib/storage'
+import { MARK_KINDS, MARK_SETS, isMarkSet, type MarkSet } from '@/lib/storage'
 import { THEMES, type Theme } from '@/lib/theme'
-import { countOf } from '@/lib/words'
 import { APP_NAME } from '@/lib/app'
 import {
   buildExport,
@@ -30,13 +21,11 @@ import {
   type ParseError,
 } from '@/lib/transfer'
 import { Button } from '@/components/ui/button'
-import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { DayMarkDrawing } from '@/components/ui/day-mark'
 import { InlineMessage } from '@/components/ui/inline-message'
 import { RadioCard } from '@/components/ui/radio-card'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { Switch } from '@/components/ui/switch'
-import { TextArea } from '@/components/ui/text-area'
 import { TextLink } from '@/components/ui/text-link'
 import ConnectionsSection from '@/components/ConnectionsSection.vue'
 
@@ -69,9 +58,6 @@ const IMPORT_FAILED: Record<'offline' | 'server' | 'auth' | 'quota' | 'error', s
 const EXPORT_WITHOUT_HISTORY =
   'Exported without your Ask conversations, because the server couldn’t be reached.'
 
-/** How long typing in Your goals rests before it is saved (F18). */
-const GOALS_PAUSE_MS = 600
-
 const store = usePlannerStore()
 const cardio = useCardioStore()
 const diet = useDietStore()
@@ -80,66 +66,27 @@ const details = useDetailsStore()
 const session = useSessionStore()
 const sync = useSyncStore()
 const heading = useTemplateRef<HTMLHeadingElement>('heading')
-const signOutButton = useTemplateRef<InstanceType<typeof Button>>('signOutButton')
 const ids = {
   look: useId(),
-  goals: useId(),
+  dailyGoal: useId(),
   data: useId(),
   connections: useId(),
-  account: useId(),
 }
 
 // Arriving here moves focus to the page's heading, so a screen reader starts at the top.
 onMounted(() => heading.value!.focus())
 
-/*
- * Your goals: the box keeps its own draft, saved when the person stops typing for a moment or
- * leaves the box, so one pause is one write (F18). The draft is never trimmed while typing.
- */
 /** Daily goal (K85): the switch reads and sets the store's, which syncs with the account. */
 const dailyGoal = computed({
   get: () => store.dailyGoal,
   set: (on: boolean) => store.setDailyGoal(on),
 })
 const dailyGoalHint = useId()
-const goalsDraft = ref(store.goals)
-let goalsTimer: ReturnType<typeof setTimeout> | undefined
-/**
- * Typing may replace the goals only once they are known: read from the server or a cache that
- * carried them, or an account the server says has no settings at all (a new one), whose goals
- * are empty. Until then a stand-in would erase the saved ones (F1).
- */
-const goalsEditable = computed(
-  () => store.goalsKnown || (sync.fresh && store.savedSettings() === null),
-)
-
-function commitGoals(): void {
-  clearTimeout(goalsTimer)
-  goalsTimer = undefined
-  if (goalsEditable.value) store.setGoals(goalsDraft.value)
-}
-function onGoalsInput(): void {
-  clearTimeout(goalsTimer)
-  goalsTimer = setTimeout(commitGoals, GOALS_PAUSE_MS)
-}
-// Goals saved elsewhere (another tab, the server) show here, unless the person is mid-pause.
-watch(
-  () => store.goals,
-  (saved) => {
-    if (goalsTimer === undefined && saved !== normaliseGoals(goalsDraft.value)) {
-      goalsDraft.value = saved
-    }
-  },
-)
-onBeforeUnmount(() => {
-  if (goalsTimer !== undefined) commitGoals()
-})
 
 const fileInput = ref<HTMLInputElement | null>(null)
 /** A parsed file waiting for "Import". */
 const pending = ref<ExportData | null>(null)
 const notice = ref<{ tone: 'error' | 'success' | 'info'; text: string } | null>(null)
-const signOutProblem = ref<string | null>(null)
 const importing = ref(false)
 const summary = useImportSummary()
 
@@ -171,6 +118,7 @@ async function exportData(): Promise<void> {
       foodPick: store.foodPick,
       ...(store.dailyGoalKnown ? { dailyGoal: store.dailyGoal } : {}),
       goals: store.goals,
+      limits: store.limits,
       itemSections: store.itemSections,
     },
   })
@@ -229,50 +177,16 @@ async function confirmImport(data: ExportData): Promise<void> {
     notice.value = { tone: 'error', text: IMPORT_FAILED[outcome.code] }
   }
 }
-
-// Sign out with unsynced changes asks first: signing out forgets this device's outbox, so those
-// changes are lost (session.logout → sync.forget).
-const askSignOut = ref(false)
-const signingOut = ref(false)
-const signOutError = ref<string | undefined>(undefined)
-const unsynced = computed(() => {
-  const n = sync.pending
-  return `${countOf(n, 'change', true)} on this device ${n === 1 ? 'hasn’t' : 'haven’t'} reached the server yet. Signing out now loses them.`
-})
-
-/** The Sign out button, where focus returns once the sign-out question closes. */
-function signOutTarget(): HTMLElement | null {
-  return (signOutButton.value?.$el as HTMLElement | undefined) ?? null
-}
-
-async function signOut(): Promise<void> {
-  if (!sync.pending) {
-    const problem = await session.logout()
-    signOutProblem.value = problem ? describeProblem(problem) : null
-    return
-  }
-  signOutError.value = undefined
-  askSignOut.value = true
-}
-
-async function confirmSignOut(): Promise<void> {
-  if (signingOut.value) return
-  signingOut.value = true
-  const problem = await session.logout()
-  signingOut.value = false
-  if (problem) signOutError.value = describeProblem(problem)
-  else askSignOut.value = false
-}
 </script>
 
 <!--
   The Settings page (brand/design-system/project/components/SettingsPage), at #/settings, with no
   Header (K52): a link back to the week, the heading, then Appearance (Marks, then Theme, K59),
-  Your goals (the Ask mockup's row), Your data, Connections (ConnectionsSection) and Account. The daily targets are set in Edit
-  plan (K56). Full width in rows like the week (K51): each section's
-  heading in the week's name column, its settings beside it, a line rule above each row, controls
-  beside their words (K53). Settings take effect at once; there is no Save. Your goals saves when
-  typing pauses.
+  Daily goal (K85), Your data and Connections (ConnectionsSection). My goals, Your limits and the
+  account are on the Profile page (K106, K107). The daily targets are set in Edit plan (K56). Full
+  width in rows like the week (K51): each section's heading in the week's name column, its
+  settings beside it, a line rule above each row, controls beside their words (K53). Settings take
+  effect at once; there is no Save.
 -->
 <template>
   <div
@@ -319,42 +233,28 @@ async function confirmSignOut(): Promise<void> {
     </section>
 
     <section
-      :aria-labelledby="ids.goals"
+      :aria-labelledby="ids.dailyGoal"
       class="grid grid-cols-[var(--grid-name-w)_minmax(0,1fr)] items-start border-t border-line py-(--set-sec-y) folded:flex folded:flex-col folded:items-stretch folded:gap-4"
     >
-      <h2 :id="ids.goals" class="title-2 text-(length:--set-h2) leading-tight text-ink">
-        Your goals
+      <h2 :id="ids.dailyGoal" class="title-2 text-(length:--set-h2) leading-tight text-ink">
+        Daily goal
       </h2>
-      <div class="flex min-w-0 flex-col gap-(--set-gap)">
-        <!-- Daily goal (K85): first in Your goals, the Switch with its hint under it. -->
-        <div class="flex flex-col items-start gap-[calc(var(--u)*6)]">
-          <Switch
-            v-model="dailyGoal"
-            label="Daily goal"
-            class="-ml-2"
-            :aria-describedby="dailyGoalHint"
-            data-testid="daily-goal"
-          />
-          <p
-            :id="dailyGoalHint"
-            class="caption max-w-[60ch] text-(length:--set-caption) leading-[1.35] text-ink-secondary"
-          >
-            A number of exercises and of foods to reach each day, set in Edit plan. A day that
-            reaches it turns green.
-          </p>
-        </div>
-        <TextArea
-          v-model="goalsDraft"
-          label="What you’re working towards"
-          hint="Ask reads this when it answers. Nothing else does."
-          rows="4"
-          :maxlength="MAX_GOALS"
-          :disabled="!goalsEditable"
-          class="max-w-[calc(var(--u)*900)]"
-          data-testid="goals"
-          @input="onGoalsInput"
-          @blur="commitGoals"
+      <!-- Daily goal (K85): the Switch with its hint under it. -->
+      <div class="flex min-w-0 flex-col items-start gap-[calc(var(--u)*6)]">
+        <Switch
+          v-model="dailyGoal"
+          label="Daily goal"
+          class="-ml-2"
+          :aria-describedby="dailyGoalHint"
+          data-testid="daily-goal"
         />
+        <p
+          :id="dailyGoalHint"
+          class="caption max-w-[60ch] text-(length:--set-caption) leading-[1.35] text-ink-secondary"
+        >
+          A number of exercises and of foods to reach each day, set in Edit plan. A day that reaches
+          it turns green.
+        </p>
       </div>
     </section>
 
@@ -366,7 +266,7 @@ async function confirmSignOut(): Promise<void> {
         Your data
       </h2>
       <div class="flex min-w-0 flex-col gap-(--set-gap)">
-        <!-- The text, then its buttons beside it, as Sign out sits beside "Signed in as" (K53). -->
+        <!-- The text, then its buttons beside it (K53). -->
         <div class="flex flex-wrap items-center gap-x-(--set-gap) gap-y-3">
           <p class="body max-w-[34ch] text-(length:--set-text) leading-normal text-ink-secondary">
             Export saves everything to a file. Import adds a file’s plans and marks to yours and
@@ -415,41 +315,5 @@ async function confirmSignOut(): Promise<void> {
       </h2>
       <ConnectionsSection />
     </section>
-
-    <section
-      :aria-labelledby="ids.account"
-      class="grid grid-cols-[var(--grid-name-w)_minmax(0,1fr)] items-start border-t border-line py-(--set-sec-y) folded:flex folded:flex-col folded:items-stretch folded:gap-4"
-    >
-      <h2 :id="ids.account" class="title-2 text-(length:--set-h2) leading-tight text-ink">
-        Account
-      </h2>
-      <div class="flex min-w-0 flex-col gap-(--set-gap)">
-        <div class="flex flex-wrap items-center gap-x-(--set-gap) gap-y-3">
-          <p
-            class="body min-w-0 text-(length:--set-text) leading-normal break-words text-ink-secondary"
-            data-testid="signed-in-as"
-          >
-            Signed in as <span class="font-semibold text-ink">{{ session.user }}</span>
-          </p>
-          <Button ref="signOutButton" @click="signOut"
-            ><LogOut :stroke-width="1.5" />Sign out</Button
-          >
-        </div>
-        <InlineMessage v-if="signOutProblem" tone="error" data-testid="sign-out-problem">
-          {{ signOutProblem }}
-        </InlineMessage>
-      </div>
-    </section>
-
-    <ConfirmDialog
-      v-model:open="askSignOut"
-      title="Sign out now?"
-      :message="unsynced"
-      confirm-label="Sign out"
-      :busy="signingOut"
-      :error="signOutError"
-      :return-focus="signOutTarget"
-      @confirm="confirmSignOut"
-    />
   </div>
 </template>

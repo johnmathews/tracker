@@ -15,6 +15,7 @@ import {
   defaultExercises,
   isRecord,
   normaliseGoals,
+  normaliseLimits,
   normaliseWeight,
   parseJson,
   parseSettings,
@@ -112,7 +113,7 @@ export const usePlannerStore = defineStore('planner', () => {
   const dailyPick = ref(DEFAULT_SETTINGS.dailyPick)
   /** Foods a day (K57). It lives here with the other settings, though the diet store's days use it. */
   const foodPick = ref(DEFAULT_SETTINGS.foodPick)
-  /** My goals, in the person's words; only Ask reads them. */
+  /** My goals, in the person's words; Ask and the MCP read them. */
   const goals = ref(DEFAULT_SETTINGS.goals)
   /**
    * Whether `goals` came from the server, a cache that carried them, or the person. Until then
@@ -120,6 +121,10 @@ export const usePlannerStore = defineStore('planner', () => {
    * saved ones (F1).
    */
   const goalsKnown = ref(false)
+  /** Your limits (K107): what the person has to work around, read like the goals. */
+  const limits = ref(DEFAULT_SETTINGS.limits)
+  /** Whether `limits` are known, as `goalsKnown` (a tab from before them carries goals only). */
+  const limitsKnown = ref(false)
   /** Daily goal (K85): on unless the person turned it off; the picks are kept either way. */
   const dailyGoal = ref(DEFAULT_SETTINGS.dailyGoal)
   /** Whether `dailyGoal` came from the server, a cache that carried it, or the person (as goals). */
@@ -248,8 +253,8 @@ export const usePlannerStore = defineStore('planner', () => {
 
   /**
    * Replace the user's data wholesale: from the cache, the server, or another tab. Settings
-   * without goals (a tab from before My goals wrote them) keep the goals this tab has, and those
-   * without Daily goal keep this tab's Daily goal (K85).
+   * without goals (a tab from before My goals wrote them) keep the goals this tab has, those
+   * without limits keep its limits (K107), and those without Daily goal its Daily goal (K85).
    */
   function adopt(data: PlannerData, settings: KnownSettings | null): void {
     plans.value = data.plans
@@ -260,6 +265,10 @@ export const usePlannerStore = defineStore('planner', () => {
     if (settings?.goals !== undefined) {
       goals.value = settings.goals
       goalsKnown.value = true
+    }
+    if (settings?.limits !== undefined) {
+      limits.value = settings.limits
+      limitsKnown.value = true
     }
     if (settings?.dailyGoal !== undefined) {
       dailyGoal.value = settings.dailyGoal
@@ -282,6 +291,8 @@ export const usePlannerStore = defineStore('planner', () => {
     adopt({ plans: {}, log: {} }, null)
     goals.value = DEFAULT_SETTINGS.goals
     goalsKnown.value = false
+    limits.value = DEFAULT_SETTINGS.limits
+    limitsKnown.value = false
     dailyGoal.value = DEFAULT_SETTINGS.dailyGoal
     dailyGoalKnown.value = false
     useDetailsStore().clear()
@@ -299,13 +310,21 @@ export const usePlannerStore = defineStore('planner', () => {
   }
   /**
    * The person's goals, normalised as the API stores them. The same text again is no change, so it
-   * sends nothing. The Settings row calls it when the person stops typing, not on each key (F18).
+   * sends nothing. The Profile page calls it when the person stops typing, not on each key (F18).
    */
   function setGoals(text: string): void {
     const next = normaliseGoals(text)
     if (next === goals.value) return
     goals.value = next
     goalsKnown.value = true
+    settingsSaved.value = true
+  }
+  /** The person's limits (K107), as `setGoals` sets the goals. */
+  function setLimits(text: string): void {
+    const next = normaliseLimits(text)
+    if (next === limits.value) return
+    limits.value = next
+    limitsKnown.value = true
     settingsSaved.value = true
   }
   /** Daily goal on or off (K85), from Settings. The picks stay as they are. */
@@ -330,8 +349,8 @@ export const usePlannerStore = defineStore('planner', () => {
   }
 
   /**
-   * The settings to send and cache: the accent, daily picks, the goals only once they are
-   * known, and the item pages' arrangement (left out while every page has the default).
+   * The settings to send and cache: the accent, daily picks, the goals and the limits only once
+   * each is known, and the item pages' arrangement (left out while every page has the default).
    */
   function portableSettings(): KnownSettings {
     return {
@@ -340,6 +359,7 @@ export const usePlannerStore = defineStore('planner', () => {
       foodPick: foodPick.value,
       ...(dailyGoalKnown.value ? { dailyGoal: dailyGoal.value } : {}),
       ...(goalsKnown.value ? { goals: goals.value } : {}),
+      ...(limitsKnown.value ? { limits: limits.value } : {}),
       ...(Object.keys(itemSections.value).length
         ? { itemSections: normaliseItemSections(itemSections.value) }
         : {}),
@@ -374,6 +394,8 @@ export const usePlannerStore = defineStore('planner', () => {
     foodPick,
     goals,
     goalsKnown,
+    limits,
+    limitsKnown,
     dailyGoal,
     dailyGoalKnown,
     itemSections,
@@ -406,6 +428,7 @@ export const usePlannerStore = defineStore('planner', () => {
     changeDailyPick,
     changeFoodPick,
     setGoals,
+    setLimits,
     setDailyGoal,
     setTheme,
     portableSettings,

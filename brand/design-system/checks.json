@@ -18,6 +18,8 @@
     "Dialog",
     "ConfirmDialog",
     "Popover",
+    "Menu",
+    "ProfilePage",
     "SettingsPage",
     "ConnectionsSection",
     "ConnectPage",

@@ -1,0 +1,87 @@
+<!-- @dsCard group="Screens" height=1000 subtitle="The Profile page, on the Settings page's frame: account and sign out, your goals and your limits for Ask" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ProfilePage — preview</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: var(--space-6); background: var(--canvas); color: var(--ink); font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
+
+  /* The page, at u = 1 (a 1280×800 screen): full width on 48px margins, in rows like the week (K51). In the app every size follows the screen. */
+  .stage { border: 1px solid var(--line); border-radius: var(--radius-lg); }
+  .page { padding: 28px 48px 64px; display: flex; flex-direction: column; }
+  .back { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-size: 19px; line-height: 26px; text-decoration: underline; text-underline-offset: 4px; }
+  .back svg { width: 26px; height: 26px; }
+  .back:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-sm); }
+  h1 { margin: 12px 0 28px; font-size: 40px; line-height: 46px; }
+  /* A section is a row: its heading in the week's 320px name column, its content to the right. */
+  section { display: grid; grid-template-columns: 320px minmax(0, 1fr); align-items: start; padding: 32px 0; border-top: 1px solid var(--line); }
+  h2 { margin: 0; font-size: 27px; line-height: 34px; }
+  /* A control beside its words (K53), wrapping under them when the row is too narrow. */
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; }
+  .who { margin: 0; color: var(--ink-secondary); font-size: 19px; line-height: 28px; overflow-wrap: anywhere; }
+  .who span { color: var(--ink); font-weight: 600; }
+  .btn { height: 60px; padding: 0 22px; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); border-radius: var(--radius-md); font: inherit; font-size: 19px; font-weight: 600; cursor: pointer; background: transparent; color: var(--ink); border: 1px solid var(--control-border); }
+  .btn:hover { background: var(--tile); }
+  .btn svg { width: 26px; height: 26px; }
+  button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  /* TextArea, drawn as its own card at the page's size. */
+  .field { display: flex; flex-direction: column; gap: var(--space-1); max-width: 900px; min-width: 0; }
+  .field .label { font-size: 19px; line-height: 25px; }
+  .area { display: block; width: 100%; min-height: 128px; padding: 10px var(--space-3); border: 1px solid var(--control-border); border-radius: var(--radius-sm); background: var(--panel); color: var(--ink); font: 400 19px/28px var(--font-sans); resize: vertical; }
+  .area:hover { border-color: var(--ink); }
+  .area:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .hint { margin: 0; color: var(--ink-secondary); max-width: 60ch; }
+  @media (prefers-reduced-motion: no-preference) { button, .area { transition: background-color 120ms, border-color 120ms; } }
+
+  /* Folded: one column, the heading over its content, at the system's sizes. */
+  @media (max-width: 639px) {
+    body { padding: var(--space-4); }
+    .page { padding: 20px 16px 48px; }
+    h1 { font-size: 30px; line-height: 36px; margin-bottom: 16px; }
+    section { display: flex; flex-direction: column; gap: 16px; padding: 24px 0; }
+    h2 { font-size: 22px; line-height: 28px; }
+    .who, .back, .area { font-size: 18px; line-height: 26px; }
+    .field .label { font-size: 16px; line-height: 22px; }
+    .btn { height: 48px; padding: 0 16px; font-size: 16px; }
+    .btn svg, .back svg { width: 22px; height: 22px; }
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+  <main class="page">
+    <a class="back" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>Back to the week</a>
+    <h1 class="display" tabindex="-1">Profile</h1>
+
+    <section aria-labelledby="p-account">
+      <h2 class="title-2" id="p-account">Account</h2>
+      <div class="row">
+        <p class="who body">Signed in as <span>alex@example.com</span></p>
+        <button type="button" class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/></svg>Sign out</button>
+      </div>
+    </section>
+
+    <section aria-labelledby="p-goals">
+      <h2 class="title-2" id="p-goals">Your goals</h2>
+      <div class="field">
+        <label class="label" for="p-goals-box">What you’re working towards</label>
+        <textarea class="area" id="p-goals-box" rows="4" maxlength="1000" aria-describedby="p-goals-hint">Run 5 km in under 25 minutes by March. Keep two strength days a week. Eat more protein at breakfast.</textarea>
+        <p class="caption hint" id="p-goals-hint">Ask and your Claude connections read this. Nothing else does.</p>
+      </div>
+    </section>
+
+    <section aria-labelledby="p-limits">
+      <h2 class="title-2" id="p-limits">Your limits</h2>
+      <div class="field">
+        <label class="label" for="p-limits-box">What you have to work around</label>
+        <textarea class="area" id="p-limits-box" rows="4" maxlength="1000" aria-describedby="p-limits-hint">Left knee: no jumping and no deep squats. Dumbbells up to 20 kg at home; the gym only on Saturdays. 40 minutes on weekdays. Vegetarian.</textarea>
+        <p class="caption hint" id="p-limits-hint">Injuries, equipment, time and food. Ask and your Claude connections read this too.</p>
+      </div>
+    </section>
+  </main>
+</div>
+</body>
+</html>

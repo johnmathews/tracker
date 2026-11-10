@@ -1,4 +1,4 @@
-A small panel attached to the control that opened it. The app has none at the moment: Settings, which was one, became the SettingsPage (2026-10-25) to have room to grow. The rules below are what a popover must follow when one comes back; the settings contents they describe now live on that page.
+A small panel attached to the control that opened it. The app has none at the moment: Settings, which was one, became the SettingsPage (2026-10-25) to have room to grow. The rules below are what a popover must follow when one comes back; the settings contents they describe now live on that page. The account and Sign out will not come back to a popover: they are the account Menu under the Header's "Profile" action now (K106), a list of actions rather than a panel of settings.
 
 ## Use
 
@@ -9,7 +9,7 @@ A small panel attached to the control that opened it. The app has none at the mo
   2. **Theme:** a SegmentedControl, System | Light | Dark, drawn exactly as its card (44px, `label` type on every segment).
   3. **Exercises a day:** a Stepper, 1 to 8, the daily pick, drawn as its card (one outline, no separators), with its label beside it.
   4. **Your data**, after a `line` rule: secondary buttons "Export" (Lucide `download`) and "Import…" (Lucide `upload`). Import's summary and its own Cancel then Import (secondary first, primary last) appear here, inline, beneath.
-  5. **Account**, after a `line` rule: "Signed in as alex" in `caption` and a secondary "Sign out" (Lucide `log-out`). Sign out with unsynced changes asks first with a ConfirmDialog.
+  5. **Account** (now the Menu, K106), after a `line` rule: "Signed in as alex" in `caption` and a secondary "Sign out" (Lucide `log-out`). Sign out with unsynced changes asks first with a ConfirmDialog.
 - Every button in the panel is md (44px), on desktop as on a phone: the popover is used on phones.
 - Group labels in `label`, sentence case: "Theme", not "APPEARANCE".
 - Settings take effect at once; there is no Save.
