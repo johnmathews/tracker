@@ -248,6 +248,8 @@ class ItemHistoryResult(insights.ItemHistory):
 
 
 class GoalsResult(insights.Goals):
+    """`note` is the "My goals" note and `limits` the limits note, each "" when there is none."""
+
     this_week: str
     today: str
 
@@ -463,11 +465,13 @@ def _add_tools(server: MCPServer, config: Config) -> None:
         title="Goals",
         description="What this week asks for: every exercise, cardio item and food with its "
         "times-a-week goal (a cardio item with its `seconds` and `distance_km`), the daily "
-        "targets (exercises a day, foods a day), `daily_goal` and the 'My goals' note. While "
-        "Daily goal is off, `daily_goal` is false and both daily targets are null: say nothing "
-        "about a number a day or met days. Call it for 'what are my goals' or before comparing "
-        "progress with them. Always this week's plan, for exercise, cardio and diet. Cardio has "
-        f"no daily target. {NOTES_CUT}",
+        "targets (exercises a day, foods a day), `daily_goal`, the 'My goals' note (`note`) and "
+        "the limits note (`limits`: what the person has to work around, such as injuries, "
+        "equipment, time or food), each in the person's own words and '' when there is none. "
+        "While Daily goal is off, `daily_goal` is false and both daily targets are null: say "
+        "nothing about a number a day or met days. Call it for 'what are my goals' or before "
+        "comparing progress with them. Always this week's plan, for exercise, cardio and diet. "
+        f"Cardio has no daily target. {NOTES_CUT}",
         annotations=READ_ONLY,
     )
     def goals() -> GoalsResult:

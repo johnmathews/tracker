@@ -19,7 +19,7 @@
       },
       "cardio": { "plans": {}, "log": {}, "details": {} },
       "diet": { "plans": {}, "log": {}, "details": {} },
-      "settings": { "accent": "#0a84ff", "dailyPick": 2, "foodPick": 2, "goals": "" }
+      "settings": { "accent": "#0a84ff", "dailyPick": 2, "foodPick": 2, "goals": "", "limits": "" }
     }
   }
 }

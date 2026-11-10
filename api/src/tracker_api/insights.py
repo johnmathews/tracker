@@ -247,8 +247,10 @@ class Goals(TypedDict):
     foods_a_day: int | None
     #: Daily goal's setting: false says why there are no daily targets.
     daily_goal: bool
-    #: The "My goals" note from Settings; "" when there is none.
+    #: The "My goals" note; "" when there is none.
     note: str
+    #: The limits note (K107): what the person has to work around; "" when there is none.
+    limits: str
 
 
 class Consistency(TypedDict):
@@ -495,7 +497,7 @@ def item_history(
 
 def goals(conn: sqlite3.Connection, user_id: int, today: date) -> Goals:
     """What today's week asks for: each item's weekly goal in each section, both daily targets
-    (None while Daily goal is off; cardio has none), and the "My goals" note."""
+    (None while Daily goal is off; cardio has none), the "My goals" note and the limits note."""
     week = monday_of(today).isoformat()
     settings = load_settings(conn, user_id)
     tracked = {section: load_tracked(conn, user_id, section) for section in SECTIONS}
@@ -521,6 +523,7 @@ def goals(conn: sqlite3.Connection, user_id: int, today: date) -> Goals:
         "foods_a_day": _daily_target(settings, "diet"),
         "daily_goal": settings is None or settings["dailyGoal"],
         "note": "" if settings is None else settings["goals"],
+        "limits": "" if settings is None else settings["limits"],
     }
 
 

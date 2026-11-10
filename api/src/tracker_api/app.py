@@ -565,11 +565,12 @@ def create_app(
         turns = [(t["question"], t["answer"]) for t in data.load_turns(conn, user.id, cid)]
         settings = data.load_settings(conn, user.id)
         goals = "" if settings is None else settings["goals"]
+        limits = "" if settings is None else settings["limits"]
         save = ask.saver(config, user.id, cid, question.text, asked_at)
         events = ask.converse(
             client,
             config.ask_model,
-            ask.messages(question, turns, goals),
+            ask.messages(question, turns, goals, limits),
             ask.tools_for(config.db_path, user.id, question.today),
             save,
             {"remaining": left, "conversation": cid},

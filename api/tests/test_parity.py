@@ -37,9 +37,11 @@ def run_parse(text: str) -> dict[str, Any]:
 def test_finds_the_fixture_files() -> None:
     assert len(PARSE) >= 14
     assert len(MERGE) >= 6
-    assert len(SETTINGS) >= 3
+    assert len(SETTINGS) >= 14
     assert len(CONVERSATIONS) >= 5
     assert len([n for n, _ in PARSE if n.startswith("conversations")]) >= 4
+    assert len([n for n, _ in PARSE if n.startswith("limits")]) >= 4
+    assert len([c for c in SETTINGS if "limits" in c["description"]]) >= 4
 
 
 @pytest.mark.parametrize(("name", "case"), PARSE, ids=[n for n, _ in PARSE])

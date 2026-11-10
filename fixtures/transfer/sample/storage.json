@@ -158,7 +158,8 @@
       "accent": "#0a84ff",
       "dailyPick": 4,
       "foodPick": 3,
-      "goals": "Run 5 km without stopping by March.\nFish twice a week."
+      "goals": "Run 5 km without stopping by March.\nFish twice a week.",
+      "limits": "Left knee: no jumping.\nDumbbells up to 20 kg at home."
     }
   },
   "tracker-settings-v1": { "theme": "dark" }

@@ -1,0 +1,41 @@
+{
+  "description": "A limits note of nothing but spaces, tabs and line breaks is no note; My goals stay.",
+  "input": {
+    "format": "tracker-export",
+    "version": 5,
+    "settings": {
+      "accent": "#0a84ff",
+      "dailyPick": 4,
+      "foodPick": 3,
+      "goals": "Run 5 km by March.",
+      "limits": " \n\t "
+    }
+  },
+  "expected": {
+    "ok": true,
+    "data": {
+      "exercise": {
+        "plans": {},
+        "log": {},
+        "details": {}
+      },
+      "cardio": {
+        "plans": {},
+        "log": {},
+        "details": {}
+      },
+      "diet": {
+        "plans": {},
+        "log": {},
+        "details": {}
+      },
+      "settings": {
+        "accent": "#0a84ff",
+        "dailyPick": 4,
+        "foodPick": 3,
+        "goals": "Run 5 km by March.",
+        "limits": ""
+      }
+    }
+  }
+}

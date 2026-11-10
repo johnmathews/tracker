@@ -27,6 +27,7 @@
         "dailyPick": 3,
         "foodPick": 2,
         "goals": "",
+        "limits": "",
         "itemSections": {
           "exercise": { "order": ["history", "plan", "notes", "details"], "hidden": ["details"] }
         }

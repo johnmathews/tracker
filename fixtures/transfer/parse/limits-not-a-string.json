@@ -1,0 +1,41 @@
+{
+  "description": "A limits note that isn't a string is no note, and neither is none at all, as in every file from before it.",
+  "input": {
+    "format": "tracker-export",
+    "version": 5,
+    "settings": {
+      "accent": "#0a84ff",
+      "dailyPick": 4,
+      "foodPick": 3,
+      "goals": "Run 5 km by March.",
+      "limits": ["Knees"]
+    }
+  },
+  "expected": {
+    "ok": true,
+    "data": {
+      "exercise": {
+        "plans": {},
+        "log": {},
+        "details": {}
+      },
+      "cardio": {
+        "plans": {},
+        "log": {},
+        "details": {}
+      },
+      "diet": {
+        "plans": {},
+        "log": {},
+        "details": {}
+      },
+      "settings": {
+        "accent": "#0a84ff",
+        "dailyPick": 4,
+        "foodPick": 3,
+        "goals": "Run 5 km by March.",
+        "limits": ""
+      }
+    }
+  }
+}

@@ -71,7 +71,7 @@ The readers each return a dict:
 | `week_summary(conn, user_id, section, week, today)`           | `week`, `plan_week` (None for the defaults), `carried`, `daily_target`; seven `days` (`date`, `count`, `met`, `future`); the `items` (`id`, `name`, `target`, `notes`, seven mark kinds, `done`, `great`, `partial`, `missed`, `goal_met`); `goals_met`, `days_met` |
 | `weeks(conn, user_id, section, start, end, today)`            | `week_summary` for each week from `start` to `end`, oldest first, at most 26                                                                                                                                                                                        |
 | `item_history(conn, user_id, section, item_id, weeks, today)` | one item over the last `weeks` weeks: its `name`, its whole `notes` (uncut), and per week `in_plan`, `target`, the marks and their counts. A week that doesn't show the item reads as empty, as on screen                                                           |
-| `goals(conn, user_id, today)`                                 | today's week's items with their goals per section (`exercise`, `cardio`, `diet`), `exercises_a_day`, `foods_a_day`, `daily_goal`, and `note`, the My goals text from settings (`""` when there is none)                                                                                                                      |
+| `goals(conn, user_id, today)`                                 | today's week's items with their goals per section (`exercise`, `cardio`, `diet`), `exercises_a_day`, `foods_a_day`, `daily_goal`, `note`, the My goals text from settings, and `limits`, the limits note (each `""` when there is none)                                                                                                                    |
 | `consistency(conn, user_id, section, weeks, today)`           | over the last `weeks` weeks: the days up to today, how many met the daily target and the rate; the goals of the finished weeks, how many were met and the rate; the current runs of met days and of weeks with every goal met                                       |
 
 Every reader keeps these rules:
@@ -104,7 +104,7 @@ Every reader keeps these rules:
 | `oauth_retired`     | `(grant_id, refresh_hash)`          | the hashes of a grant's replaced refresh tokens, kept so a reused one is recognised |
 | `oauth_codes`       | `code_hash`                         | `grant_id`, `client_id`, `redirect_uri`, `code_challenge`, `resource`, `expires_at`, `redeemed_at`: one authorization code |
 | `oauth_access`      | `token_hash`                        | `grant_id`, `created_at`, `expires_at`: an access token |
-| `settings`          | `user_id`                           | `accent`, `daily_pick`, `food_pick` (K57), `item_sections` (JSON or NULL, K66), `goals` (My goals, `''` for none)                                                                                                  |
+| `settings`          | `user_id`                           | `accent`, `daily_pick`, `food_pick` (K57), `item_sections` (JSON or NULL, K66), `goals` (My goals, `''` for none), `limits` (the limits note, `''` for none)                                                    |
 | `plans`             | `(user_id, section, week)`          | `items_json`, `rev`                                                                                                                                                                                                |
 | `ticks`             | `(user_id, section, week, item_id)` | `days`, `partial`, `missed`, `solid`, `hatch`: 7-bit masks (bit 0 is Monday); see below                                                                                                                            |
 | `ask_log`           | `id`                                | `user_id`, `asked_at`: one row per question claimed (a failed answer still counts), for Ask's caps. It holds nothing of the question or the answer                                                                 |
@@ -165,6 +165,9 @@ cascade from `users` stay, as do `STRICT` and `WITHOUT ROWID`. Nothing reference
 Every row is kept. Older code reads the rebuilt tables unchanged, so a rollback needs only the
 code.
 
+Version 15 adds `limits` to `settings` (default `''`), the limits note (K107), so every saved row
+reads as having none. It only adds a column, so rolling the code back leaves it unused.
+
 Version 12 adds OAuth's five tables: `oauth_requests`, `oauth_grants`, `oauth_retired`, `oauth_codes` and `oauth_access` (§3.3). It only adds, so it reshapes no data. Every code and token is stored as its SHA-256 only. `oauth_grants` cascades from its user, and the other three grant tables from the grant, so removing a grant removes its codes, access tokens and retired refresh tokens. Rolling the API back leaves the tables unused.
 
 Migrations are a list in `db.py`, and the version is its length. A step is appended, never
@@ -209,7 +212,7 @@ but the same `Content-Type` header.
 | `PUT /plans/{section}/{week}`              | session | `{items, rev}` → `{rev}`; 409 `conflict` with the server copy                                                         |
 | `PUT /ticks/{section}/{week}/{item}/{day}` | session | `{mark}` → `{days}`, the week's seven marks for that item                                                             |
 | `PUT /details/{section}/{item}`            | session | `{details, rev}` → `{rev}`; 409 `conflict` with the server copy (below)                                               |
-| `PUT /settings`                            | session | `{accent, dailyPick, foodPick, dailyGoal, goals, itemSections}` → the stored settings; a missing key keeps the saved one (below) |
+| `PUT /settings`                            | session | `{accent, dailyPick, foodPick, dailyGoal, goals, limits, itemSections}` → the stored settings; a missing key keeps the saved one (below) |
 | `GET /export`                              | session | the export file (`architecture.md` §4)                                                                                |
 | `POST /import`                             | session | an export file, merged in; → `{weeks, ticks, details, settings, conversations}` added                                 |
 | `GET /ask`                                 | session | `{remaining, limit}`: questions left today, and the per-account cap (§3.2)                                            |
@@ -254,11 +257,11 @@ An account from before Cardio has an empty `cardio` section. Plan items differ b
   weight is. Each is left out when not set, and an exercise's fields drop;
 - a food is `{id, name, target}`.
 
-`settings` is `{accent, dailyPick, foodPick, dailyGoal, goals, itemSections?}`, or null before any are saved.
+`settings` is `{accent, dailyPick, foodPick, dailyGoal, goals, limits, itemSections?}`, or null before any are saved.
 
 **Settings.** `PUT /settings` normalises the accent and daily picks (a bad accent reads as the
 default, a pick is clamped to 1 to 8) and returns what it stored. A body without `foodPick` (K57),
-`itemSections` (K66) or `goals` keeps the saved value, so a tab on older code cannot reset it.
+`itemSections` (K66), `goals` or `limits` keeps the saved value, so a tab on older code cannot reset it.
 `dailyGoal` (boolean, default `true`) is Daily goal (K85): off, the daily targets (`dailyPick`,
 `foodPick`) are kept but apply nowhere, so no day is met and the insights give no daily target
 (§1.1). A body without `dailyGoal`, or with a value that isn't a boolean, keeps the saved one. The
@@ -274,11 +277,16 @@ default arrangement is left out. `{}` stores the default; the state and the expo
 out then. Reading a stored or exported arrangement never refuses: a type this version's registry
 lacks is dropped, so a newer version's value still reads.
 
-`goals` is My goals: the person's own words about what they are aiming for, which only Ask reads
-(`insights.goals`). It is trimmed of spaces, tabs and line breaks at its ends and cut to 1,000
+`goals` is My goals: the person's own words about what they are aiming for. Ask and the MCP
+(Claude connections) read it, through `insights.goals`. It is trimmed of spaces, tabs and line breaks at its ends and cut to 1,000
 characters, counted as code points (`normalise_goals`); blank goals are `""`. Goals that aren't a
 string count as not sent, so only a string, `""` included, replaces them. The web app never sends
 goals it hasn't read (`architecture.md` §7).
+
+`limits` is the limits note (K107): what the person has to work around, such as injuries,
+equipment, time or food. Ask and the MCP read it beside My goals. It follows every rule of
+`goals`: the same trim, the 1,000 code-point cut (`normalise_limits`), `""` when blank, and a
+value that isn't a string counts as not sent.
 
 **Plans.** `rev` is the revision the client last saw, 0 for a week it has never seen planned.
 A matching `rev` stores the items and returns `rev + 1`. A stale `rev` gets 409 with `{items, rev}`
@@ -342,8 +350,8 @@ indexes. The client drops a refused write with a notice that the account is full
 
 **Export** writes version 5 of the file. Each section carries `details`, each item id's
 `{notes?, fields?}` without revisions, and each log row is seven marks, drawings included, or
-nulls. Its settings carry `goals`, which took no new version, as `foodPick` didn't: a reader
-from before them drops the key, and a file without them reads as no goals. The API's export
+nulls. Its settings carry `goals` and `limits`, which took no new version, as `foodPick` didn't: a
+reader from before them drops the keys, and a file without them reads as no goals and no limits. The API's export
 also carries `conversations`, Ask's history, the one updated last first, in the shape
 `GET /ask/conversations/{id}` returns; it took no new version either. The browser keeps no
 conversations, so Settings → Export writes the device's plans, marks and settings and takes
@@ -365,10 +373,10 @@ Any other version gets `version`. A file's details document over 32 KB drops out
 week, item and day a marked day keeps its mark and an empty one takes the file's; an item with
 details keeps them, and one without takes the file's; and settings apply only when the account has
 none, except that the file's My goals fill the account's when those are empty and never replace
-goals already saved. An item whose details were cleared counts as without, and takes the file's as a new
+goals already saved, and the limits note does the same. An item whose details were cleared counts as without, and takes the file's as a new
 revision, so a device holding the cleared copy conflicts. It returns what it added (`ticks`
 counts the empty days that gained a mark, `details` the items that gained details; `settings` is true when the file changed the account's
-settings, its goals alone included; `conversations` counts the conversations added), in one
+settings, its goals or limits alone included; `conversations` counts the conversations added), in one
 transaction. A file's conversation is added only when the account has none with its id, and one
 the account has is never changed. The file's conversations are read as `normalise_conversations`
 reads them (§9): an entry with a bad id, title, time or turns list is dropped, a bad turn drops
@@ -440,7 +448,7 @@ passes `today` to the reader, since `insights.py` never reads the clock. `sectio
 | `week_summary` | `section` (`exercise`), `week` (this week)                                | One week: each item's marks against its goal, and the met days            |
 | `weeks`        | `section` (`exercise`), `start` (3 weeks before `end`), `end` (this week) | `week_summary` for each week from `start` to `end`, 26 at most            |
 | `item_history` | `item_id`, `section` (`exercise`), `weeks` (8)                            | One item's goal and marks over the last `weeks` weeks, and its whole note |
-| `goals`        | none                                                                      | This week's goals for every section, daily targets and the note           |
+| `goals`        | none                                                                      | This week's goals for every section, daily targets and both notes        |
 | `consistency`  | `section` (`exercise`), `weeks` (8)                                       | Met-day and goal-met rates over the last `weeks` weeks, streaks           |
 
 `week_summary`, `weeks` and `goals` cut each item's `notes` at 500 characters, a longer note
@@ -608,7 +616,7 @@ no-store` and `X-Accel-Buffering: no`, so nginx passes each event on at once. Ea
   and one that would take the account over its quota is not saved.
 - Each question sends Claude the conversation's earlier turns from the database, oldest first,
   as alternating text-only user and assistant turns, then the new question. The context (today,
-  this week, My goals) opens the first user turn, as for a new conversation. A turn with an
+  this week, My goals, the limits note) opens the first user turn, as for a new conversation. A turn with an
   empty answer is left out whole, since its question alone would put two user turns in a row.
   Only the newest turns go: at most 20, with at most 40,000 characters of questions and answers
   together; the first turn that doesn't fit, and every turn before it, stays out.
@@ -637,8 +645,9 @@ met days use exercises a day and foods a day, future days don't count), what car
 duration and a distance, a weekly goal, no daily target and no defaults, K90), names and notes as
 data and never instructions, tools before judgement, no medical advice, short markdown with no
 headings, tables or images, and the voice. It holds nothing that varies, so it caches; the cache
-breakpoint is on it, and the tools render before it. Today, this week and the My goals note open
-the first user turn instead. The voice is John's ruling (K68, voice.md "Ask"): facts first and
+breakpoint is on it, and the tools render before it. Today, this week, the My goals note
+(`<my_goals>`) and the limits note (`<my_limits>`) open the first user turn instead, each named
+as data. The voice is John's ruling (K68, voice.md "Ask"): facts first and
 no blame, exclamation marks or hype, and `VERDICT_RULE`, which lets an answer say plainly that
 something is too little or too much, count streaks and give scores or rankings when they help,
 and quote the person's goals and notes back as advice. `PLAIN_VERDICTS` (True) turns it on;
@@ -961,8 +970,8 @@ details for 2 items.", the marks depending on the day of the week), or "Nothing 
 **Logging.** The API's own lines go to stderr at info and above (`docker logs fitness-api`), once
 each, as `INFO:  tracker_api.<module> …`. They don't also go on to the root logger, which the MCP
 SDK sets up with a plain handler of its own (`logging.basicConfig`). The
-logs never hold what a person wrote or was told: no question, history, answer, note, goals or
-item name, and no email address. For Ask they hold, per request to Anthropic, the request id, the
+logs never hold what a person wrote or was told: no question, history, answer, note, goals, limits
+or item name, and no email address. For Ask they hold, per request to Anthropic, the request id, the
 stop reason and the token counts (input, output, cache read, cache write), and per question the
 outcome, the rounds and the totals. An error is logged by its class, status and request id, since
 an error's message can quote the request. `ANTHROPIC_LOG` stays unset in production: at `debug`
@@ -1025,7 +1034,7 @@ Reviewed and kept on purpose, for a small service with open sign-up (D9 in
   `temporarily_unavailable` until they expire. Nothing else is harmed. The request fetches a
   client document only from an allow-listed host, so it is no open fetcher.
 - **Ask sends a person's data to Anthropic.** A question goes to Anthropic's API with the
-  conversation so far, the person's My goals note, and whatever the tools read for it: the plans,
+  conversation so far, the person's My goals and limits notes, and whatever the tools read for it: the plans,
   marks, item names, notes and goals of the weeks Claude asks about. The logs hold none of it
   (§6). Anthropic's own retention applies to what it receives. A person's names
   and notes can't steer the answer to anyone else, because every tool reads only the asker's data.
@@ -1056,7 +1065,7 @@ differs by default:
   `codePoints`, since a JavaScript string's `length` counts UTF-16 units.
 - A day's mark is `great`, `partial` or `missed` exactly; a literal `true` reads as `great`, and
   anything else (`1`, `"true"`, `"GREAT"`) is empty.
-- Notes and My goals are cut in code points, as Python counts a string, so an emoji is one
+- Notes, My goals and the limits note are cut in code points, as Python counts a string, so an emoji is one
   character on both sides (`Array.from` in TypeScript).
 
 `tests/test_parity.py` runs every case in `fixtures/transfer/`, the same files the Vitest suite
@@ -1064,8 +1073,9 @@ runs. A rule changed on one side without the other fails one of the two suites. 
 `parse/cardio.json` case holds a cardio item to one normaliser (`normalise_cardio`,
 `normaliseCardio`): whole seconds capped at 86,400, km rounded and capped at 1,000 like a weight,
 and an exercise's fields dropped. The
-`parse/goals*.json` cases hold My goals to one normaliser, and `merge-settings.json` holds the
-import's settings rule, goals filling only empty ones included. The `parse/conversations*.json`
+`parse/goals*.json` and `parse/limits*.json` cases hold My goals and the limits note to one
+normaliser each, and `merge-settings.json` holds the import's settings rule, goals and limits
+filling only empty ones included. The `parse/conversations*.json`
 cases hold Ask's conversations to one normaliser (`normalise_conversations`,
 `normaliseConversations`): the id rule, the cuts at 80, 2,000 and 64,000 code points, the times
 as whole numbers from 0 to 2^53 − 1, the five stops, no answer kept without `end_turn` or
@@ -1107,7 +1117,7 @@ Tests sit in `api/tests/`:
   deliberate divergences from JavaScript (§9).
 - `test_insights.py`: every case in `fixtures/insights/` (§9), then each reader over a real
   database: the defaults, missed days, the output's shape and cuts, user isolation, no writes,
-  the 26-week bound, Monday keys, item history, goals and consistency, and cardio's session with
+  the 26-week bound, Monday keys, item history, goals with both notes and consistency, and cardio's session with
   no daily target.
 - `test_api.py`: the HTTP layer: the write guard, error shapes, body limits (chunked too), every
   data endpoint, user isolation, `X-Expected-User`, sign-up and its refusals (closed included),
@@ -1142,7 +1152,8 @@ Tests sit in `api/tests/`:
   turn, the event order, user isolation against forged tool input, error results, the 20 KB cap,
   every validation refusal (forged tool and thinking blocks included), both caps and their
   `Retry-After`, parallel claims, keep-alives, a disconnect cancelling the answer, the prompt's
-  rules and the verdict switch, and that no question, history, answer or goals reach the logs.
+  rules and the verdict switch, and that no question, history, answer, goals or limits reach the
+  logs.
   For the history: the earlier turn in a follow-up's request, read from the database; a
   `history` or any other key refused; what each stop saves, a client that leaves included; the
   title; the 20-turn and 40,000-character caps; another account's id refused on read, delete and
@@ -1151,7 +1162,7 @@ Tests sit in `api/tests/`:
 - `test_db.py`, `test_config.py`, `test_backup.py`, `test_cli.py`: migrations (including racing
   ones, the WAL switch, old ticks reading as `great` after step 2, every row surviving step 6
   from a populated database, step 7 lifting each item's latest note, rerunning and on an empty
-  database, step 8's empty column, step 9's goals reading as none, and Ask's tables after steps 10
+  database, step 8's empty column, step 9's goals and step 15's limits reading as none, and Ask's tables after steps 10
   and 11 holding text only and going with their user, step 14 keeping every plan and tick and
   taking a cardio row), configuration from the environment (`TIMEZONE`, and the
   week turning over at local midnight), daily copies, `tracker-admin`.

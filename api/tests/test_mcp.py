@@ -502,6 +502,21 @@ def test_goals_reports_the_defaults_for_an_account_with_no_plans(
     assert out["foods_a_day"] >= 1
     assert out["daily_goal"] is True
     assert out["note"] == ""
+    assert out["limits"] == ""
+
+
+def test_goals_returns_my_goals_and_the_limits_note(
+    agent: TestClient, conn: sqlite3.Connection, uid: int, token: str
+) -> None:
+    """K107: a Claude connection reads both notes, and the tool and its result say so."""
+    put_settings(conn, uid, {"goals": "Run 5 km.", "limits": "Bad left knee."})
+    out = tool(agent, token, "goals")
+    assert (out["note"], out["limits"]) == ("Run 5 km.", "Bad left knee.")
+    tools = {t["name"]: t for t in result(call(agent, "tools/list", token=token))["tools"]}
+    assert "limits note" in tools["goals"]["description"]
+    schema = tools["goals"]["outputSchema"]
+    assert schema["properties"]["limits"]["type"] == "string"
+    assert "limits" in schema["required"]
 
 
 def test_the_reads_leave_daily_targets_out_while_daily_goal_is_off(

@@ -1,5 +1,5 @@
 {
-  "description": "The file's accent and daily picks apply only when no settings are saved yet; existing is null when none are. My goals are the exception: the file's fill saved goals that are empty, and never replace ones that aren't (F17).",
+  "description": "The file's accent and daily picks apply only when no settings are saved yet; existing is null when none are. My goals are the exception: the file's fill saved goals that are empty, and never replace ones that aren't (F17). The limits note (K107) follows the same rule, on its own.",
   "cases": [
     {
       "description": "Nothing saved: the file's settings apply, goals and all.",
@@ -154,6 +154,119 @@
         "dailyPick": 3,
         "foodPick": 2,
         "goals": ""
+      }
+    },
+    {
+      "description": "Nothing saved: the file's settings apply, limits and all.",
+      "existing": null,
+      "incoming": {
+        "accent": "#0a84ff",
+        "dailyPick": 4,
+        "foodPick": 5,
+        "goals": "",
+        "limits": "Bad left knee."
+      },
+      "expected": {
+        "accent": "#0a84ff",
+        "dailyPick": 4,
+        "foodPick": 5,
+        "goals": "",
+        "limits": "Bad left knee."
+      }
+    },
+    {
+      "description": "A saved limits note that is empty takes the file's, and the rest stays.",
+      "existing": {
+        "accent": "#30d158",
+        "dailyPick": 3,
+        "foodPick": 2,
+        "goals": "Lose 3 kg.",
+        "limits": ""
+      },
+      "incoming": {
+        "accent": "#0a84ff",
+        "dailyPick": 4,
+        "foodPick": 5,
+        "goals": "Run 5 km.",
+        "limits": "Bad left knee."
+      },
+      "expected": {
+        "accent": "#30d158",
+        "dailyPick": 3,
+        "foodPick": 2,
+        "goals": "Lose 3 kg.",
+        "limits": "Bad left knee."
+      }
+    },
+    {
+      "description": "A saved limits note stays, whatever the file's says.",
+      "existing": {
+        "accent": "#30d158",
+        "dailyPick": 3,
+        "foodPick": 2,
+        "goals": "",
+        "limits": "No gym on weekdays."
+      },
+      "incoming": {
+        "accent": "#0a84ff",
+        "dailyPick": 4,
+        "foodPick": 5,
+        "goals": "",
+        "limits": "Bad left knee."
+      },
+      "expected": {
+        "accent": "#30d158",
+        "dailyPick": 3,
+        "foodPick": 2,
+        "goals": "",
+        "limits": "No gym on weekdays."
+      }
+    },
+    {
+      "description": "Both notes empty: the file's fill each.",
+      "existing": {
+        "accent": "#30d158",
+        "dailyPick": 3,
+        "foodPick": 2,
+        "goals": "",
+        "limits": ""
+      },
+      "incoming": {
+        "accent": "#0a84ff",
+        "dailyPick": 4,
+        "foodPick": 5,
+        "goals": "Run 5 km.",
+        "limits": "Bad left knee."
+      },
+      "expected": {
+        "accent": "#30d158",
+        "dailyPick": 3,
+        "foodPick": 2,
+        "goals": "Run 5 km.",
+        "limits": "Bad left knee."
+      }
+    },
+    {
+      "description": "A file without a limits note never empties a saved one.",
+      "existing": {
+        "accent": "#30d158",
+        "dailyPick": 3,
+        "foodPick": 2,
+        "goals": "",
+        "limits": "No gym on weekdays."
+      },
+      "incoming": {
+        "accent": "#0a84ff",
+        "dailyPick": 4,
+        "foodPick": 5,
+        "goals": ""
+      },
+      "expected": {
+        "accent": "#30d158",
+        "dailyPick": 3,
+        "foodPick": 2,
+        "goals": "",
+        "limits": "No gym on weekdays."
       }
     }
   ]

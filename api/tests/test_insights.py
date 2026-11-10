@@ -229,6 +229,20 @@ def test_no_plans_reads_as_the_defaults(conn: sqlite3.Connection) -> None:
     assert [it["id"] for it in g["diet"]] == ["veg", "fruit", "fish", "nuts"]
 
 
+def test_goals_returns_both_notes(conn: sqlite3.Connection) -> None:
+    """`goals` carries My goals as `note` and the limits note (K107) as `limits`, each "" when
+    there is none, and with no settings at all."""
+    uid = add_user(conn)
+    g = insights.goals(conn, uid, TODAY)
+    assert (g["note"], g["limits"]) == ("", "")
+    put_settings(conn, uid, {"limits": "Bad left knee: no running."})
+    g = insights.goals(conn, uid, TODAY)
+    assert (g["note"], g["limits"]) == ("", "Bad left knee: no running.")
+    put_settings(conn, uid, {"goals": "Run 5 km by March."})
+    g = insights.goals(conn, uid, TODAY)
+    assert (g["note"], g["limits"]) == ("Run 5 km by March.", "Bad left knee: no running.")
+
+
 def test_a_missed_day_counts_as_done_and_shows_as_missed(conn: sqlite3.Connection) -> None:
     uid = add_user(conn)
     plan = [{"id": "sq", "name": "Squats", "reps": 15, "target": 2}]
@@ -526,6 +540,7 @@ def test_goals(conn: sqlite3.Connection) -> None:
         "foods_a_day": 3,
         "daily_goal": True,
         "note": "Run 5 km by March.",
+        "limits": "",
     }
 
 
@@ -579,6 +594,7 @@ def test_goals_give_no_daily_targets_while_daily_goal_is_off(conn: sqlite3.Conne
         "foods_a_day": None,
         "daily_goal": False,
         "note": "",
+        "limits": "",
     }
     turn_on(conn, uid)
     back = insights.goals(conn, uid, TODAY)

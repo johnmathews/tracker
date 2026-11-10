@@ -194,3 +194,31 @@ def test_an_export_carries_daily_goal_and_saved_settings_keep_theirs() -> None:
     assert merge_settings(None, off) == off
     saved = normalise_portable({"dailyPick": 4})
     assert merge_settings(saved, off) == saved
+
+
+def test_the_limits_note_normalises_and_merges_like_my_goals() -> None:
+    """K107: up to 1,000 code points, trimmed, "" for blank or anything that isn't a string. A file
+    from before it reads as none. An import fills a saved empty note and never replaces one."""
+    from tracker_api import validate
+
+    assert validate.MAX_LIMITS == 1000
+    assert validate.normalise_limits(" \n\tNo running.\n") == "No running."
+    assert validate.normalise_limits("🦵" * 1001) == "🦵" * 1000
+    others: list[Any] = [None, 0, True, [], {}, "  \n"]
+    for other in others:
+        assert validate.normalise_limits(other) == "", other
+    assert normalise_portable({})["limits"] == ""
+    assert normalise_portable({"limits": " Knees. "})["limits"] == "Knees."
+    file = {"format": "tracker-export", "version": 5, "settings": {"limits": "Knees."}}
+    incoming = parse_export(json.dumps(file))["settings"]
+    assert incoming is not None and incoming["limits"] == "Knees."
+    empty = normalise_portable({"dailyPick": 4, "goals": "Mine."})
+    assert merge_settings(empty, incoming) == {**empty, "limits": "Knees."}
+    mine = normalise_portable({"dailyPick": 4, "goals": "Mine.", "limits": "Wrists."})
+    assert merge_settings(mine, incoming) == mine
+    # Each note fills on its own: goals from the file and limits from the account.
+    both = normalise_portable({"goals": "Theirs.", "limits": "Ankles."})
+    blank = normalise_portable({"limits": "Wrists."})
+    assert merge_settings(blank, both) == {**blank, "goals": "Theirs."}
+    # A file read without its limits has none to give.
+    assert merge_settings(empty, normalise_portable({"goals": "", "limits": ""})) == empty

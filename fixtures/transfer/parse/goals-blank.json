@@ -28,7 +28,8 @@
         "accent": "#0a84ff",
         "dailyPick": 4,
         "foodPick": 3,
-        "goals": ""
+        "goals": "",
+        "limits": ""
       }
     }
   }

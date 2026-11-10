@@ -31,11 +31,11 @@ OLD_EXPORT_FORMATS = ("fitness-planner-export", "exercise-planner-export")
 #: lifts into the item's details on import, the latest week's winning. Version 3 files carry a mark
 #: per day with its drawing (`great`, `partial-solid`, `missed-hatch` … or null). Version 2 files
 #: carry the kinds alone, which read as the zigzag; version 1 files a `true` per done day, which
-#: reads as `great`. All five import. Settings may carry My goals (`goals`) with no new version,
-#: as `foodPick` came: a reader from before them drops the key, and a file without them reads as
-#: none. Ask's conversations (`conversations`) came the same way, and so did Daily goal
-#: (`dailyGoal`, K85): a file without it reads as on, and Cardio (`cardio`, K90): a file without
-#: it has none.
+#: reads as `great`. All five import. Settings may carry My goals (`goals`) and the limits note
+#: (`limits`, K107) with no new version, as `foodPick` came: a reader from before them drops the
+#: key, and a file without them reads as none. Ask's conversations (`conversations`) came the
+#: same way, and so did Daily goal (`dailyGoal`, K85): a file without it reads as on, and Cardio
+#: (`cardio`, K90): a file without it has none.
 EXPORT_VERSION = 5
 #: The last version whose notes live in plan items.
 LAST_ITEM_NOTES_VERSION = 4
@@ -57,6 +57,8 @@ MAX_DISTANCE = 1000
 MAX_NOTES = 500
 #: My goals' length, in characters (code points).
 MAX_GOALS = 1000
+#: The limits note's length, in characters (code points), as My goals'.
+MAX_LIMITS = 1000
 #: An item's name, in characters, for `strict_item` (MCP writes). REST and the web app set no cap.
 MAX_NAME = 80
 #: An item's id, in characters: the bounds of the ticks and details paths, and of MCP writes.
@@ -153,6 +155,8 @@ class Portable(TypedDict):
     foodPick: int
     #: My goals, in the person's words; "" when there are none.
     goals: str
+    #: The limits note (K107): what the person has to work around; "" when there is none.
+    limits: str
     #: Daily goal (K85): whether exercises a day and foods a day apply. Off, they are kept but
     #: nothing reads them: no day is met, and the insights give no daily target. Left out where it
     #: isn't known (a file or a tab from before it), which reads as on; settings the API has saved
@@ -287,6 +291,12 @@ def normalise_goals(v: object) -> str:
     """My goals: text cut to MAX_GOALS characters; "" for anything that isn't a string or for
     nothing left. The web app's `normaliseGoals` does the same."""
     return normalise_text(v, MAX_GOALS) or ""
+
+
+def normalise_limits(v: object) -> str:
+    """The limits note, by My goals' rule: text cut to MAX_LIMITS characters; "" for anything
+    that isn't a string or for nothing left. The web app's `normaliseLimits` does the same."""
+    return normalise_text(v, MAX_LIMITS) or ""
 
 
 def normalise_fields(v: object) -> dict[str, str]:
@@ -611,6 +621,7 @@ def normalise_portable(v: dict[str, Any]) -> Portable:
             to_int(v.get("foodPick"), DEFAULT_FOOD_PICK), MIN_DAILY_PICK, MAX_DAILY_PICK
         ),
         "goals": normalise_goals(v.get("goals")),
+        "limits": normalise_limits(v.get("limits")),
     }
     # Kept only when it is a boolean, as storage.ts keeps it: anything else is not known.
     daily_goal = v.get("dailyGoal")
@@ -800,15 +811,21 @@ def merge_summary(existing: Tracked, incoming: Tracked) -> Summary:
 
 
 def merge_settings(existing: Portable | None, incoming: Portable | None) -> Portable | None:
-    """Saved settings win; the file's apply only where none are saved. The one exception is My
-    goals: the file's fill saved goals that are empty, and never replace ones that aren't."""
+    """Saved settings win; the file's apply only where none are saved. The exceptions are My
+    goals and the limits note: each of the file's fills a saved one that is empty, and never
+    replaces one that isn't."""
     if existing is None:
         return incoming
-    # A file read without its goals has none to give, as in the web app.
+    merged = existing
+    # A file read without a note has none to give, as in the web app. Settings from before the
+    # limits note may lack its key, which reads as empty.
     goals = incoming.get("goals") if incoming is not None else None
     if not existing["goals"] and goals:
-        return {**existing, "goals": goals}
-    return existing
+        merged = {**merged, "goals": goals}
+    limits = incoming.get("limits") if incoming is not None else None
+    if not existing.get("limits") and limits:
+        merged = {**merged, "limits": limits}
+    return merged
 
 
 def merge_conversations(

@@ -180,8 +180,8 @@ def load_tracked(conn: sqlite3.Connection, user_id: int, section: Section) -> Tr
 
 def load_settings(conn: sqlite3.Connection, user_id: int) -> Portable | None:
     row = conn.execute(
-        "SELECT accent, daily_pick, food_pick, goals, daily_goal, item_sections FROM settings"
-        " WHERE user_id = ?",
+        "SELECT accent, daily_pick, food_pick, goals, limits, daily_goal, item_sections"
+        " FROM settings WHERE user_id = ?",
         (user_id,),
     ).fetchone()
     if row is None:
@@ -191,6 +191,7 @@ def load_settings(conn: sqlite3.Connection, user_id: int) -> Portable | None:
         "dailyPick": row["daily_pick"],
         "foodPick": row["food_pick"],
         "goals": row["goals"],
+        "limits": row["limits"],
         "dailyGoal": bool(row["daily_goal"]),
     }
     # Normalised on the way out too, so a type this version's registry lacks drops (P29).
@@ -447,11 +448,12 @@ def set_tick(
 
 def put_settings(conn: sqlite3.Connection, user_id: int, raw: dict[str, Any]) -> Portable:
     # A tab still running the app from before foods a day (K57) sends no foodPick, and one from
-    # before arranging the item page (K66) no itemSections, and one from before My goals no goals,
-    # and one from before Daily goal (K85) no dailyGoal; keep the saved ones rather than reset
-    # them. The app sends `itemSections: {}` for the default arrangement. Goals that aren't a
-    # string count as not sent, and a tab never sends goals it hasn't read (F1); a dailyGoal that
-    # isn't a boolean likewise (F2). The result always has dailyGoal: on when nothing gave one.
+    # before arranging the item page (K66) no itemSections, one from before My goals no goals, one
+    # from before Daily goal (K85) no dailyGoal, and one from before the limits note (K107) no
+    # limits; keep the saved ones rather than reset them. The app sends `itemSections: {}` for the
+    # default arrangement. Goals or limits that aren't a string count as not sent, and a tab never
+    # sends a note it hasn't read (F1); a dailyGoal that isn't a boolean likewise (F2). The result
+    # always has dailyGoal: on when nothing gave one.
     saved = load_settings(conn, user_id)
     if saved is not None:
         if "foodPick" not in raw:
@@ -462,16 +464,18 @@ def put_settings(conn: sqlite3.Connection, user_id: int, raw: dict[str, Any]) ->
             raw = {**raw, "itemSections": saved.get("itemSections", {})}
         if not isinstance(raw.get("goals"), str):
             raw = {**raw, "goals": saved["goals"]}
+        if not isinstance(raw.get("limits"), str):
+            raw = {**raw, "limits": saved["limits"]}
     settings = normalise_portable(raw)
     settings.setdefault("dailyGoal", True)
     item_sections = settings.get("itemSections")
     conn.execute(
         "INSERT INTO settings"
-        " (user_id, accent, daily_pick, food_pick, goals, daily_goal, item_sections)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?)"
+        " (user_id, accent, daily_pick, food_pick, goals, limits, daily_goal, item_sections)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
         " ON CONFLICT (user_id) DO UPDATE SET accent = excluded.accent,"
         " daily_pick = excluded.daily_pick, food_pick = excluded.food_pick,"
-        " goals = excluded.goals, daily_goal = excluded.daily_goal,"
+        " goals = excluded.goals, limits = excluded.limits, daily_goal = excluded.daily_goal,"
         " item_sections = excluded.item_sections",
         (
             user_id,
@@ -479,6 +483,7 @@ def put_settings(conn: sqlite3.Connection, user_id: int, raw: dict[str, Any]) ->
             settings["dailyPick"],
             settings["foodPick"],
             settings["goals"],
+            settings["limits"],
             int(settings["dailyGoal"]),
             json.dumps(item_sections, separators=(",", ":")) if item_sections else None,
         ),
@@ -737,7 +742,7 @@ def import_data(
                         " hatch = hatch | (excluded.hatch & ~days)",
                         (user_id, section, week, item_id, *days_to_masks(days)),
                     )
-        # Saved settings stay, but the file's goals fill empty ones (merge_settings).
+        # Saved settings stay, but the file's goals and limits fill empty ones (merge_settings).
         saved = load_settings(conn, user_id)
         merged = merge_settings(saved, data["settings"])
         applied = False

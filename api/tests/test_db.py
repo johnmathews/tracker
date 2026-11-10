@@ -35,13 +35,14 @@ ASK_HISTORY_STEP = "CREATE TABLE ask_conversations"
 OAUTH_STEP = "CREATE TABLE oauth_grants"
 DAILY_GOAL_STEP = "ADD COLUMN daily_goal"
 SECTION_CHECK_STEP = "CREATE TABLE plans_new"
+LIMITS_STEP = "ADD COLUMN limits"
 
 
 def test_steps_are_numbered_as_the_docs_say() -> None:
     """Schema 6 adds API tokens, 7 item details, 8 the item pages' arrangement, 9 My goals,
-    10 Ask's caps, 11 Ask's history, 12 OAuth connections, 13 Daily goal and 14 plans and ticks
-    without a CHECK on the section, for Cardio (docs/api.md §2)."""
-    assert SCHEMA_VERSION == 14
+    10 Ask's caps, 11 Ask's history, 12 OAuth connections, 13 Daily goal, 14 plans and ticks
+    without a CHECK on the section, for Cardio, and 15 the limits note (docs/api.md §2)."""
+    assert SCHEMA_VERSION == 15
     steps = (
         TOKENS_STEP,
         DETAILS_STEP,
@@ -52,8 +53,9 @@ def test_steps_are_numbered_as_the_docs_say() -> None:
         OAUTH_STEP,
         DAILY_GOAL_STEP,
         SECTION_CHECK_STEP,
+        LIMITS_STEP,
     )
-    assert [_step_of(m) + 1 for m in steps] == [6, 7, 8, 9, 10, 11, 12, 13, 14]
+    assert [_step_of(m) + 1 for m in steps] == [6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
 
 
 def test_section_check_step_keeps_plans_and_ticks_and_takes_cardio(
@@ -408,6 +410,7 @@ def test_item_sections_migration_adds_an_empty_column(
         "dailyPick": 4,
         "foodPick": 3,
         "goals": "",
+        "limits": "",
         "dailyGoal": True,
     }
     c.close()
@@ -467,10 +470,46 @@ def test_goals_migration_gives_saved_settings_none(
         "dailyPick": 5,
         "foodPick": 4,
         "goals": "",
+        "limits": "",
         "dailyGoal": True,
     }
     with pytest.raises(sqlite3.IntegrityError):
         c.execute("UPDATE settings SET goals = NULL")
+    c.close()
+
+
+def test_limits_migration_gives_saved_settings_none(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Settings saved before the limits note (K107) keep every value, My goals included, and read
+    as having no limits note."""
+    from tracker_api import db
+    from tracker_api.data import load_settings
+
+    c = connect(tmp_path / "f.db")
+    monkeypatch.setattr(db, "MIGRATIONS", db.MIGRATIONS[: _step_of(LIMITS_STEP)])
+    db.migrate(c)
+    monkeypatch.undo()
+    c.execute("INSERT INTO users (id, username, password_hash, created_at) VALUES (1, 'a', 'h', 0)")
+    c.execute(
+        "INSERT INTO settings (user_id, accent, daily_pick, food_pick, goals, daily_goal)"
+        " VALUES (1, '#bf5af2', 6, 5, 'Run 5 km.', 0)"
+    )
+    db.migrate(c)
+    assert c.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
+    columns = {r["name"]: r for r in c.execute("PRAGMA table_info(settings)")}
+    assert columns["limits"]["type"] == "TEXT"
+    assert columns["limits"]["notnull"] == 1
+    assert load_settings(c, 1) == {
+        "accent": "#bf5af2",
+        "dailyPick": 6,
+        "foodPick": 5,
+        "goals": "Run 5 km.",
+        "limits": "",
+        "dailyGoal": False,
+    }
+    with pytest.raises(sqlite3.IntegrityError):
+        c.execute("UPDATE settings SET limits = NULL")
     c.close()
 
 
@@ -499,6 +538,7 @@ def test_daily_goal_migration_turns_it_on_for_saved_settings(
         "dailyPick": 6,
         "foodPick": 5,
         "goals": "Run 5 km.",
+        "limits": "",
         "dailyGoal": True,
     }
     for bad in ("NULL", "2", "'yes'"):

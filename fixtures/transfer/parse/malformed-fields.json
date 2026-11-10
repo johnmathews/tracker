@@ -53,7 +53,7 @@
         "log": {},
         "details": {}
       },
-      "settings": { "accent": "#30d158", "dailyPick": 8, "foodPick": 8, "goals": "" }
+      "settings": { "accent": "#30d158", "dailyPick": 8, "foodPick": 8, "goals": "", "limits": "" }
     }
   }
 }

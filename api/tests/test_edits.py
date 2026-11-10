@@ -849,6 +849,7 @@ def test_set_daily_targets_keeps_the_accent_and_the_other_target(
         "dailyPick": 5,
         "foodPick": 4,
         "goals": "Run 5 km.",
+        "limits": "",
         "dailyGoal": True,
     }
     out = edits.set_daily_targets(conn, uid, foods_a_day=1)
@@ -858,6 +859,7 @@ def test_set_daily_targets_keeps_the_accent_and_the_other_target(
         "dailyPick": 5,
         "foodPick": 1,
         "goals": "Run 5 km.",
+        "limits": "",
         "dailyGoal": True,
     }
 
@@ -883,6 +885,7 @@ def test_set_daily_targets_starts_from_the_defaults(conn: sqlite3.Connection, ui
         "dailyPick": 8,
         "foodPick": 1,
         "goals": "",
+        "limits": "",
         "dailyGoal": True,
     }
 
@@ -911,6 +914,7 @@ def test_set_daily_targets_refuses_out_of_range_values(
         "dailyPick": 3,
         "foodPick": 2,
         "goals": "",
+        "limits": "",
         "dailyGoal": True,
     }
 

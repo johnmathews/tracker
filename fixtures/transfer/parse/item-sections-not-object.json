@@ -11,7 +11,7 @@
       "exercise": { "plans": {}, "log": {}, "details": {} },
       "cardio": { "plans": {}, "log": {}, "details": {} },
       "diet": { "plans": {}, "log": {}, "details": {} },
-      "settings": { "accent": "#0a84ff", "dailyPick": 4, "foodPick": 5, "goals": "" }
+      "settings": { "accent": "#0a84ff", "dailyPick": 4, "foodPick": 5, "goals": "", "limits": "" }
     }
   }
 }

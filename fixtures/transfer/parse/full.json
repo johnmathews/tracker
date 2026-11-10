@@ -52,7 +52,7 @@
         "log": { "2026-10-19": { "veg": ["great", "great", null, null, null, null, null] } },
         "details": {}
       },
-      "settings": { "accent": "#0a84ff", "dailyPick": 4, "foodPick": 3, "goals": "" }
+      "settings": { "accent": "#0a84ff", "dailyPick": 4, "foodPick": 3, "goals": "", "limits": "" }
     }
   }
 }

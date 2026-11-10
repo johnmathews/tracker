@@ -177,8 +177,8 @@ MIGRATIONS = [
     """
     ALTER TABLE settings ADD COLUMN item_sections TEXT;
     """,
-    # My goals: the person's own words about what they are aiming for, which only Ask reads.
-    # Saved settings start with none.
+    # My goals: the person's own words about what they are aiming for. Ask and the MCP (Claude
+    # connections) read it. Saved settings start with none.
     """
     ALTER TABLE settings ADD COLUMN goals TEXT NOT NULL DEFAULT '';
     """,
@@ -329,6 +329,12 @@ MIGRATIONS = [
         SELECT user_id, section, week, item_id, days, partial, missed, solid, hatch FROM ticks;
     DROP TABLE ticks;
     ALTER TABLE ticks_new RENAME TO ticks;
+    """,
+    # The limits note (K107): what the person has to work around (injuries, equipment, time,
+    # food), in their own words. Ask and the MCP (Claude connections) read it beside My goals.
+    # Saved settings start with none.
+    """
+    ALTER TABLE settings ADD COLUMN limits TEXT NOT NULL DEFAULT '';
     """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)

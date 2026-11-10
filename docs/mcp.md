@@ -18,14 +18,18 @@ distance in km, either, both or neither. It has a weekly goal but no daily targe
 
 **Read tools** answer questions about the log. A `read` or a `write` token may call them.
 
-| Tool           | Answers                                                         |
-| -------------- | --------------------------------------------------------------- |
-| `whoami`       | Which account and scope the token has. Use it to test the link. |
-| `week_summary` | How one week went, item by item, against its goals.             |
-| `weeks`        | Several weeks side by side, for a trend.                        |
-| `item_history` | One item over the last weeks, and its whole note.               |
-| `goals`        | This week's goals, the daily targets and the "My goals" note.   |
-| `consistency`  | The share of days and goals met, and the current streaks.       |
+| Tool           | Answers                                                                     |
+| -------------- | --------------------------------------------------------------------------- |
+| `whoami`       | Which account and scope the token has. Use it to test the link.             |
+| `week_summary` | How one week went, item by item, against its goals.                         |
+| `weeks`        | Several weeks side by side, for a trend.                                    |
+| `item_history` | One item over the last weeks, and its whole note.                           |
+| `goals`        | This week's goals, the daily targets, and the "My goals" and limits notes.  |
+| `consistency`  | The share of days and goals met, and the current streaks.                   |
+
+The "My goals" and limits notes are the person's own words: what they are working towards, and
+what they have to work around. Any agent connected to the account reads them through `goals`, as
+Ask does in the app.
 
 **Write tools** change plans, items' notes, marks and daily targets as the app does. Only a `write` token or a Read and change connection may call them.
 

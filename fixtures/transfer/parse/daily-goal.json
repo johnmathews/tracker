@@ -30,7 +30,8 @@
         "dailyPick": 4,
         "foodPick": 3,
         "dailyGoal": false,
-        "goals": ""
+        "goals": "",
+        "limits": ""
       }
     }
   }
