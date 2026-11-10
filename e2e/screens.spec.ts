@@ -439,3 +439,48 @@ test('prints each tracker on a page of its own, the week over each (K97)', async
   const pdf = (await page.pdf({ format: 'A4' })).toString('latin1')
   expect(pdf.match(/\/Type\s*\/Page[^s]/g)).toHaveLength(3)
 })
+
+test('Edit plan is one tracker per screen too, each resting under the sticky bar (K99)', async ({
+  page,
+}) => {
+  await openApp(page)
+  await page.keyboard.press('e')
+  await expect(page.getByTestId('edit-plan-button').filter({ hasText: 'Done' })).toHaveCount(1)
+  const place = () =>
+    page.evaluate(() => {
+      const bar = document.querySelector('[data-slot="bar"]')!.getBoundingClientRect().bottom
+      const screens = [...document.querySelectorAll('[data-planner-screen]')].map((s) =>
+        s.getBoundingClientRect(),
+      )
+      return {
+        bar: Math.round(bar),
+        tops: screens.map((s) => Math.round(s.top)),
+        // A screen's foot inside the window, below the bar: two trackers show.
+        across: screens
+          .slice(0, -1)
+          .some((s) => s.bottom > bar + 1 && s.bottom < window.innerHeight - 1),
+      }
+    })
+  // Each screen is at least the window less the bar (option B: Edit plan's rows, from the top).
+  const first = await place()
+  const heights = await page.evaluate(() =>
+    [...document.querySelectorAll('[data-planner-screen]')].map((s) => s.clientHeight),
+  )
+  for (const h of heights) expect(h).toBeGreaterThanOrEqual(800 - first.bar - 1)
+  // A mouse wheel's notches never leave two trackers showing, and reach Cardio under the bar.
+  await page.mouse.move(640, 500)
+  let cardio = false
+  for (let i = 0; i < 6 && !cardio; i++) {
+    await page.mouse.wheel(0, 120)
+    await page.waitForTimeout(700)
+    const at = await place()
+    expect(at.across).toBe(false)
+    cardio = Math.abs(at.tops[1]! - at.bar) <= 1
+  }
+  expect(cardio).toBe(true)
+  // The arrow on Add's line goes on to Food, its top just under the bar.
+  await page.getByTestId('to-food').click()
+  await page.waitForTimeout(700)
+  const food = await place()
+  expect(Math.abs(food.tops[2]! - food.bar)).toBeLessThanOrEqual(1)
+})

@@ -24,6 +24,9 @@
  * - `full:` the planner's screens: App puts `.planner-screens` on <html> outside Edit plan and
  *   Settings, and each section fills the screen; useScreenSprint keeps the page from resting
  *   across two (K38).
+ * - `edit:` Edit plan's screens: App puts `.edit-screens` on <html> in Edit plan, and each
+ *   section is at least the window less the sticky bar, its rows at Edit plan's size from the
+ *   top (K99); the page moves between them as between the week's.
  * - `folded:` held upright under 1000px wide, or any screen under 760px wide: the week folds,
  *   each row's name line above its seven boxes (K26).
  * - `short:` the planner's screens, landscape and 540px tall or less (a phone on its side): the
@@ -35,6 +38,13 @@
 @custom-variant full {
   @media screen {
     &:where(.planner-screens, .planner-screens *) {
+      @slot;
+    }
+  }
+}
+@custom-variant edit {
+  @media screen {
+    &:where(.edit-screens, .edit-screens *) {
       @slot;
     }
   }
@@ -143,6 +153,14 @@
     scroll-padding-top: var(--week-band);
   }
   :root.planner-screens [data-planner-screen] {
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+  /* Edit plan's screens snap the same way, each resting under the sticky bar (K99). */
+  :root.edit-screens {
+    scroll-snap-type: y mandatory;
+  }
+  :root.edit-screens [data-planner-screen] {
     scroll-snap-align: start;
     scroll-snap-stop: always;
   }
@@ -777,6 +795,10 @@
   @media screen {
     html.planner-screens {
       scroll-padding-top: var(--week-band);
+    }
+    /* Edit plan's screens rest under the sticky bar, whose height AppNavbar measures (K99). */
+    html.edit-screens {
+      scroll-padding-top: var(--bar-height, 4.5rem);
     }
   }
 

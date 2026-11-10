@@ -27,6 +27,7 @@ const finger = { pointerType: 'touch' }
 /** Edit plan is on: the bar ends with "Done" (K82), and is the sticky one in the page (K27). */
 const editing = () => wrapper.get('[data-testid="edit-plan-button"]').text() === 'Done'
 const screens = () => document.documentElement.classList.contains('planner-screens')
+const editScreens = () => document.documentElement.classList.contains('edit-screens')
 /** A pointer event at a height on the screen (trigger can't set clientY). */
 async function press(el: Element, type: string, clientY: number): Promise<void> {
   el.dispatchEvent(new MouseEvent(type, { clientY, bubbles: true }))
@@ -99,6 +100,59 @@ describe('the planner’s screens (K24–K27)', () => {
     expect(screens()).toBe(false)
     expect(bar().classes()).toContain('sticky')
     expect(wrapper.find('[data-slot="bar-handle"]').exists()).toBe(false)
+  })
+
+  it('measures the bar again whenever it changes size, and forgets it on the way out (K99)', () => {
+    let measure: (() => void) | undefined
+    const disconnect = vi.fn<() => void>()
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: () => void) {
+          measure = callback
+        }
+        observe(): void {}
+        disconnect = disconnect
+      },
+    )
+    try {
+      mountApp()
+      const height = vi.spyOn(bar().element as HTMLElement, 'offsetHeight', 'get')
+      height.mockReturnValue(140) // folded, the bar wraps onto a second line
+      measure!()
+      expect(document.documentElement.style.getPropertyValue('--bar-height')).toBe('140px')
+      wrapper.unmount()
+      expect(disconnect).toHaveBeenCalled()
+      expect(document.documentElement.style.getPropertyValue('--bar-height')).toBe('')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('gives Edit plan screens of its own under the sticky bar, and the week’s back (K99)', async () => {
+    mountApp()
+    expect(editScreens()).toBe(false)
+    await wrapper.get('[data-testid="edit-plan-button"]').trigger('click')
+    expect(editScreens()).toBe(true)
+    expect(screens()).toBe(false)
+    // The bar's height is there for main.css: each screen is the window less the bar.
+    expect(document.documentElement.style.getPropertyValue('--bar-height')).toMatch(/^\d+px$/)
+    // Each tracker is a screen, at least the window less the bar, from the top (option B).
+    for (const id of ['exercises-heading', 'cardio-heading', 'diet-heading']) {
+      const section = wrapper.get(`section[aria-labelledby="${id}"]`)
+      expect(section.attributes('data-planner-screen')).toBeDefined()
+      expect(section.classes()).toContain('edit:min-h-[calc(100dvh-var(--bar-height,0px))]')
+      expect(section.classes()).not.toContain('edit:justify-center')
+    }
+    // The arrows show in Edit plan; the way on shares Add's line.
+    for (const id of ['to-cardio', 'to-food', 'to-exercises', 'back-to-cardio']) {
+      expect(wrapper.get(`[data-testid="${id}"]`).classes()).toContain('edit:inline-flex')
+    }
+    const wayOn = wrapper.get('[data-testid="to-cardio"]').element.parentElement!
+    expect(wayOn.querySelector('[data-testid="add-exercise"]')).not.toBeNull()
+    await wrapper.get('[data-testid="edit-plan-button"]').trigger('click')
+    expect(editScreens()).toBe(false)
+    expect(screens()).toBe(true)
   })
 
   it('leads the bar with the week as its title, with no wordmark (K81)', async () => {

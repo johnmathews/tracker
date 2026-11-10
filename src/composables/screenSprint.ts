@@ -155,13 +155,18 @@ export function sprintTo(top: number, done?: () => void): void {
 }
 
 /**
- * The height of the week fixed above the screens (K88), or 0 where it isn't fixed (Edit plan, a
- * short screen). A screen rests just under it, so it is taken off the window's top.
+ * The height of what stays at the top over the screens: the week fixed above the week's screens
+ * (K88), or Edit plan's sticky bar (K99); 0 where neither is (a short screen). A screen rests just
+ * under it, so it is taken off the window's top.
  */
 export function bandHeight(): number {
-  const band = document.querySelector<HTMLElement>('[data-slot="week-band"]')
-  if (!band || getComputedStyle(band).position !== 'sticky') return 0
-  return band.getBoundingClientRect().height
+  for (const slot of ['week-band', 'bar']) {
+    const band = document.querySelector<HTMLElement>(`[data-slot="${slot}"]`)
+    if (band && getComputedStyle(band).position === 'sticky') {
+      return band.getBoundingClientRect().height
+    }
+  }
+  return 0
 }
 
 /** Sprint to the top of the screen labelled by `headingId` (the arrows between screens, K42). */

@@ -90,7 +90,7 @@ watch(
          just under the fixed week (K88), sprinting to the top of Cardio, the screen before (K90). -->
     <IconButton
       label="Back to Cardio"
-      class="absolute top-(--screen-gap-top) left-1/2 hidden -translate-x-1/2 text-ink-secondary hover:text-ink full:inline-flex short:hidden"
+      class="absolute top-(--screen-gap-top) left-1/2 hidden -translate-x-1/2 text-ink-secondary hover:text-ink full:inline-flex edit:top-0.5 edit:inline-flex short:hidden"
       data-noprint
       data-testid="back-to-cardio"
       @click="sprintToScreen('cardio-heading')"

@@ -74,7 +74,7 @@ watch(
          fixed week, sprinting to the top of Exercises. -->
     <IconButton
       label="Back to Exercises"
-      class="absolute top-(--screen-gap-top) left-1/2 hidden -translate-x-1/2 text-ink-secondary hover:text-ink full:inline-flex short:hidden"
+      class="absolute top-(--screen-gap-top) left-1/2 hidden -translate-x-1/2 text-ink-secondary hover:text-ink full:inline-flex edit:top-0.5 edit:inline-flex short:hidden"
       data-noprint
       data-testid="to-exercises"
       @click="sprintToScreen('exercises-heading')"
@@ -109,24 +109,28 @@ watch(
       </TrackerGrid>
     </div>
     <!-- The way on (PlannerScreen card, K42), as Exercises': an arrow at the foot, to Food. -->
-    <IconButton
-      label="Go to Food"
-      class="hidden self-center text-ink-secondary hover:text-ink full:mt-[calc(var(--u)*10)] full:inline-flex short:hidden"
+    <!-- In Edit plan the arrow is centred on Add's line, under the grid (K99). -->
+    <div
+      class="grid grid-cols-[1fr_auto_1fr] items-center full:mt-[calc(var(--u)*10)] edit:mt-[calc(var(--u)*24)]"
       data-noprint
-      data-testid="to-food"
-      @click="sprintToScreen('diet-heading')"
-      ><ChevronDown :size="24"
-    /></IconButton>
-    <!-- Adding opens the same dialog as editing (K54), at the page's control size. -->
-    <Button
-      v-if="planner.configMode"
-      class="mt-[calc(var(--u)*24)] h-(--set-control) self-start px-(--set-control-pad) text-(length:--set-label) [&_svg]:size-(--set-icon)"
-      data-noprint
-      data-add
-      data-testid="add-cardio"
-      @click="adding = true"
-      ><Plus :stroke-width="1.5" />Add cardio</Button
     >
+      <!-- Adding opens the same dialog as editing (K54), at the page's control size. -->
+      <Button
+        v-if="planner.configMode"
+        class="col-start-1 h-(--set-control) justify-self-start px-(--set-control-pad) text-(length:--set-label) [&_svg]:size-(--set-icon)"
+        data-add
+        data-testid="add-cardio"
+        @click="adding = true"
+        ><Plus :stroke-width="1.5" />Add cardio</Button
+      >
+      <IconButton
+        label="Go to Food"
+        class="col-start-2 hidden text-ink-secondary hover:text-ink full:inline-flex edit:inline-flex short:hidden"
+        data-testid="to-food"
+        @click="sprintToScreen('diet-heading')"
+        ><ChevronDown :size="24"
+      /></IconButton>
+    </div>
     <EditCardioDialog v-if="editing" :item="editing" @close="editing = null" />
     <EditCardioDialog v-if="adding" @close="adding = false" />
   </section>

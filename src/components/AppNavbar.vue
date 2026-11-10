@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, toRef } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, toRef } from 'vue'
 import {
   Calendar,
   ChevronLeft,
@@ -37,6 +37,25 @@ const reveal = useBarReveal(header, {
   onHandle: () => store.setConfigMode(true),
 })
 const fullscreen = useFullscreen()
+
+// Edit plan's screens fill the window under the sticky bar (K99): main.css reads its height as
+// `--bar-height`, which changes when the bar wraps (folded) or the window is resized.
+let barSize: ResizeObserver | undefined
+function measureBar(): void {
+  if (header.value) {
+    document.documentElement.style.setProperty('--bar-height', `${header.value.offsetHeight}px`)
+  }
+}
+onMounted(() => {
+  measureBar()
+  if (typeof ResizeObserver === 'undefined' || !header.value) return
+  barSize = new ResizeObserver(measureBar)
+  barSize.observe(header.value)
+})
+onBeforeUnmount(() => {
+  barSize?.disconnect()
+  document.documentElement.style.removeProperty('--bar-height')
+})
 
 const session = useSessionStore()
 const otherWeek = computed(() => store.weekKey !== store.currentWeekKey)

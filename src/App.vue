@@ -207,8 +207,20 @@ const screens = computed(
     !store.configMode,
 )
 watchEffect(() => document.documentElement.classList.toggle('planner-screens', screens.value))
-// The page never rests showing part of both screens: it sprints from one to the other (K38).
-useScreenSprint(screens)
+// Edit plan shows one tracker per screen too, under its sticky bar (K99). The class on <html> turns
+// on main.css's `edit:` variant.
+const editScreens = computed(
+  () =>
+    session.status === 'signed-in' &&
+    !link.value &&
+    !confirmLink.value &&
+    !connectId.value &&
+    shown.value === 'planner' &&
+    store.configMode,
+)
+watchEffect(() => document.documentElement.classList.toggle('edit-screens', editScreens.value))
+// The page never rests showing part of two screens: it sprints from one to the next (K38, K99).
+useScreenSprint(computed(() => screens.value || editScreens.value))
 
 // matchMedia is missing in some environments (jsdom), so "System" falls back to light there.
 const systemDark = useMediaQuery('(prefers-color-scheme: dark)')
@@ -301,7 +313,7 @@ onBeforeUnmount(() => {
     <!-- Settings, an item's page and Edit plan are full width on the page's margins, like the week
          (K51, K54, K64). Ask fills the screen beside its side panel and sets its own margins. -->
     <main
-      class="print:max-w-none print:p-0 full:max-w-none full:p-0"
+      class="print:max-w-none print:p-0 full:max-w-none full:p-0 edit:pb-0"
       :class="
         shown === 'ask'
           ? undefined

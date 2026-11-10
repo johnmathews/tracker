@@ -1,0 +1,144 @@
+<title>Edit plan, one tracker per screen</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="edit.css">
+<!--
+  A mockup (design-system skill, references/mockups.md). One question: how Edit plan looks once
+  it shows one tracker per screen, as the week does. edit.js and edit.css draw a frame you can
+  scroll; scroll snapping stands in for the app's sprint (K38, K98). No new colours or type.
+-->
+<style>
+  body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font-sans); }
+  .mockup-page {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: var(--space-8, 32px) var(--space-16, 64px);
+    max-width: 1200px; margin: 0 auto; display: grid; gap: var(--space-12, 48px);
+  }
+  .mockup-head { display: grid; gap: var(--space-2, 8px); max-width: 70ch; }
+  .mockup-head h1, .option h2 { margin: 0; text-wrap: balance; }
+  .mockup-head p, .option p { margin: 0; }
+  .mockup-meta { color: var(--ink-secondary); }
+  .option { display: grid; gap: var(--space-4, 16px); }
+  .option-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2, 8px) var(--space-3, 12px); }
+  .option-tag { color: var(--ink-secondary); }
+  .option[data-recommended] .option-tag::after { content: " · Recommended"; color: var(--ink); }
+  /* The same stage in light and in dark, side by side; stacked on a phone. Each pane is a
+     data-theme subtree, so the system's own tokens switch inside it. */
+  .panes { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4, 16px); }
+  .pane { min-width: 0; background: var(--canvas); color: var(--ink); border: 1px solid var(--line);
+          border-radius: var(--radius-lg, 10px); padding: var(--space-4, 16px); overflow-x: auto; }
+  .pane-label { color: var(--ink-secondary); margin: 0 0 var(--space-3, 12px); }
+  .measures { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); }
+  .measures li { border: 1px solid var(--line); border-radius: var(--radius-sm, 4px); padding: 2px var(--space-2, 8px); font-variant-numeric: tabular-nums; }
+  .measures li[data-pass="no"] { border-color: currentColor; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  .device { position: relative; width: 100%; }
+  .device > div { position: absolute; top: 0; left: 0; transform-origin: 0 0; border: 1px solid var(--line); border-radius: var(--radius-lg); }
+  .device.phone > div { border-radius: 28px; border-width: 2px; }
+  .phones { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+  .phones .device { max-width: 260px; }
+  .notes { margin: 0; padding-left: 1.2em; display: grid; gap: var(--space-1, 4px); max-width: 70ch; }
+</style>
+
+<main class="mockup-page">
+  <header class="mockup-head">
+    <p class="caption mockup-meta">Mockup · 2026-11-10 · Tracker</p>
+    <h1 class="title-1">Edit plan, one tracker per screen</h1>
+    <p class="body">On the week, each tracker fills the screen and the page moves one tracker at a time. Edit plan is still one long page, with Exercises, Cardio and Food one after another. Both options below give Edit plan one tracker per screen, under its bar, with the same arrows and the same one-swipe-one-screen scrolling as the week.</p>
+    <p class="body">The bar, the pencils, the bins, the “per day” Stepper and the Add buttons stay as they are. The question is how a tracker fills its screen. Scroll inside each frame to try it.</p>
+  </header>
+
+  <section class="option" id="a" data-recommended aria-labelledby="a-h">
+    <div class="option-head">
+      <h2 class="title-2" id="a-h">A. Like the week: the rows fill the screen</h2>
+      <span class="label option-tag">Option A</span>
+    </div>
+    <p class="body">Each tracker is laid out as on the week. The rows share the screen’s height, between 56px and 1.25 × a day’s width, and a short tracker sits in the middle. Add sits under the grid and the arrow to the next tracker is centred at the foot. Moving between the week and Edit plan, the grid stays in nearly the same place.</p>
+    <div class="panes">
+      <div class="pane" data-theme="light"><p class="label pane-label">Light · 1280×800 · scroll it, or press an arrow</p><div class="device" data-w="1280" data-h="800" data-o="a"></div></div>
+      <div class="pane" data-theme="dark"><p class="label pane-label">Dark · phone · top, and on Cardio</p><div class="phones"><div class="device phone" data-w="390" data-h="760" data-o="a"></div><div class="device phone" data-w="390" data-h="760" data-o="a" data-at="cardio"></div></div></div>
+    </div>
+  </section>
+
+  <section class="option" id="b" aria-labelledby="b-h">
+    <div class="option-head">
+      <h2 class="title-2" id="b-h">B. Edit plan’s rows, from the top</h2>
+      <span class="label option-tag">Option B</span>
+    </div>
+    <p class="body">Each tracker keeps Edit plan’s fixed rows, max(76px, 100u), and starts at the top of its screen, with Add straight under the grid. Space left over stays empty at the foot. The rows never change size as the window does.</p>
+    <div class="panes">
+      <div class="pane" data-theme="light"><p class="label pane-label">Light · 1280×800 · scroll it, or press an arrow</p><div class="device" data-w="1280" data-h="800" data-o="b"></div></div>
+      <div class="pane" data-theme="dark"><p class="label pane-label">Dark · phone · top, and on Cardio</p><div class="phones"><div class="device phone" data-w="390" data-h="760" data-o="b"></div><div class="device phone" data-w="390" data-h="760" data-o="b" data-at="cardio"></div></div></div>
+    </div>
+  </section>
+
+  <section class="option" id="now" aria-labelledby="now-h">
+    <div class="option-head">
+      <h2 class="title-2" id="now-h">Today, for comparison</h2>
+      <span class="label option-tag">As built (K27)</span>
+    </div>
+    <p class="body">One long page that scrolls freely, so the end of Exercises and the start of Cardio show together.</p>
+    <div class="panes">
+      <div class="pane" data-theme="light"><p class="label pane-label">Light · 1280×800</p><div class="device" data-w="1280" data-h="800" data-o="now"></div></div>
+    </div>
+  </section>
+
+  <ul class="notes body">
+    <li>Both options: each tracker is at least the window’s height less the bar’s. A tracker with more rows than fit scrolls as usual, then moves on to the next.</li>
+    <li>The scrolling is the week’s: a sprint with a mouse or trackpad, the browser’s snap on a touch screen, and the screens wrap round.</li>
+    <li>The bar stays in view above the screens, as now (K80). A long press, E or Esc still go back to the week.</li>
+    <li>On a phone held upright A and B look the same: the folded grid already starts at the top with rows at their own size. They differ on a desktop, an iPad and a phone on its side.</li>
+    <li>On paper nothing changes: each tracker already starts a page of its own (K97).</li>
+  </ul>
+</main>
+
+<script src="edit.js"></script>
+<script>
+  for (const device of document.querySelectorAll('.device')) {
+    const w = Number(device.dataset.w), h = Number(device.dataset.h)
+    const screen = document.createElement('div')
+    screen.style.width = w + 'px'
+    screen.style.height = h + 'px'
+    device.append(screen)
+    const fit = () => {
+      const s = Math.min(1, device.clientWidth / w)
+      screen.style.transform = `scale(${s})`
+      device.style.height = Math.ceil(h * s) + 'px'
+    }
+    new ResizeObserver(fit).observe(device)
+    fit()
+    EP.mount(screen, { o: device.dataset.o, at: device.dataset.at })
+  }
+</script>
+
+<script>
+  // Measures: for each <li data-fg data-bg data-min>, the WCAG contrast of the two colours in each
+  // theme, resolved inside the option (so --candidate-* values apply), written after the label.
+  (() => {
+    const rgb = (value, scope, theme) => {
+      const probe = document.createElement('span')
+      probe.dataset.theme = theme
+      probe.style.color = value
+      scope.append(probe)
+      const parts = getComputedStyle(probe).color.match(/[\d.]+/g).map(Number)
+      probe.remove()
+      return parts.slice(0, 3)
+    }
+    const lum = ([r, g, b]) => [r, g, b]
+      .map((c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4 })
+      .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0)
+    const ratio = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05) }
+    for (const li of document.querySelectorAll('.measures li[data-fg]')) {
+      const scope = li.closest('.option') || document.body
+      const min = Number(li.dataset.min || 0)
+      const results = ['light', 'dark'].map((theme) => {
+        const r = ratio(rgb(li.dataset.fg, scope, theme), rgb(li.dataset.bg, scope, theme))
+        return { theme, r, ok: !min || r >= min }
+      })
+      li.dataset.pass = results.every((x) => x.ok) ? 'yes' : 'no'
+      li.append(`: ${results.map((x) => `${x.theme} ${x.r.toFixed(1)}:1${x.ok ? '' : ' (below ' + min + ':1)'}`).join(', ')}`)
+    }
+  })()
+</script>

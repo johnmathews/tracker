@@ -127,24 +127,28 @@ watch(
     </TrackerGrid>
     <!-- The way on (PlannerScreen card, K42): an arrow, no words, sprinting to the Cardio screen,
          the next of three (K90). -->
-    <IconButton
-      label="Go to Cardio"
-      class="hidden self-center text-ink-secondary hover:text-ink full:mt-[calc(var(--u)*10)] full:inline-flex short:hidden"
+    <!-- In Edit plan the arrow is centred on Add's line, under the grid (K99). -->
+    <div
+      class="grid grid-cols-[1fr_auto_1fr] items-center full:mt-[calc(var(--u)*10)] edit:mt-[calc(var(--u)*24)]"
       data-noprint
-      data-testid="to-cardio"
-      @click="sprintToScreen('cardio-heading')"
-      ><ChevronDown :size="24"
-    /></IconButton>
-    <!-- Adding opens the same dialog as editing (K54), at the page's control size. -->
-    <Button
-      v-if="store.configMode"
-      class="mt-[calc(var(--u)*24)] h-(--set-control) self-start px-(--set-control-pad) text-(length:--set-label) [&_svg]:size-(--set-icon)"
-      data-noprint
-      data-add
-      data-testid="add-exercise"
-      @click="adding = true"
-      ><Plus :stroke-width="1.5" />Add exercise</Button
     >
+      <!-- Adding opens the same dialog as editing (K54), at the page's control size. -->
+      <Button
+        v-if="store.configMode"
+        class="col-start-1 h-(--set-control) justify-self-start px-(--set-control-pad) text-(length:--set-label) [&_svg]:size-(--set-icon)"
+        data-add
+        data-testid="add-exercise"
+        @click="adding = true"
+        ><Plus :stroke-width="1.5" />Add exercise</Button
+      >
+      <IconButton
+        label="Go to Cardio"
+        class="col-start-2 hidden text-ink-secondary hover:text-ink full:inline-flex edit:inline-flex short:hidden"
+        data-testid="to-cardio"
+        @click="sprintToScreen('cardio-heading')"
+        ><ChevronDown :size="24"
+      /></IconButton>
+    </div>
     <EditExerciseDialog v-if="editing" :exercise="editing" @close="editing = null" />
     <EditExerciseDialog v-if="adding" @close="adding = false" />
   </section>

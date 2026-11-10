@@ -443,6 +443,34 @@ describe('useScreenSprint', () => {
     expect(bandHeight()).toBe(80)
   })
 
+  it('measures Edit plan’s sticky bar where the week isn’t fixed (K99)', () => {
+    const bar = document.createElement('header')
+    bar.dataset.slot = 'bar'
+    bar.style.position = 'fixed' // the week's screens: out of sight, over the page
+    bar.getBoundingClientRect = () => ({ height: 108 }) as DOMRect
+    document.body.prepend(bar)
+    expect(bandHeight()).toBe(0)
+    bar.style.position = 'sticky'
+    band('static')
+    expect(bandHeight()).toBe(108)
+    document.querySelector<HTMLElement>('[data-slot="week-band"]')!.style.position = 'sticky'
+    expect(bandHeight()).toBe(80)
+  })
+
+  it('rests each Edit plan screen just under the sticky bar (K99)', () => {
+    const bar = document.createElement('header')
+    bar.dataset.slot = 'bar'
+    bar.style.position = 'sticky'
+    bar.getBoundingClientRect = () => ({ height: 100 }) as DOMRect
+    document.body.prepend(bar)
+    const wrapper = holder()
+    wheel()
+    scrollToY(300)
+    scrollToY(540) // Food's top is 660px down the window: past the bar, a step in
+    expect(landed()).toBe(1200) // Food's top meets the bar's foot
+    wrapper.unmount()
+  })
+
   it('rests each screen just under the fixed week (K88)', () => {
     band()
     const wrapper = holder()

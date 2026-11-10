@@ -1,0 +1,97 @@
+/*
+  Edit plan drawn as one frame (.ep), sized from its own box like the app (u is 1 on a 1280×800
+  screen). Inside it a scroller holds the sticky bar and the three trackers. Scroll snapping stands
+  in for the app's sprint (K38, K98). Shipped sizes are main.css's; new values are --candidate-*.
+*/
+.ep { position: relative; overflow: hidden; box-sizing: border-box; container: ep / size; background: var(--canvas);
+  color: var(--ink); font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
+.ep *, .ep *::before, .ep *::after { box-sizing: border-box; }
+.ep svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.ep-scroll { position: absolute; inset: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+  --u: clamp(0.75px, min(calc(100cqw / 1280), calc(100cqh / 800)), 1.6px);
+  --pad-x: calc(var(--u) * 48); --fs-title: max(30px, calc(var(--u) * 40)); --fs-day: max(20px, calc(var(--u) * 27));
+  --fs-section: max(26px, calc(var(--u) * 32)); --gap-top: calc(var(--u) * 12);
+  --name-w: calc(var(--u) * 400); --box: min(calc(var(--u) * 64), 64px); --row: max(76px, calc(var(--u) * 100));
+  --control: max(44px, calc(var(--u) * 60));
+  /* Edit plan's bar, as built: the week and its arrows on the left, the actions on the right. */
+  --bar: max(76px, calc(var(--u) * 108)); }
+
+.ep-bar { position: sticky; top: 0; z-index: 2; height: var(--bar); display: flex; align-items: center; justify-content: space-between;
+  padding: 0 var(--pad-x); background: var(--canvas); border-bottom: 1px solid var(--line); }
+.ep-week { display: flex; align-items: center; gap: calc(var(--u) * 24); font: 600 var(--fs-title) / 1.1 var(--font-serif); white-space: nowrap; }
+.ep-week i { display: inline-flex; font-size: max(24px, calc(var(--u) * 32)); }
+.ep-week i:first-child svg { transform: rotate(90deg); }
+.ep-week i:last-child svg { transform: rotate(-90deg); }
+.ep-actions { display: flex; gap: calc(var(--u) * 24); }
+.ep-actions span { display: grid; justify-items: center; gap: calc(var(--u) * 6); font: 500 max(16px, calc(var(--u) * 17)) / 1 var(--font-sans); }
+.ep-actions svg { font-size: max(26px, calc(var(--u) * 32)); }
+
+.ep-screen { position: relative; display: flex; flex-direction: column; padding: calc(var(--u) * 32) var(--pad-x) calc(var(--u) * 48); }
+.ep-title { position: relative; display: flex; align-items: center; justify-content: center; min-height: var(--control); margin-bottom: calc(var(--u) * 16); }
+.ep-sec { position: absolute; left: 0; margin: 0; font: 600 var(--fs-section) / 1.12 var(--font-serif); }
+.ep-stepper { display: inline-flex; align-items: center; height: max(44px, calc(var(--u) * 40)); border: 1px solid var(--control-border); border-radius: var(--radius-md);
+  font: 600 max(17px, calc(var(--u) * 17)) / 1 var(--font-sans); }
+.ep-stepper b { width: max(44px, calc(var(--u) * 40)); text-align: center; font-weight: 400; color: var(--ink-secondary); }
+.ep-stepper span { padding: 0 calc(var(--u) * 10); }
+.ep-arrow { display: inline-flex; color: var(--ink-secondary); font-size: 24px; cursor: pointer; }
+.ep-arrow:hover { color: var(--ink); }
+
+.ep-grid { display: grid; grid-template-columns: var(--name-w) repeat(7, minmax(0, 1fr)) calc(var(--u) * 72);
+  grid-template-rows: auto; grid-auto-rows: var(--row); }
+.ep-corner { border-bottom: 1px solid var(--ink); }
+.ep-head { align-self: end; padding-bottom: calc(var(--u) * 12); border-bottom: 1px solid var(--ink); text-align: center; font: 600 var(--fs-day) / 1.2 var(--font-sans); }
+.ep-name { display: flex; align-items: center; gap: calc(var(--u) * 14); border-bottom: 1px solid var(--line); font: 600 max(19px, calc(var(--u) * 26)) / 1.2 var(--font-sans); min-width: 0; }
+.ep-icon { display: inline-flex; font-size: max(22px, calc(var(--u) * 28)); color: var(--ink); }
+.ep-chip { padding: 1px calc(var(--u) * 8); border-radius: var(--radius-sm); background: var(--tile); color: var(--ink-secondary); font-size: 0.68em; white-space: nowrap; }
+.ep-cell { display: grid; place-items: center; border-bottom: 1px solid var(--line); }
+.ep-box { width: var(--box); height: var(--box); border: max(3px, calc(var(--u) * 4)) solid var(--control-border); border-radius: calc(var(--u) * 6); }
+.ep-box.on { background: var(--pen); border-color: var(--pen); }
+.ep-foot { display: flex; align-items: center; gap: calc(var(--u) * 16); margin-top: calc(var(--u) * 24); }
+.ep-add { display: inline-flex; align-items: center; height: var(--control); padding: 0 calc(var(--u) * 24); border: 1px solid var(--control-border);
+  border-radius: var(--radius-md); font: 600 max(16px, calc(var(--u) * 19)) / 1 var(--font-sans); white-space: nowrap; }
+
+/* Both options: one tracker per screen. Each is the window's height less the bar's, and the page
+   moves a screen at a time (snapping here, the sprint in the app). The way back sits on the title's
+   line, centred over the Stepper's place; the way on is at the foot, centred. */
+.ep[data-o="a"] .ep-scroll, .ep[data-o="b"] .ep-scroll { scroll-snap-type: y mandatory; scroll-padding-top: var(--bar); }
+.ep[data-o="a"] .ep-screen, .ep[data-o="b"] .ep-screen { min-height: calc(100cqh - var(--bar)); scroll-snap-align: start; scroll-snap-stop: always;
+  padding-top: var(--gap-top); padding-bottom: calc(var(--u) * 20); }
+.ep-up { position: absolute; top: calc(var(--gap-top) - 4px); left: 50%; transform: translateX(-50%); }
+.ep-screen:has(.ep-up) .ep-stepper { margin-top: calc(var(--u) * 28); }
+.ep-down { position: absolute; left: 50%; transform: translateX(-50%); }
+.ep-foot { position: relative; }
+
+/* A: the week's screens. The rows share the screen's height (56px to 1.25 × a day's width), the
+   week sits in the middle, and Add sits under the grid, its arrow centred at the foot. */
+.ep[data-o="a"] .ep-screen { justify-content: center; }
+.ep[data-o="a"] .ep-grid { flex: 1 1 auto; min-height: 0;
+  --candidate-row-max: calc((100cqw - 2 * var(--pad-x) - var(--name-w)) / 7 * 1.25);
+  grid-template-rows: auto repeat(var(--n), minmax(56px, 1fr));
+  max-height: calc(var(--fs-day) * 1.2 + var(--u) * 12 + var(--n) * var(--candidate-row-max)); }
+.ep[data-o="a"] .ep-box { --box: min(calc(var(--u) * 86), 86%, 128px); width: auto; height: min(86%, var(--box)); aspect-ratio: 1; }
+
+/* B: Edit plan's own rows, a fixed max(76px, 100u), from the top of the screen; the space left
+   over stays empty under Add. */
+.ep[data-o="b"] .ep-screen { justify-content: flex-start; }
+
+/* Folded (a phone held upright): the bar's week alone on its line; each row's name above its boxes. */
+@container ep (width < 760px) {
+  .ep-scroll { --u: 1px; --pad-x: 16px; --fs-title: 24px; --fs-day: 16px; --fs-section: 24px; --name-w: 0px; --box: 30px; --bar: 104px; --control: 44px; }
+  .ep-bar { flex-direction: column; justify-content: center; gap: 8px; }
+  .ep-actions { gap: 20px; }
+  .ep-actions span { font-size: 13px; }
+  .ep-actions svg { font-size: 22px; }
+  .ep-title { justify-content: flex-end; }
+  .ep-screen:has(.ep-up) .ep-stepper { margin-top: 0; }
+  .ep-up { left: auto; right: 50%; transform: translateX(50%); top: 2px; }
+  .ep-screen:has(.ep-up) .ep-title { margin-top: 26px; }
+  .ep-grid, .ep[data-o="a"] .ep-grid { flex: none; grid-template-columns: repeat(7, minmax(0, 1fr)) 40px; grid-auto-rows: auto; row-gap: 6px; }
+  .ep-name { grid-column: 1 / -1; border: 0; padding-top: 10px; font-size: 17px; }
+  .ep-cell { border: 0; padding-block: 2px; }
+  .ep-corner { display: none; }
+  .ep-head { padding-bottom: 6px; }
+  .ep-head:last-of-type { border-bottom-color: transparent; }
+  .ep[data-o="a"] .ep-screen { justify-content: flex-start; }
+  .ep[data-o="a"] .ep-grid { grid-template-rows: none; max-height: none; }
+  .ep[data-o="a"] .ep-box { width: 30px; height: 30px; aspect-ratio: auto; }
+}

@@ -545,8 +545,8 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
 - **One screen per section, not a window.** The handoff drew the app as a macOS window (traffic
   lights, a framed window on a backdrop). The app fills the browser instead: Exercises, Cardio and
   Food are a screen each, the page sprints between them, and the navbar keeps out of sight until it is
-  wanted (K24, K25; §6.6). Edit plan is an ordinary page with a sticky navbar (K27), full
-  width at the week's sizes with rows a fixed 100u (K54). Settings has no navbar (K52) and is full
+  wanted (K24, K25; §6.6). Edit plan has a sticky navbar (K27) and is one tracker per screen under
+  it too (K99), full width at the week's sizes with rows a fixed 100u (K54). Settings has no navbar (K52) and is full
   width in rows like the week (K51), and an item's page follows it, rows and all (K64, K65). The navbar keeps the week controls, This week, Edit plan,
   Settings, Print… and Full screen.
 - **Light and dark themes.** The handoff is dark-only. Settings offers System (the default, which
@@ -796,14 +796,17 @@ first grid that has today. Tabbing to it brings the navbar into view on the plan
 
 ### 6.6 The planner's screens
 
-`App.vue` puts `planner-screens` on `<html>` while the planner shows outside Edit plan (K27). That
-class turns on main.css's `full:` variant. Settings and an item's page are ordinary pages that
-scroll, so neither has it. With it, each section is a screen (`SCREEN` in
+`App.vue` puts `planner-screens` on `<html>` while the planner shows outside Edit plan. That
+class turns on main.css's `full:` variant. In Edit plan it puts `edit-screens` there instead, which
+turns on the `edit:` variant (K99): each section is at least the window less the sticky bar, whose
+height AppNavbar publishes as `--bar-height` from a ResizeObserver, with Edit plan's fixed rows
+from the top. Settings and an item's page are ordinary pages that scroll, so neither has either
+class. With it, each section is a screen (`SCREEN` in
 `src/lib/screens.ts`: the window's height less the fixed week's `--week-band`, a centred column,
 and `data-planner-screen`) and its grid takes the height left (`SCREEN_GRID`). WeekHeader, before
 the sections, is the fixed week: `sticky` at the top on the canvas, so the screens move under it
-(K88). `bandHeight()` measures it while it is sticky, and the sprint takes it off the window's
-top, so each screen rests just under it. `useScreenSprint` (`src/composables/screenSprint.ts`) keeps the
+(K88). `bandHeight()` measures it while it is sticky, or else Edit plan's sticky bar (K99), and the
+sprint takes it off the window's top, so each screen rests just under it. `useScreenSprint` (`src/composables/screenSprint.ts`) keeps the
 page from resting across two screens. A wheel or a fling sprints as soon as the line between two
 screens is a step (4% of the window, at least 16px) inside it, while it is still moving (K45); a finger on the
 screen waits until it lifts; a scrollbar drag or the keyboard 120ms after the scroll stops (K38).
@@ -820,8 +823,8 @@ script stands aside and main.css snaps instead (K98): `mandatory` with `scroll-s
 one swipe moves one screen and iOS keeps its own momentum. The script still wraps round and runs
 the arrows there, turning snapping off while it moves (`touchSnaps`, `snapOff`). Four custom variants in main.css carry
 the layout, all screen-only so paper keeps the table: `screen:` (the WeekGrid is a CSS grid),
-`full:`, `folded:` (upright under 1000px wide, or under 760px wide) and `short:` (landscape, 540px
-tall or less).
+`full:`, `edit:` (Edit plan's screens, K99), `folded:` (upright under 1000px wide, or under 760px
+wide) and `short:` (landscape, 540px tall or less).
 
 - **Sizes follow the screen.** `--u` in main.css is 1 at 1280×800, clamped between 0.75 and 1.6.
   The named sizes (`--fs-name`, `--grid-name-w`, `--screen-pad-x`, …) derive from it, and folded

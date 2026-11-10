@@ -197,9 +197,9 @@
   ],
   "lastChange": {
     "by": "John Mathews",
-    "at": "2026-11-10T08:30:49Z",
+    "at": "2026-11-10T10:21:36Z",
     "via": "Claude Code",
-    "note": "Touch scrolling (K98): on a touch screen PlannerScreen lets the browser snap, one swipe to one screen with scroll-snap-stop: always; a mouse or trackpad keeps the sprint."
+    "note": "Edit plan screens (K99): PlannerScreen gives Edit plan one tracker per screen under the sticky bar, Edit plan's fixed rows from the top; the Header publishes its height as --bar-height."
   },
 
   "layout": "files",

@@ -10,7 +10,8 @@ The planner's layout: the week fixed at the top, Exercises, Cardio and Food each
 - **The bar** is the Header, out of sight (Header, Out of sight): a long press anywhere, the handle or E opens Edit plan, where the bar is sticky above the page (K80, K91); focus floats it over the screen for the keyboard.
 - **Messages** (Banner: sync, confirm your email, import) sit at the top of the Exercises screen, under the band and above its SectionHeader, and push the section down while they show.
 - **Every screen size gets this layout.** A desktop, an iPad on its side and a phone on its side get the wide grid; a screen held upright under 1000px wide, or any screen under 760px wide, gets the folded one (K26). There is no separate phone view.
-- **Not in Edit plan or Settings** (K27): there the page scrolls freely, nothing sprints and the sections are as tall as their content. Edit plan keeps the bar in view; Settings has none (K52). The week's `<h1>` is hidden on screen there, since Edit plan's bar shows the week (K81), and shows in `display` only on paper.
+- **Edit plan is one tracker per screen too** (K99). Each section is at least the window's height less the sticky bar's (`--bar-height`, which the Header measures), starts at the top with Edit plan's own rows (max(76px, 100u), K54), and leaves any space over empty at its foot. The page moves between them exactly as above, each screen resting just under the bar instead of the week. The arrows show: the way back on its own line above the title, the way on centred on the Add button's line under the grid. The week's `<h1>` is hidden on screen there, since Edit plan's bar shows the week (K81), and shows in `display` only on paper.
+- **Not in Settings**: there the page scrolls freely, nothing sprints and there is no bar (K52).
 - **Print**: no sprinting, no bar, the WeekGrid as a table on paper. Each section starts a page of its own, with the week over it in `display` (SectionHeader, K97).
 
 ## States
@@ -32,5 +33,5 @@ The planner's layout: the week fixed at the top, Exercises, Cardio and Food each
 
 ## You provide
 
-- The sections, in order (Exercises, Cardio, Food), and whether Edit plan or another page is showing (which turns the layout off).
+- The sections, in order (Exercises, Cardio, Food), and whether Edit plan (screens under the bar) or another page (no screens) is showing.
 - The messages to show, if any.
