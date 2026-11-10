@@ -191,6 +191,41 @@ export function stopSprint(): void {
 /** Whether a wrap's sprint is running: it can't be turned round halfway (K92). */
 let wrapping = false
 
+/** How much of the window a swipe inside a tall screen moves on (K101), so a line cut at the foot shows again at the top. */
+export const STOP_SHARE = 0.8
+
+/**
+ * Where the window's top may rest inside a screen `height` tall, in a window `room` tall (K101),
+ * as offsets from the screen's top: a step of STOP_SHARE of the window at a time, and last where
+ * the screen's foot meets the window's. None when the screen fits. A step that would leave less
+ * than a quarter of one before the foot is left out, so no swipe moves on only a few pixels.
+ */
+export function stopOffsets(height: number, room: number): number[] {
+  const over = Math.round(height - room)
+  if (over <= 1) return []
+  const step = Math.max(1, Math.round(room * STOP_SHARE))
+  const stops: number[] = []
+  for (let at = step; at < over - step / 4; at += step) stops.push(at)
+  stops.push(over)
+  return stops
+}
+
+/**
+ * A copy of a screen to show beyond an end (K92, K100): the same to look at, but inert, hidden
+ * from a screen reader, never printed, with no ids, and not a screen to the script.
+ */
+function copyOf(screen: HTMLElement): HTMLElement {
+  const copy = screen.cloneNode(true) as HTMLElement
+  for (const el of [copy, ...copy.querySelectorAll('[id]')]) el.removeAttribute('id')
+  for (const stop of copy.querySelectorAll('[data-snap-stop]')) stop.remove()
+  copy.removeAttribute('data-planner-screen')
+  copy.removeAttribute('aria-labelledby')
+  copy.setAttribute('aria-hidden', 'true')
+  copy.setAttribute('data-noprint', '')
+  copy.inert = true
+  return copy
+}
+
 /**
  * Where the page is against its ends: 1 at its foot, -1 at its top, 0 between them or when it
  * doesn't scroll at all.
@@ -216,12 +251,7 @@ export function wrapAround(way: 1 | -1, done?: () => void): boolean {
   stopSprint()
   snapOff()
   const target = way > 0 ? screens[0]! : screens.at(-1)!
-  const copy = target.cloneNode(true) as HTMLElement
-  for (const el of [copy, ...copy.querySelectorAll('[id]')]) el.removeAttribute('id')
-  copy.removeAttribute('data-planner-screen')
-  copy.removeAttribute('aria-labelledby')
-  copy.setAttribute('aria-hidden', 'true')
-  copy.inert = true
+  const copy = copyOf(target)
   copy.dataset.wrapCopy = ''
   const band = bandHeight()
   let to: number
@@ -292,6 +322,165 @@ export function useScreenSprint(enabled: Ref<boolean>) {
   let touchEnd: 1 | -1 | 0 = 0
 
   /**
+   * On a touch screen the wrap round is the browser's own swipe (K100). A copy of the last screen
+   * sits above the first and a copy of the first below the last, each a snap point like the
+   * screens (main.css), so a swipe past an end snaps onto a copy as smoothly as onto any screen.
+   * Once the page rests there it jumps to the same place on the real screen, which looks the same.
+   * `ends` holds each copy and the screen it copies.
+   */
+  let ends: { copy: HTMLElement; of: HTMLElement }[] = []
+  /** The page is moving on a touch screen: copies and stops wait for it to rest. */
+  let touchMoving = false
+  /**
+   * The screens whose copies must be made afresh, or all of them (a screen added or taken away,
+   * the screens' class on <html>, the screens turned on or off). A change inside a middle screen,
+   * which no copy shows, makes none.
+   */
+  let dirty: Set<HTMLElement> | 'all' = 'all'
+  let refreshFrame = 0
+  let restTimer: ReturnType<typeof setTimeout> | undefined
+
+  /**
+   * At rest, or when the screens change. The screen the page shows gets its stops and the others
+   * lose theirs (K101, K102); the copies of changed screens are made afresh, or all taken away
+   * where the browser doesn't snap (a mouse or trackpad, or the screens are off); and the page
+   * stays where it was on the screen it showed, or, resting on a copy, goes to the same place on
+   * the real screen (K100).
+   */
+  function place(): void {
+    const band = bandHeight()
+    const screens = [...document.querySelectorAll<HTMLElement>('[data-planner-screen]')]
+    // The screen the page shows: the one, or the copy, across the line just under the band (2px
+    // under it, so a screen resting a pixel low on a fractional position still counts).
+    let shown: HTMLElement | undefined
+    let into = 0
+    for (const el of [...ends.map((end) => end.copy), ...screens]) {
+      const box = el.getBoundingClientRect()
+      if (box.top <= band + 2 && box.bottom > band + 2) {
+        shown = ends.find((end) => end.copy === el)?.of ?? el
+        into = band - box.top
+        break
+      }
+    }
+    const on = enabled.value && touchSnaps()
+    layStops(screens, band, on ? shown : undefined)
+    const want = on && screens.length > 1 ? [screens.at(-1)!, screens[0]!] : []
+    const fresh = dirty
+    dirty = new Set()
+    ends = ends.filter((end, i) => {
+      const keep = end.of === want[i] && fresh !== 'all' && !fresh.has(end.of)
+      if (!keep) end.copy.remove()
+      return keep
+    })
+    if (want.length && ends.length < 2) {
+      const [above, below] = [
+        ends.find((end) => end.of === want[0]),
+        ends.find((end) => end.of === want[1]),
+      ]
+      ends = [
+        above ?? { copy: copyOf(want[0]!), of: want[0]! },
+        below ?? { copy: copyOf(want[1]!), of: want[1]! },
+      ]
+      for (const end of ends) end.copy.dataset.snapCopy = ''
+      if (!above) screens[0]!.before(ends[0]!.copy)
+      if (!below) screens.at(-1)!.after(ends[1]!.copy)
+    }
+    if (!shown) return
+    const top = shown.getBoundingClientRect().top + window.scrollY - band + into
+    if (Math.abs(top - window.scrollY) < 1) return
+    snapOff()
+    window.scrollTo({ top, behavior: 'auto' })
+    snapOn()
+  }
+
+  /**
+   * Only the screen the page shows has stops inside it, where it is taller than the window and the
+   * browser snaps (K101, K102): marks the page may rest at, each a snap point (main.css), at
+   * `stopOffsets`. iOS doesn't let a page scroll freely inside a snap area taller than the window,
+   * as the spec asks, so without them a swipe on a tall screen went straight to the next one and
+   * its foot was never seen. Kept to the screen shown, a swipe up onto another screen lands on its
+   * top, never on its foot. A screen whose stops are already right is left alone.
+   */
+  function layStops(screens: HTMLElement[], band: number, shown: HTMLElement | undefined): void {
+    const room = window.innerHeight - band
+    for (const screen of screens) {
+      const want = screen === shown ? stopOffsets(screen.getBoundingClientRect().height, room) : []
+      const have = [...screen.querySelectorAll<HTMLElement>(':scope > [data-snap-stop]')]
+      if (want.join() === have.map((stop) => stop.dataset.snapStop).join()) continue
+      for (const stop of have) stop.remove()
+      for (const at of want) {
+        const stop = document.createElement('div')
+        stop.dataset.snapStop = String(at)
+        stop.setAttribute('aria-hidden', 'true')
+        stop.setAttribute('data-noprint', '')
+        stop.style.cssText = `position:absolute;top:${at - screen.clientTop}px;left:0;width:1px;height:1px;pointer-events:none`
+        screen.append(stop)
+      }
+    }
+  }
+
+  /** At the next frame, or, while the page moves, once it rests. */
+  function refresh(): void {
+    cancelAnimationFrame(refreshFrame)
+    refreshFrame = requestAnimationFrame(() => {
+      if (!touchMoving && !finger && !sprinting()) place()
+    })
+  }
+
+  /** The page came to rest on a touch screen (`scrollend`, or REST_MS without a scroll). */
+  function rest(): void {
+    clearTimeout(restTimer)
+    if (finger || sprinting()) return
+    touchMoving = false
+    place()
+  }
+  const restsByItself = () => 'onscrollend' in window
+
+  const isStop = (node: Node) => node instanceof Element && node.hasAttribute('data-snap-stop')
+  /**
+   * Which screens changed: one with a change inside it, or all of them for a screen added or taken
+   * away or the screens' class on <html>. A copy's own changes and the stops count for nothing.
+   */
+  function changed(records: MutationRecord[]): Set<HTMLElement> | 'all' {
+    const screens = new Set<HTMLElement>()
+    for (const record of records) {
+      if (record.target === document.documentElement) return 'all'
+      const nodes = [...record.addedNodes, ...record.removedNodes]
+      if (nodes.length && nodes.every(isStop)) continue
+      const at = record.target instanceof Element ? record.target : record.target.parentElement
+      if (at?.closest('[data-snap-copy]')) continue
+      const screen = at?.closest<HTMLElement>('[data-planner-screen]')
+      if (screen) screens.add(screen)
+      else if (
+        nodes.some(
+          (node) =>
+            node instanceof Element &&
+            !node.hasAttribute('data-snap-copy') &&
+            (node.matches('[data-planner-screen]') ||
+              !!node.querySelector('[data-planner-screen]')),
+        )
+      )
+        return 'all'
+    }
+    return screens
+  }
+  const observer = new MutationObserver((records) => {
+    if (!ends.length && !touchSnaps()) return
+    const screens = changed(records)
+    if (screens !== 'all' && !screens.size) return
+    if (screens === 'all' || dirty === 'all') dirty = 'all'
+    else for (const screen of screens) dirty.add(screen)
+    refresh()
+  })
+  /** A screen grew or shrank with nothing changed inside it (a font arriving): its stops follow. */
+  const sizes =
+    typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(() => {
+          if (ends.length || touchSnaps()) refresh()
+        })
+
+  /**
    * Each screen's top, as the scroll position that rests it just under the fixed week (K88). With
    * the window less the band as the height, sprintTarget sees only the part the screens move in.
    */
@@ -346,7 +535,15 @@ export function useScreenSprint(enabled: Ref<boolean>) {
   }
 
   function onScroll(): void {
-    if (!enabled.value || sprinting() || touchSnaps()) return
+    if (!enabled.value) return
+    if (touchSnaps()) {
+      // The browser snaps; the script only waits for rest, to step off a copy (K100).
+      touchMoving = true
+      clearTimeout(restTimer)
+      if (!restsByItself()) restTimer = setTimeout(rest, REST_MS)
+      return
+    }
+    if (sprinting()) return
     const now = window.scrollY
     if (now !== last) direction = now > last ? 1 : -1
     last = now
@@ -364,6 +561,8 @@ export function useScreenSprint(enabled: Ref<boolean>) {
     last = window.scrollY
     clearTimeout(timer)
     timer = setTimeout(settle, REST_MS)
+    // The window's height decides where a tall screen's stops go (K101).
+    if (ends.length || touchSnaps()) refresh()
   }
 
   /**
@@ -429,8 +628,10 @@ export function useScreenSprint(enabled: Ref<boolean>) {
     liftAt = performance.now()
     const y = event.changedTouches?.[0]?.clientY ?? touchY
     const way = Math.sign(touchY - y)
+    // Where the browser snaps, a swipe past an end lands on a copy by itself (K100).
     if (
       enabled.value &&
+      !touchSnaps() &&
       touchEnd !== 0 &&
       way === touchEnd &&
       pageEnd() === touchEnd &&
@@ -444,9 +645,24 @@ export function useScreenSprint(enabled: Ref<boolean>) {
 
   watch(enabled, (on) => {
     if (!on) clearTimeout(timer)
+    dirty = 'all'
+    refresh()
   })
+  function onScrollEnd(): void {
+    if (enabled.value && touchSnaps()) rest()
+  }
   onMounted(() => {
     last = window.scrollY
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributes: true,
+    })
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+    sizes?.observe(document.body)
+    refresh()
+    window.addEventListener('scrollend', onScrollEnd, { passive: true })
     window.addEventListener('scroll', onScroll, { passive: true })
     window.addEventListener('resize', onResize)
     window.addEventListener('wheel', onWheel, { passive: false })
@@ -457,6 +673,13 @@ export function useScreenSprint(enabled: Ref<boolean>) {
   })
   onBeforeUnmount(() => {
     clearTimeout(timer)
+    clearTimeout(restTimer)
+    cancelAnimationFrame(refreshFrame)
+    observer.disconnect()
+    sizes?.disconnect()
+    for (const end of ends) end.copy.remove()
+    ends = []
+    window.removeEventListener('scrollend', onScrollEnd)
     stopSprint()
     window.removeEventListener('scroll', onScroll)
     window.removeEventListener('resize', onResize)

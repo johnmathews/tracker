@@ -146,13 +146,14 @@
 /* On a touch screen the browser snaps between the planner's screens (K98): `always` stops a swipe
    at the next screen, however hard, and iOS keeps its own smooth momentum. A screen taller than
    the window scrolls freely inside. The padding rests each screen under the fixed week. A mouse or
-   trackpad keeps the script's sprint (K38, K45), which can leave a tall screen's end. */
+   trackpad keeps the script's sprint (K38, K45), which can leave a tall screen's end. The copies
+   beyond each end (useScreenSprint, K100) snap like the screens, so the wrap round is a swipe too. */
 @media screen and (hover: none) and (pointer: coarse) {
   :root.planner-screens {
     scroll-snap-type: y mandatory;
     scroll-padding-top: var(--week-band);
   }
-  :root.planner-screens [data-planner-screen] {
+  :root.planner-screens :is([data-planner-screen], [data-snap-copy]) {
     scroll-snap-align: start;
     scroll-snap-stop: always;
   }
@@ -160,7 +161,17 @@
   :root.edit-screens {
     scroll-snap-type: y mandatory;
   }
-  :root.edit-screens [data-planner-screen] {
+  :root.edit-screens :is([data-planner-screen], [data-snap-copy]) {
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+  /* A screen taller than the window has stops inside it (useScreenSprint, K101): iOS won't scroll
+     freely inside a snap area taller than the window, so each swipe moves on to the next stop
+     until the screen's foot shows. The screen, and its copy, place them. */
+  :root:is(.planner-screens, .edit-screens) :is([data-planner-screen], [data-snap-copy]) {
+    position: relative;
+  }
+  :root:is(.planner-screens, .edit-screens) [data-snap-stop] {
     scroll-snap-align: start;
     scroll-snap-stop: always;
   }
@@ -791,7 +802,8 @@
   }
 
   /* The planner's screens: no bar covers the top (K24), only the fixed week (K88). The page
-     sprints between them in script (useScreenSprint, K38), not with CSS snapping, which a mouse wheel couldn't cross. */
+     sprints between them in script (useScreenSprint, K38) under a mouse or trackpad, whose wheel CSS
+     snapping couldn't cross; a touch screen snaps (K98). */
   @media screen {
     html.planner-screens {
       scroll-padding-top: var(--week-band);

@@ -15,6 +15,8 @@ import {
   sprintTarget,
   sprinting,
   sprintTo,
+  STOP_SHARE,
+  stopOffsets,
   useScreenSprint,
 } from '@/composables/screenSprint'
 
@@ -52,6 +54,27 @@ describe('sprintTarget (K38)', () => {
     expect(sprintTarget(540, 800, starts, 1, 32)).toBe(1300)
     expect(sprintTarget(1280, 800, starts, -1, 32)).toBeNull()
     expect(sprintTarget(1260, 800, starts, -1, 32)).toBe(500)
+  })
+})
+
+describe('stopOffsets (K101)', () => {
+  it('has none where the screen fits', () => {
+    expect(stopOffsets(653, 653)).toEqual([])
+    expect(stopOffsets(654, 653)).toEqual([]) // a pixel over is a rounding
+  })
+
+  it('rests last where the screen’s foot meets the window’s', () => {
+    expect(stopOffsets(762, 653)).toEqual([109])
+  })
+
+  it('steps a share of the window at a time on a long screen', () => {
+    const step = Math.round(600 * STOP_SHARE)
+    expect(stopOffsets(2000, 600)).toEqual([step, 2 * step, 1400])
+  })
+
+  it('leaves out a step that would come only a few pixels before the foot', () => {
+    // 600 over in a 600px window: a step at 480 would leave 120, under a quarter of a step.
+    expect(stopOffsets(1200, 600)).toEqual([600])
   })
 })
 
@@ -281,6 +304,372 @@ describe('useScreenSprint', () => {
       vi.advanceTimersByTime(REST_MS + SPRINT_MS + 50)
       expect(scrollTo).not.toHaveBeenCalled()
       wrapper.unmount()
+    })
+  })
+
+  describe('on a touch screen the wrap round is a swipe onto a copy (K100)', () => {
+    /**
+     * Three screens, each 800px, laid out one under the other in the order they stand in the
+     * page, the copies included, in an 800px window with no band.
+     */
+    function layout(): void {
+      document.body.innerHTML =
+        '<main><section data-planner-screen id="ex" aria-labelledby="ex-h"><h2 id="ex-h">Exercises</h2></section>' +
+        '<section data-planner-screen><h2>Cardio</h2></section>' +
+        '<section data-planner-screen><h2>Food</h2></section></main>'
+      vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+        this: HTMLElement,
+      ) {
+        const all = [...document.querySelectorAll('[data-planner-screen], [data-snap-copy]')]
+        const i = all.indexOf(this)
+        if (i < 0) return { top: 0, bottom: 0, height: 0 } as DOMRect
+        const top = i * 800 - window.scrollY
+        return { top, bottom: top + 800, height: 800 } as DOMRect
+      })
+    }
+    function touchScreen(): void {
+      vi.stubGlobal(
+        'matchMedia',
+        vi.fn<(q: string) => MediaQueryList>(
+          (q) => ({ matches: q.includes('pointer: coarse') }) as unknown as MediaQueryList,
+        ),
+      )
+    }
+    /** What stands in the page, in order: a screen by its title, a copy as "copy of <title>". */
+    function order(): string[] {
+      return [...document.querySelectorAll('[data-planner-screen], [data-snap-copy]')].map(
+        (el) =>
+          (el.hasAttribute('data-snap-copy') ? 'copy of ' : '') +
+          el.querySelector('h2')!.textContent,
+      )
+    }
+    function copies(): HTMLElement[] {
+      return [...document.querySelectorAll<HTMLElement>('[data-snap-copy]')]
+    }
+    /** The MutationObserver's records arrive in a microtask; the copies follow at the next frame. */
+    async function frame(): Promise<void> {
+      await Promise.resolve()
+      vi.advanceTimersByTime(20)
+    }
+    /** A swipe that comes to rest at `y`, its finger lifted. */
+    function restAt(y: number): void {
+      window.dispatchEvent(new Event('touchstart'))
+      Object.defineProperty(window, 'scrollY', { configurable: true, value: y })
+      window.dispatchEvent(new Event('scroll'))
+      window.dispatchEvent(new Event('touchend'))
+    }
+
+    beforeEach(() => {
+      touchScreen()
+      layout()
+    })
+    afterEach(() => {
+      vi.restoreAllMocks()
+      Reflect.deleteProperty(window, 'onscrollend')
+    })
+
+    it('lays a copy of the last screen above the first and of the first below the last', async () => {
+      holder()
+      await frame()
+      expect(order()).toEqual(['copy of Food', 'Exercises', 'Cardio', 'Food', 'copy of Exercises'])
+      // The page stays on Exercises, now one screen further down.
+      expect(at_()).toBe(800)
+      for (const copy of copies()) {
+        expect(copy.inert).toBe(true)
+        expect(copy.getAttribute('aria-hidden')).toBe('true')
+        expect(copy.hasAttribute('data-noprint')).toBe(true)
+        expect(copy.hasAttribute('aria-labelledby')).toBe(false)
+        expect(copy.querySelector('[id]')).toBeNull()
+      }
+      expect(document.documentElement.style.scrollSnapType).toBe('') // snapping back on
+    })
+
+    it('rests on the real screen after a swipe onto a copy, at either end', async () => {
+      holder()
+      await frame()
+      restAt(0) // up past Exercises, onto the copy of Food
+      vi.advanceTimersByTime(REST_MS)
+      expect(at_()).toBe(3 * 800) // the same place on Food
+      restAt(4 * 800) // down past Food, onto the copy of Exercises
+      vi.advanceTimersByTime(REST_MS)
+      expect(at_()).toBe(800)
+      const calls = scrollTo.mock.calls.length
+      restAt(2 * 800) // Cardio: nothing to do
+      vi.advanceTimersByTime(REST_MS)
+      expect(scrollTo.mock.calls.length).toBe(calls)
+    })
+
+    it('waits for scrollend where the browser has it, and never for a finger still down', async () => {
+      Object.defineProperty(window, 'onscrollend', { configurable: true, value: null })
+      holder()
+      await frame()
+      window.dispatchEvent(new Event('touchstart'))
+      Object.defineProperty(window, 'scrollY', { configurable: true, value: 0 })
+      window.dispatchEvent(new Event('scroll'))
+      vi.advanceTimersByTime(REST_MS)
+      window.dispatchEvent(new Event('scrollend')) // the finger still holds the page
+      expect(at_()).toBe(800)
+      window.dispatchEvent(new Event('touchend'))
+      vi.advanceTimersByTime(REST_MS)
+      expect(at_()).toBe(800) // no timer: the browser says when it rests
+      window.dispatchEvent(new Event('scrollend'))
+      expect(at_()).toBe(3 * 800)
+    })
+
+    it('never wraps by script on a touch screen', async () => {
+      holder()
+      await frame()
+      Object.defineProperty(document.documentElement, 'scrollHeight', {
+        configurable: true,
+        value: 4000,
+      })
+      Object.defineProperty(window, 'scrollY', { configurable: true, value: 3200 })
+      const start = new Event('touchstart') as Event & Record<string, unknown>
+      start.touches = [{ clientY: 500 }]
+      window.dispatchEvent(start)
+      const end = new Event('touchend') as Event & Record<string, unknown>
+      end.changedTouches = [{ clientY: 300 }]
+      window.dispatchEvent(end)
+      expect(document.querySelector('[data-wrap-copy]')).toBeNull()
+      expect(sprinting()).toBe(false)
+      Reflect.deleteProperty(document.documentElement, 'scrollHeight')
+    })
+
+    it('makes the copies afresh when a screen changes, once the page rests', async () => {
+      holder()
+      await frame()
+      document.querySelector('[data-planner-screen] h2')!.textContent = 'Workouts'
+      await frame()
+      expect(order()).toEqual(['copy of Food', 'Workouts', 'Cardio', 'Food', 'copy of Workouts'])
+      // While the page moves, the change waits for rest.
+      window.dispatchEvent(new Event('scroll'))
+      document.querySelector('[data-planner-screen] h2')!.textContent = 'Exercises'
+      await frame()
+      expect(order().at(-1)).toBe('copy of Workouts')
+      vi.advanceTimersByTime(REST_MS)
+      expect(order().at(-1)).toBe('copy of Exercises')
+    })
+
+    it('follows a screen added or taken away, and the screens’ class on <html>', async () => {
+      holder()
+      await frame()
+      const main = document.querySelector('main')!
+      const wrap = document.createElement('div')
+      wrap.innerHTML = '<section data-planner-screen><h2>Notes</h2></section>'
+      main.append(wrap)
+      await frame()
+      expect(order().slice(0, 1)).toEqual(['copy of Notes'])
+      wrap.remove()
+      await frame()
+      expect(order()[0]).toBe('copy of Food')
+      const before = copies()[0]
+      document.documentElement.classList.add('edit-screens')
+      await frame()
+      expect(copies()[0]).not.toBe(before)
+      document.documentElement.classList.remove('edit-screens')
+    })
+
+    it('makes afresh only the copy of a screen that changed', async () => {
+      holder()
+      await frame()
+      const [above, below] = copies()
+      document.querySelectorAll('[data-planner-screen] h2')[1]!.textContent = 'Running'
+      await frame()
+      expect(copies()).toEqual([above, below]) // Cardio: no copy shows it
+      document.querySelectorAll('[data-planner-screen] h2')[2]!.textContent = 'Meals'
+      await frame()
+      expect(copies()[0]).not.toBe(above)
+      expect(copies()[1]).toBe(below)
+      expect(order()).toEqual([
+        'copy of Meals',
+        'Exercises',
+        'Running',
+        'Meals',
+        'copy of Exercises',
+      ])
+    })
+
+    it('leaves the copies alone for a change outside the screens or inside a copy', async () => {
+      holder()
+      await frame()
+      const [above] = copies()
+      document.body.append(document.createElement('div'))
+      above!.setAttribute('data-x', '')
+      above!.querySelector('h2')!.textContent = 'Food'
+      await frame()
+      expect(copies()[0]).toBe(above)
+    })
+
+    it('takes the copies away when the screens are off, and when it unmounts', async () => {
+      const enabled = ref(true)
+      const wrapper = holder(enabled)
+      await frame()
+      expect(copies()).toHaveLength(2)
+      enabled.value = false
+      await nextTick()
+      await frame()
+      expect(copies()).toHaveLength(0)
+      window.dispatchEvent(new Event('scrollend')) // the screens are off: nothing to do
+      enabled.value = true
+      await nextTick()
+      await frame()
+      expect(copies()).toHaveLength(2)
+      wrapper.unmount()
+      expect(copies()).toHaveLength(0)
+    })
+
+    it('makes no copies under a mouse or trackpad, or with one screen', async () => {
+      vi.unstubAllGlobals()
+      holder()
+      await frame()
+      document.querySelector('[data-planner-screen] h2')!.textContent = 'Workouts'
+      await frame()
+      expect(copies()).toHaveLength(0)
+      for (const wrapper of mounted.splice(0)) wrapper.unmount()
+      touchScreen()
+      document.querySelector('main')!.innerHTML =
+        '<section data-planner-screen><h2>Food</h2></section>'
+      holder()
+      await frame()
+      expect(copies()).toHaveLength(0)
+    })
+
+    it('keeps the copies made while a sprint runs for its landing', async () => {
+      holder()
+      await frame()
+      sprintTo(1600)
+      document.querySelector('[data-planner-screen] h2')!.textContent = 'Workouts'
+      await frame()
+      expect(order().at(-1)).toBe('copy of Exercises')
+      window.dispatchEvent(new Event('scrollend'))
+      expect(order().at(-1)).toBe('copy of Exercises') // still sprinting
+      vi.advanceTimersByTime(SPRINT_MS + 50)
+      window.dispatchEvent(new Event('scroll'))
+      vi.advanceTimersByTime(REST_MS)
+      expect(order().at(-1)).toBe('copy of Workouts')
+    })
+  })
+
+  describe('a screen taller than the window has stops inside it on a touch screen (K101)', () => {
+    /** Exercises 1300px tall in an 800px window, Food 800px under it, the copies 800px each. */
+    function layout(): void {
+      document.body.innerHTML =
+        '<main><section data-planner-screen><h2>Exercises</h2></section>' +
+        '<section data-planner-screen><h2>Food</h2></section></main>'
+      vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+        this: HTMLElement,
+      ) {
+        let top = -window.scrollY
+        for (const el of document.querySelectorAll('[data-planner-screen], [data-snap-copy]')) {
+          const height = el.querySelector('h2')!.textContent === 'Exercises' ? 1300 : 800
+          if (el === this) return { top, bottom: top + height, height } as DOMRect
+          top += height
+        }
+        return { top: 0, bottom: 0, height: 0 } as DOMRect
+      })
+    }
+    function touchScreen(): void {
+      vi.stubGlobal(
+        'matchMedia',
+        vi.fn<(q: string) => MediaQueryList>(
+          (q) => ({ matches: q.includes('pointer: coarse') }) as unknown as MediaQueryList,
+        ),
+      )
+    }
+    function stops(selector = '[data-planner-screen]'): string[] {
+      return [...document.querySelectorAll<HTMLElement>(`${selector} > [data-snap-stop]`)].map(
+        (stop) => `${stop.dataset.snapStop}@${stop.style.top}`,
+      )
+    }
+    async function frame(): Promise<void> {
+      await Promise.resolve()
+      vi.advanceTimersByTime(20)
+    }
+
+    beforeEach(() => {
+      touchScreen()
+      layout()
+    })
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('rests the window’s foot on the screen’s, hidden from a screen reader and never printed', async () => {
+      holder()
+      await frame()
+      expect(stops()).toEqual(['500@500px']) // only Exercises is taller than the window
+      const stop = document.querySelector<HTMLElement>('[data-snap-stop]')!
+      expect(stop.getAttribute('aria-hidden')).toBe('true')
+      expect(stop.hasAttribute('data-noprint')).toBe(true)
+      expect(stops('[data-snap-copy]')).toEqual([]) // a copy has none: it is only passed through
+    })
+
+    it('leaves stops that are already right alone, and moves them when the window changes', async () => {
+      holder()
+      await frame()
+      const first = document.querySelector('[data-planner-screen] > [data-snap-stop]')
+      document.querySelector('main')!.append(document.createElement('section'))
+      window.dispatchEvent(new Event('resize'))
+      await frame()
+      expect(document.querySelector('[data-planner-screen] > [data-snap-stop]')).toBe(first)
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: 700 })
+      window.dispatchEvent(new Event('resize'))
+      await frame()
+      expect(stops()).toEqual(['600@600px']) // Food is taller than 700px too, but not shown
+    })
+
+    it('keeps the stops to the screen the page shows, so a swipe up lands on a screen’s top (K102)', async () => {
+      holder()
+      await frame()
+      expect(stops()).toEqual(['500@500px'])
+      const copiesBefore = [...document.querySelectorAll('[data-snap-copy]')]
+      // Down onto Food: the copy of Food (800) and Exercises (1300) above it.
+      Object.defineProperty(window, 'scrollY', { configurable: true, value: 2100 })
+      window.dispatchEvent(new Event('scroll'))
+      vi.advanceTimersByTime(REST_MS)
+      expect(stops()).toEqual([]) // Exercises' stops gone; Food fits
+      await frame()
+      // Laying stops is no change to a screen: the copies stay as they were.
+      expect([...document.querySelectorAll('[data-snap-copy]')]).toEqual(copiesBefore)
+      Object.defineProperty(window, 'scrollY', { configurable: true, value: 800 })
+      window.dispatchEvent(new Event('scroll'))
+      vi.advanceTimersByTime(REST_MS)
+      expect(stops()).toEqual(['500@500px']) // back on Exercises' top
+    })
+
+    it('takes the stops away where the browser doesn’t snap', async () => {
+      const enabled = ref(true)
+      holder(enabled)
+      await frame()
+      expect(stops()).toHaveLength(1)
+      enabled.value = false
+      await nextTick()
+      await frame()
+      expect(stops()).toEqual([])
+    })
+
+    it('follows a screen that changes size with nothing changed inside it', async () => {
+      let resized: () => void = () => {}
+      vi.stubGlobal(
+        'ResizeObserver',
+        class {
+          constructor(callback: () => void) {
+            resized = callback
+          }
+          observe(): void {}
+          disconnect(): void {}
+        },
+      )
+      holder()
+      await frame()
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: 1000 })
+      resized()
+      await frame()
+      expect(stops()).toEqual(['300@300px'])
+      vi.unstubAllGlobals()
+      resized() // a mouse or trackpad now: nothing to lay
+      await frame()
+      expect(stops()).toEqual([])
     })
   })
 

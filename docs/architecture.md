@@ -820,8 +820,19 @@ pass for one. A new push moves on once the sprint has landed; nothing queues whi
 settles on the screen that fills more of the window (K40). It replaced `scroll-snap-type: y mandatory`, which a mouse wheel couldn't
 cross from the end of a tall screen. On a touch screen (`(hover: none) and (pointer: coarse)`) the
 script stands aside and main.css snaps instead (K98): `mandatory` with `scroll-snap-stop: always`, so
-one swipe moves one screen and iOS keeps its own momentum. The script still wraps round and runs
-the arrows there, turning snapping off while it moves (`touchSnaps`, `snapOff`). Four custom variants in main.css carry
+one swipe moves one screen and iOS keeps its own momentum. The script still runs the arrows there,
+turning snapping off while they move (`touchSnaps`, `snapOff`). The wrap round on touch is a snap
+too (K100): an inert copy of the last screen stands above the first and of the first below the last
+(`data-snap-copy`, snap points in main.css). Once the page rests on one (`scrollend`, or 120ms
+still), `place()` jumps it to the same spot on the real screen. A MutationObserver remakes the
+copy of a screen that changes, or all of them when the screens' class on `<html>` changes or a
+screen comes or goes, waiting for rest if the page is moving. The screen the page rests on, when taller than the window, gets stops
+inside it (K101, K102): `layStops()` adds an absolutely placed `data-snap-stop` mark at each of
+`stopOffsets()` (every 80% of the window, and the screen's foot), snap points in main.css, because
+iOS won't scroll freely inside a snap area taller than the window. Every other screen, and every
+copy, has none, so a swipe up onto a screen lands on its top. A copy is remade only when the screen
+it copies changes. A ResizeObserver on the body and the window's resize keep
+them where they belong. Four custom variants in main.css carry
 the layout, all screen-only so paper keeps the table: `screen:` (the WeekGrid is a CSS grid),
 `full:`, `edit:` (Edit plan's screens, K99), `folded:` (upright under 1000px wide, or under 760px
 wide) and `short:` (landscape, 540px tall or less).
