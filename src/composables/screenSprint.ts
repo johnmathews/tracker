@@ -261,6 +261,15 @@ export function useScreenSprint(enabled: Ref<boolean>) {
   /** Where a finger came down, and whether the page was at an end then. */
   let touchY = 0
   let touchEnd: 1 | -1 | 0 = 0
+  /**
+   * One swipe, one screen on touch (K98). `flung` once the swipe since the finger last lifted has
+   * moved a screen; until its momentum dies away the page stays where that sprint put it. iOS
+   * carries a fling's momentum on underneath a sprint, so without this a small swipe ran on
+   * through screen after screen.
+   */
+  let flung = false
+  /** Where a fling's sprint put the page, while its momentum is held there. */
+  let pinned: number | null = null
 
   /**
    * Each screen's top, as the scroll position that rests it just under the fixed week (K88). With
@@ -290,12 +299,30 @@ export function useScreenSprint(enabled: Ref<boolean>) {
     clearTimeout(timer)
     spent = true
     momentum.reset()
+    holdStill()
     sprintTo(target, landed)
+  }
+
+  /**
+   * A finger's fling is sprinting: stop the browser's own momentum (K98). Hiding the page's
+   * overflow ends it on iOS; the sprint's scrollTo still moves the page. Only after a finger
+   * lifts: on a desktop it would take the scrollbar away for the sprint.
+   */
+  function holdStill(): void {
+    if (finger || performance.now() - liftAt >= FLING_MS) return
+    flung = true
+    document.documentElement.style.overflow = 'hidden'
+  }
+  function letGo(): void {
+    document.documentElement.style.removeProperty('overflow')
   }
 
   /** A sprint or a wrap has landed. */
   function landed(): void {
+    letGo()
     last = window.scrollY
+    pinned = flung ? last : null
+    flung = false
   }
 
   /** How far a scroll must go to count: 4% of the window, at least 16px (K45). */
@@ -308,7 +335,8 @@ export function useScreenSprint(enabled: Ref<boolean>) {
     clearTimeout(timer)
     spent = true
     momentum.reset()
-    wrapAround(way, landed)
+    // A page of one screen has nothing to wrap to, and no sprint to land and let go.
+    if (wrapAround(way, landed)) holdStill()
   }
 
   /** At rest. A finger still on the screen is holding the page where it is; its lifting decides. */
@@ -318,6 +346,14 @@ export function useScreenSprint(enabled: Ref<boolean>) {
 
   function onScroll(): void {
     if (!enabled.value || sprinting()) return
+    // A fling's momentum still running after its sprint (K98): back to where the sprint put the
+    // page, until the scroll has been still for REST_MS.
+    if (pinned !== null && !finger) {
+      if (window.scrollY !== pinned) window.scrollTo({ top: pinned, behavior: 'auto' })
+      clearTimeout(timer)
+      timer = setTimeout(unpin, REST_MS)
+      return
+    }
     const now = window.scrollY
     if (now !== last) direction = now > last ? 1 : -1
     last = now
@@ -327,6 +363,11 @@ export function useScreenSprint(enabled: Ref<boolean>) {
     const moving = t - wheelAt < WHEEL_MS || (!finger && t - liftAt < FLING_MS)
     if (moving && go(step())) return
     timer = setTimeout(settle, REST_MS)
+  }
+
+  /** A fling's momentum has died away: the page scrolls freely again. */
+  function unpin(): void {
+    pinned = null
   }
 
   /** A resize or rotation: no one scrolled, so no direction until the next scroll says one. */
@@ -352,7 +393,10 @@ export function useScreenSprint(enabled: Ref<boolean>) {
     wheelAt = now
     const way = Math.sign(event.deltaY)
     const size = Math.abs(event.deltaY) * (event.deltaMode === 1 ? 16 : 1)
-    if (fresh) spent = false
+    if (fresh) {
+      spent = false
+      pinned = null
+    }
     if (sprinting() || spent) {
       // A new push the same way, once the sprint has landed (K95). Never during it (K96): the
       // momentum watch still sees the steps, so a push that started then goes on to count after.
@@ -365,6 +409,7 @@ export function useScreenSprint(enabled: Ref<boolean>) {
         return
       } else {
         stopSprint()
+        letGo()
         spent = false
         last = window.scrollY
         fresh = true
@@ -385,6 +430,8 @@ export function useScreenSprint(enabled: Ref<boolean>) {
 
   function onTouchStart(event: TouchEvent): void {
     finger = true
+    flung = false
+    pinned = null
     touchY = event.touches?.[0]?.clientY ?? 0
     touchEnd = sprinting() ? 0 : pageEnd()
   }
@@ -414,7 +461,10 @@ export function useScreenSprint(enabled: Ref<boolean>) {
   }
 
   watch(enabled, (on) => {
-    if (!on) clearTimeout(timer)
+    if (on) return
+    clearTimeout(timer)
+    letGo()
+    pinned = null
   })
   onMounted(() => {
     last = window.scrollY
@@ -429,6 +479,7 @@ export function useScreenSprint(enabled: Ref<boolean>) {
   onBeforeUnmount(() => {
     clearTimeout(timer)
     stopSprint()
+    letGo()
     window.removeEventListener('scroll', onScroll)
     window.removeEventListener('resize', onResize)
     window.removeEventListener('wheel', onWheel)

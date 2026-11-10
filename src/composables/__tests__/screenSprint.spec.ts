@@ -250,6 +250,67 @@ describe('useScreenSprint', () => {
     wrapper.unmount()
   })
 
+  describe('one swipe, one screen on a phone (K98)', () => {
+    /** Three screens 1300px tall, as on a phone: Exercises, Cardio, Food. */
+    function three(): void {
+      document.body.innerHTML = '<section data-planner-screen></section>'.repeat(3)
+      const all = document.querySelectorAll<HTMLElement>('[data-planner-screen]')
+      all.forEach((el, i) => {
+        el.getBoundingClientRect = () => ({ top: i * 1300 - window.scrollY }) as DOMRect
+      })
+    }
+    /** A small swipe down: the finger lifts, and the browser's momentum carries the page on. */
+    function flick(): void {
+      window.dispatchEvent(new Event('touchstart'))
+      scrollToY(window.scrollY + 40)
+      window.dispatchEvent(new Event('touchend'))
+    }
+    /** iOS momentum that a sprint doesn't stop: the page goes on down for `ms`, 30px a frame. */
+    function iosMomentum(ms: number): void {
+      for (let t = 0; t < ms; t += 16) {
+        vi.advanceTimersByTime(16)
+        scrollToY(window.scrollY + 30)
+      }
+    }
+
+    it('moves one screen however long the momentum runs after the sprint', () => {
+      three()
+      const wrapper = holder()
+      flick()
+      scrollToY(600) // the momentum brings Cardio a step in
+      expect(landed()).toBe(1300)
+      iosMomentum(900) // on past Cardio's end and Food's top, inside FLING_MS
+      vi.advanceTimersByTime(REST_MS + SPRINT_MS + 50)
+      expect(window.scrollY).toBe(1300)
+      // A new swipe moves the next screen.
+      flick()
+      scrollToY(1300 + 600)
+      expect(landed()).toBe(2600)
+      wrapper.unmount()
+    })
+
+    it("stops the browser's momentum while a fling's sprint runs, and lets go on landing", () => {
+      three()
+      const wrapper = holder()
+      flick()
+      scrollToY(600)
+      expect(document.documentElement.style.overflow).toBe('hidden')
+      landed()
+      expect(document.documentElement.style.overflow).toBe('')
+      wrapper.unmount()
+    })
+
+    it("doesn't hold the page still for a wheel's sprint", () => {
+      three()
+      const wrapper = holder()
+      wheel()
+      scrollToY(600)
+      expect(document.documentElement.style.overflow).toBe('')
+      landed()
+      wrapper.unmount()
+    })
+  })
+
   it('swallows the wheel during a sprint and until it is quiet after', () => {
     const wrapper = holder()
     expect(wheel().defaultPrevented).toBe(false)
