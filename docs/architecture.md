@@ -832,7 +832,12 @@ inside it (K101, K102): `layStops()` adds an absolutely placed `data-snap-stop` 
 iOS won't scroll freely inside a snap area taller than the window. Every other screen, and every
 copy, has none, so a swipe up onto a screen lands on its top. A copy is remade only when the screen
 it copies changes. A ResizeObserver on the body and the window's resize keep
-them where they belong. Four custom variants in main.css carry
+them where they belong. A slow drag turns sooner than the snap would (K103): from `touchstart` the
+script notes the snap positions (`snapPoints`) and the finger's places; while the finger is slower
+than 0.3px a ms over the last 100ms, or still, and `turnTarget()` finds the drag has gone a fifth
+of the window, snapping is off. On `touchend` the browser's smooth `scrollTo` carries the page to
+the next snap point the way it went, and snapping comes back on when it rests there, or after
+`GLIDE_MS`. A faster finger turns snapping back on, so a fling stays iOS's own. Four custom variants in main.css carry
 the layout, all screen-only so paper keeps the table: `screen:` (the WeekGrid is a CSS grid),
 `full:`, `edit:` (Edit plan's screens, K99), `folded:` (upright under 1000px wide, or under 760px
 wide) and `short:` (landscape, 540px tall or less).

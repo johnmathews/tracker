@@ -276,7 +276,11 @@ listed in [api.md](api.md) §10):
   afresh when a screen or `<html>`'s class changes, but not for a change elsewhere or inside a copy;
   `stopOffsets` and a tall screen's stops, only on the screen shown and never on a copy, left alone
   when right and following the window's and the screen's size, and only a changed screen's copy made
-  afresh (K38, K40, K45, K88, K89, K98, K99, K100, K101, K102).
+  afresh; `turnTarget`, and a slow drag past a fifth of the window turning to the next screen or
+  back, with snapping off while it would, a shorter drag or a fling left to the browser, a still
+  finger counting as slow, a touch stopping the glide, snapping back on when it lands or after
+  `GLIDE_MS`, and a jump when motion is reduced (K38, K40, K45, K88, K89, K98, K99, K100, K101,
+  K102, K103).
 - `src/composables/__tests__/fullscreen.spec.ts`: full screen unsupported (an iPhone), entering and
   leaving it, and a refusal leaving the page as it is (K34).
 - `src/styles/__tests__/print.spec.ts`: the print block's literal colours match `tokens.json`'s light

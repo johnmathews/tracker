@@ -211,6 +211,36 @@ export function stopOffsets(height: number, room: number): number[] {
 }
 
 /**
+ * How far a slow drag must move the page, as a share of the window under the band, to turn to the
+ * next screen when the finger lifts (K103). The browser's own snap turns only past half.
+ */
+export const TURN_SHARE = 0.2
+/** A finger slower than this, in px/ms, lets go without a fling: the drag is a slow one (K103). */
+export const SLOW_SPEED = 0.3
+/** How far back a finger's speed is measured, and how long a still finger takes to count as still. */
+export const SPEED_MS = 100
+/** The longest a turn may take before snapping comes back on regardless. */
+export const GLIDE_MS = 1000
+
+/**
+ * Where a slow drag goes when the finger lifts (K103). `top` is the page's position, `from` where it
+ * was when the finger came down, `points` the snap positions in order and `room` the window under
+ * the band. Once the drag has gone TURN_SHARE of the room, on to the next point the way it went;
+ * short of that, null, and the browser's snap decides.
+ */
+export function turnTarget(
+  top: number,
+  from: number,
+  points: number[],
+  room: number,
+): number | null {
+  const moved = top - from
+  if (Math.abs(moved) < room * TURN_SHARE) return null
+  const ahead = moved > 0 ? points.filter((p) => p > top - 1) : points.filter((p) => p < top + 1)
+  return (moved > 0 ? ahead[0] : ahead.at(-1)) ?? null
+}
+
+/**
  * A copy of a screen to show beyond an end (K92, K100): the same to look at, but inert, hidden
  * from a screen reader, never printed, with no ids, and not a screen to the script.
  */
@@ -322,6 +352,22 @@ export function useScreenSprint(enabled: Ref<boolean>) {
   let touchEnd: 1 | -1 | 0 = 0
 
   /**
+   * A drag on a touch screen (K103): where the page was when the finger came down, the snap
+   * positions then and the window under the band, and the finger's recent places, to tell a slow
+   * drag from a fling.
+   */
+  let dragFrom = 0
+  let points: number[] = []
+  let room = 0
+  let track: { t: number; y: number }[] = []
+  let stillTimer: ReturnType<typeof setTimeout> | undefined
+  /** The script will turn the page when the finger lifts: snapping is off until it lands. */
+  let turning = false
+  /** Where a turn is gliding to, or null. */
+  let gliding: number | null = null
+  let glideTimer: ReturnType<typeof setTimeout> | undefined
+
+  /**
    * On a touch screen the wrap round is the browser's own swipe (K100). A copy of the last screen
    * sits above the first and a copy of the first below the last, each a snap point like the
    * screens (main.css), so a swipe past an end snaps onto a copy as smoothly as onto any screen.
@@ -423,7 +469,7 @@ export function useScreenSprint(enabled: Ref<boolean>) {
   function refresh(): void {
     cancelAnimationFrame(refreshFrame)
     refreshFrame = requestAnimationFrame(() => {
-      if (!touchMoving && !finger && !sprinting()) place()
+      if (!touchMoving && !finger && !sprinting() && gliding === null) place()
     })
   }
 
@@ -431,8 +477,72 @@ export function useScreenSprint(enabled: Ref<boolean>) {
   function rest(): void {
     clearTimeout(restTimer)
     if (finger || sprinting()) return
+    if (gliding !== null) {
+      if (Math.abs(window.scrollY - gliding) > 1) return // a turn still on its way
+      endGlide()
+    }
     touchMoving = false
     place()
+  }
+
+  /**
+   * Each snap position on a touch screen, in order: the scroll position that rests a screen, a copy
+   * or a stop just under the band, as far as the page can scroll.
+   */
+  function snapPoints(band: number): number[] {
+    const max = document.documentElement.scrollHeight - window.innerHeight
+    const limit = max > 0 ? max : Infinity
+    const all = document.querySelectorAll<HTMLElement>(
+      '[data-planner-screen], [data-snap-copy], [data-snap-stop]',
+    )
+    const tops = [...all].map((el) =>
+      Math.min(limit, Math.max(0, el.getBoundingClientRect().top + window.scrollY - band)),
+    )
+    return [...new Set(tops)].sort((a, b) => a - b)
+  }
+
+  /** The finger's speed over the last SPEED_MS, in px/ms; 0 once it has been still that long. */
+  function speed(now: number): number {
+    const last = track.at(-1)
+    if (!last || now - last.t >= SPEED_MS) return 0
+    // The oldest place inside the last SPEED_MS; a move just after a pause, alone in it, is
+    // measured from the place before, over SPEED_MS at most.
+    const i = track.findIndex((s) => s.t >= now - SPEED_MS)
+    const ref = track[track[i] === last ? i - 1 : i]
+    if (!ref || ref === last) return 0
+    return Math.abs(last.y - ref.y) / Math.max(1, Math.min(last.t - ref.t, SPEED_MS))
+  }
+
+  /**
+   * Whether the page should turn when the finger lifts (K103): the finger is slow, or still, and
+   * the drag has gone TURN_SHARE of the window. Snapping is off while it should, so the browser
+   * doesn't pull the page back first; a finger that speeds up again gives the browser it back.
+   */
+  function judge(): void {
+    const turn =
+      finger &&
+      speed(performance.now()) < SLOW_SPEED &&
+      turnTarget(window.scrollY, dragFrom, points, room) !== null
+    if (turn === turning) return
+    turning = turn
+    if (turn) snapOff()
+    else snapOn()
+  }
+
+  /** Turn the page to `target`, the browser's own smooth scroll, then snap again once it lands. */
+  function glide(target: number): void {
+    gliding = target
+    clearTimeout(glideTimer)
+    glideTimer = setTimeout(() => {
+      endGlide()
+      rest()
+    }, GLIDE_MS)
+    window.scrollTo({ top: target, behavior: reducedMotion() ? 'auto' : 'smooth' })
+  }
+  function endGlide(): void {
+    clearTimeout(glideTimer)
+    gliding = null
+    snapOn()
   }
   const restsByItself = () => 'onscrollend' in window
 
@@ -615,9 +725,32 @@ export function useScreenSprint(enabled: Ref<boolean>) {
     finger = true
     touchY = event.touches?.[0]?.clientY ?? 0
     touchEnd = sprinting() ? 0 : pageEnd()
+    // A finger on the page stops a turn where it is; the browser snaps again (K103).
+    if (gliding !== null) endGlide()
+    clearTimeout(stillTimer)
+    turning = false
+    track = [{ t: performance.now(), y: touchY }]
+    dragFrom = window.scrollY
+    points = []
+    if (enabled.value && touchSnaps()) {
+      const band = bandHeight()
+      points = snapPoints(band)
+      room = window.innerHeight - band
+    }
   }
   function onTouchMove(event: TouchEvent): void {
     if (enabled.value && sprinting()) event.preventDefault()
+    const y = event.touches?.[0]?.clientY
+    if (!points.length || y === undefined) return
+    const now = performance.now()
+    track.push({ t: now, y })
+    // Keep one place from before the last SPEED_MS, so a move just after a pause has a speed.
+    const i = track.findIndex((s) => s.t >= now - SPEED_MS)
+    if (i > 1) track = track.slice(i - 1)
+    judge()
+    // A finger held still sends no more moves: look again once it has been still SPEED_MS.
+    clearTimeout(stillTimer)
+    stillTimer = setTimeout(judge, SPEED_MS)
   }
   /**
    * A finger lifting. A swipe that began at an end and went a step the way past it, with the page
@@ -628,6 +761,14 @@ export function useScreenSprint(enabled: Ref<boolean>) {
     liftAt = performance.now()
     const y = event.changedTouches?.[0]?.clientY ?? touchY
     const way = Math.sign(touchY - y)
+    clearTimeout(stillTimer)
+    if (turning) {
+      // A slow drag gone far enough turns to the next screen, or the next stop (K103).
+      turning = false
+      const target = enabled.value ? turnTarget(window.scrollY, dragFrom, points, room) : null
+      if (target === null || Math.abs(target - window.scrollY) < 1) snapOn()
+      else glide(target)
+    }
     // Where the browser snaps, a swipe past an end lands on a copy by itself (K100).
     if (
       enabled.value &&
@@ -644,7 +785,12 @@ export function useScreenSprint(enabled: Ref<boolean>) {
   }
 
   watch(enabled, (on) => {
-    if (!on) clearTimeout(timer)
+    if (!on) {
+      clearTimeout(timer)
+      clearTimeout(stillTimer)
+      if (turning || gliding !== null) endGlide()
+      turning = false
+    }
     dirty = 'all'
     refresh()
   })
@@ -674,6 +820,8 @@ export function useScreenSprint(enabled: Ref<boolean>) {
   onBeforeUnmount(() => {
     clearTimeout(timer)
     clearTimeout(restTimer)
+    clearTimeout(stillTimer)
+    if (turning || gliding !== null) endGlide()
     cancelAnimationFrame(refreshFrame)
     observer.disconnect()
     sizes?.disconnect()

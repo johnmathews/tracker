@@ -197,9 +197,9 @@
   ],
   "lastChange": {
     "by": "John Mathews",
-    "at": "2026-11-10T13:46:36Z",
+    "at": "2026-11-10T16:13:13Z",
     "via": "Claude Code",
-    "note": "Edit plan screens (K99): PlannerScreen gives Edit plan one tracker per screen under the sticky bar, Edit plan's fixed rows from the top; the Header publishes its height as --bar-height. On a touch screen the wrap round is a snap onto a copy beyond the end (K100), and the screen shown, when taller than the window, has stops inside it (K101, K102)."
+    "note": "Slow drag (K103): on a touch screen PlannerScreen turns to the next screen once a slow drag has gone a fifth of the window, not half; a fling stays the browser's snap."
   },
 
   "layout": "files",

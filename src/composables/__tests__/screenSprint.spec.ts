@@ -17,6 +17,10 @@ import {
   sprintTo,
   STOP_SHARE,
   stopOffsets,
+  GLIDE_MS,
+  SPEED_MS,
+  TURN_SHARE,
+  turnTarget,
   useScreenSprint,
 } from '@/composables/screenSprint'
 
@@ -54,6 +58,30 @@ describe('sprintTarget (K38)', () => {
     expect(sprintTarget(540, 800, starts, 1, 32)).toBe(1300)
     expect(sprintTarget(1280, 800, starts, -1, 32)).toBeNull()
     expect(sprintTarget(1260, 800, starts, -1, 32)).toBe(500)
+  })
+})
+
+describe('turnTarget (K103)', () => {
+  const points = [0, 800, 1600, 2400]
+
+  it('turns once a drag has gone a share of the window, the way it went', () => {
+    const far = 800 * TURN_SHARE
+    expect(turnTarget(800 + far, 800, points, 800)).toBe(1600)
+    expect(turnTarget(800 - far, 800, points, 800)).toBe(0)
+  })
+
+  it('leaves a shorter drag to the browser', () => {
+    expect(turnTarget(800 + 800 * TURN_SHARE - 1, 800, points, 800)).toBeNull()
+    expect(turnTarget(800, 800, points, 800)).toBeNull()
+  })
+
+  it('goes to the next point past where the page is, not past where it started', () => {
+    expect(turnTarget(1700, 800, points, 800)).toBe(2400)
+    expect(turnTarget(1600, 800, points, 800)).toBe(1600) // already there
+  })
+
+  it('has nowhere to go past the last point', () => {
+    expect(turnTarget(2600, 2400, points, 800)).toBeNull()
   })
 })
 
@@ -547,6 +575,168 @@ describe('useScreenSprint', () => {
       window.dispatchEvent(new Event('scroll'))
       vi.advanceTimersByTime(REST_MS)
       expect(order().at(-1)).toBe('copy of Workouts')
+    })
+  })
+
+  describe('on a touch screen a slow drag turns after a fifth of the window (K103)', () => {
+    /** Three screens 800px tall in an 800px window, with no band; the copies make five. */
+    function layout(): void {
+      document.body.innerHTML =
+        '<main><section data-planner-screen><h2>Exercises</h2></section>' +
+        '<section data-planner-screen><h2>Cardio</h2></section>' +
+        '<section data-planner-screen><h2>Food</h2></section></main>'
+      vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+        this: HTMLElement,
+      ) {
+        const all = [...document.querySelectorAll('[data-planner-screen], [data-snap-copy]')]
+        const i = all.indexOf(this)
+        if (i < 0) return { top: 0, bottom: 0, height: 0 } as DOMRect
+        const top = i * 800 - window.scrollY
+        return { top, bottom: top + 800, height: 800 } as DOMRect
+      })
+    }
+    const snap = () => document.documentElement.style.scrollSnapType
+    const touch = (type: string, y: number) =>
+      window.dispatchEvent(
+        Object.assign(new Event(type), {
+          touches: [{ clientY: y }],
+          changedTouches: [{ clientY: y }],
+        }),
+      )
+    /**
+     * A finger dragging the page by `by` pixels in `steps` moves `ms` apart, the page following it.
+     * Down the page is a finger going up.
+     */
+    function drag(by: number, steps: number, ms: number): void {
+      const from = window.scrollY
+      for (let k = 1; k <= steps; k++) {
+        vi.advanceTimersByTime(ms)
+        Object.defineProperty(window, 'scrollY', {
+          configurable: true,
+          value: from + (by * k) / steps,
+        })
+        window.dispatchEvent(new Event('scroll'))
+        touch('touchmove', 500 - (by * k) / steps)
+      }
+    }
+    /** The page arrives where it was sent, and rests. */
+    function arrive(): void {
+      window.dispatchEvent(new Event('scroll'))
+      vi.advanceTimersByTime(REST_MS)
+    }
+
+    beforeEach(async () => {
+      vi.stubGlobal(
+        'matchMedia',
+        vi.fn<(q: string) => MediaQueryList>(
+          (q) => ({ matches: q.includes('pointer: coarse') }) as unknown as MediaQueryList,
+        ),
+      )
+      layout()
+      holder()
+      await Promise.resolve()
+      vi.advanceTimersByTime(20)
+      scrollTo.mockClear() // the page is on Exercises, under the copy of Food
+    })
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('turns to the next screen when a slow drag lets go past a fifth', () => {
+      touch('touchstart', 500)
+      drag(180, 9, 100) // 20px every 100ms
+      expect(snap()).toBe('none') // the browser won't pull it back first
+      touch('touchend', 320)
+      expect(scrollTo).toHaveBeenLastCalledWith({ top: 1600, behavior: 'smooth' })
+      expect(snap()).toBe('none')
+      arrive()
+      expect(snap()).toBe('') // snapping again once it has landed
+    })
+
+    it('turns back up to the screen before', () => {
+      Object.defineProperty(window, 'scrollY', { configurable: true, value: 1600 })
+      touch('touchstart', 500)
+      drag(-180, 9, 100)
+      touch('touchend', 680)
+      expect(scrollTo).toHaveBeenLastCalledWith({ top: 800, behavior: 'smooth' })
+    })
+
+    it('leaves a shorter drag to the browser, which snaps it back', () => {
+      touch('touchstart', 500)
+      drag(140, 7, 100)
+      expect(snap()).toBe('')
+      touch('touchend', 360)
+      vi.advanceTimersByTime(REST_MS)
+      expect(scrollTo).not.toHaveBeenCalled()
+    })
+
+    it('leaves a fling to the browser', () => {
+      touch('touchstart', 500)
+      drag(300, 5, 16)
+      expect(snap()).toBe('')
+      touch('touchend', 200)
+      expect(scrollTo).not.toHaveBeenCalled()
+    })
+
+    it('turns after a fast drag the finger then held still', () => {
+      touch('touchstart', 500)
+      drag(300, 5, 16)
+      expect(snap()).toBe('')
+      vi.advanceTimersByTime(SPEED_MS)
+      expect(snap()).toBe('none')
+      touch('touchend', 200)
+      expect(scrollTo).toHaveBeenLastCalledWith({ top: 1600, behavior: 'smooth' })
+    })
+
+    it('gives the browser the snap back when a slow drag speeds up', () => {
+      touch('touchstart', 500)
+      drag(180, 9, 100)
+      expect(snap()).toBe('none')
+      drag(150, 3, 16)
+      expect(snap()).toBe('')
+    })
+
+    it('stops a turn where it is when a finger comes down on the page', () => {
+      scrollTo.mockImplementation(() => {}) // the glide is still on its way
+      touch('touchstart', 500)
+      drag(180, 9, 100)
+      touch('touchend', 320)
+      touch('touchstart', 320)
+      expect(snap()).toBe('')
+    })
+
+    it('snaps again after a while, even if the turn never arrives', () => {
+      scrollTo.mockImplementation(() => {})
+      touch('touchstart', 500)
+      drag(180, 9, 100)
+      touch('touchend', 320)
+      arrive()
+      expect(snap()).toBe('none') // short of where it was going: still on its way
+      vi.advanceTimersByTime(GLIDE_MS)
+      expect(snap()).toBe('')
+    })
+
+    it('jumps rather than glides when motion is reduced', () => {
+      vi.stubGlobal(
+        'matchMedia',
+        vi.fn<(q: string) => MediaQueryList>(
+          (q) => ({ matches: /coarse|reduce/.test(q) }) as unknown as MediaQueryList,
+        ),
+      )
+      touch('touchstart', 500)
+      drag(180, 9, 100)
+      touch('touchend', 320)
+      expect(scrollTo).toHaveBeenLastCalledWith({ top: 1600, behavior: 'auto' })
+    })
+
+    it('leaves a mouse or trackpad alone', () => {
+      vi.stubGlobal(
+        'matchMedia',
+        vi.fn<(q: string) => MediaQueryList>(() => ({ matches: false }) as MediaQueryList),
+      )
+      touch('touchstart', 500)
+      drag(180, 9, 100)
+      expect(snap()).toBe('')
     })
   })
 
