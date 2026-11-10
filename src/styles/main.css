@@ -133,6 +133,21 @@
   }
 }
 
+/* On a touch screen the browser snaps between the planner's screens (K98): `always` stops a swipe
+   at the next screen, however hard, and iOS keeps its own smooth momentum. A screen taller than
+   the window scrolls freely inside. The padding rests each screen under the fixed week. A mouse or
+   trackpad keeps the script's sprint (K38, K45), which can leave a tall screen's end. */
+@media screen and (hover: none) and (pointer: coarse) {
+  :root.planner-screens {
+    scroll-snap-type: y mandatory;
+    scroll-padding-top: var(--week-band);
+  }
+  :root.planner-screens [data-planner-screen] {
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+}
+
 /* A phone on its side: rows of 52px, so five still fit with the title in the corner, and no
    room for the fixed week (K88). */
 @media screen and (orientation: landscape) and (height <= 540px) {

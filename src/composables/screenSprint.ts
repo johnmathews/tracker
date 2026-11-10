@@ -96,6 +96,25 @@ export function sprintTarget(
 }
 
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+/**
+ * A touch screen (a phone, an iPad without a trackpad): there the browser snaps between the
+ * screens itself (main.css, K98), with `scroll-snap-stop: always`, so a swipe moves one screen
+ * and its momentum is the browser's own. A script setting the position each frame fights iOS's
+ * momentum and jitters.
+ */
+export const touchSnaps = () =>
+  window.matchMedia?.('(hover: none) and (pointer: coarse)').matches ?? false
+
+/**
+ * CSS snapping would pull each frame of a sprint back to a snap point, so it is off while one
+ * runs (the arrows, a wrap) and back on when it lands or stops.
+ */
+function snapOff(): void {
+  document.documentElement.style.scrollSnapType = 'none'
+}
+function snapOn(): void {
+  document.documentElement.style.removeProperty('scroll-snap-type')
+}
 
 let frame = 0
 /** The end of the sprint running now, if one is. */
@@ -110,9 +129,11 @@ let heading: 1 | -1 | 0 = 0
 export function sprintTo(top: number, done?: () => void): void {
   halt()
   heading = top > window.scrollY ? 1 : top < window.scrollY ? -1 : 0
+  snapOff()
   if (reducedMotion()) {
     window.scrollTo({ top, behavior: 'auto' })
     done?.()
+    snapOn()
     return
   }
   const from = window.scrollY
@@ -120,6 +141,7 @@ export function sprintTo(top: number, done?: () => void): void {
   landing = () => {
     landing = null
     done?.()
+    snapOn()
   }
   const step = (now: number) => {
     // A frame's time can fall just before `start` (the first frame of a sprint begun in a scroll
@@ -151,6 +173,7 @@ export function sprintToScreen(headingId: string): void {
 function halt(): void {
   cancelAnimationFrame(frame)
   landing = null
+  snapOn()
 }
 
 /** Stop a running sprint where it is. A wrap's copy goes with it, so none is left behind. */
@@ -186,6 +209,7 @@ export function wrapAround(way: 1 | -1, done?: () => void): boolean {
   const screens = [...document.querySelectorAll<HTMLElement>('[data-planner-screen]')]
   if (screens.length < 2) return false
   stopSprint()
+  snapOff()
   const target = way > 0 ? screens[0]! : screens.at(-1)!
   const copy = target.cloneNode(true) as HTMLElement
   for (const el of [copy, ...copy.querySelectorAll('[id]')]) el.removeAttribute('id')
@@ -313,11 +337,11 @@ export function useScreenSprint(enabled: Ref<boolean>) {
 
   /** At rest. A finger still on the screen is holding the page where it is; its lifting decides. */
   function settle(): void {
-    if (enabled.value && !finger && !sprinting()) go(1)
+    if (enabled.value && !finger && !sprinting() && !touchSnaps()) go(1)
   }
 
   function onScroll(): void {
-    if (!enabled.value || sprinting()) return
+    if (!enabled.value || sprinting() || touchSnaps()) return
     const now = window.scrollY
     if (now !== last) direction = now > last ? 1 : -1
     last = now
@@ -345,7 +369,7 @@ export function useScreenSprint(enabled: Ref<boolean>) {
    * (K89): it stops a sprint where it is, and counts as a new gesture.
    */
   function onWheel(event: WheelEvent): void {
-    if (!enabled.value) return
+    if (!enabled.value || touchSnaps()) return
     const now = performance.now()
     const gap = now - wheelAt
     let fresh = gap >= WHEEL_MS

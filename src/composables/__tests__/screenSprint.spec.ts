@@ -250,6 +250,52 @@ describe('useScreenSprint', () => {
     wrapper.unmount()
   })
 
+  describe('on a touch screen the browser snaps (K98)', () => {
+    function touchScreen(): void {
+      vi.stubGlobal(
+        'matchMedia',
+        vi.fn<(q: string) => MediaQueryList>(
+          (q) => ({ matches: q.includes('pointer: coarse') }) as unknown as MediaQueryList,
+        ),
+      )
+    }
+
+    it('leaves a swipe and its momentum to the browser', () => {
+      touchScreen()
+      const wrapper = holder()
+      window.dispatchEvent(new Event('touchstart'))
+      scrollToY(100)
+      window.dispatchEvent(new Event('touchend'))
+      scrollToY(600)
+      vi.advanceTimersByTime(REST_MS + SPRINT_MS + 50)
+      expect(scrollTo).not.toHaveBeenCalled()
+      wrapper.unmount()
+    })
+
+    it('leaves a wheel and a rotation to the browser too', () => {
+      touchScreen()
+      const wrapper = holder()
+      expect(wheel().defaultPrevented).toBe(false)
+      scrollToY(600)
+      window.dispatchEvent(new Event('resize'))
+      vi.advanceTimersByTime(REST_MS + SPRINT_MS + 50)
+      expect(scrollTo).not.toHaveBeenCalled()
+      wrapper.unmount()
+    })
+  })
+
+  it('turns snapping off while it sprints, and back on when it lands or stops (K98)', () => {
+    const html = document.documentElement
+    sprintTo(1300)
+    expect(html.style.scrollSnapType).toBe('none')
+    vi.advanceTimersByTime(SPRINT_MS + 50)
+    expect(html.style.scrollSnapType).toBe('')
+    sprintTo(0)
+    expect(html.style.scrollSnapType).toBe('none')
+    stopSprint()
+    expect(html.style.scrollSnapType).toBe('')
+  })
+
   it('swallows the wheel during a sprint and until it is quiet after', () => {
     const wrapper = holder()
     expect(wheel().defaultPrevented).toBe(false)

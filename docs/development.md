@@ -267,7 +267,8 @@ listed in [api.md](api.md) §10):
   direction, and only past a step when given one) and the composable: a moving scroll sprinting at
   once, a short one after a pause, a finger waiting to lift, the wheel swallowed during and after
   but let through the other way, the eased `sprintTo`, a resize, reduced motion, switching off,
-  and the fixed week's height taken off the window (K38, K40, K45, K88, K89).
+  the fixed week's height taken off the window, and a touch screen left to the browser's snapping,
+  with snapping off during a sprint (K38, K40, K45, K88, K89, K98).
 - `src/composables/__tests__/fullscreen.spec.ts`: full screen unsupported (an iPhone), entering and
   leaving it, and a refusal leaving the page as it is (K34).
 - `src/styles/__tests__/print.spec.ts`: the print block's literal colours match `tokens.json`'s light

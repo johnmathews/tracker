@@ -197,9 +197,9 @@
   ],
   "lastChange": {
     "by": "John Mathews",
-    "at": "2026-11-09T23:33:48Z",
+    "at": "2026-11-10T08:30:49Z",
     "via": "Claude Code",
-    "note": "Scrolling and print (K96, K97): PlannerScreen moves one screen a push and never queues a second mid-sprint; on paper each section has a page of its own, and SectionHeader prints the week over it."
+    "note": "Touch scrolling (K98): on a touch screen PlannerScreen lets the browser snap, one swipe to one screen with scroll-snap-stop: always; a mouse or trackpad keeps the sprint."
   },
 
   "layout": "files",

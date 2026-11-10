@@ -815,7 +815,10 @@ in it: steps that fall below 70% of their peak and then rise twice, or a mouse w
 100ms of silence, judged by speed (px a ms) so steps the browser sends merged mid-sprint can't
 pass for one. A new push moves on once the sprint has landed; nothing queues while one runs (K96). A wheel the other way stops the sprint and scrolls back (K89). After a resize or rotation, the page
 settles on the screen that fills more of the window (K40). It replaced `scroll-snap-type: y mandatory`, which a mouse wheel couldn't
-cross from the end of a tall screen. Four custom variants in main.css carry
+cross from the end of a tall screen. On a touch screen (`(hover: none) and (pointer: coarse)`) the
+script stands aside and main.css snaps instead (K98): `mandatory` with `scroll-snap-stop: always`, so
+one swipe moves one screen and iOS keeps its own momentum. The script still wraps round and runs
+the arrows there, turning snapping off while it moves (`touchSnaps`, `snapOff`). Four custom variants in main.css carry
 the layout, all screen-only so paper keeps the table: `screen:` (the WeekGrid is a CSS grid),
 `full:`, `folded:` (upright under 1000px wide, or under 760px wide) and `short:` (landscape, 540px
 tall or less).
