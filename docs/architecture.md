@@ -813,7 +813,7 @@ push moves one screen (K94, K95). Once a wheel gesture (events less than 150ms a
 one, it is `spent` and its momentum is swallowed, but `MomentumWatch` still looks for a new push
 in it: steps that fall below 70% of their peak and then rise twice, or a mouse wheel's click after
 100ms of silence, judged by speed (px a ms) so steps the browser sends merged mid-sprint can't
-pass for one. A new push moves on once the sprint has landed; nothing queues while one runs (K96). A wheel the other way stops the sprint and scrolls back (K89). A swipe on touch moves one screen as well (K98): its sprint hides the page's overflow, which stops iOS's own momentum, and any momentum left after landing is held where the sprint put the page until the scroll is still. After a resize or rotation, the page
+pass for one. A new push moves on once the sprint has landed; nothing queues while one runs (K96). A wheel the other way stops the sprint and scrolls back (K89). After a resize or rotation, the page
 settles on the screen that fills more of the window (K40). It replaced `scroll-snap-type: y mandatory`, which a mouse wheel couldn't
 cross from the end of a tall screen. Four custom variants in main.css carry
 the layout, all screen-only so paper keeps the table: `screen:` (the WeekGrid is a CSS grid),
