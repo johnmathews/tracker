@@ -8,8 +8,10 @@ import { openApp } from './support'
 test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
 
 /**
- * A real fling through Chrome's input pipeline, the finger lifting while it still moves, so the
- * browser's momentum runs on: `dy` > 0 moves the page down. Returns how the page moved, sampled
+ * A real fling through Chrome's input pipeline: touch events, a finger moving `dy` in ten steps a
+ * frame apart and lifting while it still moves, so the browser's own momentum runs on. `dy` > 0
+ * moves the page down. (Input.synthesizeScrollGesture scrolls nothing in Linux's headless Chromium,
+ * so CI's page never moved; plain touch events do, there and on a Mac.) Returns how the page moved, sampled
  * every frame: how often it turned back, and whether it set off again (a second leg) after slowing
  * nearly to a stop. Measured three frames at a time: once it moves (24px or more), 6px or less
  * followed by 24px or more again. One fling is one movement, so once slowed it never speeds up.
@@ -24,14 +26,19 @@ async function fling(page: Page, cdp: CDPSession, dy: number) {
     }
     w.frame = requestAnimationFrame(sample)
   })
-  await cdp.send('Input.synthesizeScrollGesture', {
-    x: 195,
-    y: dy > 0 ? 680 : 170,
-    yDistance: -dy,
-    speed: 1500,
-    gestureSourceType: 'touch',
-    preventFling: false,
+  const from = dy > 0 ? 680 : 170
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ x: 195, y: from }],
   })
+  for (let i = 1; i <= 10; i++) {
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: 195, y: from - (dy * i) / 10 }],
+    })
+    await page.waitForTimeout(16)
+  }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
   await page.waitForTimeout(2200)
   return page.evaluate((way) => {
     const w = window as unknown as { samples: [number, number][]; frame: number }
