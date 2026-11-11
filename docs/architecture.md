@@ -124,7 +124,7 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 │                       questions), Settings, Print…, Full screen (useFullscreen, where the
 │                       browser has one) and Profile, which opens the profile Menu: Signed in
 │                       as, Profile and Sign out (useSignOut, K106); the week's keys E, Esc,
-│                       F, P and S (useShortcuts, K91); full width, sized by main.css's --bar-* (K47, K49); on the
+│                       F, P, S and A (useShortcuts, K91, K109); full width, sized by main.css's --bar-* (K47, K49); on the
 │                       planner's screens out of sight until a long press or the handle opens
 │                       Edit plan (useBarReveal, §6.6)
 ├── ConnectPage.vue     an OAuth consent link (#/connect/<id>, K73), signed in or out: who is
@@ -725,7 +725,8 @@ have no `<style>` blocks. Everything global is in `src/styles/main.css`.
   `bg-canvas`, `text-ink-secondary` or `border-control-border`, and both themes follow without
   `dark:` variants. The roles are `canvas`, `panel`, `tile`, `line`, `control-border`, `ink`,
   `on-ink`, `ink-secondary`, `error-ink`, `focus`, `pen`, `pen-partial`, `pen-missed`,
-  `caution-ink` and `scrim`.
+  `caution-ink`, `edit` and `scrim`. `edit` draws only Edit plan's frame (K112): App.vue's
+  `data-slot="edit-frame"`, fixed round the window, `--edit-frame` wide (8px, 4px on a phone, K117).
 - **No palette.** `--color-*: initial` switches Tailwind's default colours off, keeping only
   `transparent` and `current`, so a palette class such as `bg-red-500` or `text-white` generates
   nothing. Every colour on screen comes from a role.
@@ -839,7 +840,8 @@ turns on the `edit:` variant (K99): each section is at least the window less the
 height AppNavbar publishes as `--bar-height` from a ResizeObserver, with Edit plan's fixed rows
 from the top. Settings and an item's page are ordinary pages that scroll, so neither has either
 class. With it, each section is a screen (`SCREEN` in
-`src/lib/screens.ts`: the window's height less the fixed week's `--week-band`, a centred column,
+`src/lib/screens.ts`: the window's height less the fixed week's `--week-band`, a column that
+starts at the top with the arrow to the next screen at its foot (K114),
 and `data-planner-screen`) and its grid takes the height left (`SCREEN_GRID`). WeekHeader, before
 the sections, is the fixed week: `sticky` at the top on the canvas, so the screens move under it
 (K88). `bandHeight()` measures it while it is sticky, or else Edit plan's sticky bar (K99), and the
@@ -882,7 +884,16 @@ script notes the snap positions (`snapPoints`) and the finger's places; while th
 than 0.3px a ms over the last 100ms, or still, and `turnTarget()` finds the drag has gone a fifth
 of the window, snapping is off. On `touchend` the browser's smooth `scrollTo` carries the page to
 the next snap point the way it went, and snapping comes back on when it rests there, or after
-`GLIDE_MS`. A faster finger turns snapping back on, so a fling stays iOS's own. A `touchcancel` counts as a lift. Four custom variants in main.css carry
+`GLIDE_MS`. A faster finger turns snapping back on, so a fling stays iOS's own. A `touchcancel` counts as a lift.
+When a swipe rests partway into a different screen than the last one it rested on (`restingOn`),
+`place(swiped)` glides on to that screen's top (K116). The app's own moves set `restingOn` so they
+stay where they chose: `focusOnScreen()` rests the page on the focused element's screen
+(`restOn()`: its top, its foot, or the element in the middle) before focusing with
+`preventScroll`, which App.vue uses back on the week from the new item page or an item's page
+(K111); `screenInView()` names the screen showing most under the band, and App.vue notes it the
+moment `configMode` flips (a sync watcher) and calls `restOnScreen()` once the new layout has
+rendered (a post watcher), so Edit plan on or off keeps the tracker on show (K115); AppNavbar's
+A key presses that screen's `[data-add]` (K109). Four custom variants in main.css carry
 the layout, all screen-only so paper keeps the table: `screen:` (the WeekGrid is a CSS grid),
 `full:`, `edit:` (Edit plan's screens, K99), `folded:` (upright under 1000px wide, or under 760px
 wide) and `short:` (landscape, 540px tall or less).

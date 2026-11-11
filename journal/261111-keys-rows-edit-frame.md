@@ -2,8 +2,9 @@
 
 > Purpose
 >
-> Records four changes John asked for on 2026-11-11 (K109–K112): what each does, why it took the
-> shape it did, and what was tried and dropped on the way.
+> Records the changes John asked for on 2026-11-11 (K109–K118): the four first asked for
+> (K109–K112), and the ones that followed his look at the local stack and his iPhone. For each,
+> what it does, why it took its shape, what was tried and dropped, and how it shipped.
 
 ## 1. The A key (K109)
 
@@ -117,3 +118,42 @@
   one step, with short ease-backs when a drag went past a near stop.
 - On the iPhone John found it "much worse", and it was reverted the same day to K118. The skipping
   inside a long tracker is still open.
+
+## 9. Shipping, and two red runs on `main`
+
+All of this went to `main` by direct push (`CLAUDE.md`'s Shipping), after the local CI steps.
+`main` went red twice before it went green.
+
+- **Run 1 (`91a7566`), e2e red.** Both K116/K118 touch tests: the page never moved. Confirmed:
+  `Input.synthesizeScrollGesture` scrolls nothing in headless Chromium on Linux, in either its
+  touch or mouse mode. Reproduced in the `mcr.microsoft.com/playwright:v1.64.1-noble` image. The
+  full Chromium (`channel: 'chromium'`) behaved the same, so the headless shell was not the cause.
+  Plain `Input.dispatchTouchEvent` sequences scroll and fling there and on a Mac. The spec now uses
+  them, green in the image as committed and red with the K118 freeing switched off (`36377d2`).
+- **Run 2 (`36377d2`), check red.** Line coverage was 99.97% against a 100% threshold: `place()`'s
+  un-freeing was reached only by e2e. A unit test now covers it (`8e4d5c1`). The local runs had
+  printed the same 99.97% and the threshold error. They were judged by a filtered summary rather
+  than the step's exit code, which is how it was missed.
+- **Run 3 (`8e4d5c1`), green:** `check`, `e2e` and `api`. Docker published `tracker` and
+  `tracker-api`.
+- **Live, confirmed:** the bundle served at tracker.itsa-pizza.com contains `data-snap-free`,
+  `edit-frame` and `section-end`, which exist only in this release. The site answered 502 for a few
+  seconds around 14:14 CET and then 200. That is strongly supported as What's Up Docker replacing
+  the containers, not observed.
+- The design system was republished as version 80, after checking that its live files matched
+  `cf4a4f2` so no edit made on the page was overwritten.
+
+## 10. What is deliberately not done
+
+- **Skipping inside a long tracker on touch.** A swipe made before the page settles on a long
+  tracker, which has no stops until then, can run through to the next tracker. A fling can also
+  pass a stop despite `scroll-snap-stop: always`. Both are confirmed in Chrome's touch pipeline.
+  The fix tried (K119, page turns, section 8) felt much worse on John's iPhone and was reverted. He
+  chose to ship without a fix. Filed as #70.
+- **A tap leaves a screen freed** (code review). With no scroll, `place()` doesn't run, so
+  `data-snap-free` stays until the next rest or DOM change. Strongly supported as harmless: a freed
+  screen's one snap position is its top, which is where K116 wants a swipe up to end. Left alone
+  rather than changing shipped touch code without an iPhone check. Filed as #71, with the review's
+  note that `onTouchStart` re-reads the screens' tops beside `snapPoints()`.
+- **The print value for `edit`.** None was added. The frame never prints (`print:hidden`), and
+  `focus` has none either.

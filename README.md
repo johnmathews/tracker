@@ -35,7 +35,8 @@
     "− 3 per day +", sets its daily target (1–8): exercises a day and foods a day. They are one
     setting for every week. The week isn't shown over the sections in config mode, since the bar
     shows it;
-  - **Add exercise**, **Add cardio** and **Add food**, under each grid, open a new item page: a
+  - **Add exercise**, **Add cardio** and **Add food**, at the end of each section's title line,
+    open a new item page: a
     name, then this week's plan, notes and details. An exercise starts at one set of one rep, and
     takes sets, reps or a time in seconds (a plank), "Per set" or "Each side" and an optional
     weight in kg (e.g. squats with a 12 kg kettlebell); cardio takes minutes and a distance in km.
@@ -63,7 +64,8 @@
   plan** (**Done** in Edit plan). **Print…** (or **P**) produces a page for each tracker, with the week at the top of each, in
   the light theme's colours on white paper.
 - **Keys** on the week: **E** goes into Edit plan and out again, **Esc** leaves full screen or Edit
-  plan, **F** is full screen, **P** print and **S** Settings. On every page, **H** or **B** goes
+  plan, **F** is full screen, **P** print and **S** Settings. **A** opens Ask, where Ask is on;
+  in Edit plan it adds to the tracker on screen. On every page, **H** or **B** goes
   back and **L** forward, as the browser's buttons do. They do nothing while you type in a field or
   a dialog is open.
 - **One screen per section.** The week fills the screen, and the bar stays out of sight. A long press

@@ -170,6 +170,15 @@ clock is fixed to Wednesday 21 October 2026, so every run sees the same week.
   (K88); and a wheel turned round straight after a sprint goes straight back, both ways (K89).
   In Edit plan each screen is at least the window less the bar, a mouse wheel's notches never rest
   across two, and Cardio and then Food (by the arrow) rest just under the sticky bar (K99).
+  Cardio's two rows stop at 82u, from the top of their screen, the arrow at its foot (K110, K114);
+  each Add sits at the end of its title line (K113); Edit plan's frame is 8px of `edit` round the
+  window and a press on it lands on the page (K112); after Add the page rests on Exercises, not
+  Cardio (K111); and Edit plan on and off keeps Cardio, then Food, just under the band (K115).
+- `touch.spec.ts`: a phone held upright (390×844, `isMobile`, `hasTouch`), the browser snapping. Real
+  flings through `Input.dispatchTouchEvent` (a touch start, ten moves a frame apart, and the lift
+  while still moving; `Input.synthesizeScrollGesture` scrolls nothing in headless Linux): a fling up
+  from Cardio onto a tall Exercises ends at its top, in one movement, never turning back or setting
+  off again after slowing (K116, K118); and Edit plan's frame is 4px there (K117).
 
 CI (`.github/workflows/ci.yml`) runs three jobs on every pull request and every push to `main`.
 `check` runs lint, format, types, unit tests with coverage, the build, the design gate and
@@ -285,8 +294,11 @@ listed in [api.md](api.md) §10):
   afresh; `turnTarget`, and a slow drag past a fifth of the window turning to the next screen or
   back, with snapping off while it would, a shorter drag or a fling left to the browser, a still
   finger counting as slow, a touch stopping the glide, snapping back on when it lands or after
-  `GLIDE_MS`, and a jump when motion is reduced (K38, K40, K45, K88, K89, K98, K99, K100, K101,
-  K102, K103, K108).
+  `GLIDE_MS`, and a jump when motion is reduced; `restOn` (a screen's top, its foot or the
+  element in the middle, never across two) and `focusOnScreen` resting the page before focusing
+  with `preventScroll`; `screenInView` and `restOnScreen`; `tallAbove`, and a touch from a screen's
+  top freeing a tall screen above until the page rests (K38, K40, K45, K88, K89, K98, K99, K100,
+  K101, K102, K103, K108, K111, K115, K118).
 - `src/composables/__tests__/fullscreen.spec.ts`: full screen unsupported (an iPhone), entering and
   leaving it, and a refusal leaving the page as it is (K34).
 - `src/styles/__tests__/print.spec.ts`: the print block's literal colours match `tokens.json`'s light
@@ -472,8 +484,9 @@ listed in [api.md](api.md) §10):
   it's pressed) and confirming an email (the banner, Send it again, too soon, already confirmed,
   the link while signed in).
 - `src/components/__tests__/PlannerScreen.spec.ts`: the planner's screens in the mounted app
-  (K24–K27, K79–K82, K99): the `planner-screens` class, and Edit plan's sticky bar with its
-  `edit-screens` class, screens at least the window less the bar, the arrows and `--bar-height`, no top-edge strip,
+  (K24–K27, K79–K82, K99, K109, K113, K114): the `planner-screens` class, and Edit plan's sticky bar with its
+  `edit-screens` class, screens at least the window less the bar, the arrows and `--bar-height`
+  (the way on at the screen's foot, each Add in its section's title line), no top-edge strip,
   the bar led by the week in `title-1` with no wordmark and "This week" first among the actions,
   no Edit plan or Done BarAction and the keyboard's hidden "Edit plan" ("Done" in Edit plan)
   after "Skip to today", the week's keys (E in and out, Esc out of full screen and then Edit plan,
