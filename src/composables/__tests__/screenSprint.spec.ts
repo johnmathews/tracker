@@ -1000,6 +1000,29 @@ describe('useScreenSprint', () => {
       expect(stops()).toEqual(['500@500px']) // back on Exercises' top
     })
 
+    it('frees a tall screen above for a touch from a screen’s top, and snaps it again at rest (K118)', async () => {
+      holder()
+      await frame()
+      const [exercises, food] = [...document.querySelectorAll<HTMLElement>('[data-planner-screen]')]
+      // On Food's top: the copy of Food (800) and Exercises (1300, taller than the window) above it.
+      Object.defineProperty(window, 'scrollY', { configurable: true, value: 2100 })
+      const finger = (type: string) => {
+        const event = new Event(type) as Event & Record<string, unknown>
+        Object.assign(event, {
+          [type === 'touchstart' ? 'touches' : 'changedTouches']: [{ clientY: 300 }],
+        })
+        window.dispatchEvent(event)
+      }
+      finger('touchstart')
+      expect(exercises!.hasAttribute('data-snap-free')).toBe(true)
+      expect(food!.hasAttribute('data-snap-free')).toBe(false)
+      finger('touchend')
+      window.dispatchEvent(new Event('scroll'))
+      window.dispatchEvent(new Event('scrollend'))
+      vi.advanceTimersByTime(REST_MS)
+      expect(exercises!.hasAttribute('data-snap-free')).toBe(false)
+    })
+
     it('takes the stops away where the browser doesn’t snap', async () => {
       const enabled = ref(true)
       holder(enabled)
