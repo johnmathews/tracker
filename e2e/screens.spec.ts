@@ -440,6 +440,158 @@ test('prints each tracker on a page of its own, the week over each (K97)', async
   expect(pdf.match(/\/Type\s*\/Page[^s]/g)).toHaveLength(3)
 })
 
+test('a tracker with few rows keeps them at 82u, from the top of its screen (K110, K114)', async ({
+  page,
+}) => {
+  // Cardio has two rows: before K110 they stretched to fill the screen.
+  await openApp(page)
+  const cardio = await page.evaluate(() => {
+    const screen = document.querySelector('[aria-labelledby="cardio-heading"]')!
+    const rows = [...screen.querySelectorAll('[role="rowheader"]')].map((r) =>
+      r.getBoundingClientRect(),
+    )
+    const heading = screen.querySelector('#cardio-heading')!.getBoundingClientRect()
+    const arrow = screen.querySelector('[data-testid="to-food"]')!.getBoundingClientRect()
+    const box = screen.getBoundingClientRect()
+    return {
+      rows: rows.map((r) => r.height),
+      above: heading.top - box.top,
+      below: box.bottom - rows.at(-1)!.bottom,
+      arrowFoot: box.bottom - arrow.bottom,
+    }
+  })
+  expect(cardio.rows).toHaveLength(2)
+  // 1280 × 800 makes u 1px.
+  for (const h of cardio.rows) expect(h).toBeLessThanOrEqual(82.5)
+  // The heading at the top, as on a page; the space left over under the rows; the arrow at the foot.
+  expect(cardio.above).toBeLessThan(40)
+  expect(cardio.below).toBeGreaterThan(200)
+  expect(cardio.arrowFoot).toBeLessThan(40)
+})
+
+test('Edit plan’s Add sits at the end of each title line (K113)', async ({ page }) => {
+  await openApp(page)
+  await page.keyboard.press('e')
+  for (const [section, add] of [
+    ['exercises', 'add-exercise'],
+    ['cardio', 'add-cardio'],
+    ['diet', 'add-food'],
+  ] as const) {
+    const place = await page.evaluate(
+      ({ section, add }) => {
+        const screen = document.querySelector(`[aria-labelledby="${section}-heading"]`)!
+        const button = screen.querySelector(`[data-testid="${add}"]`)!
+        const line = screen.querySelector('[data-slot="section-header"]')!.getBoundingClientRect()
+        const grid = screen.querySelector('table')!.getBoundingClientRect()
+        const box = button.getBoundingClientRect()
+        return {
+          inHeader: !!button.closest('[data-slot="section-header"]'),
+          aboveGrid: box.bottom <= grid.top,
+          endGap: Math.round(line.right - box.right),
+        }
+      },
+      { section, add },
+    )
+    expect(place).toEqual({ inHeader: true, aboveGrid: true, endGap: 0 })
+  }
+})
+
+test('Edit plan on and off keeps the tracker on show, its top under the bar or the week (K115)', async ({
+  page,
+}) => {
+  await openApp(page)
+  const tops = () =>
+    page.evaluate(() => {
+      const band = [
+        ...document.querySelectorAll<HTMLElement>('[data-slot="week-band"], [data-slot="bar"]'),
+      ]
+        .filter((b) => getComputedStyle(b).position === 'sticky')
+        .map((b) => b.getBoundingClientRect().bottom)[0]!
+      const at = (id: string) =>
+        document.querySelector(`[aria-labelledby="${id}"]`)!.getBoundingClientRect().top - band
+      return { cardio: Math.round(at('cardio-heading')), food: Math.round(at('diet-heading')) }
+    })
+  await page.getByTestId('to-cardio').click()
+  await page.waitForTimeout(700)
+  expect(Math.abs((await tops()).cardio)).toBeLessThanOrEqual(1)
+  await page.keyboard.press('e')
+  await page.waitForTimeout(400)
+  expect(Math.abs((await tops()).cardio)).toBeLessThanOrEqual(1)
+  await page.getByTestId('to-food').click()
+  await page.waitForTimeout(700)
+  await page.keyboard.press('e')
+  await page.waitForTimeout(400)
+  expect(Math.abs((await tops()).food)).toBeLessThanOrEqual(1)
+})
+
+test('Edit plan draws an 8px edit frame round the window, and every press goes through (K112)', async ({
+  page,
+}) => {
+  await openApp(page)
+  const frame = page.locator('[data-slot="edit-frame"]')
+  await expect(frame).toHaveCount(0)
+  await page.keyboard.press('e')
+  await expect(frame).toHaveCount(1)
+  const look = await frame.evaluate((el) => {
+    const s = getComputedStyle(el)
+    const box = el.getBoundingClientRect()
+    return {
+      width: s.borderTopWidth,
+      colour: s.borderTopColor,
+      box: [box.left, box.top, box.width, box.height],
+      through: s.pointerEvents,
+    }
+  })
+  expect(look).toEqual({
+    width: '8px',
+    colour: 'rgb(37, 99, 201)',
+    box: [0, 0, 1280, 800],
+    through: 'none',
+  })
+  // A press on the frame lands on the page under it.
+  const hit = await page.evaluate(
+    () => (document.elementFromPoint(4, 400) as HTMLElement | null)?.dataset.slot ?? '',
+  )
+  expect(hit).not.toBe('edit-frame')
+  await page.keyboard.press('e')
+  await expect(frame).toHaveCount(0)
+})
+
+test('after Add, the page stays on the tracker it was adding to (K111)', async ({ page }) => {
+  // Five exercises at Edit plan's 100u rows already run past an 800px window, so the sixth makes
+  // Exercises a tall screen with Add near its foot, where the browser's own scroll left the page
+  // across two trackers and the sprint moved on to Cardio.
+  await openApp(page)
+  await page.keyboard.press('e')
+  await expect(page.getByTestId('edit-plan-button').filter({ hasText: 'Done' })).toHaveCount(1)
+  await page.getByTestId('add-exercise').click()
+  await page.getByLabel('Name').fill('Lunges')
+  await page.getByRole('button', { name: 'Add exercise' }).first().click()
+  await expect(page.getByTestId('add-exercise')).toBeFocused()
+  await page.waitForTimeout(700)
+  const at = await page.evaluate(() => {
+    const bar = document.querySelector('[data-slot="bar"]')!.getBoundingClientRect().bottom
+    const [exercises, cardio] = [...document.querySelectorAll('[data-planner-screen]')].map((s) =>
+      s.getBoundingClientRect(),
+    )
+    const add = document.querySelector('[data-testid="add-exercise"]')!.getBoundingClientRect()
+    return {
+      bar,
+      vh: innerHeight,
+      exercisesTop: exercises!.top,
+      exercisesBottom: exercises!.bottom,
+      cardioTop: cardio!.top,
+      add: { top: add.top, bottom: add.bottom },
+    }
+  })
+  // Exercises fills the window: the next tracker's top is out of sight, and Add is in view.
+  expect(at.exercisesTop).toBeLessThanOrEqual(at.bar + 1)
+  expect(at.exercisesBottom).toBeGreaterThanOrEqual(at.vh - 1)
+  expect(at.cardioTop).toBeGreaterThanOrEqual(at.vh - 1)
+  expect(at.add.top).toBeGreaterThanOrEqual(at.bar)
+  expect(at.add.bottom).toBeLessThanOrEqual(at.vh)
+})
+
 test('Edit plan is one tracker per screen too, each resting under the sticky bar (K99)', async ({
   page,
 }) => {
@@ -478,7 +630,7 @@ test('Edit plan is one tracker per screen too, each resting under the sticky bar
     cardio = Math.abs(at.tops[1]! - at.bar) <= 1
   }
   expect(cardio).toBe(true)
-  // The arrow on Add's line goes on to Food, its top just under the bar.
+  // The arrow at Cardio's foot goes on to Food, its top just under the bar.
   await page.getByTestId('to-food').click()
   await page.waitForTimeout(700)
   const food = await place()

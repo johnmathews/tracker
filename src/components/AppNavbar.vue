@@ -22,6 +22,7 @@ import { Menu, MenuItem } from '@/components/ui/menu'
 import { IconButton } from '@/components/ui/icon-button'
 import { useBarReveal } from '@/composables/barReveal'
 import { useFullscreen } from '@/composables/fullscreen'
+import { screenInView } from '@/composables/screenSprint'
 import { useShortcuts } from '@/composables/shortcuts'
 import { useSignOut } from '@/composables/signOut'
 
@@ -102,9 +103,21 @@ async function startSignOut(): Promise<void> {
   }
 }
 
+/**
+ * Edit plan's Add for the tracker on screen (K109): the screen showing most of itself in the
+ * window, under the bar, presses its Add button, which opens the new item page.
+ */
+function addHere(): boolean {
+  const add = screenInView()?.querySelector<HTMLElement>('[data-add]')
+  add?.click()
+  return !!add
+}
+
 // The week's keys (K91): E in and out of Edit plan, Esc out of full screen and then out of Edit
-// plan, F full screen, P print and S Settings, as their buttons do.
+// plan, F full screen, P print and S Settings, as their buttons do. A opens Ask, or in Edit plan
+// adds to the tracker on screen (K109).
 useShortcuts(() => ({
+  a: () => (store.configMode ? addHere() : session.ask === true && (openAsk(), true)),
   e: toggleEditPlan,
   escape: () => {
     if (fullscreen.active.value) void fullscreen.toggle()
@@ -253,6 +266,7 @@ function skipToToday(): void {
         <BarAction
           v-if="session.ask === true"
           label="Ask"
+          aria-keyshortcuts="A"
           class="folded:flex-1 folded:basis-0"
           data-testid="ask-button"
           @click="openAsk"

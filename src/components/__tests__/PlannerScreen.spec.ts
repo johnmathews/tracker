@@ -144,12 +144,20 @@ describe('the planner’s screens (K24–K27)', () => {
       expect(section.classes()).toContain('edit:min-h-[calc(100dvh-var(--bar-height,0px))]')
       expect(section.classes()).not.toContain('edit:justify-center')
     }
-    // The arrows show in Edit plan; the way on shares Add's line.
+    // The arrows show in Edit plan; the way on keeps to the screen's foot (K114).
     for (const id of ['to-cardio', 'to-food', 'to-exercises', 'back-to-cardio']) {
       expect(wrapper.get(`[data-testid="${id}"]`).classes()).toContain('edit:inline-flex')
     }
     const wayOn = wrapper.get('[data-testid="to-cardio"]').element.parentElement!
-    expect(wayOn.querySelector('[data-testid="add-exercise"]')).not.toBeNull()
+    expect(wayOn.className).toContain('edit:mt-auto')
+    // Each Add is at the end of its title line (K113), not beside the way on.
+    expect(wayOn.querySelector('[data-add]')).toBeNull()
+    for (const add of ['add-exercise', 'add-cardio', 'add-food']) {
+      const slot = wrapper
+        .get(`[data-testid="${add}"]`)
+        .element.closest('[data-slot="section-end"]')
+      expect(slot?.closest('[data-slot="section-header"]')).not.toBeNull()
+    }
     await wrapper.get('[data-testid="edit-plan-button"]').trigger('click')
     expect(editScreens()).toBe(false)
     expect(screens()).toBe(true)
@@ -285,6 +293,58 @@ describe('the planner’s screens (K24–K27)', () => {
           value: undefined,
         })
         Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: null })
+      }
+    })
+
+    it('A opens Ask on the week, only while Ask is offered (K109)', async () => {
+      try {
+        signedIn().ask = true
+        const pinia = createPinia()
+        setActivePinia(pinia)
+        wrapper = mount(App, { global: { plugins: [pinia] }, attachTo: document.body })
+        await flushPromises()
+        expect(wrapper.get('[data-testid="ask-button"]').attributes('aria-keyshortcuts')).toBe('A')
+        expect((await press('a')).defaultPrevented).toBe(true)
+        expect(location.hash).toBe('#/ask')
+      } finally {
+        history.replaceState(null, '', location.pathname)
+      }
+    })
+
+    it('A does nothing on the week while Ask is off (K109)', async () => {
+      mountApp()
+      await flushPromises()
+      expect((await press('a')).defaultPrevented).toBe(false)
+      expect(location.hash).toBe('')
+    })
+
+    it('A in Edit plan opens the new item page for the tracker on screen (K109)', async () => {
+      try {
+        mountApp()
+        await press('e')
+        expect(editing()).toBe(true)
+        const adds = wrapper.findAll('[data-add]')
+        expect(adds.map((b) => b.attributes('aria-keyshortcuts'))).toEqual(['A', 'A', 'A'])
+        // jsdom lays nothing out: put Cardio's screen in the window and the others out of it.
+        const sections = [...document.querySelectorAll<HTMLElement>('[data-planner-screen]')]
+        sections.forEach((s, i) => {
+          const top = (i - 1) * 800
+          s.getBoundingClientRect = () =>
+            ({
+              top,
+              bottom: top + 800,
+              height: 800,
+              left: 0,
+              right: 0,
+              width: 0,
+              x: 0,
+              y: top,
+            }) as DOMRect
+        })
+        expect((await press('a')).defaultPrevented).toBe(true)
+        expect(location.hash).toBe('#/new/cardio')
+      } finally {
+        history.replaceState(null, '', location.pathname)
       }
     })
 

@@ -21,7 +21,12 @@ import ImportPrompt from '@/components/ImportPrompt.vue'
 import { ConfirmHost } from '@/components/ui/confirm-dialog'
 import { dismissConfirm } from '@/composables/useConfirm'
 import { useMediaQuery } from '@/composables/useMediaQuery'
-import { useScreenSprint } from '@/composables/screenSprint'
+import {
+  focusOnScreen,
+  restOnScreen,
+  screenInView,
+  useScreenSprint,
+} from '@/composables/screenSprint'
 import { useShortcuts } from '@/composables/shortcuts'
 import { isDark } from '@/lib/theme'
 import { useAskStore } from '@/stores/ask'
@@ -151,19 +156,23 @@ let leftNew: Section | null = null
 watch(newSection, (now, before) => {
   if (before) leftNew = before
 })
+// The page rests on the screen of what takes focus (K111): the browser's own scroll into view could
+// leave it across two screens, and the sprint would move on to the next tracker.
 watch(shown, async (now, before) => {
   if (now !== 'planner' || before === 'planner') return
   await nextTick()
+  let target: HTMLElement | null | undefined
   if (before === 'new')
-    document.querySelector<HTMLElement>(`[data-testid="${ADDS[leftNew!]}"]`)?.focus()
+    target = document.querySelector<HTMLElement>(`[data-testid="${ADDS[leftNew!]}"]`)
   else if (before !== 'item')
-    document.querySelector<HTMLElement>(`[data-testid="${OPENERS[before]}"]`)?.focus()
+    target = document.querySelector<HTMLElement>(`[data-testid="${OPENERS[before]}"]`)
   else if (leftItem) {
     const href = itemHref(leftItem.section, leftItem.id)
-    ;[...document.querySelectorAll<HTMLElement>('[data-slot="item-link"]')]
-      .find((a) => a.getAttribute('href') === href)
-      ?.focus()
+    target = [...document.querySelectorAll<HTMLElement>('[data-slot="item-link"]')].find(
+      (a) => a.getAttribute('href') === href,
+    )
   }
+  if (target) focusOnScreen(target)
 })
 // Ask is off on this planner (no key, or turned off since): `#/ask` means the week.
 watch(
@@ -224,6 +233,29 @@ watch(
     if (forgot.value) closeForgot()
   },
   { immediate: true },
+)
+
+// Edit plan on or off keeps the tracker on show (K115): its rows change height and the bar docks or
+// hides, so the same scroll position would land partway into the tracker before. The screen is
+// noted the moment the mode flips, before anything re-renders, and the page rests on its top once
+// the new layout is in.
+let onShow: HTMLElement | null = null
+watch(
+  () => store.configMode,
+  () => {
+    onShow = document.documentElement.matches('.planner-screens, .edit-screens')
+      ? screenInView()
+      : null
+  },
+  { flush: 'sync' },
+)
+watch(
+  () => store.configMode,
+  () => {
+    if (onShow?.isConnected && screens.value !== editScreens.value) restOnScreen(onShow)
+    onShow = null
+  },
+  { flush: 'post' },
 )
 
 // The planner's screens (PlannerScreen card, K24–K27): outside Edit plan and the other pages each
@@ -414,6 +446,15 @@ onBeforeUnmount(() => {
   <SignupForm v-else-if="session.status === 'signed-out' && signup" @leave="closeSignup" />
   <ForgotForm v-else-if="session.status === 'signed-out' && forgot" @leave="closeForgot" />
   <LoginForm v-else-if="session.status === 'signed-out'" />
+  <!-- Edit plan's frame (PlannerScreen card, K112): `--edit-frame` of `edit` round the window (8px,
+       4px on a phone, K117), over the bar and under a dialog's scrim, so it is plain that Edit plan
+       is on. Every press goes through. -->
+  <div
+    v-if="editScreens"
+    aria-hidden="true"
+    class="pointer-events-none fixed inset-0 z-40 border-(length:--edit-frame) border-edit print:hidden"
+    data-slot="edit-frame"
+  />
   <!-- The one host for useConfirm(): removing a row and copying over next week's plan ask here. -->
   <ConfirmHost />
 </template>

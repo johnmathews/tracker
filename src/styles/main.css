@@ -83,6 +83,11 @@
   --grid-name-w: calc(var(--u) * 320);
   --grid-row-min: 76px;
   --grid-row-max: 76px;
+  /* The WeekGrid's header row on screen: its 12u padding above and below, the day's name at
+     leading-tight, and the ink rule. TrackerGrid's max-height adds it to the rows' (K110). */
+  --grid-head-h: calc(var(--u) * 24 + var(--fs-day) * 1.25 + 1px);
+  /* Edit plan's frame round the window (K112): 8px, and 4px on a phone below (K117). */
+  --edit-frame: 8px;
   --fs-title: max(30px, calc(var(--u) * 40));
   /* A section's title on the planner, the serif a step under the week's (K86, K87). */
   --fs-section: max(26px, calc(var(--u) * 32));
@@ -134,11 +139,15 @@
     --grid-row-max: max(76px, calc(var(--u) * 100));
   }
 
-  /* Rows share the screen's height, at least 56px each; the grid stops at 1.25 × a day's width a
-     row (TrackerGrid's max-height), so a tall screen centres the week. */
+  /* Rows share the screen's height, at least 56px each. The grid stops at 82u a row, about three
+     times a row's name (K110), or 1.25 × a day's width where that is less (TrackerGrid's
+     max-height), so a tracker with few rows keeps John's row height, from the screen's top. */
   :root.planner-screens {
     --grid-row-min: 56px;
-    --grid-row-max: calc((100vw - 2 * var(--screen-pad-x) - var(--grid-name-w)) / 7 * 1.25);
+    --grid-row-max: min(
+      calc(var(--u) * 82),
+      calc((100vw - 2 * var(--screen-pad-x) - var(--grid-name-w)) / 7 * 1.25)
+    );
   }
 }
 
@@ -172,9 +181,27 @@
   :root:is(.planner-screens, .edit-screens) :is([data-planner-screen], [data-snap-copy]) {
     position: relative;
   }
+  /* A tall screen freed for a swipe up onto it (useScreenSprint, K118): not a snap area, which
+     would let the swipe rest wherever it covers the window, so at its foot; its top mark is its one
+     snap position instead, and the swipe ends at its top in one movement. */
+  :root:is(.planner-screens, .edit-screens) [data-snap-free] {
+    scroll-snap-align: none;
+  }
+  :root:is(.planner-screens, .edit-screens) [data-snap-free] > [data-snap-top] {
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
   :root:is(.planner-screens, .edit-screens) [data-snap-stop] {
     scroll-snap-align: start;
     scroll-snap-stop: always;
+  }
+}
+
+/* A phone, upright or on its side (a touch screen whose shorter side is under 600px; not an iPad):
+   Edit plan's frame at half its width, 4px (K117). */
+@media (pointer: coarse) and (width < 600px), (pointer: coarse) and (height < 600px) {
+  :root {
+    --edit-frame: 4px;
   }
 }
 
@@ -183,6 +210,8 @@
 @media screen and (orientation: landscape) and (height <= 540px) {
   :root.planner-screens {
     --grid-row-min: 52px;
+    /* The header's padding is 4px here (TrackerGrid's short:py-1). */
+    --grid-head-h: calc(8px + var(--fs-day) * 1.25 + 1px);
     --week-band: 0px;
   }
 }
@@ -759,6 +788,7 @@
   --color-ink-secondary: var(--ink-secondary);
   --color-error-ink: var(--error-ink);
   --color-focus: var(--focus);
+  --color-edit: var(--edit);
   --color-pen: var(--pen);
   --color-pen-partial: var(--pen-partial);
   --color-pen-missed: var(--pen-missed);

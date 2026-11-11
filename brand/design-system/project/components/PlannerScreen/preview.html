@@ -68,7 +68,7 @@
 .fs .grid { flex: 1 1 auto; min-height: 0; display: grid;
   grid-template-columns: var(--candidate-name-col) repeat(7, minmax(0, 1fr));
   grid-template-rows: auto repeat(var(--rows), minmax(56px, 1fr));
-  /* Rows stop at 1.25 × a day's width, so a tall screen centres the week instead of stretching it. */
+  /* Rows stop at 1.25 × a day's width rather than stretching; the app also stops them at 82u (K110). */
   max-height: calc(var(--rows) * (100cqw - 2 * var(--candidate-pad) - var(--candidate-name-col)) / 7 * 1.25 + var(--u) * 240); }
 .fs .grid > * { min-width: 0; }
 .fs .hd { display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
@@ -132,6 +132,9 @@
 .fs[data-bar="docked"] .bar { transform: none; visibility: visible; box-shadow: none; }
 .fs[data-bar="docked"] .scroller { top: var(--docked-bar, 57px); }
 .fs[data-bar="docked"] .grab { display: none; }
+/* Edit plan's frame (K112): 8px of `edit` round the screen, over the bar, every press going through. */
+.fs[data-bar="docked"]::after { content: ""; position: absolute; inset: 0; z-index: 40; pointer-events: none;
+  border: 8px solid var(--edit); }
 .fs .bar .wordmark { display: block; height: 20px; width: auto; fill: var(--ink); justify-self: start; }
 .fs .bar .wordmark { height: 20px; }
 .fs .bar .start { justify-self: start; }

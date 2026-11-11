@@ -6,7 +6,7 @@ A tile in the Header for one of its actions: a Lucide icon with its name under i
 - The icon over its name, centred, `radius-md`, no border. The icon is Lucide outline at the 1.5 stroke in `currentColor`, `aria-hidden="true"`; the name is `label` type (600, sentence case) in `ink`, and it is the accessible name.
 - Its sizes follow the screen with the Header (PlannerScreen's `u`): the icon max(26px, 32u), the name max(16px, 17u), 6u between them, 10u × 12u padding, at least max(76px, 96u) wide so a short name doesn't make a thin target. Folded (a phone or an upright iPad, `n`), the icon is 26n and the name 16n, and the tiles share the Header's second row equally.
 - **A toggle** (`aria-pressed`) takes the selected segment's fill while on: `ink`, with the icon and name in `on-ink`. Never the pen. No Header action is a toggle now: the Edit plan toggle (K48) went with K82, and the filled Done (K82) with K91.
-- **Its key** (K91): Settings, Print and Full screen each carry `aria-keyshortcuts` (S, P, F), the key that does the same on the week.
+- **Its key** (K91, K109): Ask, Settings, Print and Full screen each carry `aria-keyshortcuts` (A, S, P, F), the key that does the same on the week.
 
 ## States
 

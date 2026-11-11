@@ -651,11 +651,12 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
   config mode (Edit plan), where the bar is in view. Another long press, E, Esc or the hidden
   button (reading "Done") turns it off; the bar has no Done (K91). `useShortcuts`
   (`src/composables/shortcuts.ts`) carries the week's keys: E, Esc (full screen first, then Edit
-  plan), F full screen, P print and S Settings. `App.vue` adds H or B for back and L for forward,
+  plan), F full screen, P print, S Settings, and A for Ask, or in Edit plan the Add button of the
+  screen showing most under the bar (K109). `App.vue` adds H or B for back and L for forward,
   signed in, on every page (K105). `ownedElsewhere` leaves a key alone in a field,
   with Ctrl, ⌘ or Alt, repeating, mid-composition, or while a dialog or popover is open. Edit plan
   shows the
-  remove IconButtons, "Add exercise", "Add cardio" and "Add food" buttons under the grids, and
+  remove IconButtons, "Add exercise", "Add cardio" and "Add food" buttons at the end of each title line (K113), and
   the daily targets centred on each title line, under the bar's week: a Stepper at max(44px, 40u)
   reading "4 per day", its label ("Exercises a day", "Foods a day") for a screen reader only
   (K56, K62, K63). The week beside the titles is left out there. An item is added on the new item page and changed
@@ -872,8 +873,10 @@ screen comes or goes, waiting for rest if the page is moving. The screen the pag
 inside it (K101, K102): `layStops()` adds an absolutely placed `data-snap-stop` mark at each of
 `stopOffsets()` (every 80% of the window, and the screen's foot), snap points in main.css, because
 iOS won't scroll freely inside a snap area taller than the window. Every other screen, and every
-copy, has none, so a swipe up onto a screen lands on its top. A copy is remade only when the screen
-it copies changes. A ResizeObserver on the body and the window's resize keep
+copy, has none, so a swipe up onto a screen lands on its top. A swipe up from a screen's top onto a
+tall screen frees that screen for the touch (K118, `tallAbove`, `data-snap-free`): its top mark,
+`data-snap-top` in each section, is its one snap position, so the browser's fling ends at its top.
+A copy is remade only when the screen it copies changes. A ResizeObserver on the body and the window's resize keep
 them where they belong. A slow drag turns sooner than the snap would (K103): from `touchstart` the
 script notes the snap positions (`snapPoints`) and the finger's places; while the finger is slower
 than 0.3px a ms over the last 100ms, or still, and `turnTarget()` finds the drag has gone a fifth
@@ -896,8 +899,10 @@ wide) and `short:` (landscape, 540px tall or less).
   scrolls rather than filling the window.
 - **The grid.** `TrackerGrid` makes the table `display: grid` with its row groups and rows
   `display: contents`, so the cells place themselves and gridNav still walks `table.rows`. Rows
-  share the height (`minmax(--grid-row-min, 1fr)`), and a `max-height` stops them at 1.25 × a day's
-  width. Each day cell is a size container that `DayMark fill` fills (86%, up to 128px). Folded,
+  share the height (`minmax(--grid-row-min, 1fr)`), and a `max-height` of the rows at
+  `--grid-row-max` plus the header row's `--grid-head-h` stops them at 82u, or 1.25 × a day's
+  width where that is less (K110). Every screen's content starts at its top, with the arrow
+  to the next screen at its foot (K114). Each day cell is a size container that `DayMark fill` fills (86%, up to 128px). Folded,
   each `TrackerRow` sets `--line-row` and `--box-row`, the two grid lines it takes. There is no
   band for today (K36).
 - **The navbar.** `useBarReveal` (`src/composables/barReveal.ts`) listens on the document for a

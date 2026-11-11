@@ -2,7 +2,7 @@
 
 Ten standard roles carry every screen: `canvas` (the page), `panel` (dialogs, popovers, cards), `tile` (quiet fills and hover), `line` (hairline rules, never a control border), `control-border` (inputs, outlined buttons, the day's box), `ink` (text, icons and the primary button's fill), `on-ink`, `ink-secondary` (dates, goals, hints), `error-ink` and `focus`.
 
-Four project roles each mean exactly one thing:
+Five project roles each mean exactly one thing:
 
 | Role | Means | Never |
 | --- | --- | --- |
@@ -10,6 +10,7 @@ Four project roles each mean exactly one thing:
 | `pen-partial` | Partly done: a day's fill | Over the pick, warnings |
 | `pen-missed` | Tried and couldn't: a day's fill | Errors |
 | `caution-ink` | A caution, always with words; nothing on the planner uses it since the Picked row went (K28) | Errors |
+| `edit` | Edit plan is on: the frame round the window, 8px and 4px on a phone (K112, K117). A brighter blue than `focus` | Text, buttons, decoration |
 
 **The three pens** are fixed, like the green, yellow and red markers by a whiteboard; nobody picks them. The pen is what tells the three kinds apart on screen (K15); the accessible name says "partly done" or "couldn't do it". `pen` reaches 4.5:1 as text on `canvas` and `panel`, and `pen` and `pen-missed` reach 3:1 as a mark on `canvas`, `panel` and `tile`, in both themes. `pen-partial` is a sunny yellow by the owner's choice (K18): 1.5–1.9:1 on the light grounds, held to 1.5:1 by the gate, and above 7:1 in dark. The box drawn over every mark keeps it findable. In dark the pens are vivid, a grass green, a sunflower yellow and a tomato red (K22).
 

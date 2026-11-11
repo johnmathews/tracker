@@ -50,7 +50,7 @@ never a control border), `control-border` (inputs, outlined buttons, the day's b
 goals, hints), `error-ink` (form errors) and `focus` (the focus ring). `scrim` dims the page behind a
 dialog.
 
-Four project roles each mean one thing, and nothing else may use them:
+Five project roles each mean one thing, and nothing else may use them:
 
 | Role          | Means                                                                                                                               | Never                      |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
@@ -58,6 +58,7 @@ Four project roles each mean one thing, and nothing else may use them:
 | `pen-partial` | Partly done: a day's mark                                                                                                           | Over the pick, warnings    |
 | `pen-missed`  | Tried and couldn't: a day's mark                                                                                                    | Errors                     |
 | `caution-ink` | A caution, always with words; nothing on the planner uses it (K28). The consent screen's warning does (K73)                                                                  | Errors                     |
+| `edit`        | Edit plan is on: the frame round the window, 8px and 4px on a phone (K112, K117). A brighter blue than `focus`, so the two never read as one thing                                              | Text, buttons, decoration  |
 
 The primary action is `ink`, not a brand colour (K8): one colour for "act", the pens for "done".
 Outside the day's mark, no meaning rests on colour alone: a met day's name and a met week's count

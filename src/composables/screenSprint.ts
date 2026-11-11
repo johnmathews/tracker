@@ -196,6 +196,78 @@ export function sprintToScreen(headingId: string): void {
   if (screen) sprintTo(screen.getBoundingClientRect().top + window.scrollY - bandHeight())
 }
 
+/**
+ * The screen the page last came to rest on, on a touch screen (K116): a swipe that brings in
+ * another one ends at that one's top. The app's own moves (focusOnScreen, restOnScreen) set it, so
+ * the place they chose stays.
+ */
+let restingOn: HTMLElement | null = null
+
+/** A box's top and bottom in page coordinates. */
+type Span = { top: number; bottom: number }
+
+/**
+ * Where the page rests to show `el` on its `screen` (K111), both in page coordinates, under a band
+ * `band` tall in a window `height` tall. A screen that fits rests at its top, under the band. A
+ * taller one rests at its top when the element shows there, with its foot at the window's foot
+ * when the element shows there, and otherwise with the element in the middle. Always inside the
+ * screen, so the page never rests across two and the sprint has nothing to finish.
+ */
+export function restOn(screen: Span, el: Span, band: number, height: number): number {
+  const first = screen.top - band
+  const last = screen.bottom - height
+  if (last <= first || el.bottom <= first + height) return first
+  if (el.top >= last + band) return last
+  const room = height - band
+  const middle = el.top - band - (room - (el.bottom - el.top)) / 2
+  return Math.min(last, Math.max(first, middle))
+}
+
+/**
+ * The screen on show (K109, K115): the one showing most of itself in the window under the band.
+ * Null where there are no screens.
+ */
+export function screenInView(): HTMLElement | null {
+  const top = bandHeight()
+  let best: { shown: number; screen: HTMLElement } | null = null
+  for (const screen of document.querySelectorAll<HTMLElement>('[data-planner-screen]')) {
+    const box = screen.getBoundingClientRect()
+    const shown = Math.min(box.bottom, window.innerHeight) - Math.max(box.top, top)
+    if (shown > 0 && (!best || shown > best.shown)) best = { shown, screen }
+  }
+  return best?.screen ?? null
+}
+
+/** Rest the page with `screen`'s top just under the band (K115), at once. */
+export function restOnScreen(screen: HTMLElement): void {
+  const top = screen.getBoundingClientRect().top + window.scrollY - bandHeight()
+  restingOn = screen
+  window.scrollTo({ top, behavior: 'auto' })
+}
+
+/**
+ * Focus `el` with the page resting on its screen (K111): the browser's own scroll into view moves
+ * only as far as it must, which can leave the page across two screens, and the sprint then moves
+ * on to the next one. Outside a screen it is an ordinary focus.
+ */
+export function focusOnScreen(el: HTMLElement): void {
+  const screen = el.closest<HTMLElement>('[data-planner-screen]')
+  if (screen) {
+    const box = screen.getBoundingClientRect()
+    const own = el.getBoundingClientRect()
+    const y = window.scrollY
+    const top = restOn(
+      { top: box.top + y, bottom: box.bottom + y },
+      { top: own.top + y, bottom: own.bottom + y },
+      bandHeight(),
+      window.innerHeight,
+    )
+    restingOn = screen
+    window.scrollTo({ top, behavior: 'auto' })
+  }
+  el.focus({ preventScroll: screen !== null })
+}
+
 function halt(): void {
   cancelAnimationFrame(frame)
   landing = null
@@ -262,6 +334,25 @@ export function turnTarget(
 }
 
 /**
+ * The tall screen a swipe up would bring in, on a touch screen (K118): its top as a scroll
+ * position, or null. `from` is the page's position when the finger came down, `screens` each
+ * screen's (and copy's) top as a scroll position and its height, in order, and `room` the window
+ * under the band. From a screen's top, the screen above comes next; when it is taller than the
+ * window, the browser's snap would rest wherever it covers the window, so at its foot. That screen
+ * is freed for the touch, its top its one snap position, and the swipe ends there in one movement.
+ */
+export function tallAbove(
+  from: number,
+  screens: { top: number; height: number }[],
+  room: number,
+): number | null {
+  const i = screens.findIndex((s) => Math.abs(s.top - from) <= 1)
+  if (i < 1) return null
+  const above = screens[i - 1]!
+  return above.height > room + 1 ? above.top : null
+}
+
+/**
  * A copy of a screen to show beyond an end (K92, K100): the same to look at, but inert, hidden
  * from a screen reader, never printed, with no ids, and not a screen to the script.
  */
@@ -270,6 +361,7 @@ function copyOf(screen: HTMLElement): HTMLElement {
   for (const el of [copy, ...copy.querySelectorAll('[id]')]) el.removeAttribute('id')
   for (const stop of copy.querySelectorAll('[data-snap-stop]')) stop.remove()
   copy.removeAttribute('data-planner-screen')
+  copy.removeAttribute('data-snap-free')
   copy.removeAttribute('aria-labelledby')
   copy.setAttribute('aria-hidden', 'true')
   copy.setAttribute('data-noprint', '')
@@ -415,9 +507,14 @@ export function useScreenSprint(enabled: Ref<boolean>) {
    * lose theirs (K101, K102); the copies of changed screens are made afresh, or all taken away
    * where the browser doesn't snap (a mouse or trackpad, or the screens are off); and the page
    * stays where it was on the screen it showed, or, resting on a copy, goes to the same place on
-   * the real screen (K100).
+   * the real screen (K100). After a swipe (`swiped`) that came to rest on another screen than the
+   * last, partway down it, the page glides on to its top, where its title shows (K116): a tall
+   * screen covering the window is a snap position too, so a swipe up stopped at its foot.
    */
-  function place(): void {
+  function place(swiped = false): void {
+    // At rest, a screen freed for a touch snaps as usual again (K118).
+    for (const el of document.querySelectorAll('[data-snap-free]'))
+      el.removeAttribute('data-snap-free')
     const band = bandHeight()
     const screens = [...document.querySelectorAll<HTMLElement>('[data-planner-screen]')]
     // The screen the page shows: the one, or the copy, across the line just under the band (2px
@@ -456,11 +553,16 @@ export function useScreenSprint(enabled: Ref<boolean>) {
       if (!below) screens.at(-1)!.after(ends[1]!.copy)
     }
     if (!shown) return
-    const top = shown.getBoundingClientRect().top + window.scrollY - band + into
-    if (Math.abs(top - window.scrollY) < 1) return
-    snapOff()
-    window.scrollTo({ top, behavior: 'auto' })
-    snapOn()
+    const entered = on && swiped && shown !== restingOn && into > 1
+    restingOn = shown
+    const start = shown.getBoundingClientRect().top + window.scrollY - band
+    const top = start + into
+    if (Math.abs(top - window.scrollY) >= 1) {
+      snapOff()
+      window.scrollTo({ top, behavior: 'auto' })
+      snapOn()
+    }
+    if (entered) glide(start)
   }
 
   /**
@@ -468,8 +570,9 @@ export function useScreenSprint(enabled: Ref<boolean>) {
    * browser snaps (K101, K102): marks the page may rest at, each a snap point (main.css), at
    * `stopOffsets`. iOS doesn't let a page scroll freely inside a snap area taller than the window,
    * as the spec asks, so without them a swipe on a tall screen went straight to the next one and
-   * its foot was never seen. Kept to the screen shown, a swipe up onto another screen lands on its
-   * top, never on its foot. A screen whose stops are already right is left alone.
+   * its foot was never seen. Kept to the screen shown. A swipe up onto a tall screen can still rest
+   * at its foot, which covers the window and so is a snap position too; place() then glides on to
+   * its top (K116). A screen whose stops are already right is left alone.
    */
   function layStops(screens: HTMLElement[], band: number, shown: HTMLElement | undefined): void {
     const room = window.innerHeight - band
@@ -505,8 +608,9 @@ export function useScreenSprint(enabled: Ref<boolean>) {
       if (Math.abs(window.scrollY - gliding) > 1) return // a turn still on its way
       endGlide()
     }
+    const swiped = touchMoving
     touchMoving = false
-    place()
+    place(swiped)
   }
 
   /**
@@ -578,6 +682,8 @@ export function useScreenSprint(enabled: Ref<boolean>) {
   function changed(records: MutationRecord[]): Set<HTMLElement> | 'all' {
     const screens = new Set<HTMLElement>()
     for (const record of records) {
+      // Freeing a screen for a touch (K118) changes nothing a copy shows.
+      if (record.attributeName === 'data-snap-free') continue
       if (record.target === document.documentElement) return 'all'
       const nodes = [...record.addedNodes, ...record.removedNodes]
       if (nodes.length && nodes.every(isStop)) continue
@@ -779,6 +885,17 @@ export function useScreenSprint(enabled: Ref<boolean>) {
       const band = bandHeight()
       points = snapPoints(band)
       room = window.innerHeight - band
+      const spans = [
+        ...document.querySelectorAll<HTMLElement>('[data-planner-screen], [data-snap-copy]'),
+      ]
+        .map((el) => ({ el, box: el.getBoundingClientRect() }))
+        .map(({ el, box }) => ({ el, top: box.top + window.scrollY - band, height: box.height }))
+        .sort((a, b) => a.top - b.top)
+      // From a screen's top, a tall screen above is freed for this touch (K118): its top mark is
+      // its one snap position, not every place where it covers the window, so a swipe up can't
+      // rest at its foot. It is snapped as usual again once the page rests (place).
+      const above = tallAbove(dragFrom, spans, room)
+      spans.find((s) => s.top === above)?.el.setAttribute('data-snap-free', '')
     }
   }
   function onTouchMove(event: TouchEvent): void {

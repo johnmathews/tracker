@@ -52,15 +52,23 @@ function add(): void {
 
 <!-- The Exercises section (SectionHeader, WeekGrid and PlannerScreen cards): its heading; in Edit
      plan with Exercises a day centred on its line, reading "3 per day" (K56, K62, K63), and the Add
-     exercise button under the grid (K54). On the planner's screens it is the first screen, under
+     exercise button at the line's end (K113). On the planner's screens it is the first screen, under
      the fixed week (K88): the slot's messages at its top, the arrow to Cardio at its foot. -->
 <template>
   <section
     aria-labelledby="exercises-heading"
-    class="pt-8 print:pt-0"
+    class="relative pt-8 print:pt-0"
     :class="SCREEN"
     data-planner-screen
   >
+    <!-- The screen's top as a snap point of its own (K118): used on a touch screen only while the
+         screen is freed for a swipe up onto it, so the swipe can't rest at its foot. -->
+    <div
+      aria-hidden="true"
+      data-snap-top
+      data-noprint
+      class="pointer-events-none absolute top-0 left-0 size-px"
+    />
     <slot />
     <SectionHeader :title="type.label" heading-id="exercises-heading" :week="store.label">
       <template v-if="store.configMode && store.dailyGoal" #actions>
@@ -79,6 +87,18 @@ function add(): void {
             data-testid="exercises-a-day"
           />
         </div>
+      </template>
+      <!-- Add, at the end of the title line (K113), opens the new item page (K104), at the
+           page's control size. -->
+      <template v-if="store.configMode" #end>
+        <Button
+          class="h-(--set-control) px-(--set-control-pad) text-(length:--set-label) [&_svg]:size-(--set-icon)"
+          data-add
+          aria-keyshortcuts="A"
+          data-testid="add-exercise"
+          @click="add"
+          ><Plus :stroke-width="1.5" />Add exercise</Button
+        >
       </template>
     </SectionHeader>
     <TrackerGrid
@@ -104,20 +124,11 @@ function add(): void {
     </TrackerGrid>
     <!-- The way on (PlannerScreen card, K42): an arrow, no words, sprinting to the Cardio screen,
          the next of three (K90). -->
-    <!-- In Edit plan the arrow is centred on Add's line, under the grid (K99). -->
+    <!-- The screen's content starts at the top and the arrow keeps to its foot (K114). -->
     <div
-      class="grid grid-cols-[1fr_auto_1fr] items-center full:mt-[calc(var(--u)*10)] edit:mt-[calc(var(--u)*24)]"
+      class="grid grid-cols-[1fr_auto_1fr] items-center full:mt-auto full:pt-[calc(var(--u)*10)] edit:mt-auto edit:pt-[calc(var(--u)*24)]"
       data-noprint
     >
-      <!-- Add opens the new item page (K104), at the page's control size. -->
-      <Button
-        v-if="store.configMode"
-        class="col-start-1 h-(--set-control) justify-self-start px-(--set-control-pad) text-(length:--set-label) [&_svg]:size-(--set-icon)"
-        data-add
-        data-testid="add-exercise"
-        @click="add"
-        ><Plus :stroke-width="1.5" />Add exercise</Button
-      >
       <IconButton
         label="Go to Cardio"
         class="col-start-2 hidden text-ink-secondary hover:text-ink full:inline-flex edit:inline-flex short:hidden"

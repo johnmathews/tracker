@@ -5,7 +5,12 @@ import {
   CLICK_GAP_MS,
   MomentumWatch,
   bandHeight,
+  focusOnScreen,
   pageEnd,
+  restOn,
+  restOnScreen,
+  screenInView,
+  tallAbove,
   stopSprint,
   wrapAround,
   sprintToScreen,
@@ -82,6 +87,159 @@ describe('turnTarget (K103)', () => {
 
   it('has nowhere to go past the last point', () => {
     expect(turnTarget(2600, 2400, points, 800)).toBeNull()
+  })
+})
+
+describe('restOn (K111)', () => {
+  // A screen from 900 to 2100 in page coordinates, a 900px window, a 100px bar over the screens.
+  const screen = { top: 900, bottom: 2100 }
+
+  it('rests a screen that fits at its top, under the bar', () => {
+    expect(restOn({ top: 900, bottom: 1700 }, { top: 1000, bottom: 1050 }, 100, 900)).toBe(800)
+  })
+
+  it('rests at the top of a tall screen when the element shows there', () => {
+    expect(restOn(screen, { top: 1000, bottom: 1050 }, 100, 900)).toBe(800)
+  })
+
+  it('rests a tall screen’s foot at the window’s foot for an element near its end', () => {
+    // Add, under the last row: the next screen's top stays just out of sight.
+    expect(restOn(screen, { top: 2000, bottom: 2050 }, 100, 900)).toBe(1200)
+  })
+
+  it('centres an element in the middle of a long screen, inside the screen', () => {
+    const at = restOn({ top: 900, bottom: 4000 }, { top: 2500, bottom: 2600 }, 100, 900)
+    expect(at).toBe(2500 - 100 - (800 - 100) / 2)
+  })
+
+  it('never rests across two screens', () => {
+    for (const el of [900, 1300, 1700, 2040]) {
+      const at = restOn(screen, { top: el, bottom: el + 50 }, 100, 900)
+      expect(at).toBeGreaterThanOrEqual(800)
+      expect(at).toBeLessThanOrEqual(1200)
+    }
+  })
+})
+
+describe('tallAbove (K118)', () => {
+  // Three screens in scroll positions: a tall one (1200), one that fits (700), a tall one (1000),
+  // in a 700px window under the band.
+  const screens = [
+    { top: 0, height: 1200 },
+    { top: 1200, height: 700 },
+    { top: 1900, height: 1000 },
+  ]
+
+  it('finds the tall screen above a screen’s top, by its top', () => {
+    expect(tallAbove(1200, screens, 700)).toBe(0)
+  })
+
+  it('finds none above when the screen above fits, whose snap lands on its top anyway', () => {
+    expect(tallAbove(1900, screens, 700)).toBeNull()
+  })
+
+  it('finds none from inside a screen, where its stops decide', () => {
+    expect(tallAbove(1500, screens, 700)).toBeNull()
+    expect(tallAbove(2300, screens, 700)).toBeNull()
+  })
+
+  it('has nowhere to go from the first screen', () => {
+    expect(tallAbove(0, screens, 700)).toBeNull()
+  })
+
+  it('takes a page resting a pixel off a top as at it', () => {
+    expect(tallAbove(1200.6, screens, 700)).toBe(0)
+  })
+})
+
+describe('screenInView and restOnScreen (K115)', () => {
+  afterEach(() => {
+    document.body.innerHTML = ''
+    vi.restoreAllMocks()
+  })
+
+  function screensAt(tops: number[], height: number): HTMLElement[] {
+    document.body.innerHTML = tops.map(() => '<section data-planner-screen></section>').join('')
+    const screens = [...document.querySelectorAll<HTMLElement>('section')]
+    screens.forEach((s, i) => {
+      const top = tops[i]!
+      s.getBoundingClientRect = () =>
+        ({
+          top,
+          bottom: top + height,
+          height,
+          left: 0,
+          right: 0,
+          width: 0,
+          x: 0,
+          y: top,
+        }) as DOMRect
+    })
+    return screens
+  }
+
+  it('finds the screen showing most of itself in the window', () => {
+    // jsdom's window is 768 tall: the second screen shows 568px, the first 200.
+    const screens = screensAt([-600, 200, 1000], 800)
+    expect(screenInView()).toBe(screens[1])
+  })
+
+  it('finds none where there are no screens', () => {
+    document.body.innerHTML = '<main></main>'
+    expect(screenInView()).toBeNull()
+  })
+
+  it('rests the page with the screen’s top at the window’s top when nothing is fixed over it', () => {
+    const screens = screensAt([-600, 200, 1000], 800)
+    vi.spyOn(window, 'scrollY', 'get').mockReturnValue(1000)
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    restOnScreen(screens[1]!)
+    expect(scrollTo).toHaveBeenCalledWith({ top: 1200, behavior: 'auto' })
+  })
+})
+
+describe('focusOnScreen (K111)', () => {
+  afterEach(() => {
+    document.body.innerHTML = ''
+    vi.restoreAllMocks()
+  })
+
+  function rect(top: number, bottom: number): DOMRect {
+    return {
+      top,
+      bottom,
+      left: 0,
+      right: 0,
+      width: 0,
+      height: bottom - top,
+      x: 0,
+      y: top,
+    } as DOMRect
+  }
+
+  it('rests the page on the button’s screen before it takes focus, so the browser scrolls nothing', () => {
+    document.body.innerHTML =
+      '<section data-planner-screen><button>Add exercise</button></section><section data-planner-screen></section>'
+    const [screen] = document.querySelectorAll('section')
+    const button = document.querySelector('button')!
+    vi.spyOn(screen!, 'getBoundingClientRect').mockReturnValue(rect(0, 1200))
+    vi.spyOn(button, 'getBoundingClientRect').mockReturnValue(rect(1100, 1150))
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    const focus = vi.spyOn(button, 'focus')
+    focusOnScreen(button)
+    // The screen is taller than jsdom's window: its foot rests at the window's foot.
+    expect(scrollTo).toHaveBeenCalledWith({ top: 1200 - innerHeight, behavior: 'auto' })
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true })
+    expect(document.activeElement).toBe(button)
+  })
+
+  it('focuses as usual outside the screens', () => {
+    document.body.innerHTML = '<button>Settings</button>'
+    const button = document.querySelector('button')!
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    focusOnScreen(button)
+    expect(scrollTo).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(button)
   })
 })
 

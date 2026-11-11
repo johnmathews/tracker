@@ -45,6 +45,11 @@
   ],
   "extra_contrast_pairs": [
     [
+      "edit",
+      "canvas",
+      3.0
+    ],
+    [
       "caution-ink",
       "canvas",
       4.5

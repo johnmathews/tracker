@@ -69,7 +69,8 @@ useGridNav(table, {
   On screen the table is a CSS grid (its row groups and rows `display: contents`, so the explicit
   roles carry the table's meaning). It fills the height its screen leaves (PlannerScreen): rows
   share it, at least --grid-row-min each, and the grid stops at --grid-row-max a row (main.css),
-  so a tall screen centres it. Each day cell is a size
+  so a tracker with few rows keeps its rows' height and space is left under it (K110, K114). Each
+  day cell is a size
   container that its DayMark fills. Folded (held upright) the names leave their column: each row's
   name line spans the seven days above its boxes, placed by the row's --line-row and --box-row,
   Nothing scrolls sideways. On paper it is a
@@ -87,7 +88,7 @@ useGridNav(table, {
     ref="table"
     role="grid"
     :aria-label="tableLabel"
-    class="w-full table-fixed border-collapse tabular-nums screen:grid screen:grid-rows-[auto_repeat(var(--rows),minmax(var(--grid-row-min),1fr))] screen:content-center full:max-h-[calc(var(--rows)*var(--grid-row-max)_+_var(--u)*100)] folded:max-h-none folded:grid-cols-7 folded:grid-rows-none folded:content-start"
+    class="w-full table-fixed border-collapse tabular-nums screen:grid screen:grid-rows-[auto_repeat(var(--rows),minmax(var(--grid-row-min),1fr))] screen:content-center full:max-h-[calc(var(--rows)*var(--grid-row-max)_+_var(--grid-head-h))] folded:max-h-none folded:grid-cols-7 folded:grid-rows-none folded:content-start"
     :class="columns"
     :style="{ '--rows': items.length }"
   >

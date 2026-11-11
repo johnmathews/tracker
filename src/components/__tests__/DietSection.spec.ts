@@ -42,7 +42,7 @@ async function settle(): Promise<void> {
   for (let i = 0; i < 4; i++) await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
-/** Opens the new item page from Add food, under the grid (K104). */
+/** Opens the new item page from Add food, on the title line (K104, K113). */
 async function openAddFood() {
   await wrapper.get('[data-testid="add-food"]').trigger('click')
   await settle()

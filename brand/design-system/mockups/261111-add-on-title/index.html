@@ -1,0 +1,151 @@
+<title>Add on the title line</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="tokens.css">
+<!--
+  A mockup (design-system skill, references/mockups.md). Fill in, top to bottom:
+  1. The question: one sentence, and what stays as it is.
+  2. One <section class="option"> per option, two to four, lettered A, B, C. Mark one
+     data-recommended. Each changes only what the question is about.
+  3. Every proposed value as a --candidate-* custom property on its option (see the style block); everything
+     else from the system's tokens (var(--ink)), type classes (.body, .caption) and real copy.
+  4. The stage: the real screen or component the change lands in, at its real size, once per
+     theme (the two .pane elements). Add a close-up only beside it, never instead of it.
+  5. Measures: one <li data-fg data-bg data-min> per new colour pairing; the page computes them.
+  The frame (.mockup-*) is plain on purpose; the options are the design.
+-->
+<style>
+  body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font-sans); }
+  .mockup-page {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: var(--space-8, 32px) var(--space-16, 64px);
+    max-width: 1200px; margin: 0 auto; display: grid; gap: var(--space-12, 48px);
+  }
+  .mockup-head { display: grid; gap: var(--space-2, 8px); max-width: 70ch; }
+  .mockup-head h1, .option h2 { margin: 0; text-wrap: balance; }
+  .mockup-head p, .option p { margin: 0; }
+  .mockup-meta { color: var(--ink-secondary); }
+  .option { display: grid; gap: var(--space-4, 16px); }
+  .option-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2, 8px) var(--space-3, 12px); }
+  .option-tag { color: var(--ink-secondary); }
+  .option[data-recommended] .option-tag::after { content: " · Recommended"; color: var(--ink); }
+  /* The same stage in light and in dark, side by side; stacked on a phone. Each pane is a
+     data-theme subtree, so the system's own tokens switch inside it. */
+  .panes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--space-4, 16px); }
+  .pane { min-width: 0; background: var(--canvas); color: var(--ink); border: 1px solid var(--line);
+          border-radius: var(--radius-lg, 10px); padding: var(--space-4, 16px); overflow-x: auto; }
+  .pane-label { color: var(--ink-secondary); margin: 0 0 var(--space-3, 12px); }
+  .measures { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); }
+  .measures li { border: 1px solid var(--line); border-radius: var(--radius-sm, 4px); padding: 2px var(--space-2, 8px); font-variant-numeric: tabular-nums; }
+  .measures li[data-pass="no"] { border-color: currentColor; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  /* ---- The options' own styles: each picture is the real app with the Add button moved. ---- */
+  .mockup-page { max-width: 1360px; }
+  .panes { grid-template-columns: minmax(0, 1fr); }
+  .phones { display: flex; flex-wrap: wrap; gap: var(--space-4, 16px); min-width: 0; }
+  .shot { display: block; max-width: none; }
+</style>
+
+<main class="mockup-page">
+  <header class="mockup-head">
+    <p class="caption mockup-meta">Mockup · 2026-11-11 · Tracker</p>
+    <h1 class="title-1">Add on the title line</h1>
+    <p class="body">Where does Edit plan's Add button go on the tracker's title line, so it is
+      in view the moment a tracker is, with no scrolling to its foot? The grid, the rows and the
+      per-day stepper stay as they are, and the arrow to the next tracker stays at the foot.</p>
+    <p class="body">Each picture is the real app in Edit plan with the button moved. On a narrow
+      screen, scroll a desktop picture sideways.</p>
+  </header>
+
+  <section class="option" id="a" data-recommended aria-labelledby="a-h">
+    <div class="option-head">
+      <h2 class="title-2" id="a-h">A. At the end of the title line</h2>
+      <span class="label option-tag">Option A</span>
+    </div>
+    <p class="body">Add exercise in the title line's empty right-hand column, over the Remove buttons: the plan's two edits, add and remove, down one edge. The per-day stepper keeps the centre.</p>
+    <div class="panes">
+      <div class="pane" data-theme="light"><p class="label pane-label">Light · 1280 × 800</p>
+        <img class="shot" src="a-desktop-light.png" width="1280" height="800" alt="Edit plan, light, option A"></div>
+      <div class="pane" data-theme="dark"><p class="label pane-label">Dark · 1280 × 800</p>
+        <img class="shot" src="a-desktop-dark.png" width="1280" height="800" alt="Edit plan, dark, option A"></div>
+      <div class="phones">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · phone</p>
+          <img class="shot" src="a-phone-light.png" width="390" height="844" alt="Edit plan on a phone, light, option A"></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · phone</p>
+          <img class="shot" src="a-phone-dark.png" width="390" height="844" alt="Edit plan on a phone, dark, option A"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="option" id="b" aria-labelledby="b-h">
+    <div class="option-head">
+      <h2 class="title-2" id="b-h">B. Right after the title</h2>
+      <span class="label option-tag">Option B</span>
+    </div>
+    <p class="body">Add exercise straight after Exercises, the button and its name as now.</p>
+    <div class="panes">
+      <div class="pane" data-theme="light"><p class="label pane-label">Light · 1280 × 800</p>
+        <img class="shot" src="b-desktop-light.png" width="1280" height="800" alt="Edit plan, light, option B"></div>
+      <div class="pane" data-theme="dark"><p class="label pane-label">Dark · 1280 × 800</p>
+        <img class="shot" src="b-desktop-dark.png" width="1280" height="800" alt="Edit plan, dark, option B"></div>
+      <div class="phones">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · phone</p>
+          <img class="shot" src="b-phone-light.png" width="390" height="844" alt="Edit plan on a phone, light, option B"></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · phone</p>
+          <img class="shot" src="b-phone-dark.png" width="390" height="844" alt="Edit plan on a phone, dark, option B"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="option" id="c" aria-labelledby="c-h">
+    <div class="option-head">
+      <h2 class="title-2" id="c-h">C. A plus after the title</h2>
+      <span class="label option-tag">Option C</span>
+    </div>
+    <p class="body">Only the plus, a square button after the title, named Add exercise for a screen reader and by its tooltip. The quietest, and the least plain about what it does.</p>
+    <div class="panes">
+      <div class="pane" data-theme="light"><p class="label pane-label">Light · 1280 × 800</p>
+        <img class="shot" src="c-desktop-light.png" width="1280" height="800" alt="Edit plan, light, option C"></div>
+      <div class="pane" data-theme="dark"><p class="label pane-label">Dark · 1280 × 800</p>
+        <img class="shot" src="c-desktop-dark.png" width="1280" height="800" alt="Edit plan, dark, option C"></div>
+      <div class="phones">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · phone</p>
+          <img class="shot" src="c-phone-light.png" width="390" height="844" alt="Edit plan on a phone, light, option C"></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · phone</p>
+          <img class="shot" src="c-phone-dark.png" width="390" height="844" alt="Edit plan on a phone, dark, option C"></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+  // Measures: for each <li data-fg data-bg data-min>, the WCAG contrast of the two colours in each
+  // theme, resolved inside the option (so --candidate-* values apply), written after the label.
+  (() => {
+    const rgb = (value, scope, theme) => {
+      const probe = document.createElement('span')
+      probe.dataset.theme = theme
+      probe.style.color = value
+      scope.append(probe)
+      const parts = getComputedStyle(probe).color.match(/[\d.]+/g).map(Number)
+      probe.remove()
+      return parts.slice(0, 3)
+    }
+    const lum = ([r, g, b]) => [r, g, b]
+      .map((c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4 })
+      .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0)
+    const ratio = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05) }
+    for (const li of document.querySelectorAll('.measures li[data-fg]')) {
+      const scope = li.closest('.option') || document.body
+      const min = Number(li.dataset.min || 0)
+      const results = ['light', 'dark'].map((theme) => {
+        const r = ratio(rgb(li.dataset.fg, scope, theme), rgb(li.dataset.bg, scope, theme))
+        return { theme, r, ok: !min || r >= min }
+      })
+      li.dataset.pass = results.every((x) => x.ok) ? 'yes' : 'no'
+      li.append(`: ${results.map((x) => `${x.theme} ${x.r.toFixed(1)}:1${x.ok ? '' : ' (below ' + min + ':1)'}`).join(', ')}`)
+    }
+  })()
+</script>

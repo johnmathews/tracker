@@ -54,7 +54,7 @@ function add(): void {
 <!--
   The Food section: the same WeekGrid without chips (the food type has none), under its own
   SectionHeader, and in Edit plan Foods a day centred on the title line, reading "2 per day" (K56, K62, K63) and the Add food
-  button under the grid (K54). On screen 56u of space
+  button at the line's end (K113). On screen 56u of space
   sets it apart from Cardio, with no rule. On paper the heading and the grid stay on one page
   (F20): the header avoids a break after it, and the pair avoids a break inside. On the planner's
   screens it is the third screen, after Cardio (K90), under the fixed week (K88), with nothing
@@ -67,6 +67,14 @@ function add(): void {
     data-planner-screen
     aria-labelledby="diet-heading"
   >
+    <!-- The screen's top as a snap point of its own (K118): used on a touch screen only while the
+         screen is freed for a swipe up onto it, so the swipe can't rest at its foot. -->
+    <div
+      aria-hidden="true"
+      data-snap-top
+      data-noprint
+      class="pointer-events-none absolute top-0 left-0 size-px"
+    />
     <!-- The way back (PlannerScreen card, K42): an arrow on the screen's top, on the title's line
          just under the fixed week (K88), sprinting to the top of Cardio, the screen before (K90). -->
     <IconButton
@@ -99,6 +107,18 @@ function add(): void {
             />
           </div>
         </template>
+        <!-- Add, at the end of the title line (K113), opens the new item page (K104), at the
+             page's control size. -->
+        <template v-if="planner.configMode" #end>
+          <Button
+            class="h-(--set-control) px-(--set-control-pad) text-(length:--set-label) [&_svg]:size-(--set-icon)"
+            data-add
+            aria-keyshortcuts="A"
+            data-testid="add-food"
+            @click="add"
+            ><Plus :stroke-width="1.5" />Add food</Button
+          >
+        </template>
       </SectionHeader>
       <TrackerGrid
         :class="SCREEN_GRID"
@@ -122,15 +142,5 @@ function add(): void {
         </template>
       </TrackerGrid>
     </div>
-    <!-- Add opens the new item page (K104), at the page's control size. -->
-    <Button
-      v-if="planner.configMode"
-      class="mt-[calc(var(--u)*24)] h-(--set-control) self-start px-(--set-control-pad) text-(length:--set-label) [&_svg]:size-(--set-icon)"
-      data-noprint
-      data-add
-      data-testid="add-food"
-      @click="add"
-      ><Plus :stroke-width="1.5" />Add food</Button
-    >
   </section>
 </template>

@@ -477,7 +477,8 @@ listed in [api.md](api.md) §10):
   the bar led by the week in `title-1` with no wordmark and "This week" first among the actions,
   no Edit plan or Done BarAction and the keyboard's hidden "Edit plan" ("Done" in Edit plan)
   after "Skip to today", the week's keys (E in and out, Esc out of full screen and then Edit plan,
-  F, P and S, and none in a field, with a modifier, repeating or under a dialog; K91), H and B
+  F, P and S, and none in a field, with a modifier, repeating or under a dialog; K91; A for Ask,
+  only while Ask is offered, and in Edit plan for the Add of the tracker on screen, K109), H and B
   back and L forward on every page (K105),
   a long press turning Edit plan on and a second one off (by mouse or finger; not when let go
   early, moved, cancelled, held with another button, or in a field, popover, dialog or the bar),
