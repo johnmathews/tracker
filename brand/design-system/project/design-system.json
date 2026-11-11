@@ -197,9 +197,9 @@
   ],
   "lastChange": {
     "by": "John Mathews",
-    "at": "2026-11-10T21:42:54Z",
+    "at": "2026-11-11T12:49:11Z",
     "via": "Claude Code",
-    "note": "PlannerScreen: the screens scroll each wheel step themselves, so a trackpad swipe's momentum stays cancellable and one swipe moves one screen (K108)."
+    "note": "A new colour role, edit, frames the window while Edit plan is on, 8px and 4px on a phone (K112, K117). SectionHeader gains an end slot, where Edit plan's Add now sits (K113). WeekGrid rows stop at 82u (K110). PlannerScreen: a screen's content starts at its top (K114), Edit plan on or off keeps the tracker on show (K115), and on touch a swipe onto a new tracker ends at its top, up onto a tall one in one movement (K116, K118). Header and BarAction: A opens Ask, or adds in Edit plan (K109)."
   },
 
   "layout": "files",
