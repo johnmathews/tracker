@@ -53,8 +53,6 @@ STRENGTH = TrackerType(
     new_target=3,
     daily_target=3,
 )
-#: The kind under its old name: insights.py and edits.py still read it.
-EXERCISE = STRENGTH
 #: Cycling, running and the like (K90): a duration and a distance, every kind of mark like an
 #: exercise, a weekly goal and no daily target.
 CARDIO = TrackerType(
