@@ -19,9 +19,12 @@
   "expected": {
     "ok": true,
     "data": {
-      "exercise": { "plans": {}, "log": {}, "details": {} },
-      "cardio": { "plans": {}, "log": {}, "details": {} },
-      "diet": { "plans": {}, "log": {}, "details": {} },
+      "trackers": [],
+      "sections": {
+        "exercise": { "plans": {}, "log": {}, "details": {} },
+        "cardio": { "plans": {}, "log": {}, "details": {} },
+        "diet": { "plans": {}, "log": {}, "details": {} }
+      },
       "settings": {
         "accent": "#30d158",
         "dailyPick": 3,
@@ -29,7 +32,7 @@
         "goals": "",
         "limits": "",
         "itemSections": {
-          "exercise": { "order": ["history", "plan", "notes", "details"], "hidden": ["details"] }
+          "strength": { "order": ["history", "plan", "notes", "details"], "hidden": ["details"] }
         }
       }
     }

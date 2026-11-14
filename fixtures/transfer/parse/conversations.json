@@ -276,16 +276,11 @@
   "expected": {
     "ok": true,
     "data": {
-      "exercise": {
-        "plans": {},
-        "log": {},
-        "details": {}
-      },
-      "cardio": { "plans": {}, "log": {}, "details": {} },
-      "diet": {
-        "plans": {},
-        "log": {},
-        "details": {}
+      "trackers": [],
+      "sections": {
+        "exercise": { "plans": {}, "log": {}, "details": {} },
+        "cardio": { "plans": {}, "log": {}, "details": {} },
+        "diet": { "plans": {}, "log": {}, "details": {} }
       },
       "settings": null,
       "conversations": [
@@ -301,12 +296,7 @@
               "stop": "end_turn",
               "askedAt": 1792742400
             },
-            {
-              "question": "And food?",
-              "answer": "",
-              "stop": "refused",
-              "askedAt": 1792742460
-            }
+            { "question": "And food?", "answer": "", "stop": "refused", "askedAt": 1792742460 }
           ]
         },
         {
@@ -321,30 +311,10 @@
               "stop": "max_tokens",
               "askedAt": 1792742400
             },
-            {
-              "question": "Why?",
-              "answer": "",
-              "stop": "refused",
-              "askedAt": 1792742400
-            },
-            {
-              "question": "Again?",
-              "answer": "",
-              "stop": "error",
-              "askedAt": 1792742400
-            },
-            {
-              "question": "Still?",
-              "answer": "",
-              "stop": "cancelled",
-              "askedAt": 1792742400
-            },
-            {
-              "question": "Extra",
-              "answer": "Kept.",
-              "stop": "end_turn",
-              "askedAt": 1792742400
-            }
+            { "question": "Why?", "answer": "", "stop": "refused", "askedAt": 1792742400 },
+            { "question": "Again?", "answer": "", "stop": "error", "askedAt": 1792742400 },
+            { "question": "Still?", "answer": "", "stop": "cancelled", "askedAt": 1792742400 },
+            { "question": "Extra", "answer": "Kept.", "stop": "end_turn", "askedAt": 1792742400 }
           ]
         },
         {

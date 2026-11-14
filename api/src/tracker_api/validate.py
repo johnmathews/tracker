@@ -13,12 +13,13 @@ import re
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import date, timedelta
 from typing import Any, Literal, NotRequired, TypedDict, TypeIs, cast
 
 from .item_sections import ItemSections, normalise_item_sections
 
 # Re-exported: the rest of the API reads the sections from here, beside the normalisers.
-from .types import CARDIO, EXERCISE, FOOD, SECTION_TYPES, TypeId
+from .types import CARDIO, FOOD, SECTION_TYPES, STRENGTH, TYPES, TypeId
 from .types import SECTIONS as SECTIONS
 from .types import Section as Section
 
@@ -26,24 +27,29 @@ EXPORT_FORMAT = "tracker-export"
 #: Files exported under the app's earlier names (Fitness Planner, and Exercise Planner before it)
 #: carry these formats; they import as if current.
 OLD_EXPORT_FORMATS = ("fitness-planner-export", "exercise-planner-export")
-#: Version 5 files carry each item's details (notes and fields) once per section, beside its plans
-#: and log. Version 4 files may carry a note on an exercise or a food in a week's plan (K43); it
-#: lifts into the item's details on import, the latest week's winning. Version 3 files carry a mark
-#: per day with its drawing (`great`, `partial-solid`, `missed-hatch` … or null). Version 2 files
-#: carry the kinds alone, which read as the zigzag; version 1 files a `true` per done day, which
-#: reads as `great`. All five import. Settings may carry My goals (`goals`) and the limits note
-#: (`limits`, K107) with no new version, as `foodPick` came: a reader from before them drops the
-#: key, and a file without them reads as none. Ask's conversations (`conversations`) came the
-#: same way, and so did Daily goal (`dailyGoal`, K85): a file without it reads as on, and Cardio
-#: (`cardio`, K90): a file without it has none.
-EXPORT_VERSION = 5
+#: Version 6 files carry the account's trackers (K123), and each tracker's plans and log under
+#: `sections` and its items' details under `details`, both keyed by tracker id. Version 5 files
+#: carry the first three trackers under fixed keys (`exercise`, `cardio`, `diet`), each with its
+#: items' details (notes and fields) beside its plans and log. Version 4 files may carry a note on
+#: an exercise or a food in a week's plan (K43); it lifts into the item's details on import, the
+#: latest week's winning. Version 3 files carry a mark per day with its drawing (`great`,
+#: `partial-solid`, `missed-hatch` … or null). Version 2 files carry the kinds alone, which read
+#: as the zigzag; version 1 files a `true` per done day, which reads as `great`. All six import.
+#: Settings may carry My goals (`goals`) and the limits note (`limits`, K107) with no new version,
+#: as `foodPick` came: a reader from before them drops the key, and a file without them reads as
+#: none. Ask's conversations (`conversations`) came the same way, and so did Daily goal
+#: (`dailyGoal`, K85): a file without it reads as on, and Cardio (`cardio`, K90): a file without
+#: it has none.
+EXPORT_VERSION = 6
 #: The last version whose notes live in plan items.
 LAST_ITEM_NOTES_VERSION = 4
-READ_VERSIONS = (1, 2, 3, LAST_ITEM_NOTES_VERSION, EXPORT_VERSION)
+#: The last version whose sections are the first three trackers' fixed keys.
+LAST_FIXED_VERSION = 5
+READ_VERSIONS = (1, 2, 3, LAST_ITEM_NOTES_VERSION, LAST_FIXED_VERSION, EXPORT_VERSION)
 
 MIN_TARGET, MAX_TARGET = 0, 7
 MIN_DAILY_PICK, MAX_DAILY_PICK = 1, 8
-NEW_EXERCISE_TARGET = EXERCISE.new_target
+NEW_EXERCISE_TARGET = STRENGTH.new_target
 NEW_CARDIO_TARGET = CARDIO.new_target
 NEW_FOOD_TARGET = FOOD.new_target
 MAX_WEIGHT = 500
@@ -82,6 +88,12 @@ MAX_CONVERSATIONS = 500
 MAX_CONVERSATION_TURNS = 200
 #: A time in Unix seconds is a whole number from 0 to JavaScript's largest safe integer.
 MAX_TIME = 2**53 - 1
+#: A tracker's name, in characters (code points).
+MAX_TRACKER_NAME = 60
+#: An account's trackers, ended ones included: a create or an import adds none past it.
+MAX_TRACKERS = 100
+#: A tracker's position: a sort key, from 0.
+MAX_POSITION = 10_000
 
 # `[0-9]` rather than `\d`, which in Python also matches non-ASCII digits; fullmatch rather than
 # `$`, which in Python also matches before a trailing newline.
@@ -91,6 +103,8 @@ ACCENT_RE = re.compile(r"#[0-9a-fA-F]{6}")
 CONVERSATION_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 #: A details field's key: lower case, a letter first, at most 32 characters.
 FIELD_KEY_RE = re.compile(r"[a-z][a-z0-9_]{0,31}")
+#: A tracker's id: URL-safe, as the app's `newId` makes them, so it can sit in a path.
+TRACKER_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 
 type Item = dict[str, Any]
 type Plans = dict[str, list[Item]]
@@ -147,6 +161,28 @@ class Tracked(TypedDict):
     details: DetailsMap
 
 
+class TrackerInfo(TypedDict):
+    """A tracker as an export file carries it (spec §1, §2)."""
+
+    id: str
+    name: str
+    kind: TypeId
+    #: The sort key of the week's order, from 0.
+    position: int
+    #: How many items a day make a met day; None for a kind with no daily target.
+    dailyTarget: int | None
+    #: The Monday of the week it was created in; None for the first three.
+    startWeek: str | None
+    #: The Monday of the first week it no longer shows in; None while it is live.
+    endWeek: str | None
+
+
+class Tracker(TrackerInfo):
+    """A stored tracker: its revision counts its changes, as a plan's does."""
+
+    rev: int
+
+
 class Portable(TypedDict):
     """The settings that belong to the person rather than the device: everything but the theme."""
 
@@ -191,9 +227,11 @@ class Conversation(TypedDict):
 
 
 class ExportData(TypedDict):
-    exercise: Tracked
-    cardio: Tracked
-    diet: Tracked
+    """A file as read: its trackers (none before version 6) and each tracker's data by id. The
+    first three ids are always there, so a file from before version 6 maps onto them."""
+
+    trackers: list[TrackerInfo]
+    sections: dict[str, Tracked]
     settings: Portable | None
     #: Present only when the file carries a list of them.
     conversations: NotRequired[list[Conversation]]
@@ -437,14 +475,15 @@ def normalise_food(v: object) -> Item | None:
 
 type Normaliser = Callable[[object], Item | None]
 
-#: Each type's item normaliser, and through the registry each section's.
-_TYPE_NORMALISERS: dict[TypeId, Normaliser] = {
-    EXERCISE.id: normalise_exercise,
+#: Each kind's item normaliser.
+KIND_NORMALISERS: dict[TypeId, Normaliser] = {
+    STRENGTH.id: normalise_exercise,
     CARDIO.id: normalise_cardio,
     FOOD.id: normalise_food,
 }
+#: Each of the first three trackers' item normaliser, through its kind.
 NORMALISERS: dict[Section, Normaliser] = {
-    name: _TYPE_NORMALISERS[tracker_type.id] for name, tracker_type in SECTION_TYPES.items()
+    name: KIND_NORMALISERS[tracker_type.id] for name, tracker_type in SECTION_TYPES.items()
 }
 
 
@@ -503,6 +542,76 @@ def check_day(day: int) -> int:
     return day
 
 
+def check_tracker_id(v: object) -> str:
+    if not is_tracker_id(v):
+        raise Invalid("a tracker id is 1 to 64 letters, digits, - or _")
+    return v
+
+
+def check_tracker_name(v: object) -> str:
+    """A tracker's name, trimmed: 1 to MAX_TRACKER_NAME characters. Need not be unique."""
+    name = v.strip(BLANK) if isinstance(v, str) else ""
+    if not 1 <= len(name) <= MAX_TRACKER_NAME:
+        raise Invalid(f"name must be 1 to {MAX_TRACKER_NAME} characters")
+    return name
+
+
+def check_kind(v: object) -> TypeId:
+    if isinstance(v, str) and v in TYPES:
+        return v
+    raise Invalid(f"kind must be {' or '.join(TYPES)}")
+
+
+def week_monday(v: object, today: date) -> str:
+    """The Monday of the week `v` (a date written YYYY-MM-DD, any day of it) falls in, or of
+    today's week when `v` is None, as a week key."""
+    day = today
+    if v is not None:
+        try:
+            day = date.fromisoformat(week_key(v) if isinstance(v, str) else "")
+        except ValueError:
+            raise Invalid("week must be a date such as 2026-10-19") from None
+    return (day - timedelta(days=day.weekday())).isoformat()
+
+
+def _whole(v: object, lo: int, hi: int, what: str) -> int:
+    if type(v) is not int or not lo <= v <= hi:
+        raise Invalid(f"{what} must be a whole number from {lo} to {hi}")
+    return v
+
+
+class TrackerChanges(TypedDict, total=False):
+    """What a `PATCH /api/trackers/{id}` changes: any of these, at least one."""
+
+    name: str
+    position: int
+    dailyTarget: int | None
+
+
+def check_tracker_patch(body: dict[str, Any], kind: TypeId) -> tuple[TrackerChanges, int]:
+    """A tracker write's changes and `rev` (a whole number from 0). The daily target is a whole
+    number from 1 to 8 for a kind with one, and null for a kind without."""
+    rev = body.get("rev")
+    if type(rev) is not int or rev < 0:
+        raise Invalid("rev must be a whole number from 0")
+    changes: TrackerChanges = {}
+    if "name" in body:
+        changes["name"] = check_tracker_name(body["name"])
+    if "position" in body:
+        changes["position"] = _whole(body["position"], 0, MAX_POSITION, "position")
+    if "dailyTarget" in body:
+        target = body["dailyTarget"]
+        if TYPES[kind].daily_target is None:
+            if target is not None:
+                raise Invalid(f"a {kind} tracker has no daily target")
+            changes["dailyTarget"] = None
+        else:
+            changes["dailyTarget"] = _whole(target, MIN_DAILY_PICK, MAX_DAILY_PICK, "dailyTarget")
+    if not changes:
+        raise Invalid("send name, position or dailyTarget")
+    return changes, rev
+
+
 def tick_mark(body: dict[str, Any]) -> Mark | None:
     """`{"mark": ...}`, or `{"done": bool}` from a client (or a queued tick) from before marks
     had kinds: true is `great`, false clears the day."""
@@ -546,7 +655,7 @@ def strict_item(section: Section, raw: object) -> StrictItem:
     elif len(name) > MAX_NAME:
         problems.append(f"name is over {MAX_NAME} characters")
     if (
-        SECTION_TYPES[section] is EXERCISE
+        SECTION_TYPES[section] is STRENGTH
         and to_int(raw.get("reps"), 0) > 0
         and to_int(raw.get("duration"), 0) > 0
     ):
@@ -592,19 +701,24 @@ def normalise_log(v: object) -> Log:
     return log
 
 
-def normalise_items(section: Section, v: list[Any]) -> list[Item]:
-    """A plan's items, dropping any that fail validation."""
-    normalise = NORMALISERS[section]
+def normalise_kind_items(kind: TypeId, v: list[Any]) -> list[Item]:
+    """A plan's items for a tracker of `kind`, dropping any that fail validation."""
+    normalise = KIND_NORMALISERS[kind]
     return [it for it in map(normalise, v) if it is not None]
 
 
-def normalise_plans(section: Section, v: object) -> Plans:
+def normalise_items(section: Section, v: list[Any]) -> list[Item]:
+    """A plan's items for one of the first three trackers."""
+    return normalise_kind_items(SECTION_TYPES[section].id, v)
+
+
+def normalise_plans(kind: TypeId, v: object) -> Plans:
     plans: Plans = {}
     if not isinstance(v, dict):
         return plans
     for week, items in v.items():
         if is_week(week) and isinstance(items, list):
-            plans[week] = normalise_items(section, items)
+            plans[week] = normalise_kind_items(kind, items)
     return plans
 
 
@@ -729,21 +843,94 @@ def parse_json(text: str) -> object:
 
 
 def section(name: Section, v: object, *, item_notes: bool) -> Tracked:
-    """One section of a file. With `item_notes` (a file of version 4 or older) the details come
-    from the plans' notes, and any `details` key is not read."""
+    """One of the first three trackers' sections in a file of version 5 or older. With
+    `item_notes` (version 4 or older) the details come from the plans' notes, and any `details`
+    key is not read."""
     if not isinstance(v, dict):
         return {"plans": {}, "log": {}, "details": {}}
     plans = v.get("plans")
     details = lift_notes(name, plans) if item_notes else normalise_details_map(v.get("details"))
     return {
-        "plans": normalise_plans(name, plans),
+        "plans": normalise_plans(SECTION_TYPES[name].id, plans),
         "log": normalise_log(v.get("log")),
         "details": details,
     }
 
 
+def tracked(kind: TypeId, v: object, details: object) -> Tracked:
+    """One tracker's data in a version 6 file: its section and its details, read apart."""
+    raw: dict[str, Any] = v if isinstance(v, dict) else {}
+    return {
+        "plans": normalise_plans(kind, raw.get("plans")),
+        "log": normalise_log(raw.get("log")),
+        "details": normalise_details_map(details),
+    }
+
+
+def is_tracker_id(v: object) -> TypeIs[str]:
+    """A tracker id: URL-safe, 1 to 64 characters, and not `__proto__`, which JavaScript would
+    take for the object's prototype."""
+    return isinstance(v, str) and TRACKER_ID_RE.fullmatch(v) is not None and v != "__proto__"
+
+
+def _week_or_none(v: object) -> str | None:
+    return v if isinstance(v, str) and is_week(v) else None
+
+
+def normalise_tracker(v: object, position: int) -> TrackerInfo | None:
+    """A file's tracker, or None: it needs a tracker id, a kind the registry has (the first three
+    ids their own kind) and a name that isn't blank, cut to MAX_TRACKER_NAME characters. A bad
+    position reads as `position`, a bad daily target as the kind's default, and a bad week as
+    none."""
+    if not isinstance(v, dict) or not is_tracker_id(v.get("id")):
+        return None
+    tracker_id, kind = v["id"], v.get("kind")
+    first = SECTION_TYPES.get(cast(Section, tracker_id))
+    name = normalise_text(v.get("name"), MAX_TRACKER_NAME)
+    if kind not in TYPES or (first is not None and first.id != kind) or name is None:
+        return None
+    default = TYPES[kind].daily_target
+    daily = None
+    if default is not None:
+        daily = clamp(to_int(v.get("dailyTarget"), default), MIN_DAILY_PICK, MAX_DAILY_PICK)
+    return {
+        "id": tracker_id,
+        "name": name,
+        "kind": kind,
+        "position": clamp(to_int(v.get("position"), position), 0, MAX_POSITION),
+        "dailyTarget": daily,
+        "startWeek": _week_or_none(v.get("startWeek")),
+        "endWeek": _week_or_none(v.get("endWeek")),
+    }
+
+
+def normalise_trackers(v: object) -> list[TrackerInfo]:
+    """A file's trackers: the valid ones, the first of each id, at most MAX_TRACKERS."""
+    out: list[TrackerInfo] = []
+    if not isinstance(v, list):
+        return out
+    seen: set[str] = set()
+    for i, raw in enumerate(v):
+        tracker = normalise_tracker(raw, i)
+        if tracker is None or tracker["id"] in seen:
+            continue
+        seen.add(tracker["id"])
+        out.append(tracker)
+        if len(out) == MAX_TRACKERS:
+            break
+    return out
+
+
+def _dict(v: object) -> dict[str, Any]:
+    return v if isinstance(v, dict) else {}
+
+
 def parse_export(text: str) -> ExportData:
-    """Read an export file, or raise ExportError. Valid files normalise like stored data."""
+    """Read an export file, or raise ExportError. Valid files normalise like stored data.
+
+    A file from before version 6 maps its fixed keys onto the first three trackers' ids. A
+    version 6 file's data is read for the first three ids and for each of its trackers, by that
+    tracker's kind; data under any other id is dropped."""
     parsed = parse_json(text)
     if parsed is None:
         raise ExportError("json")
@@ -754,12 +941,24 @@ def parse_export(text: str) -> ExportData:
     version = as_number(parsed.get("version"))
     if version is None or version not in READ_VERSIONS:
         raise ExportError("version")
-    item_notes = version <= LAST_ITEM_NOTES_VERSION
     settings = parsed.get("settings")
-    # ExportData's keys are the registry's sections and settings (tests/test_types.py).
-    data: dict[str, object] = {
-        name: section(name, parsed.get(name), item_notes=item_notes) for name in SECTIONS
-    }
+    data: dict[str, object] = {}
+    if version <= LAST_FIXED_VERSION:
+        item_notes = version <= LAST_ITEM_NOTES_VERSION
+        data["trackers"] = []
+        data["sections"] = {
+            name: section(name, parsed.get(name), item_notes=item_notes) for name in SECTIONS
+        }
+    else:
+        trackers = normalise_trackers(parsed.get("trackers"))
+        kinds: dict[str, TypeId] = {name: t.id for name, t in SECTION_TYPES.items()}
+        kinds.update({t["id"]: t["kind"] for t in trackers})
+        sections, details = _dict(parsed.get("sections")), _dict(parsed.get("details"))
+        data["trackers"] = trackers
+        data["sections"] = {
+            tracker_id: tracked(kind, sections.get(tracker_id), details.get(tracker_id))
+            for tracker_id, kind in kinds.items()
+        }
     data["settings"] = normalise_portable(settings) if isinstance(settings, dict) else None
     # Conversations that aren't a list read as none, as in a file from before them.
     conversations = parsed.get("conversations")

@@ -32,7 +32,63 @@ EMPTY: dict[str, dict[str, Any]] = {
     "revs": {},
     "detailRevs": {},
 }
-EMPTY_STATE = {"exercise": EMPTY, "cardio": EMPTY, "diet": EMPTY, "settings": None}
+#: Each account's first three trackers (spec §3), as the state and the export carry them.
+FIRST_TRACKERS: list[dict[str, Any]] = [
+    {
+        "id": "exercise",
+        "name": "Strength",
+        "kind": "strength",
+        "position": 0,
+        "dailyTarget": 3,
+        "startWeek": None,
+        "endWeek": None,
+    },
+    {
+        "id": "cardio",
+        "name": "Cardio",
+        "kind": "cardio",
+        "position": 1,
+        "dailyTarget": None,
+        "startWeek": None,
+        "endWeek": None,
+    },
+    {
+        "id": "diet",
+        "name": "Food",
+        "kind": "food",
+        "position": 2,
+        "dailyTarget": 2,
+        "startWeek": None,
+        "endWeek": None,
+    },
+]
+FIRSTS = ("exercise", "cardio", "diet")
+EMPTY_STATE: dict[str, Any] = {
+    "trackers": [{**t, "rev": 1} for t in FIRST_TRACKERS],
+    "sections": {s: {"plans": {}, "log": {}, "revs": {}} for s in FIRSTS},
+    "details": {s: {} for s in FIRSTS},
+    "detailRevs": {s: {} for s in FIRSTS},
+    "exercise": EMPTY,
+    "cardio": EMPTY,
+    "diet": EMPTY,
+    "settings": None,
+}
+
+
+def as_version_6(file: dict[str, Any], trackers: list[dict[str, Any]]) -> dict[str, Any]:
+    """A version 5 file as the API exports it once imported: its fixed keys under `sections` and
+    `details` by tracker id, beside `trackers`."""
+    rest = {k: v for k, v in file.items() if k not in FIRSTS}
+    return {
+        **rest,
+        "version": 6,
+        "trackers": trackers,
+        "sections": {
+            s: {"plans": file.get(s, {}).get("plans", {}), "log": file.get(s, {}).get("log", {})}
+            for s in FIRSTS
+        },
+        "details": {s: file.get(s, {}).get("details", {}) for s in FIRSTS},
+    }
 
 
 def invite(config: Config, name: str) -> str:
@@ -767,14 +823,15 @@ def test_settings_carry_each_types_item_page_arrangement(
     sent = {
         **SETTINGS,
         "itemSections": {
-            "exercise": {
+            "strength": {
                 "order": ["history", "map", "notes", "notes", "details"],
                 "hidden": ["details"],
             },
             "food": {"order": ["plan", "notes", "details", "history"], "hidden": []},
         },
     }
-    saved = {**SETTINGS, "itemSections": {"exercise": ARRANGED}}
+    # The strength kind's arrangement goes under its old key too, for a tab on older code.
+    saved = {**SETTINGS, "itemSections": {"strength": ARRANGED, "exercise": ARRANGED}}
     assert client.put("/api/settings", json=sent).json() == saved
     assert client.get("/api/state").json()["settings"] == saved
     # Back to the default: the key goes, as for an account that never arranged a page.
@@ -788,11 +845,31 @@ def test_settings_without_item_sections_keep_the_saved_arrangement(
     """A tab still running the app from before arranging (K66) sends no itemSections."""
     sign_up(client, config)
     assert client.put("/api/settings", json=SETTINGS).json() == SETTINGS
-    client.put("/api/settings", json={**SETTINGS, "itemSections": {"exercise": ARRANGED}})
+    client.put("/api/settings", json={**SETTINGS, "itemSections": {"strength": ARRANGED}})
     old_tab = {**SETTINGS, "dailyPick": 6}
-    saved = {**old_tab, "itemSections": {"exercise": ARRANGED}}
+    saved = {**old_tab, "itemSections": {"strength": ARRANGED, "exercise": ARRANGED}}
     assert client.put("/api/settings", json=old_tab).json() == saved
     assert client.get("/api/state").json()["settings"] == saved
+
+
+def test_a_tab_on_older_code_keeps_the_strength_arrangement(
+    client: TestClient, config: Config
+) -> None:
+    """A tab from before the kind rename (K123) reads and sends the `exercise` key: it reads the
+    strength kind's arrangement there, and what it sends back is stored as strength's."""
+    sign_up(client, config)
+    client.put("/api/settings", json={**SETTINGS, "itemSections": {"strength": ARRANGED}})
+    old = client.get("/api/state").json()["settings"]["itemSections"]["exercise"]
+    assert old == ARRANGED
+    moved = {"order": ["notes", "plan", "details", "history"], "hidden": []}
+    client.put("/api/settings", json={**SETTINGS, "itemSections": {"exercise": moved}})
+    stored = connect(config.db_path)
+    try:
+        row = stored.execute("SELECT item_sections FROM settings").fetchone()[0]
+    finally:
+        stored.close()
+    assert json.loads(row) == {"strength": moved}
+    assert client.get("/api/export").json()["settings"]["itemSections"] == {"strength": moved}
 
 
 @pytest.mark.parametrize(
@@ -803,10 +880,10 @@ def test_settings_without_item_sections_keep_the_saved_arrangement(
         "history",
         {"swimming": ARRANGED},
         {"diet": ARRANGED},
-        {"exercise": ["history"]},
-        {"exercise": {"order": ["history"]}},
+        {"strength": ["history"]},
+        {"strength": {"order": ["history"]}},
         {"exercise": {"order": "history", "hidden": []}},
-        {"exercise": {"order": ["history", 2], "hidden": []}},
+        {"strength": {"order": ["history", 2], "hidden": []}},
     ],
 )
 def test_a_malformed_arrangement_is_refused(
@@ -835,13 +912,13 @@ def test_a_stored_arrangement_reads_without_types_it_does_not_know(
     try:
         conn.execute(
             "UPDATE settings SET item_sections = ?",
-            (json.dumps({"swimming": ARRANGED, "exercise": ARRANGED}),),
+            (json.dumps({"swimming": ARRANGED, "strength": ARRANGED}),),
         )
     finally:
         conn.close()
-    assert client.get("/api/state").json()["settings"] == {
+    assert client.get("/api/export").json()["settings"] == {
         **SETTINGS,
-        "itemSections": {"exercise": ARRANGED},
+        "itemSections": {"strength": ARRANGED},
     }
 
 
@@ -849,17 +926,17 @@ def test_the_arrangement_exports_and_imports_into_an_empty_account(
     client: TestClient, config: Config
 ) -> None:
     sign_up(client, config)
-    client.put("/api/settings", json={**SETTINGS, "itemSections": {"exercise": ARRANGED}})
+    client.put("/api/settings", json={**SETTINGS, "itemSections": {"strength": ARRANGED}})
     exported = client.get("/api/export").json()
-    assert exported["settings"] == {**SETTINGS, "itemSections": {"exercise": ARRANGED}}
+    assert exported["settings"] == {**SETTINGS, "itemSections": {"strength": ARRANGED}}
     with other_client(config) as bob:
         sign_up(bob, config, "bob@example.com")
         assert post_import(bob, exported).json()["settings"] is True
-        assert bob.get("/api/state").json()["settings"] == exported["settings"]
+        assert bob.get("/api/export").json()["settings"] == exported["settings"]
         # Saved settings win: a second file's arrangement doesn't apply.
         other = {**exported, "settings": {**SETTINGS, "itemSections": {"food": ARRANGED}}}
         assert post_import(bob, other).json()["settings"] is False
-        assert bob.get("/api/state").json()["settings"] == exported["settings"]
+        assert bob.get("/api/export").json()["settings"] == exported["settings"]
 
 
 def test_users_cannot_see_or_change_each_others_data(client: TestClient, config: Config) -> None:
@@ -870,7 +947,11 @@ def test_users_cannot_see_or_change_each_others_data(client: TestClient, config:
     with other_client(config) as bob:
         sign_up(bob, config, "bob@example.com")
         assert bob.get("/api/state").json() == EMPTY_STATE
-        assert bob.get("/api/export").json()["exercise"] == {"plans": {}, "log": {}, "details": {}}
+        bobs = bob.get("/api/export").json()
+        assert (bobs["sections"]["exercise"], bobs["details"]["exercise"]) == (
+            {"plans": {}, "log": {}},
+            {},
+        )
         # Bob's writes to the same week create his own rows, not edits of Alice's.
         assert bob.put(f"/api/plans/exercise/{WEEK}", json={"items": [], "rev": 0}).json() == {
             "rev": 1
@@ -947,6 +1028,7 @@ def test_sample_import_then_export_round_trips(client: TestClient, config: Confi
     r = post_import(client, sample)
     # The same counts the browser's confirm step shows for this file (App.spec.ts).
     assert r.json() == {
+        "trackers": 0,
         # Six weeks of exercise and food plans and one of cardio (K90).
         "weeks": 7,
         "ticks": 108,
@@ -955,20 +1037,25 @@ def test_sample_import_then_export_round_trips(client: TestClient, config: Confi
         "conversations": 0,
     }
     exported = client.get("/api/export")
-    assert sample["version"] == exported.json()["version"] == 5
+    assert (sample["version"], exported.json()["version"]) == (5, 6)
     assert (
         exported.headers["content-disposition"] == 'attachment; filename="tracker-2026-10-23.json"'
     )
-    # The sample is from before Daily goal (K85): its settings read as on, and export so.
+    # The sample is from before Daily goal (K85): its settings read as on, and export so. Its
+    # daily targets are the first trackers' now.
     assert "dailyGoal" not in sample["settings"]
+    picks = (sample["settings"]["dailyPick"], sample["settings"]["foodPick"])
+    trackers = copy.deepcopy(FIRST_TRACKERS)
+    trackers[0]["dailyTarget"], trackers[2]["dailyTarget"] = picks
     expected = {
-        **sample,
+        **as_version_6(sample, trackers),
         "exportedAt": "2026-10-23T08:00:00.000Z",
         "settings": {**sample["settings"], "dailyGoal": True},
         "conversations": [],
     }
     assert exported.json() == expected
     assert post_import(client, sample).json() == {
+        "trackers": 0,
         "weeks": 0,
         "ticks": 0,
         "details": 0,
@@ -996,7 +1083,14 @@ def test_import_merges_without_deleting(client: TestClient, config: Config) -> N
             "settings": {"accent": "#0a84ff", "dailyPick": 4},
         },
     )
-    assert r.json() == {"weeks": 1, "ticks": 1, "details": 0, "settings": False, "conversations": 0}
+    assert r.json() == {
+        "trackers": 0,
+        "weeks": 1,
+        "ticks": 1,
+        "details": 0,
+        "settings": False,
+        "conversations": 0,
+    }
     state = client.get("/api/state").json()
     assert state["exercise"]["plans"] == {"2026-10-12": [squats], WEEK: [PUSHUPS]}
     assert state["exercise"]["revs"] == {"2026-10-12": 1, WEEK: 1}
@@ -1019,6 +1113,7 @@ def test_import_fills_empty_goals_only(client: TestClient, config: Config) -> No
     settings = {"accent": "#0a84ff", "dailyPick": 4, "goals": "Run 5 km by March."}
     file = {"format": "tracker-export", "version": 5, "settings": settings}
     assert post_import(client, file).json() == {
+        "trackers": 0,
         "weeks": 0,
         "ticks": 0,
         "details": 0,
@@ -1074,7 +1169,7 @@ def test_import_fills_empty_limits_only(client: TestClient, config: Config) -> N
         ("null", "json"),
         ('{"format": "fitness-planner-export", "version": 1, "x": NaN}', "json"),
         ({"plans": {}}, "format"),
-        ({"format": "fitness-planner-export", "version": 6}, "version"),
+        ({"format": "fitness-planner-export", "version": 7}, "version"),
         ({"format": "fitness-planner-export", "version": 0}, "version"),
     ],
 )
@@ -1106,7 +1201,14 @@ def test_import_keeps_existing_marks_and_fills_empty_days(
             "exercise": {"log": {WEEK: {"pu": incoming, "sq": ["missed", _, _, _, _, _, _]}}},
         },
     )
-    assert r.json() == {"weeks": 0, "ticks": 4, "details": 0, "settings": False, "conversations": 0}
+    assert r.json() == {
+        "trackers": 0,
+        "weeks": 0,
+        "ticks": 4,
+        "details": 0,
+        "settings": False,
+        "conversations": 0,
+    }
     log = client.get("/api/state").json()["exercise"]["log"]
     assert log == {
         WEEK: {
@@ -1119,10 +1221,17 @@ def test_import_keeps_existing_marks_and_fills_empty_days(
     # The same file again adds nothing.
     assert post_import(
         client, {"format": "fitness-planner-export", "version": 2, "exercise": {"log": log}}
-    ).json() == {"weeks": 0, "ticks": 0, "details": 0, "settings": False, "conversations": 0}
+    ).json() == {
+        "trackers": 0,
+        "weeks": 0,
+        "ticks": 0,
+        "details": 0,
+        "settings": False,
+        "conversations": 0,
+    }
 
 
-def test_a_version_1_import_exports_as_version_5(client: TestClient, config: Config) -> None:
+def test_a_version_1_import_exports_as_version_6(client: TestClient, config: Config) -> None:
     sign_up(client, config)
     old = {
         "format": "fitness-planner-export",
@@ -1131,6 +1240,7 @@ def test_a_version_1_import_exports_as_version_5(client: TestClient, config: Con
         "diet": {"log": {WEEK: {"veg": [False] * 7}}},
     }
     assert post_import(client, old).json() == {
+        "trackers": 0,
         "weeks": 0,
         "ticks": 2,
         "details": 0,
@@ -1138,12 +1248,12 @@ def test_a_version_1_import_exports_as_version_5(client: TestClient, config: Con
         "conversations": 0,
     }
     exported = client.get("/api/export").json()
-    assert exported["version"] == 5
-    assert exported["exercise"]["log"] == {
+    assert exported["version"] == 6
+    assert exported["sections"]["exercise"]["log"] == {
         WEEK: {"pu": ["great", None, "great", None, None, None, None]}
     }
     # An all-empty row is kept, so the export matches the file.
-    assert exported["diet"]["log"] == {WEEK: {"veg": [None] * 7}}
+    assert exported["sections"]["diet"]["log"] == {WEEK: {"veg": [None] * 7}}
 
 
 def test_import_accepts_a_byte_order_mark(client: TestClient, config: Config) -> None:
@@ -1152,7 +1262,14 @@ def test_import_accepts_a_byte_order_mark(client: TestClient, config: Config) ->
     r = client.post(
         "/api/import", content=body.encode(), headers={"Content-Type": "application/json"}
     )
-    assert r.json() == {"weeks": 0, "ticks": 0, "details": 0, "settings": False, "conversations": 0}
+    assert r.json() == {
+        "trackers": 0,
+        "weeks": 0,
+        "ticks": 0,
+        "details": 0,
+        "settings": False,
+        "conversations": 0,
+    }
 
 
 def test_ticks_on_different_days_from_many_connections_all_land(
@@ -1251,16 +1368,16 @@ def add_conversation(config: Config, uid: int, conversation: dict[str, Any]) -> 
 
 
 def export_file(conversations: list[Any]) -> dict[str, Any]:
-    return {"format": "tracker-export", "version": 5, "conversations": conversations}
+    return {"format": "tracker-export", "version": 6, "conversations": conversations}
 
 
 def test_export_then_import_round_trips_conversations(client: TestClient, config: Config) -> None:
     sign_up(client, config)
     add_conversation(config, 1, CONVERSATION)
     exported = client.get("/api/export").json()
-    assert exported["version"] == 5
+    assert exported["version"] == 6
     assert exported["conversations"] == [CONVERSATION]
-    nothing = {"weeks": 0, "ticks": 0, "details": 0, "settings": False}
+    nothing = {"trackers": 0, "weeks": 0, "ticks": 0, "details": 0, "settings": False}
     with other_client(config) as bob:
         sign_up(bob, config, "bob@example.com")
         # Ids belong to an account: the same id in Bob's is a conversation of his own.
@@ -1287,6 +1404,7 @@ def test_import_never_changes_a_conversation_the_account_has(
     invalid = {**CONVERSATION, "id": "has a space"}
     r = post_import(client, export_file([changed, invalid, new]))
     assert r.json() == {
+        "trackers": 0,
         "weeks": 0,
         "ticks": 0,
         "details": 0,

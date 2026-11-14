@@ -1,0 +1,108 @@
+{
+  "description": "A version 6 file keeps each tracker's plans and log under sections and its details under details, both by tracker id. Each is read by its tracker's kind (a food tracker's items lose an exercise's fields), the first three ids always, by their own kinds, whether or not the file lists them. Data under an id with no tracker in the file, or whose tracker dropped, is dropped too, and a details key inside a section is not read.",
+  "input": {
+    "format": "tracker-export",
+    "version": 6,
+    "trackers": [
+      {
+        "id": "exercise",
+        "name": "Strength",
+        "kind": "strength",
+        "position": 0,
+        "dailyTarget": 3,
+        "startWeek": null,
+        "endWeek": null
+      },
+      {
+        "id": "xsupp",
+        "name": "Supplements",
+        "kind": "food",
+        "position": 3,
+        "dailyTarget": 1,
+        "startWeek": "2026-10-12",
+        "endWeek": null
+      },
+      { "id": "mob", "name": "Mobility", "kind": "mobility", "position": 4 }
+    ],
+    "sections": {
+      "exercise": {
+        "plans": {
+          "2026-10-19": [
+            { "id": "pu", "name": "Push-ups", "reps": 10, "weight": 0.125, "target": 9 }
+          ]
+        },
+        "log": { "2026-10-19": { "pu": ["great", null, "partial-solid", null, null, null, null] } },
+        "details": { "pu": { "notes": "inside the section" } }
+      },
+      "diet": {
+        "plans": { "2026-10-19": [{ "id": "veg", "name": "Vegetables", "target": 7 }] },
+        "log": { "2026-10-19": { "veg": [true, false] } }
+      },
+      "xsupp": {
+        "plans": {
+          "2026-10-19": [{ "id": "d3", "name": "Vitamin D", "sets": 3, "reps": 10, "target": 7 }],
+          "nope": []
+        },
+        "log": { "2026-10-19": { "d3": ["great", "great", null, null, null, null, null] } }
+      },
+      "mob": { "plans": { "2026-10-19": [{ "id": "hip", "name": "Hip circles", "target": 3 }] } },
+      "ghost": { "plans": { "2026-10-19": [{ "id": "g", "name": "Ghost", "target": 3 }] } }
+    },
+    "details": {
+      "exercise": { "pu": { "notes": "Slow.", "fields": { "equipment": "Mat" } } },
+      "xsupp": { "d3": { "fields": { "serving": "One tablet" } }, "__proto__": { "notes": "x" } },
+      "ghost": { "g": { "notes": "Gone." } },
+      "cardio": "not an object"
+    }
+  },
+  "expected": {
+    "ok": true,
+    "data": {
+      "trackers": [
+        {
+          "id": "exercise",
+          "name": "Strength",
+          "kind": "strength",
+          "position": 0,
+          "dailyTarget": 3,
+          "startWeek": null,
+          "endWeek": null
+        },
+        {
+          "id": "xsupp",
+          "name": "Supplements",
+          "kind": "food",
+          "position": 3,
+          "dailyTarget": 1,
+          "startWeek": "2026-10-12",
+          "endWeek": null
+        }
+      ],
+      "sections": {
+        "exercise": {
+          "plans": {
+            "2026-10-19": [
+              { "id": "pu", "name": "Push-ups", "reps": 10, "weight": 0.13, "target": 7 }
+            ]
+          },
+          "log": {
+            "2026-10-19": { "pu": ["great", null, "partial-solid", null, null, null, null] }
+          },
+          "details": { "pu": { "notes": "Slow.", "fields": { "equipment": "Mat" } } }
+        },
+        "cardio": { "plans": {}, "log": {}, "details": {} },
+        "diet": {
+          "plans": { "2026-10-19": [{ "id": "veg", "name": "Vegetables", "target": 7 }] },
+          "log": { "2026-10-19": { "veg": ["great", null, null, null, null, null, null] } },
+          "details": {}
+        },
+        "xsupp": {
+          "plans": { "2026-10-19": [{ "id": "d3", "name": "Vitamin D", "target": 7 }] },
+          "log": { "2026-10-19": { "d3": ["great", "great", null, null, null, null, null] } },
+          "details": { "d3": { "fields": { "serving": "One tablet" } } }
+        }
+      },
+      "settings": null
+    }
+  }
+}

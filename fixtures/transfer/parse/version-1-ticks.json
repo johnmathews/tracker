@@ -15,16 +15,19 @@
   "expected": {
     "ok": true,
     "data": {
-      "exercise": {
-        "plans": { "2026-10-19": [{ "id": "pu", "name": "Push-ups", "reps": 10, "target": 4 }] },
-        "log": { "2026-10-19": { "pu": ["great", null, "great", null, null, "great", null] } },
-        "details": {}
-      },
-      "cardio": { "plans": {}, "log": {}, "details": {} },
-      "diet": {
-        "plans": { "2026-10-19": [{ "id": "veg", "name": "Vegetables", "target": 7 }] },
-        "log": { "2026-10-19": { "veg": [null, null, null, null, null, null, "great"] } },
-        "details": {}
+      "trackers": [],
+      "sections": {
+        "exercise": {
+          "plans": { "2026-10-19": [{ "id": "pu", "name": "Push-ups", "reps": 10, "target": 4 }] },
+          "log": { "2026-10-19": { "pu": ["great", null, "great", null, null, "great", null] } },
+          "details": {}
+        },
+        "cardio": { "plans": {}, "log": {}, "details": {} },
+        "diet": {
+          "plans": { "2026-10-19": [{ "id": "veg", "name": "Vegetables", "target": 7 }] },
+          "log": { "2026-10-19": { "veg": [null, null, null, null, null, null, "great"] } },
+          "details": {}
+        }
       },
       "settings": null
     }

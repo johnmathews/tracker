@@ -36,28 +36,31 @@
   "expected": {
     "ok": true,
     "data": {
-      "exercise": { "plans": {}, "log": {}, "details": {} },
-      "cardio": {
-        "plans": {
-          "2026-10-19": [
-            { "id": "cy", "name": "Cycling", "duration": 1800, "target": 2 },
-            { "id": "ru", "name": "Running", "distance": 5, "target": 3 },
-            { "id": "a", "name": "A", "duration": 1800, "distance": 21.1, "target": 3 },
-            { "id": "b", "name": "B", "duration": 86400, "distance": 1000, "target": 7 },
-            { "id": "c", "name": "C", "target": 3 },
-            { "id": "d", "name": "D", "target": 3 }
-          ]
-        },
-        "log": {
-          "2026-10-19": {
-            "cy": ["great", "partial", "missed-hatch", null, "great-solid", null, null]
+      "trackers": [],
+      "sections": {
+        "exercise": { "plans": {}, "log": {}, "details": {} },
+        "cardio": {
+          "plans": {
+            "2026-10-19": [
+              { "id": "cy", "name": "Cycling", "duration": 1800, "target": 2 },
+              { "id": "ru", "name": "Running", "distance": 5, "target": 3 },
+              { "id": "a", "name": "A", "duration": 1800, "distance": 21.1, "target": 3 },
+              { "id": "b", "name": "B", "duration": 86400, "distance": 1000, "target": 7 },
+              { "id": "c", "name": "C", "target": 3 },
+              { "id": "d", "name": "D", "target": 3 }
+            ]
+          },
+          "log": {
+            "2026-10-19": {
+              "cy": ["great", "partial", "missed-hatch", null, "great-solid", null, null]
+            }
+          },
+          "details": {
+            "ru": { "fields": { "route": "Round the park", "link": "https://example.com" } }
           }
         },
-        "details": {
-          "ru": { "fields": { "route": "Round the park", "link": "https://example.com" } }
-        }
+        "diet": { "plans": {}, "log": {}, "details": {} }
       },
-      "diet": { "plans": {}, "log": {}, "details": {} },
       "settings": null
     }
   }

@@ -27,32 +27,35 @@
   "expected": {
     "ok": true,
     "data": {
-      "exercise": {
-        "plans": {
-          "2026-10-12": [
-            { "id": "pu", "name": "Push-ups", "reps": 10, "target": 4 },
-            { "id": "sq", "name": "Squats", "reps": 15, "target": 3 },
-            { "id": "kh", "name": "Halos", "reps": 8, "target": 2 }
-          ],
-          "2026-10-19": [
-            { "id": "pu", "name": "Push-ups", "reps": 10, "target": 4 },
-            { "id": "sq", "name": "Squats", "reps": 15, "target": 3 },
-            { "id": "kh", "name": "Halos", "reps": 8, "target": 2 },
-            { "id": "dup", "name": "A", "reps": 1, "target": 1 },
-            { "id": "dup", "name": "B", "reps": 1, "target": 1 },
-            { "id": "dup", "name": "C", "reps": 1, "target": 1 }
-          ]
+      "trackers": [],
+      "sections": {
+        "exercise": {
+          "plans": {
+            "2026-10-12": [
+              { "id": "pu", "name": "Push-ups", "reps": 10, "target": 4 },
+              { "id": "sq", "name": "Squats", "reps": 15, "target": 3 },
+              { "id": "kh", "name": "Halos", "reps": 8, "target": 2 }
+            ],
+            "2026-10-19": [
+              { "id": "pu", "name": "Push-ups", "reps": 10, "target": 4 },
+              { "id": "sq", "name": "Squats", "reps": 15, "target": 3 },
+              { "id": "kh", "name": "Halos", "reps": 8, "target": 2 },
+              { "id": "dup", "name": "A", "reps": 1, "target": 1 },
+              { "id": "dup", "name": "B", "reps": 1, "target": 1 },
+              { "id": "dup", "name": "C", "reps": 1, "target": 1 }
+            ]
+          },
+          "log": {},
+          "details": {
+            "pu": { "notes": "newest" },
+            "dup": { "notes": "second" },
+            "sq": { "notes": "squat note" },
+            "kh": { "notes": "halos" }
+          }
         },
-        "log": {},
-        "details": {
-          "pu": { "notes": "newest" },
-          "dup": { "notes": "second" },
-          "sq": { "notes": "squat note" },
-          "kh": { "notes": "halos" }
-        }
+        "cardio": { "plans": {}, "log": {}, "details": {} },
+        "diet": { "plans": {}, "log": {}, "details": {} }
       },
-      "cardio": { "plans": {}, "log": {}, "details": {} },
-      "diet": { "plans": {}, "log": {}, "details": {} },
       "settings": null
     }
   }

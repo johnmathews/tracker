@@ -1,5 +1,5 @@
-"""A user's plans, ticks, item details, settings and Ask history: reads, writes, import and export
-(docs/api.md §3)."""
+"""A user's trackers, plans, ticks, item details, settings and Ask history: reads, writes, import
+and export (docs/api.md §3)."""
 
 import json
 import sqlite3
@@ -8,22 +8,27 @@ from datetime import UTC, datetime
 from typing import Any, Literal, TypedDict
 
 from .db import transaction
-from .item_sections import normalise_item_sections
+from .item_sections import normalise_item_sections, with_old_keys
+from .types import SECTION_TYPES, TYPES, PickKey, TypeId
 from .validate import (
     EXPORT_FORMAT,
     EXPORT_VERSION,
+    MAX_TRACKERS,
     SECTIONS,
     Conversation,
     Days,
     Details,
     DetailsMap,
     ExportData,
+    Invalid,
     Item,
     Log,
     Mark,
     Portable,
-    Section,
     Tracked,
+    Tracker,
+    TrackerChanges,
+    TrackerInfo,
     Turn,
     days_to_masks,
     details_fit,
@@ -33,7 +38,7 @@ from .validate import (
     merge_settings,
     merge_summary,
     normalise_details,
-    normalise_items,
+    normalise_kind_items,
     normalise_portable,
     parse_json,
 )
@@ -51,6 +56,19 @@ class QuotaExceeded(Exception):
 
 class DetailsTooLarge(Exception):
     """A details document over MAX_DETAILS_BYTES as stored; nothing was changed."""
+
+
+class NoTracker(Invalid):
+    """A write names a tracker id the user doesn't have; nothing was changed. REST answers it
+    `400 invalid`, as it answered a section outside the fixed three."""
+
+
+class TrackerExists(Exception):
+    """A create names an id the user has, for a tracker of another kind; nothing was changed."""
+
+
+class TooManyTrackers(Exception):
+    """A create would take the user past MAX_TRACKERS; nothing was changed."""
 
 
 def usage(conn: sqlite3.Connection, user_id: int) -> int:
@@ -97,6 +115,8 @@ def _check_growth(before: int, after: int, quota: int) -> None:
 
 
 class ImportResult(TypedDict):
+    #: Trackers the file added.
+    trackers: int
     weeks: int
     ticks: int
     details: int
@@ -128,6 +148,208 @@ class DetailsConflict:
     rev: int
 
 
+# --- trackers (spec §1 to §3) ---------------------------------------------------------------------
+
+#: The settings column each of the first trackers with a daily target keeps it in step with, so a
+#: tab on older code still reads it (spec §3), by the settings key that names it.
+TARGET_SETTINGS: dict[str, tuple[PickKey, str]] = {
+    "exercise": ("dailyPick", "daily_pick"),
+    "diet": ("foodPick", "food_pick"),
+}
+_TRACKER_COLUMNS = "id, kind, name, position, daily_target, start_week, end_week, rev"
+
+
+def _tracker(row: sqlite3.Row) -> Tracker:
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "kind": row["kind"],
+        "position": row["position"],
+        "dailyTarget": row["daily_target"],
+        "startWeek": row["start_week"],
+        "endWeek": row["end_week"],
+        "rev": row["rev"],
+    }
+
+
+def load_trackers(conn: sqlite3.Connection, user_id: int) -> list[Tracker]:
+    """The user's trackers, ended ones included, in the week's order: by position, then id."""
+    return [
+        _tracker(r)
+        for r in conn.execute(
+            f"SELECT {_TRACKER_COLUMNS} FROM trackers WHERE user_id = ?"  # noqa: S608
+            " ORDER BY position, id",
+            (user_id,),
+        )
+    ]
+
+
+def load_tracker(conn: sqlite3.Connection, user_id: int, tracker_id: str) -> Tracker | None:
+    row = conn.execute(
+        f"SELECT {_TRACKER_COLUMNS} FROM trackers WHERE user_id = ? AND id = ?",  # noqa: S608
+        (user_id, tracker_id),
+    ).fetchone()
+    return None if row is None else _tracker(row)
+
+
+def shows_in(tracker: TrackerInfo, week: str) -> bool:
+    """Whether a tracker shows in the week whose Monday is `week` (spec §2): from its start
+    week, or always without one, up to but not including its end week. The week view, Edit
+    plan, print, the Claude tools and Ask all follow it."""
+    start, end = tracker["startWeek"], tracker["endWeek"]
+    return (start is None or start <= week) and (end is None or end > week)
+
+
+def trackers_in(conn: sqlite3.Connection, user_id: int, week: str) -> list[Tracker]:
+    """The user's trackers that show in `week`, in the week's order."""
+    return [t for t in load_trackers(conn, user_id) if shows_in(t, week)]
+
+
+def tracker_kind(conn: sqlite3.Connection, user_id: int, tracker_id: str) -> TypeId:
+    """A tracker's kind, or NoTracker when the user has no tracker with that id."""
+    row = conn.execute(
+        "SELECT kind FROM trackers WHERE user_id = ? AND id = ?", (user_id, tracker_id)
+    ).fetchone()
+    if row is None:
+        raise NoTracker(f"no tracker {tracker_id!r}")
+    kind: TypeId = row["kind"]
+    return kind
+
+
+def _next_position(conn: sqlite3.Connection, user_id: int) -> int:
+    row = conn.execute(
+        "SELECT coalesce(max(position) + 1, 0) FROM trackers WHERE user_id = ?", (user_id,)
+    ).fetchone()
+    return int(row[0])
+
+
+def _insert_tracker(conn: sqlite3.Connection, user_id: int, t: TrackerInfo) -> None:
+    conn.execute(
+        "INSERT INTO trackers"
+        " (user_id, id, kind, name, position, daily_target, start_week, end_week, rev)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)",
+        (
+            user_id,
+            t["id"],
+            t["kind"],
+            t["name"],
+            t["position"],
+            t["dailyTarget"],
+            t["startWeek"],
+            t["endWeek"],
+        ),
+    )
+
+
+def create_tracker(
+    conn: sqlite3.Connection, user_id: int, tracker_id: str, name: str, kind: TypeId, week: str
+) -> tuple[Tracker, bool]:
+    """Add a tracker after the user's others, empty, starting in `week` with its kind's default
+    daily target; and whether it was added. An id the user already has for a tracker of the same
+    kind is a create sent again (an outbox replaying it): the stored tracker comes back as it is.
+    Raises TrackerExists for another kind, and TooManyTrackers past MAX_TRACKERS."""
+    with transaction(conn):
+        existing = load_tracker(conn, user_id, tracker_id)
+        if existing is not None:
+            if existing["kind"] != kind:
+                raise TrackerExists
+            return existing, False
+        count = conn.execute(
+            "SELECT count(*) FROM trackers WHERE user_id = ?", (user_id,)
+        ).fetchone()[0]
+        if count >= MAX_TRACKERS:
+            raise TooManyTrackers
+        tracker: Tracker = {
+            "id": tracker_id,
+            "name": name,
+            "kind": kind,
+            "position": _next_position(conn, user_id),
+            "dailyTarget": TYPES[kind].daily_target,
+            "startWeek": week,
+            "endWeek": None,
+            "rev": 1,
+        }
+        _insert_tracker(conn, user_id, tracker)
+    return tracker, True
+
+
+@dataclass(frozen=True)
+class TrackerSaved:
+    tracker: Tracker
+
+
+@dataclass(frozen=True)
+class TrackerConflict:
+    #: The server's copy, its revision in `rev`.
+    tracker: Tracker
+
+
+def _sync_setting(conn: sqlite3.Connection, user_id: int, tracker_id: str, target: int) -> None:
+    """Write a first tracker's daily target to the settings column kept in step with it. With no
+    settings saved there is nothing to keep in step: the tracker holds it alone."""
+    if tracker_id in TARGET_SETTINGS:
+        column = TARGET_SETTINGS[tracker_id][1]
+        conn.execute(
+            f"UPDATE settings SET {column} = ? WHERE user_id = ?",  # noqa: S608
+            (target, user_id),
+        )
+
+
+def patch_tracker(
+    conn: sqlite3.Connection, user_id: int, tracker_id: str, changes: TrackerChanges, rev: int
+) -> TrackerSaved | TrackerConflict | None:
+    """Change a tracker's name, position or daily target if `rev` is current, by put_plan's
+    rules: a stale `rev` conflicts unless the tracker already reads so. None when the user has
+    no such tracker. The `exercise` and `diet` trackers' targets go to the settings too."""
+    with transaction(conn):
+        stored = load_tracker(conn, user_id, tracker_id)
+        if stored is None:
+            return None
+        merged: Tracker = {**stored, **changes}
+        if merged == stored:
+            return TrackerSaved(stored)
+        if rev != stored["rev"]:
+            return TrackerConflict(stored)
+        merged["rev"] = stored["rev"] + 1
+        conn.execute(
+            "UPDATE trackers SET name = ?, position = ?, daily_target = ?, rev = ?"
+            " WHERE user_id = ? AND id = ?",
+            (
+                merged["name"],
+                merged["position"],
+                merged["dailyTarget"],
+                merged["rev"],
+                user_id,
+                tracker_id,
+            ),
+        )
+        target = merged["dailyTarget"]
+        if target is not None and target != stored["dailyTarget"]:
+            _sync_setting(conn, user_id, tracker_id, target)
+    return TrackerSaved(merged)
+
+
+def end_tracker(
+    conn: sqlite3.Connection, user_id: int, tracker_id: str, week: str
+) -> Tracker | None:
+    """Delete tracker (K122): end it from the week whose Monday is `week`, so it shows in no week
+    from it on. Its plans, marks and details stay, and earlier weeks still show it. An ended
+    tracker keeps its earlier end: ending never brings a week back. None when the user has no
+    such tracker."""
+    with transaction(conn):
+        stored = load_tracker(conn, user_id, tracker_id)
+        if stored is None:
+            return None
+        end = stored["endWeek"]
+        if end is not None and end <= week:
+            return stored
+        conn.execute(
+            "UPDATE trackers SET end_week = ?, rev = rev + 1 WHERE user_id = ? AND id = ?",
+            (week, user_id, tracker_id),
+        )
+    return {**stored, "endWeek": week, "rev": stored["rev"] + 1}
+
+
 def stored_items(items_json: str) -> list[Item]:
     """A stored plan's items. A plan written before item details still holds its items' notes
     until it is next written; they are the item's details now (migration 7, D3), so they are
@@ -139,8 +361,8 @@ def stored_items(items_json: str) -> list[Item]:
     ]
 
 
-def load_details(conn: sqlite3.Connection, user_id: int, section: Section) -> DetailsMap:
-    """A section's item details, leaving out cleared (empty) documents."""
+def load_details(conn: sqlite3.Connection, user_id: int, section: str) -> DetailsMap:
+    """A tracker's item details, leaving out cleared (empty) documents."""
     out: DetailsMap = {}
     for r in conn.execute(
         "SELECT item_id, details_json FROM item_details"
@@ -158,7 +380,8 @@ def notes_of(details: DetailsMap, item_id: str) -> str:
     return details.get(item_id, {}).get("notes", "")
 
 
-def load_tracked(conn: sqlite3.Connection, user_id: int, section: Section) -> Tracked:
+def load_tracked(conn: sqlite3.Connection, user_id: int, section: str) -> Tracked:
+    """A tracker's plans, log and item details, by its id (the stored `section`)."""
     plans = {
         r["week"]: stored_items(r["items_json"])
         for r in conn.execute(
@@ -202,35 +425,68 @@ def load_settings(conn: sqlite3.Connection, user_id: int) -> Portable | None:
     return settings
 
 
+def _revs(conn: sqlite3.Connection, user_id: int, section: str) -> tuple[Any, Any]:
+    """A tracker's plans' revisions by week, and its details' by item id (cleared ones too)."""
+    key = (user_id, section)
+    revs = {
+        r["week"]: r["rev"]
+        for r in conn.execute("SELECT week, rev FROM plans WHERE user_id = ? AND section = ?", key)
+    }
+    detail_revs = {
+        r["item_id"]: r["rev"]
+        for r in conn.execute(
+            "SELECT item_id, rev FROM item_details WHERE user_id = ? AND section = ?", key
+        )
+    }
+    return revs, detail_revs
+
+
 def state(conn: sqlite3.Connection, user_id: int) -> dict[str, Any]:
-    """Everything the client renders: per section its plans, log and item details, the plans'
-    revisions by week (`revs`) and the details' by item id (`detailRevs`, which also lists items
-    whose details were cleared); and settings."""
-    out: dict[str, Any] = {}
+    """Everything the client renders: the trackers, ended ones included; per tracker id its plans,
+    log and plan revisions by week (`sections`), its item details (`details`) and their revisions
+    by item id (`detailRevs`, which also lists items whose details were cleared); and settings.
+
+    The first three trackers' data also goes under the keys of version 5 (`exercise`, `cardio`,
+    `diet`, each `{plans, log, details, revs, detailRevs}`), and an arrangement of the strength
+    kind's pages under its old key too, so a tab still running that code keeps working."""
+    trackers = load_trackers(conn, user_id)
+    ids = [t["id"] for t in trackers]
+    out: dict[str, Any] = {"trackers": trackers, "sections": {}, "details": {}, "detailRevs": {}}
+    for tracker_id in ids + [s for s in SECTIONS if s not in ids]:
+        tracked = load_tracked(conn, user_id, tracker_id)
+        revs, detail_revs = _revs(conn, user_id, tracker_id)
+        out["sections"][tracker_id] = {
+            "plans": tracked["plans"],
+            "log": tracked["log"],
+            "revs": revs,
+        }
+        out["details"][tracker_id] = tracked["details"]
+        out["detailRevs"][tracker_id] = detail_revs
     for section in SECTIONS:
-        tracked = load_tracked(conn, user_id, section)
-        key = (user_id, section)
-        revs = {
-            r["week"]: r["rev"]
-            for r in conn.execute(
-                "SELECT week, rev FROM plans WHERE user_id = ? AND section = ?", key
-            )
+        out[section] = {
+            **out["sections"][section],
+            "details": out["details"][section],
+            "detailRevs": out["detailRevs"][section],
         }
-        detail_revs = {
-            r["item_id"]: r["rev"]
-            for r in conn.execute(
-                "SELECT item_id, rev FROM item_details WHERE user_id = ? AND section = ?", key
-            )
-        }
-        out[section] = {**tracked, "revs": revs, "detailRevs": detail_revs}
-    out["settings"] = load_settings(conn, user_id)
+    out["settings"] = for_older_tabs(load_settings(conn, user_id))
+    return out
+
+
+def for_older_tabs(settings: Portable | None) -> dict[str, Any] | None:
+    """Settings as the state and `PUT /api/settings` send them: an arrangement of a renamed kind
+    goes under its old key too (`item_sections.with_old_keys`)."""
+    if settings is None:
+        return None
+    out: dict[str, Any] = dict(settings)
+    if "itemSections" in settings:
+        out["itemSections"] = with_old_keys(settings["itemSections"])
     return out
 
 
 def put_plan(
     conn: sqlite3.Connection,
     user_id: int,
-    section: Section,
+    section: str,
     week: str,
     raw_items: list[Any],
     rev: int,
@@ -245,7 +501,7 @@ def put_plan(
 def put_plan_locked(
     conn: sqlite3.Connection,
     user_id: int,
-    section: Section,
+    section: str,
     week: str,
     raw_items: list[Any],
     rev: int,
@@ -253,8 +509,9 @@ def put_plan_locked(
     quota: int,
 ) -> PlanSaved | PlanConflict:
     """`put_plan` for a caller already inside `transaction`, so that one transaction can hold
-    more writes (edits.py: a plan and an item's notes)."""
-    items = normalise_items(section, raw_items)
+    more writes (edits.py: a plan and an item's notes). The items are validated by the tracker's
+    kind; NoTracker when the user has no tracker `section`."""
+    items = normalise_kind_items(tracker_kind(conn, user_id, section), raw_items)
     encoded = json.dumps(items)
     row = conn.execute(
         "SELECT items_json, rev FROM plans WHERE user_id = ? AND section = ? AND week = ?",
@@ -282,7 +539,7 @@ def put_plan_locked(
 def put_details(
     conn: sqlite3.Connection,
     user_id: int,
-    section: Section,
+    section: str,
     item_id: str,
     raw: dict[str, Any],
     rev: int,
@@ -292,12 +549,14 @@ def put_details(
     """Store an item's details if `rev` is current, by put_plan's rules: a stale `rev` conflicts
     unless the stored document already equals the sent one after validation. An empty document
     is stored too, so the revision keeps counting and a device holding an older one conflicts.
-    Raises DetailsTooLarge for a document over MAX_DETAILS_BYTES."""
+    Raises DetailsTooLarge for a document over MAX_DETAILS_BYTES, and NoTracker when the user
+    has no tracker `section`."""
     details = normalise_details(raw)
     assert details is not None  # `raw` is an object
     if not details_fit(details):
         raise DetailsTooLarge
     with transaction(conn):
+        tracker_kind(conn, user_id, section)
         row = _details_row(conn, user_id, section, item_id)
         current = 0 if row is None else int(row["rev"])
         if rev == current:
@@ -321,7 +580,7 @@ class NotesSet:
 def set_notes_locked(
     conn: sqlite3.Connection,
     user_id: int,
-    section: Section,
+    section: str,
     item_id: str,
     text: str,
     *,
@@ -349,7 +608,7 @@ def set_notes_locked(
 
 
 def _details_row(
-    conn: sqlite3.Connection, user_id: int, section: Section, item_id: str
+    conn: sqlite3.Connection, user_id: int, section: str, item_id: str
 ) -> sqlite3.Row | None:
     row: sqlite3.Row | None = conn.execute(
         "SELECT details_json, rev FROM item_details"
@@ -362,7 +621,7 @@ def _details_row(
 def _write_details(
     conn: sqlite3.Connection,
     user_id: int,
-    section: Section,
+    section: str,
     item_id: str,
     details: Details,
     row: sqlite3.Row | None,
@@ -387,7 +646,7 @@ def _write_details(
 def set_tick(
     conn: sqlite3.Connection,
     user_id: int,
-    section: Section,
+    section: str,
     week: str,
     item_id: str,
     day: int,
@@ -398,6 +657,7 @@ def set_tick(
     """Set or clear one day's mark for one item in one upsert; returns the item's seven marks.
 
     Only a tick that adds a row can exceed the quota, so only that case pays for the check.
+    NoTracker when the user has no tracker `section`.
     """
     bit = 1 << day
     days, partial, missed, solid, hatch = days_to_masks(
@@ -405,6 +665,7 @@ def set_tick(
     )
     key = (user_id, section, week, item_id)
     with transaction(conn):
+        tracker_kind(conn, user_id, section)
         exists = conn.execute(
             "SELECT 1 FROM ticks WHERE user_id = ? AND section = ? AND week = ? AND item_id = ?",
             key,
@@ -447,6 +708,8 @@ def set_tick(
 
 
 def put_settings(conn: sqlite3.Connection, user_id: int, raw: dict[str, Any]) -> Portable:
+    """Store the settings, and the daily targets on the `exercise` and `diet` trackers with them:
+    two writes, so the caller holds a transaction."""
     # A tab still running the app from before foods a day (K57) sends no foodPick, and one from
     # before arranging the item page (K66) no itemSections, one from before My goals no goals, one
     # from before Daily goal (K85) no dailyGoal, and one from before the limits note (K107) no
@@ -488,6 +751,14 @@ def put_settings(conn: sqlite3.Connection, user_id: int, raw: dict[str, Any]) ->
             json.dumps(item_sections, separators=(",", ":")) if item_sections else None,
         ),
     )
+    # The `exercise` and `diet` trackers hold the daily targets now; a tab on older code still
+    # sends them here, so they move in step (spec §3). A change moves the revision on.
+    for tracker_id, (key, _) in TARGET_SETTINGS.items():
+        conn.execute(
+            "UPDATE trackers SET daily_target = :target, rev = rev + 1"
+            " WHERE user_id = :user AND id = :id AND daily_target IS NOT :target",
+            {"target": settings[key], "user": user_id, "id": tracker_id},
+        )
     return settings
 
 
@@ -680,29 +951,64 @@ def _insert_conversation(conn: sqlite3.Connection, user_id: int, c: Conversation
 
 
 def export_file(conn: sqlite3.Connection, user_id: int, now: int) -> dict[str, Any]:
-    """The file Settings → Export writes in the browser, with Ask's conversations as well, which
-    only the server holds."""
-    settings = load_settings(conn, user_id)
+    """The file Settings → Export writes, version 6: the trackers, ended ones included, each
+    tracker's plans and log under `sections` and its items' details under `details`, both by
+    tracker id; the settings; and Ask's conversations, which only the server holds."""
+    trackers: list[TrackerInfo] = []
+    sections: dict[str, Any] = {}
+    details: dict[str, DetailsMap] = {}
+    for t in load_trackers(conn, user_id):
+        info: dict[str, Any] = {k: v for k, v in t.items() if k != "rev"}
+        trackers.append(info)  # type: ignore[arg-type]
+        tracked = load_tracked(conn, user_id, t["id"])
+        sections[t["id"]] = {"plans": tracked["plans"], "log": tracked["log"]}
+        details[t["id"]] = tracked["details"]
     return {
         "format": EXPORT_FORMAT,
         "version": EXPORT_VERSION,
         # JavaScript's toISOString shape, milliseconds included.
         "exportedAt": datetime.fromtimestamp(now, UTC).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
-        **{section: load_tracked(conn, user_id, section) for section in SECTIONS},
-        "settings": settings,
+        "trackers": trackers,
+        "sections": sections,
+        "details": details,
+        "settings": load_settings(conn, user_id),
         "conversations": load_conversations(conn, user_id),
     }
+
+
+def _add_trackers(conn: sqlite3.Connection, user_id: int, data: ExportData) -> dict[str, TypeId]:
+    """Add the file's trackers the user has no id for, after the user's own in the file's order,
+    up to MAX_TRACKERS; each keeps its name, kind, daily target and weeks. A tracker the user has
+    is never changed, and never ended. Returns the kind of every tracker the user now has."""
+    have = {t["id"]: t["kind"] for t in load_trackers(conn, user_id)}
+    position = _next_position(conn, user_id)
+    for t in sorted(data["trackers"], key=lambda t: t["position"]):
+        if t["id"] in have or len(have) >= MAX_TRACKERS:
+            continue
+        _insert_tracker(conn, user_id, {**t, "position": position})
+        have[t["id"]] = t["kind"]
+        position += 1
+    return have
 
 
 def import_data(
     conn: sqlite3.Connection, user_id: int, data: ExportData, *, quota: int
 ) -> ImportResult:
-    """Merge a parsed export in, never deleting (architecture.md §4); returns what it added."""
+    """Merge a parsed export in, never deleting (architecture.md §4); returns what it added.
+
+    The file's trackers the user lacks come first (`_add_trackers`). Then each tracker's data
+    merges by id: a file from before version 6 has only the first three. Data for a tracker the
+    user doesn't have, or has with another kind, is passed over."""
     weeks = ticks = details = 0
+    kinds: dict[str, TypeId] = {s: t.id for s, t in SECTION_TYPES.items()}
+    kinds.update({t["id"]: t["kind"] for t in data["trackers"]})
     with transaction(conn):
         before = usage(conn, user_id)
-        for section in SECTIONS:
-            incoming = data[section]
+        trackers_before = len(load_trackers(conn, user_id))
+        have = _add_trackers(conn, user_id, data)
+        for section, incoming in data["sections"].items():
+            if have.get(section) != kinds.get(section):
+                continue
             existing = load_tracked(conn, user_id, section)
             summary = merge_summary(existing, incoming)
             weeks += summary["weeks"]
@@ -757,6 +1063,7 @@ def import_data(
         # Raising inside the transaction rolls the whole merge back.
         _check_growth(before, usage(conn, user_id), quota)
     return {
+        "trackers": len(have) - trackers_before,
         "weeks": weeks,
         "ticks": ticks,
         "details": details,

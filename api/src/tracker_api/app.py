@@ -17,7 +17,8 @@ from starlette.routing import Route
 from . import ask, auth, data, oauth, oauth_api, outbox
 from .backup import BackupThread
 from .config import Config
-from .db import connect, migrate
+from .db import connect, migrate, transaction
+from .edits import new_id
 from .item_sections import item_sections_valid
 from .mail import Mailer, Message, ResendMailer, send_quietly
 from .mcp_server import MCP_PATH, build_mcp
@@ -25,17 +26,22 @@ from .validate import (
     Days,
     ExportError,
     Invalid,
-    Section,
+    Tracker,
     check_day,
     check_details_body,
     check_details_id,
     check_item_id,
+    check_kind,
     check_plan_body,
+    check_tracker_id,
+    check_tracker_name,
+    check_tracker_patch,
     normalise_title,
     parse_export,
     parse_json,
     tick_mark,
     week_key,
+    week_monday,
 )
 
 #: The package's logger; `create_app_from_env` gives it a handler.
@@ -461,8 +467,58 @@ def create_app(
     def get_state(user: User, conn: Conn) -> dict[str, Any]:
         return data.state(conn, user.id)
 
+    @app.get("/api/trackers")
+    def trackers(user: User, conn: Conn) -> dict[str, list[Tracker]]:
+        return {"trackers": data.load_trackers(conn, user.id)}
+
+    @app.post("/api/trackers", status_code=201)
+    def create_tracker(body: Body, user: User, response: Response, conn: Conn) -> Tracker:
+        """A new tracker, last in the week, empty, from the week of `week` (today's without it).
+        A client that made the id itself (`newId`) sends it, so an outbox sending the create
+        again gets the same tracker back, with 200."""
+        name, kind = check_tracker_name(body.get("name")), check_kind(body.get("kind"))
+        week = week_monday(body.get("week"), config.today())
+        given = body.get("id")
+        if given is None:
+            taken = {t["id"] for t in data.load_trackers(conn, user.id)}
+            tracker_id = new_id(taken)
+        else:
+            tracker_id = check_tracker_id(given)
+        try:
+            tracker, added = data.create_tracker(conn, user.id, tracker_id, name, kind, week)
+        except data.TrackerExists:
+            raise ApiError(409, "exists") from None
+        except data.TooManyTrackers:
+            raise ApiError(409, "too-many") from None
+        if not added:
+            response.status_code = 200
+        return tracker
+
+    @app.patch("/api/trackers/{tracker_id}")
+    def patch_tracker(tracker_id: str, body: Body, user: User, conn: Conn) -> Tracker:
+        stored = data.load_tracker(conn, user.id, tracker_id)
+        if stored is None:
+            raise ApiError(404, "not-found")
+        changes, rev = check_tracker_patch(body, stored["kind"])
+        result = data.patch_tracker(conn, user.id, tracker_id, changes, rev)
+        if result is None:
+            raise ApiError(404, "not-found")
+        if isinstance(result, data.TrackerConflict):
+            raise ApiError(409, "conflict", tracker=result.tracker, rev=result.tracker["rev"])
+        return result.tracker
+
+    @app.post("/api/trackers/{tracker_id}/end")
+    def end_tracker(tracker_id: str, body: Body, user: User, conn: Conn) -> Tracker:
+        """Delete tracker (K122): it ends from the week of `week`, the one on screen (today's
+        without it), and keeps its history."""
+        week = week_monday(body.get("week"), config.today())
+        tracker = data.end_tracker(conn, user.id, tracker_id, week)
+        if tracker is None:
+            raise ApiError(404, "not-found")
+        return tracker
+
     @app.put("/api/plans/{section}/{week}")
-    def put_plan(section: Section, week: str, body: Body, user: User, conn: Conn) -> dict[str, int]:
+    def put_plan(section: str, week: str, body: Body, user: User, conn: Conn) -> dict[str, int]:
         items, rev = check_plan_body(body)
         result = data.put_plan(
             conn, user.id, section, week_key(week), items, rev, quota=config.user_quota_bytes
@@ -473,7 +529,7 @@ def create_app(
 
     @app.put("/api/details/{section}/{item_id}")
     def put_details(
-        section: Section, item_id: str, body: Body, user: User, conn: Conn
+        section: str, item_id: str, body: Body, user: User, conn: Conn
     ) -> dict[str, int]:
         details, rev = check_details_body(body)
         item_id = check_details_id(item_id)
@@ -486,7 +542,7 @@ def create_app(
 
     @app.put("/api/ticks/{section}/{week}/{item_id}/{day}")
     def put_tick(
-        section: Section,
+        section: str,
         week: str,
         item_id: str,
         day: int,
@@ -512,7 +568,9 @@ def create_app(
         # app writes (P29). Within that shape it normalises, as the other settings do.
         if "itemSections" in body and not item_sections_valid(body["itemSections"]):
             raise ApiError(400, "invalid")
-        return dict(data.put_settings(conn, user.id, body))
+        with transaction(conn):
+            stored = data.put_settings(conn, user.id, body)
+        return data.for_older_tabs(stored) or {}
 
     @app.get("/api/export")
     def export(user: User, conn: Conn, response: Response) -> dict[str, Any]:

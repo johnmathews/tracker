@@ -1,0 +1,122 @@
+{
+  "description": "A version 6 file's trackers (K123) normalise: a tracker needs an id of 1 to 64 letters, digits, - or _ (not __proto__), a kind the registry has, the first three ids their own kind (a diet tracker of kind strength drops), and a name that isn't blank, trimmed and cut to 60 characters. The first of each id wins. A bad position reads as the tracker's place in the list, a position is clamped to 0 to 10000, a daily target to 1 to 8 (its kind's default when it isn't a number, null for cardio whatever the file says), and a week that isn't a week key reads as null.",
+  "input": {
+    "format": "tracker-export",
+    "version": 6,
+    "trackers": [
+      {
+        "id": "exercise",
+        "name": "Strength",
+        "kind": "strength",
+        "position": 0,
+        "dailyTarget": 4,
+        "startWeek": null,
+        "endWeek": null
+      },
+      { "id": "exercise", "name": "Again", "kind": "strength", "position": 5 },
+      { "id": "diet", "name": "Food", "kind": "strength", "position": 2 },
+      {
+        "id": "xk3j9a2b1c",
+        "name": "  Upper body  ",
+        "kind": "strength",
+        "position": 3.6,
+        "dailyTarget": 20,
+        "startWeek": "2026-10-12",
+        "endWeek": "2026-10-26"
+      },
+      {
+        "id": "swim",
+        "name": "Swimming",
+        "kind": "cardio",
+        "position": -4,
+        "dailyTarget": 3,
+        "startWeek": "2026-10-5",
+        "endWeek": true
+      },
+      {
+        "id": "fd",
+        "name": "NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",
+        "kind": "food",
+        "position": "1",
+        "dailyTarget": "3",
+        "startWeek": 20261019
+      },
+      { "id": "far", "name": "Far", "kind": "food", "position": 99999, "dailyTarget": 0 },
+      { "id": "mob", "name": "Mobility", "kind": "mobility", "position": 4 },
+      { "id": "bad id", "name": "Spaces", "kind": "food" },
+      {
+        "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "name": "Long id",
+        "kind": "food"
+      },
+      { "id": "__proto__", "name": "Proto", "kind": "food" },
+      { "id": "blank", "name": " \n ", "kind": "food" },
+      { "id": "noname", "kind": "food" },
+      { "id": 7, "name": "Numeric id", "kind": "food" },
+      "not an object",
+      null
+    ]
+  },
+  "expected": {
+    "ok": true,
+    "data": {
+      "trackers": [
+        {
+          "id": "exercise",
+          "name": "Strength",
+          "kind": "strength",
+          "position": 0,
+          "dailyTarget": 4,
+          "startWeek": null,
+          "endWeek": null
+        },
+        {
+          "id": "xk3j9a2b1c",
+          "name": "Upper body",
+          "kind": "strength",
+          "position": 4,
+          "dailyTarget": 8,
+          "startWeek": "2026-10-12",
+          "endWeek": "2026-10-26"
+        },
+        {
+          "id": "swim",
+          "name": "Swimming",
+          "kind": "cardio",
+          "position": 0,
+          "dailyTarget": null,
+          "startWeek": null,
+          "endWeek": null
+        },
+        {
+          "id": "fd",
+          "name": "NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN",
+          "kind": "food",
+          "position": 5,
+          "dailyTarget": 2,
+          "startWeek": null,
+          "endWeek": null
+        },
+        {
+          "id": "far",
+          "name": "Far",
+          "kind": "food",
+          "position": 10000,
+          "dailyTarget": 1,
+          "startWeek": null,
+          "endWeek": null
+        }
+      ],
+      "sections": {
+        "exercise": { "plans": {}, "log": {}, "details": {} },
+        "cardio": { "plans": {}, "log": {}, "details": {} },
+        "diet": { "plans": {}, "log": {}, "details": {} },
+        "xk3j9a2b1c": { "plans": {}, "log": {}, "details": {} },
+        "swim": { "plans": {}, "log": {}, "details": {} },
+        "fd": { "plans": {}, "log": {}, "details": {} },
+        "far": { "plans": {}, "log": {}, "details": {} }
+      },
+      "settings": null
+    }
+  }
+}

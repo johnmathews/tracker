@@ -1,0 +1,16 @@
+{
+  "description": "A version 6 file with nothing in it reads as no trackers of its own, the first three trackers' ids each empty, and no settings.",
+  "input": { "format": "tracker-export", "version": 6 },
+  "expected": {
+    "ok": true,
+    "data": {
+      "trackers": [],
+      "sections": {
+        "exercise": { "plans": {}, "log": {}, "details": {} },
+        "cardio": { "plans": {}, "log": {}, "details": {} },
+        "diet": { "plans": {}, "log": {}, "details": {} }
+      },
+      "settings": null
+    }
+  }
+}

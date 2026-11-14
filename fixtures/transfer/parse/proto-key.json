@@ -8,13 +8,16 @@
   "expected": {
     "ok": true,
     "data": {
-      "exercise": {
-        "plans": {},
-        "log": { "2026-10-19": { "b": ["great", null, null, null, null, null, null] } },
-        "details": {}
+      "trackers": [],
+      "sections": {
+        "exercise": {
+          "plans": {},
+          "log": { "2026-10-19": { "b": ["great", null, null, null, null, null, null] } },
+          "details": {}
+        },
+        "cardio": { "plans": {}, "log": {}, "details": {} },
+        "diet": { "plans": {}, "log": {}, "details": {} }
       },
-      "cardio": { "plans": {}, "log": {}, "details": {} },
-      "diet": { "plans": {}, "log": {}, "details": {} },
       "settings": null
     }
   }

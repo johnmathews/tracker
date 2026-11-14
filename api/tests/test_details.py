@@ -69,7 +69,7 @@ def test_plans_stored_with_notes_read_without_them(client: TestClient, config: C
         conn.close()
     assert state(client)["exercise"]["plans"] == {WEEK: [PUSHUPS]}
     exported = client.get("/api/export").json()
-    assert exported["exercise"]["plans"] == {WEEK: [PUSHUPS]}
+    assert exported["sections"]["exercise"]["plans"] == {WEEK: [PUSHUPS]}
     url = f"/api/plans/exercise/{WEEK}"
     # A device that missed rev 1 sends the same items: the same plan, not a conflict.
     assert client.put(url, json={"items": [PUSHUPS], "rev": 0}).json() == {"rev": 1}
@@ -183,7 +183,7 @@ def test_an_empty_document_clears_but_keeps_the_revision(
     # A device that still holds rev 1 conflicts with the cleared copy, not with nothing.
     r = client.put(PU, json={"details": {"notes": "old"}, "rev": 1})
     assert (r.status_code, r.json()) == (409, {"error": "conflict", "details": {}, "rev": 2})
-    assert client.get("/api/export").json()["exercise"]["details"] == {}
+    assert client.get("/api/export").json()["details"]["exercise"] == {}
 
 
 def test_sections_and_users_keep_their_own_details(client: TestClient, config: Config) -> None:
@@ -221,7 +221,7 @@ def test_unknown_field_keys_survive_a_round_trip(client: TestClient, config: Con
     doc = {"fields": {"tempo": "3-1-1", "equipment": "Bench"}}
     client.put(PU, json={"details": doc, "rev": 0})
     assert state(client)["exercise"]["details"]["pu"] == doc
-    assert client.get("/api/export").json()["exercise"]["details"]["pu"] == doc
+    assert client.get("/api/export").json()["details"]["exercise"]["pu"] == doc
 
 
 @pytest.mark.parametrize(
@@ -329,18 +329,18 @@ def test_the_quota_refuses_details_growth_but_not_shrinking(
 # --- export and import ----------------------------------------------------------------------------
 
 
-def test_export_is_version_5_with_details_per_section(client: TestClient, config: Config) -> None:
+def test_export_is_version_6_with_details_per_tracker(client: TestClient, config: Config) -> None:
     sign_up(client, config)
     client.put(PU, json={"details": {"notes": "Slow.", "fields": {"tempo": "3-1-1"}}, "rev": 0})
     client.put("/api/details/diet/veg", json={"details": {"fields": {"serving": "80 g"}}, "rev": 0})
     exported = client.get("/api/export").json()
-    assert exported["version"] == 5
-    assert exported["exercise"] == {
-        "plans": {},
-        "log": {},
-        "details": {"pu": {"notes": "Slow.", "fields": {"tempo": "3-1-1"}}},
+    assert exported["version"] == 6
+    assert exported["sections"]["exercise"] == {"plans": {}, "log": {}}
+    assert exported["details"] == {
+        "exercise": {"pu": {"notes": "Slow.", "fields": {"tempo": "3-1-1"}}},
+        "cardio": {},
+        "diet": {"veg": {"fields": {"serving": "80 g"}}},
     }
-    assert exported["diet"]["details"] == {"veg": {"fields": {"serving": "80 g"}}}
 
 
 def v5(exercise_details: dict[str, Any], **extra: Any) -> dict[str, Any]:
@@ -361,7 +361,14 @@ def test_import_keeps_existing_details_and_adds_missing_ones(
         client,
         v5({"pu": {"notes": "theirs"}, "sq": {"notes": "squats"}, "pl": {"fields": {"a": "b"}}}),
     )
-    assert r.json() == {"weeks": 0, "ticks": 0, "details": 2, "settings": False, "conversations": 0}
+    assert r.json() == {
+        "trackers": 0,
+        "weeks": 0,
+        "ticks": 0,
+        "details": 2,
+        "settings": False,
+        "conversations": 0,
+    }
     exercise = state(client)["exercise"]
     assert exercise["details"] == {
         "pu": {"notes": "mine"},
@@ -373,6 +380,7 @@ def test_import_keeps_existing_details_and_adds_missing_ones(
     # The same file again adds nothing.
     again = post_import(client, v5({"pu": {"notes": "theirs"}, "sq": {"notes": "squats"}}))
     assert again.json() == {
+        "trackers": 0,
         "weeks": 0,
         "ticks": 0,
         "details": 0,
@@ -386,10 +394,17 @@ def test_a_files_document_over_32_kb_drops_out(client: TestClient, config: Confi
     drop rather than refuse) and the rest imports."""
     big = {"notes": "é" * MAX_DETAILS_NOTES}
     data = parse_export(json.dumps(v5({"pu": big, "sq": {"notes": "fine"}})))
-    assert data["exercise"]["details"] == {"sq": {"notes": "fine"}}
+    assert data["sections"]["exercise"]["details"] == {"sq": {"notes": "fine"}}
     sign_up(client, config)
     r = post_import(client, v5({"pu": big, "sq": {"notes": "fine"}}))
-    assert r.json() == {"weeks": 0, "ticks": 0, "details": 1, "settings": False, "conversations": 0}
+    assert r.json() == {
+        "trackers": 0,
+        "weeks": 0,
+        "ticks": 0,
+        "details": 1,
+        "settings": False,
+        "conversations": 0,
+    }
 
 
 def test_a_version_4_import_lifts_notes_into_details(client: TestClient, config: Config) -> None:
@@ -416,7 +431,14 @@ def test_a_version_4_import_lifts_notes_into_details(client: TestClient, config:
             "diet": {"plans": {WEEK: [{"id": "veg", "name": "Veg", "notes": "Not juice"}]}},
         },
     )
-    assert r.json() == {"weeks": 3, "ticks": 0, "details": 3, "settings": False, "conversations": 0}
+    assert r.json() == {
+        "trackers": 0,
+        "weeks": 3,
+        "ticks": 0,
+        "details": 3,
+        "settings": False,
+        "conversations": 0,
+    }
     s = state(client)
     assert s["exercise"]["details"] == {
         "kh": {"notes": "my halos"},

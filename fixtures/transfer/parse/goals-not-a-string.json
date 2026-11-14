@@ -13,24 +13,13 @@
   "expected": {
     "ok": true,
     "data": {
-      "exercise": {
-        "plans": {},
-        "log": {},
-        "details": {}
+      "trackers": [],
+      "sections": {
+        "exercise": { "plans": {}, "log": {}, "details": {} },
+        "cardio": { "plans": {}, "log": {}, "details": {} },
+        "diet": { "plans": {}, "log": {}, "details": {} }
       },
-      "cardio": { "plans": {}, "log": {}, "details": {} },
-      "diet": {
-        "plans": {},
-        "log": {},
-        "details": {}
-      },
-      "settings": {
-        "accent": "#0a84ff",
-        "dailyPick": 4,
-        "foodPick": 3,
-        "goals": "",
-        "limits": ""
-      }
+      "settings": { "accent": "#0a84ff", "dailyPick": 4, "foodPick": 3, "goals": "", "limits": "" }
     }
   }
 }

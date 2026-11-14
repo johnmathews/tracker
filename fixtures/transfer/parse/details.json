@@ -45,24 +45,27 @@
   "expected": {
     "ok": true,
     "data": {
-      "exercise": {
-        "plans": { "2026-10-19": [{ "id": "pu", "name": "Push-ups", "reps": 10, "target": 4 }] },
-        "log": {},
-        "details": {
-          "pu": {
-            "notes": "**Slow** on the way down.\n[Form video](https://example.com/push-ups)",
-            "fields": { "equipment": "None", "tempo": "3-1-1", "a_b_9": "kept" }
-          },
-          "sq": {
-            "fields": {
-              "works": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxy"
-            }
-          },
-          "ht": { "notes": "<script>alert(1)</script>" }
-        }
+      "trackers": [],
+      "sections": {
+        "exercise": {
+          "plans": { "2026-10-19": [{ "id": "pu", "name": "Push-ups", "reps": 10, "target": 4 }] },
+          "log": {},
+          "details": {
+            "pu": {
+              "notes": "**Slow** on the way down.\n[Form video](https://example.com/push-ups)",
+              "fields": { "equipment": "None", "tempo": "3-1-1", "a_b_9": "kept" }
+            },
+            "sq": {
+              "fields": {
+                "works": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxy"
+              }
+            },
+            "ht": { "notes": "<script>alert(1)</script>" }
+          }
+        },
+        "cardio": { "plans": {}, "log": {}, "details": {} },
+        "diet": { "plans": {}, "log": {}, "details": {} }
       },
-      "cardio": { "plans": {}, "log": {}, "details": {} },
-      "diet": { "plans": {}, "log": {}, "details": {} },
       "settings": null
     }
   }

@@ -41,6 +41,7 @@ def test_finds_the_fixture_files() -> None:
     assert len(CONVERSATIONS) >= 5
     assert len([n for n, _ in PARSE if n.startswith("conversations")]) >= 4
     assert len([n for n, _ in PARSE if n.startswith("limits")]) >= 4
+    assert len([n for n, _ in PARSE if n.startswith("v6-")]) >= 4
     assert len([c for c in SETTINGS if "limits" in c["description"]]) >= 4
 
 
@@ -84,15 +85,37 @@ def test_merge_conversations_does_not_alias_its_inputs() -> None:
 
 
 def test_sample_export_parses_to_itself() -> None:
+    """The version 5 sample maps onto the first three trackers' ids, with no trackers of its
+    own."""
     sample = read_fixture("sample/export.json")
     data = parse_export(json.dumps(sample))
-    assert data == {k: sample[k] for k in ("exercise", "cardio", "diet", "settings")}
+    assert data == {
+        "trackers": [],
+        "sections": {k: sample[k] for k in ("exercise", "cardio", "diet")},
+        "settings": sample["settings"],
+    }
+
+
+def test_version_6_sample_parses_to_itself() -> None:
+    """The version 6 sample is already normal: its trackers, and per tracker id its section with
+    its details beside it."""
+    sample = read_fixture("sample/export-v6.json")
+    data = parse_export(json.dumps(sample))
+    assert data == {
+        "trackers": sample["trackers"],
+        "sections": {
+            t["id"]: {**sample["sections"][t["id"]], "details": sample["details"][t["id"]]}
+            for t in sample["trackers"]
+        },
+        "settings": sample["settings"],
+        "conversations": sample["conversations"],
+    }
 
 
 def test_json_numbers_keep_their_type() -> None:
     """Whole numbers come back as int, so the API's JSON reads 12 rather than 12.0."""
     data = parse_export(json.dumps(read_fixture("sample/export.json")))
-    squats = data["exercise"]["plans"]["2026-10-12"][2]
+    squats = data["sections"]["exercise"]["plans"]["2026-10-12"][2]
     assert squats["weight"] == 16
     assert type(squats["weight"]) is int
 

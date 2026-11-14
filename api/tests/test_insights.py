@@ -52,9 +52,12 @@ def load(
 ) -> None:
     """Store plans, marks and item details the way an import does, and settings when given."""
     data: ExportData = {
-        "exercise": tracked(exercise),
-        "cardio": tracked(cardio),
-        "diet": tracked(diet),
+        "trackers": [],
+        "sections": {
+            "exercise": tracked(exercise),
+            "cardio": tracked(cardio),
+            "diet": tracked(diet),
+        },
         "settings": None,
     }
     import_data(conn, user_id, data, quota=QUOTA)

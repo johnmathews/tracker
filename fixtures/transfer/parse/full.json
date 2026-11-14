@@ -29,28 +29,31 @@
   "expected": {
     "ok": true,
     "data": {
-      "exercise": {
-        "plans": {
-          "2026-10-19": [
-            { "id": "pu", "name": "Push-ups", "sets": 3, "reps": 10, "target": 4 },
-            { "id": "sq", "name": "Squats", "reps": 15, "weight": 12, "target": 4 },
-            { "id": "kh", "name": "Kettlebell halos", "reps": 8, "perSide": true, "target": 3 }
-          ],
-          "2026-10-26": []
+      "trackers": [],
+      "sections": {
+        "exercise": {
+          "plans": {
+            "2026-10-19": [
+              { "id": "pu", "name": "Push-ups", "sets": 3, "reps": 10, "target": 4 },
+              { "id": "sq", "name": "Squats", "reps": 15, "weight": 12, "target": 4 },
+              { "id": "kh", "name": "Kettlebell halos", "reps": 8, "perSide": true, "target": 3 }
+            ],
+            "2026-10-26": []
+          },
+          "log": {
+            "2026-10-19": {
+              "pu": ["great", null, "partial", null, "missed", null, null],
+              "sq": [null, "great", null, null, null, null, "partial"]
+            }
+          },
+          "details": {}
         },
-        "log": {
-          "2026-10-19": {
-            "pu": ["great", null, "partial", null, "missed", null, null],
-            "sq": [null, "great", null, null, null, null, "partial"]
-          }
-        },
-        "details": {}
-      },
-      "cardio": { "plans": {}, "log": {}, "details": {} },
-      "diet": {
-        "plans": { "2026-10-19": [{ "id": "veg", "name": "Vegetables", "target": 7 }] },
-        "log": { "2026-10-19": { "veg": ["great", "great", null, null, null, null, null] } },
-        "details": {}
+        "cardio": { "plans": {}, "log": {}, "details": {} },
+        "diet": {
+          "plans": { "2026-10-19": [{ "id": "veg", "name": "Vegetables", "target": 7 }] },
+          "log": { "2026-10-19": { "veg": ["great", "great", null, null, null, null, null] } },
+          "details": {}
+        }
       },
       "settings": { "accent": "#0a84ff", "dailyPick": 4, "foodPick": 3, "goals": "", "limits": "" }
     }
