@@ -562,13 +562,17 @@ describe('Add tracker and the new tracker page (K124)', () => {
     await mountConfig()
     const page = await openNewTracker()
     const kinds = page.findAll('[data-slot="segmented-control"] button')
-    expect(kinds.map((k) => k.text())).toEqual(['Strength', 'Cardio', 'Food'])
+    expect(kinds.map((k) => k.text())).toEqual(['Strength', 'Cardio', 'Food', 'Mobility'])
     const line = () => page.get('[data-testid="new-tracker-kind-line"]').text()
     expect(line()).toBe(
       'Strength: sets, then reps or time, and weight. Marked great, partial or missed.',
     )
     await kinds[2]!.trigger('click')
     expect(line()).toBe('Food: a number of times a week. Marked eaten.')
+    await kinds[3]!.trigger('click')
+    expect(line()).toBe(
+      'Mobility: sets, then reps or a hold time, each side if you like. Marked great, partial or missed.',
+    )
   })
 
   it('asks for a name before adding anything', async () => {

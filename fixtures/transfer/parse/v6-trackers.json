@@ -42,7 +42,7 @@
         "startWeek": 20261019
       },
       { "id": "far", "name": "Far", "kind": "food", "position": 99999, "dailyTarget": 0 },
-      { "id": "mob", "name": "Mobility", "kind": "mobility", "position": 4 },
+      { "id": "yoga", "name": "Yoga", "kind": "yoga", "position": 4 },
       { "id": "bad id", "name": "Spaces", "kind": "food" },
       {
         "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",

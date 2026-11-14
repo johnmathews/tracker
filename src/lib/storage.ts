@@ -430,6 +430,16 @@ export function normaliseExercise(v: unknown): Exercise | null {
   }
 }
 
+/**
+ * A mobility item: an exercise's sets, reps or hold time and each side, with no weight (W8). As
+ * the API's `normalise_mobility`.
+ */
+export function normaliseMobility(v: unknown): Exercise | null {
+  const e = normaliseExercise(v)
+  if (e) delete e.weight
+  return e
+}
+
 export function normaliseFood(v: unknown): Food | null {
   if (!isRecord(v) || typeof v.id !== 'string' || typeof v.name !== 'string') return null
   return {

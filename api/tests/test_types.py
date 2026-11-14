@@ -61,6 +61,7 @@ def test_validate_reads_the_registry() -> None:
         "strength": validate.normalise_exercise,
         "cardio": validate.normalise_cardio,
         "food": validate.normalise_food,
+        "mobility": validate.normalise_mobility,
     } == validate.KIND_NORMALISERS
     # A file reads as trackers and their data by id, plus settings and Ask's conversations.
     assert set(validate.ExportData.__annotations__) == {
@@ -81,5 +82,28 @@ def test_cardio_has_no_daily_pick() -> None:
 
 def test_the_exercise_kind_is_strength() -> None:
     """K123: the old `exercise` type is the `strength` kind; the tracker keeps its id."""
-    assert list(TYPES) == ["strength", "cardio", "food"]
+    assert list(TYPES) == ["strength", "cardio", "food", "mobility"]
     assert SECTION_TYPES["exercise"].id == "strength"
+
+
+def test_mobility_is_strength_without_weight() -> None:
+    """W8: a mobility item has sets, then reps or a hold time, each side, and no weight; its
+    tracker has a daily target of its own, kept only on the tracker."""
+    mobility = TYPES["mobility"]
+    assert mobility.fields == TYPES["strength"].fields
+    assert (mobility.pick_key, mobility.daily_target) == (None, 3)
+    held = {"id": "h", "name": "Hip hold", "sets": 2, "duration": 45, "perSide": True}
+    assert validate.normalise_mobility({**held, "weight": 10, "distance": 3}) == {
+        **held,
+        "reps": 0,
+        "target": 3,
+    }
+    assert validate.normalise_mobility({"id": "c", "name": "Cat-cow", "reps": 10}) == {
+        "id": "c",
+        "name": "Cat-cow",
+        "reps": 10,
+        "target": 3,
+    }
+    assert validate.normalise_mobility({"id": 1}) is None
+    both = validate.strict_kind_item("mobility", {"id": "b", "name": "B", "reps": 5, "duration": 9})
+    assert both.problems == ["give reps or seconds, not both"]

@@ -27,7 +27,12 @@ export type ItemSections = Partial<Record<TrackerTypeId, Arrangement>>
  * imports storage.ts, which imports this module: the Record makes TypeScript check every id is
  * here and no other, and itemSections.spec.ts that the order is the registry's.
  */
-const TYPE_IDS: Readonly<Record<TrackerTypeId, true>> = { strength: true, cardio: true, food: true }
+const TYPE_IDS: Readonly<Record<TrackerTypeId, true>> = {
+  strength: true,
+  cardio: true,
+  food: true,
+  mobility: true,
+}
 export const ITEM_SECTION_TYPES = Object.keys(TYPE_IDS) as readonly TrackerTypeId[]
 
 /** Keys an older tab or file uses for a kind since renamed: `exercise` is `strength` (K123). */

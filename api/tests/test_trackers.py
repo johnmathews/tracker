@@ -101,7 +101,7 @@ def test_a_create_may_name_its_week_and_its_id(client: TestClient, config: Confi
         {"name": " \n\t "},
         {"name": "x" * (MAX_TRACKER_NAME + 1)},
         {"kind": "exercise"},
-        {"kind": "mobility"},
+        {"kind": "yoga"},
         {"kind": None},
         {"id": "has space"},
         {"id": "x" * 65},
@@ -358,6 +358,32 @@ def test_writes_go_to_a_new_tracker_by_its_kind(client: TestClient, config: Conf
     # Only the first three go under the keys a tab on older code reads.
     assert supplements not in state
     assert state["diet"] == EMPTY
+
+
+def test_a_mobility_tracker_plans_holds_and_reps_without_weight(
+    client: TestClient, config: Config
+) -> None:
+    """W8: mobility has strength's sets, then reps or a hold time, each side, and no weight; a
+    weight sent anyway drops out, as a field another kind lacks does."""
+    sign_up(client, config)
+    r = create(client, name="Mobility", kind="mobility")
+    assert r.status_code == 201
+    tracker = r.json()
+    assert (tracker["kind"], tracker["dailyTarget"], tracker["position"]) == ("mobility", 3, 3)
+    mobility = tracker["id"]
+    items = [
+        {"id": "hip", "name": "Hip hold", "sets": 2, "duration": 45, "perSide": True, "target": 4},
+        {"id": "cat", "name": "Cat-cow", "sets": 3, "reps": 10, "weight": 8, "target": 3},
+    ]
+    assert client.put(f"/api/plans/{mobility}/{WEEK}", json={"items": items, "rev": 0}).json() == {
+        "rev": 1
+    }
+    assert client.get("/api/state").json()["sections"][mobility]["plans"][WEEK] == [
+        {**items[0], "reps": 0},
+        {"id": "cat", "name": "Cat-cow", "sets": 3, "reps": 10, "target": 3},
+    ]
+    patched = client.patch(f"/api/trackers/{mobility}", json={"rev": 1, "dailyTarget": 5})
+    assert patched.json()["dailyTarget"] == 5
 
 
 @pytest.mark.parametrize(

@@ -29,6 +29,16 @@
         { "key": "serving", "label": "A serving" },
         { "key": "examples", "label": "Examples" }
       ]
+    },
+    "mobility": {
+      "pickKey": null,
+      "newTarget": 3,
+      "dailyTarget": 3,
+      "fields": [
+        { "key": "equipment", "label": "Equipment" },
+        { "key": "works", "label": "Works" },
+        { "key": "link", "label": "Link" }
+      ]
     }
   }
 }

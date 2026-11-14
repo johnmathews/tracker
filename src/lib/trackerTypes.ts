@@ -11,6 +11,7 @@ import {
   normaliseCardio,
   normaliseExercise,
   normaliseFood,
+  normaliseMobility,
   type Cardio,
   type Exercise,
   type Food,
@@ -30,13 +31,19 @@ import { durationText } from '@/lib/words'
  */
 
 /** A kind's id. `strength` was `exercise` before trackers were the account's own (K123). */
-export type TrackerTypeId = 'strength' | 'cardio' | 'food'
+export type TrackerTypeId = 'strength' | 'cardio' | 'food' | 'mobility'
 
 /** A plan item of any kind. */
 export type Item = Exercise | Cardio | Food
 
 /** The settings that hold a daily target: how many items a day count as a met day (K30, K57). */
 export type PickKey = Extract<keyof PortableSettings, 'dailyPick' | 'foodPick'>
+
+/**
+ * The plan fields an item of the kind has (PlanFields.vue): an exercise's sets, then reps or time,
+ * each side and weight; cardio's time and distance; or a food's Times a week alone.
+ */
+export type PlanKind = 'exercise' | 'cardio' | 'food'
 
 /** A text field on the item page, by its stored key and the label it shows. */
 export type ItemField = { key: string; label: string }
@@ -53,6 +60,10 @@ export type TrackerType = {
   itemsLabel: string
   /** Edit plan's Add button and the new item page's Add: "Add exercise" (K104, K113). */
   addLabel: string
+  /** The plan fields its items have. */
+  plan: PlanKind
+  /** Whether an item with an exercise's plan has a weight: mobility's has none (W8). */
+  weighted: boolean
   /** The marks a press steps through in the device's mark set. */
   cycle: (set: MarkSet) => readonly Mark[]
   /** The chips under an item's name; none for a type without them. */
@@ -60,8 +71,9 @@ export type TrackerType = {
   /** The item page's fields, in order. */
   fields: readonly ItemField[]
   /**
-   * The setting that holds how many items a day count as a met day (K30, K57); null for a type
-   * with no daily target, whose days never turn green (cardio, K90).
+   * The setting the first tracker of the kind keeps its daily target in, beside the tracker (K30,
+   * K57); null for cardio, which has no daily target (K90), and for mobility, whose trackers keep
+   * theirs only on the tracker.
    */
   pickKey: PickKey | null
   /** The weekly goal an added item starts with. */
@@ -124,6 +136,8 @@ export const TRACKER_TYPES: Readonly<Record<TrackerTypeId, TrackerType>> = {
     itemLabel: 'Exercise',
     itemsLabel: 'Exercises',
     addLabel: 'Add exercise',
+    plan: 'exercise',
+    weighted: true,
     cycle: (set) => (set === 'squiggles' ? EXERCISE_CYCLE : EXERCISE_KIND_CYCLE),
     // An exercise section holds only exercises.
     details: (item) => exerciseDetails(item as Exercise),
@@ -144,6 +158,8 @@ export const TRACKER_TYPES: Readonly<Record<TrackerTypeId, TrackerType>> = {
     itemLabel: 'Cardio',
     itemsLabel: 'Cardio',
     addLabel: 'Add cardio',
+    plan: 'cardio',
+    weighted: false,
     // Marked like an exercise: done well, in part, or tried and missed (K90).
     cycle: (set) => (set === 'squiggles' ? EXERCISE_CYCLE : EXERCISE_KIND_CYCLE),
     details: (item) => cardioDetails(item as Cardio),
@@ -163,6 +179,8 @@ export const TRACKER_TYPES: Readonly<Record<TrackerTypeId, TrackerType>> = {
     itemLabel: 'Food',
     itemsLabel: 'Foods',
     addLabel: 'Add food',
+    plan: 'food',
+    weighted: false,
     cycle: (set) => (set === 'squiggles' ? FOOD_CYCLE : FOOD_KIND_CYCLE),
     details: () => [],
     fields: [
@@ -173,6 +191,30 @@ export const TRACKER_TYPES: Readonly<Record<TrackerTypeId, TrackerType>> = {
     newTarget: NEW_FOOD_TARGET,
     dailyTarget: DEFAULT_SETTINGS.foodPick,
     normalise: normaliseFood,
+  },
+  // Stretches, holds and drills (K123): an exercise's sets, then reps or a hold time, each side if
+  // you like, and no weight; marked as an exercise is, with a daily target of its own.
+  mobility: {
+    id: 'mobility',
+    label: 'Mobility',
+    records:
+      'sets, then reps or a hold time, each side if you like. Marked great, partial or missed.',
+    itemLabel: 'Exercise',
+    itemsLabel: 'Exercises',
+    addLabel: 'Add mobility',
+    plan: 'exercise',
+    weighted: false,
+    cycle: (set) => (set === 'squiggles' ? EXERCISE_CYCLE : EXERCISE_KIND_CYCLE),
+    details: (item) => exerciseDetails(item as Exercise),
+    fields: [
+      { key: 'equipment', label: 'Equipment' },
+      { key: 'works', label: 'Works' },
+      { key: 'link', label: 'Link' },
+    ],
+    pickKey: null,
+    newTarget: NEW_EXERCISE_TARGET,
+    dailyTarget: DEFAULT_SETTINGS.dailyPick,
+    normalise: normaliseMobility,
   },
 }
 

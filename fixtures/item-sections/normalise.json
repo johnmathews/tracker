@@ -88,6 +88,17 @@
       }
     },
     {
+      "name": "mobility has its own arrangement, after food in the registry's order (W8)",
+      "input": {
+        "mobility": { "order": ["notes", "plan", "details", "history"], "hidden": ["history"] },
+        "food": { "order": ["history", "notes", "details", "plan"], "hidden": [] }
+      },
+      "output": {
+        "food": { "order": ["history", "notes", "details", "plan"], "hidden": [] },
+        "mobility": { "order": ["notes", "plan", "details", "history"], "hidden": ["history"] }
+      }
+    },
+    {
       "name": "a type the registry doesn't have drops out",
       "input": {
         "swimming": { "order": ["history"], "hidden": ["notes"] },

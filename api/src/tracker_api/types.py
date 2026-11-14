@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 #: A kind's id. `strength` was `exercise` before trackers were the account's own (K123).
-type TypeId = Literal["strength", "cardio", "food"]
+type TypeId = Literal["strength", "cardio", "food", "mobility"]
 #: The settings key that holds how many items a day count as a met day (K30, K57).
 type PickKey = Literal["dailyPick", "foodPick"]
 #: The ids of each account's first three trackers, in the order the week first showed them.
@@ -34,7 +34,8 @@ class TrackerType:
     #: The item page's fields, in order.
     fields: tuple[ItemField, ...]
     #: The settings key the first tracker of this kind keeps its daily target in, beside the
-    #: tracker; None for a kind with no daily target (cardio, K90).
+    #: tracker; None for cardio, which has no daily target (K90), and for mobility, whose
+    #: trackers keep theirs only on the tracker.
     pick_key: PickKey | None
     #: The weekly goal an added item starts with.
     new_target: int
@@ -70,7 +71,22 @@ FOOD = TrackerType(
     daily_target=2,
 )
 
-TYPES: dict[TypeId, TrackerType] = {t.id: t for t in (STRENGTH, CARDIO, FOOD)}
+#: Stretches, holds and drills (K123): an exercise's sets, then reps or a hold time, each side if
+#: you like, and no weight (`validate.normalise_mobility`); marked as an exercise is, with a daily
+#: target of its own.
+MOBILITY = TrackerType(
+    id="mobility",
+    fields=(
+        ItemField("equipment", "Equipment"),
+        ItemField("works", "Works"),
+        ItemField("link", "Link"),
+    ),
+    pick_key=None,
+    new_target=3,
+    daily_target=3,
+)
+
+TYPES: dict[TypeId, TrackerType] = {t.id: t for t in (STRENGTH, CARDIO, FOOD, MOBILITY)}
 #: The kind of each of the first three trackers, in the order the week first showed them.
 SECTION_TYPES: dict[Section, TrackerType] = {"exercise": STRENGTH, "cardio": CARDIO, "diet": FOOD}
 SECTIONS: tuple[Section, ...] = tuple(SECTION_TYPES)

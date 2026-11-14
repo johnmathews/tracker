@@ -19,7 +19,7 @@ from typing import Any, Literal, NotRequired, TypedDict, TypeIs, cast
 from .item_sections import ItemSections, normalise_item_sections
 
 # Re-exported: the rest of the API reads the sections from here, beside the normalisers.
-from .types import CARDIO, FOOD, SECTION_TYPES, STRENGTH, TYPES, TypeId
+from .types import CARDIO, FOOD, MOBILITY, SECTION_TYPES, STRENGTH, TYPES, TypeId
 from .types import SECTIONS as SECTIONS
 from .types import Section as Section
 
@@ -462,6 +462,15 @@ def normalise_cardio(v: object) -> Item | None:
     return out
 
 
+def normalise_mobility(v: object) -> Item | None:
+    """A mobility item: an exercise's sets, reps or hold time and each side, with no weight
+    (W8). As the web app's `normaliseMobility`."""
+    item = normalise_exercise(v)
+    if item is not None:
+        item.pop("weight", None)
+    return item
+
+
 def normalise_food(v: object) -> Item | None:
     if (
         not isinstance(v, dict)
@@ -480,6 +489,7 @@ KIND_NORMALISERS: dict[TypeId, Normaliser] = {
     STRENGTH.id: normalise_exercise,
     CARDIO.id: normalise_cardio,
     FOOD.id: normalise_food,
+    MOBILITY.id: normalise_mobility,
 }
 #: Each of the first three trackers' item normaliser, through its kind.
 NORMALISERS: dict[Section, Normaliser] = {
@@ -643,7 +653,8 @@ def strict_kind_item(kind: TypeId, raw: object) -> StrictItem:
     """Like the kind's normaliser, but names what is wrong rather than dropping the item.
 
     Follows the web app's rules (`src/stores/planner.ts`): names are trimmed and may not be empty,
-    and an exercise counts reps or seconds, not both. It also caps names at `MAX_NAME`.
+    and an exercise (strength or mobility) counts reps or seconds, not both. It also caps names
+    at `MAX_NAME`.
     """
     if not isinstance(raw, dict):
         return StrictItem(None, ["item is not an object"])
@@ -660,7 +671,7 @@ def strict_kind_item(kind: TypeId, raw: object) -> StrictItem:
     elif len(name) > MAX_NAME:
         problems.append(f"name is over {MAX_NAME} characters")
     if (
-        kind == STRENGTH.id
+        kind in (STRENGTH.id, MOBILITY.id)
         and to_int(raw.get("reps"), 0) > 0
         and to_int(raw.get("duration"), 0) > 0
     ):

@@ -141,7 +141,8 @@ describe('the tracker-type registry', () => {
   it('lists the kinds in the registry’s order, and knows one from anything else', () => {
     expect(TRACKER_KINDS).toEqual(Object.keys(EXPECTED.types))
     expect(TRACKER_KINDS.every(isTrackerKind)).toBe(true)
-    for (const v of ['exercise', 'mobility', 'toString', '__proto__', '', 1, null]) {
+    expect(TRACKER_KINDS).toEqual(['strength', 'cardio', 'food', 'mobility'])
+    for (const v of ['exercise', 'yoga', 'Mobility', 'toString', '__proto__', '', 1, null]) {
       expect(isTrackerKind(v)).toBe(false)
     }
   })
@@ -164,6 +165,36 @@ describe('the tracker-type registry', () => {
     })
     expect(TRACKER_TYPES.food.normalise(raw)).toEqual({ id: 'a', name: 'A', target: 7 })
     expect(TRACKER_TYPES.food.normalise({ id: 1 })).toBeNull()
+  })
+
+  it('gives mobility strength’s plan without weight, its marks and a daily target (W8)', () => {
+    const m = TRACKER_TYPES.mobility
+    expect([m.label, m.itemLabel, m.itemsLabel, m.addLabel]).toEqual([
+      'Mobility',
+      'Exercise',
+      'Exercises',
+      'Add mobility',
+    ])
+    expect(m.records).toBe(
+      'sets, then reps or a hold time, each side if you like. Marked great, partial or missed.',
+    )
+    expect([m.plan, m.weighted]).toEqual(['exercise', false])
+    expect([TRACKER_TYPES.strength.plan, TRACKER_TYPES.strength.weighted]).toEqual([
+      'exercise',
+      true,
+    ])
+    expect([TRACKER_TYPES.cardio.plan, TRACKER_TYPES.food.plan]).toEqual(['cardio', 'food'])
+    expect(m.fields).toEqual(TRACKER_TYPES.strength.fields)
+    expect([m.pickKey, m.dailyTarget, m.newTarget]).toEqual([null, 3, 3])
+    for (const set of MARK_SETS) expect(m.cycle(set)).toBe(TRACKER_TYPES.strength.cycle(set))
+    const hold = { id: 'h', name: 'Hip hold', sets: 2, duration: 45, perSide: true }
+    const held = m.normalise({ ...hold, weight: 10, distance: 3, target: 4 })
+    expect(held).toEqual({ ...hold, reps: 0, target: 4 })
+    expect(m.details(held!)).toEqual(['2 × 45 s each side'])
+    const reps = m.normalise({ id: 'c', name: 'Cat-cow', sets: 3, reps: 10, weight: 8 })
+    expect(reps).toEqual({ id: 'c', name: 'Cat-cow', sets: 3, reps: 10, target: 3 })
+    expect(m.details(reps!)).toEqual(['3 × 10'])
+    expect(m.normalise({ id: 1 })).toBeNull()
   })
 
   it('gives the default items to the exercise and diet trackers only (spec §4)', () => {
