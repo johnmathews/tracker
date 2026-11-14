@@ -635,7 +635,12 @@ class StrictItem:
 
 
 def strict_item(section: Section, raw: object) -> StrictItem:
-    """Like the section's normaliser, but names what is wrong rather than dropping the item.
+    """`strict_kind_item` for one of the first three trackers."""
+    return strict_kind_item(SECTION_TYPES[section].id, raw)
+
+
+def strict_kind_item(kind: TypeId, raw: object) -> StrictItem:
+    """Like the kind's normaliser, but names what is wrong rather than dropping the item.
 
     Follows the web app's rules (`src/stores/planner.ts`): names are trimmed and may not be empty,
     and an exercise counts reps or seconds, not both. It also caps names at `MAX_NAME`.
@@ -655,14 +660,14 @@ def strict_item(section: Section, raw: object) -> StrictItem:
     elif len(name) > MAX_NAME:
         problems.append(f"name is over {MAX_NAME} characters")
     if (
-        SECTION_TYPES[section] is STRENGTH
+        kind == STRENGTH.id
         and to_int(raw.get("reps"), 0) > 0
         and to_int(raw.get("duration"), 0) > 0
     ):
         problems.append("give reps or seconds, not both")
     if problems:
         return StrictItem(None, problems)
-    item = NORMALISERS[section]({**raw, "name": name})
+    item = KIND_NORMALISERS[kind]({**raw, "name": name})
     # The checks above cover what the normaliser rejects, so it never returns None here.
     assert item is not None
     return StrictItem(item)

@@ -11,8 +11,20 @@ from typing import Any
 import pytest
 
 from tracker_api import insights
-from tracker_api.data import import_data, load_settings, put_details, put_settings
-from tracker_api.validate import MAX_NOTES, ExportData, Section, Tracked
+from tracker_api.data import (
+    PlanSaved,
+    create_tracker,
+    end_tracker,
+    import_data,
+    load_settings,
+    patch_tracker,
+    put_details,
+    put_plan,
+    put_settings,
+    set_tick,
+)
+from tracker_api.types import TypeId
+from tracker_api.validate import MAX_NOTES, ExportData, Section, Tracked, Tracker
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "insights"
 CASES: list[tuple[str, Any]] = [
@@ -67,6 +79,17 @@ def load(
 
 def days(*marked: int) -> list[Any]:
     return ["great" if i in marked else None for i in range(7)]
+
+
+def goal_items(goals: insights.Goals, tracker_id: str) -> list[insights.GoalItem]:
+    """One tracker's items in `goals`."""
+    (tracker,) = [t for t in goals["trackers"] if t["id"] == tracker_id]
+    return tracker["items"]
+
+
+def daily_targets(goals: insights.Goals) -> dict[str, int | None]:
+    """Each tracker's daily target in `goals`, by id."""
+    return {t["id"]: t["daily_target"] for t in goals["trackers"]}
 
 
 def keys(value: object) -> set[str]:
@@ -228,8 +251,9 @@ def test_no_plans_reads_as_the_defaults(conn: sqlite3.Connection) -> None:
     assert [it["id"] for it in diet["items"]] == ["veg", "fruit", "fish", "nuts"]
     assert diet["daily_target"] == 2
     g = insights.goals(conn, uid, TODAY)
-    assert [it["id"] for it in g["exercise"]] == ["pu", "pl", "sq", "be", "kh"]
-    assert [it["id"] for it in g["diet"]] == ["veg", "fruit", "fish", "nuts"]
+    assert [it["id"] for it in goal_items(g, "exercise")] == ["pu", "pl", "sq", "be", "kh"]
+    assert goal_items(g, "cardio") == []
+    assert [it["id"] for it in goal_items(g, "diet")] == ["veg", "fruit", "fish", "nuts"]
 
 
 def test_goals_returns_both_notes(conn: sqlite3.Connection) -> None:
@@ -321,7 +345,7 @@ def test_names_and_notes_are_cut_in_output(conn: sqlite3.Connection) -> None:
     assert item["name"] == "🥦" * insights.MAX_NAME
     assert item["notes"] == "🥕" * (MAX_NOTES - 1) + "…"
     assert MAX_NOTES == 500
-    goal = insights.goals(conn, uid, TODAY)["diet"][0]
+    goal = goal_items(insights.goals(conn, uid, TODAY), "diet")[0]
     assert goal["name"] == "🥦" * insights.MAX_NAME
     assert goal["notes"] == "🥕" * (MAX_NOTES - 1) + "…"
     history = insights.item_history(conn, uid, "diet", "f", 1, TODAY)
@@ -364,11 +388,11 @@ def test_notes_are_the_items_details_in_every_week(conn: sqlite3.Connection) -> 
     for week in ("2026-10-19", "2026-10-26"):
         items = insights.week_summary(conn, uid, "exercise", week, TODAY)["items"]
         assert [(it["id"], it["notes"]) for it in items] == [("pu", "Elbows in."), ("sq", "")]
-    goals = insights.goals(conn, uid, TODAY)["exercise"]
+    goals = goal_items(insights.goals(conn, uid, TODAY), "exercise")
     assert [(it["id"], it["notes"]) for it in goals] == [("pu", "Elbows in."), ("sq", "")]
-    # Another section's details for the same id are another item's.
+    # Another tracker's details for the same id are another item's.
     put_details(conn, uid, "diet", "sq", {"notes": "Not squats."}, 0, quota=QUOTA)
-    assert insights.goals(conn, uid, TODAY)["exercise"][1]["notes"] == ""
+    assert goal_items(insights.goals(conn, uid, TODAY), "exercise")[1]["notes"] == ""
 
 
 def test_readers_see_only_their_users_data(conn: sqlite3.Connection) -> None:
@@ -384,7 +408,7 @@ def test_readers_see_only_their_users_data(conn: sqlite3.Connection) -> None:
     assert out["plan_week"] is None
     assert out["daily_target"] == 3
     assert out["days_met"] == 0
-    assert insights.goals(conn, ann, TODAY)["exercises_a_day"] == 3
+    assert daily_targets(insights.goals(conn, ann, TODAY))["exercise"] == 3
 
 
 def test_readers_write_nothing(conn: sqlite3.Connection) -> None:
@@ -404,7 +428,7 @@ def test_weeks_lists_each_monday_oldest_first(conn: sqlite3.Connection) -> None:
     plan = [{"id": "pu", "name": "Push-ups", "reps": 10, "target": 1}]
     load(conn, uid, exercise={"plans": {"2026-10-12": plan}, "log": {}})
     out = insights.weeks(conn, uid, "exercise", "2026-10-05", "2026-10-26", TODAY)
-    assert out["section"] == "exercise"
+    assert out["tracker"] == "exercise"
     assert (out["start"], out["end"]) == ("2026-10-05", "2026-10-26")
     assert [w["week"] for w in out["weeks"]] == [
         "2026-10-05",
@@ -451,7 +475,7 @@ def test_item_history(conn: sqlite3.Connection) -> None:
         },
     )
     out = insights.item_history(conn, uid, "exercise", "pu", 4, TODAY)
-    assert out["section"] == "exercise"
+    assert out["tracker"] == "exercise"
     assert out["item_id"] == "pu"
     assert out["name"] == "Push-ups"
     assert out["notes"] == ""
@@ -535,12 +559,32 @@ def test_goals(conn: sqlite3.Connection) -> None:
     )
     assert insights.goals(conn, uid, TODAY) == {
         "week": "2026-10-26",
-        "exercise": [{"id": "pu", "name": "Push-ups", "target": 4, "notes": ""}],
-        # A cardio item's session comes in the edit tools' words (K90).
-        "cardio": [{"id": "cy", "name": "Cycling", "target": 2, "seconds": 1800, "notes": ""}],
-        "diet": [{"id": "fish", "name": "Fish", "target": 2, "notes": ""}],
-        "exercises_a_day": 4,
-        "foods_a_day": 3,
+        "trackers": [
+            {
+                "id": "exercise",
+                "name": "Strength",
+                "kind": "strength",
+                "daily_target": 4,
+                "items": [{"id": "pu", "name": "Push-ups", "target": 4, "notes": ""}],
+            },
+            {
+                "id": "cardio",
+                "name": "Cardio",
+                "kind": "cardio",
+                "daily_target": None,
+                # A cardio item's session comes in the edit tools' words (K90).
+                "items": [
+                    {"id": "cy", "name": "Cycling", "target": 2, "seconds": 1800, "notes": ""}
+                ],
+            },
+            {
+                "id": "diet",
+                "name": "Food",
+                "kind": "food",
+                "daily_target": 3,
+                "items": [{"id": "fish", "name": "Fish", "target": 2, "notes": ""}],
+            },
+        ],
         "daily_goal": True,
         "note": "Run 5 km by March.",
         "limits": "",
@@ -586,22 +630,35 @@ def test_goals_give_no_daily_targets_while_daily_goal_is_off(conn: sqlite3.Conne
     uid = load_off(conn)
     assert insights.goals(conn, uid, TODAY) == {
         "week": "2026-10-26",
-        "exercise": [
-            {"id": "a", "name": "A", "target": 2, "notes": ""},
-            {"id": "b", "name": "B", "target": 0, "notes": ""},
+        "trackers": [
+            {
+                "id": "exercise",
+                "name": "Strength",
+                "kind": "strength",
+                "daily_target": None,
+                "items": [
+                    {"id": "a", "name": "A", "target": 2, "notes": ""},
+                    {"id": "b", "name": "B", "target": 0, "notes": ""},
+                ],
+            },
+            # No cardio planned: an empty list, not defaults (K90).
+            {"id": "cardio", "name": "Cardio", "kind": "cardio", "daily_target": None, "items": []},
+            {
+                "id": "diet",
+                "name": "Food",
+                "kind": "food",
+                "daily_target": None,
+                "items": [{"id": "fish", "name": "Fish", "target": 2, "notes": ""}],
+            },
         ],
-        # No cardio planned: an empty list, not defaults (K90).
-        "cardio": [],
-        "diet": [{"id": "fish", "name": "Fish", "target": 2, "notes": ""}],
-        "exercises_a_day": None,
-        "foods_a_day": None,
         "daily_goal": False,
         "note": "",
         "limits": "",
     }
     turn_on(conn, uid)
     back = insights.goals(conn, uid, TODAY)
-    assert (back["exercises_a_day"], back["foods_a_day"], back["daily_goal"]) == (2, 3, True)
+    assert daily_targets(back) == {"exercise": 2, "cardio": None, "diet": 3}
+    assert back["daily_goal"] is True
 
 
 def test_week_summaries_have_no_met_days_while_daily_goal_is_off(conn: sqlite3.Connection) -> None:
@@ -632,7 +689,7 @@ def test_week_summaries_have_no_met_days_while_daily_goal_is_off(conn: sqlite3.C
 def test_consistency_has_no_met_days_while_daily_goal_is_off(conn: sqlite3.Connection) -> None:
     uid = load_off(conn)
     assert insights.consistency(conn, uid, "exercise", 3, TODAY) == {
-        "section": "exercise",
+        "tracker": "exercise",
         "start": "2026-10-12",
         "end": "2026-10-26",
         "today": "2026-10-28",
@@ -677,7 +734,7 @@ def test_consistency(conn: sqlite3.Connection) -> None:
     )
     out = insights.consistency(conn, uid, "exercise", 3, TODAY)
     assert out == {
-        "section": "exercise",
+        "tracker": "exercise",
         "start": "2026-10-12",
         "end": "2026-10-26",
         "today": "2026-10-28",
@@ -760,14 +817,21 @@ def test_weeks_must_be_mondays(conn: sqlite3.Connection, week: str) -> None:
         insights.weeks(conn, uid, "exercise", "2026-10-26", week, TODAY)
 
 
-def test_sections_are_exercise_or_diet(conn: sqlite3.Connection) -> None:
+def test_a_tracker_is_one_of_the_users_own(conn: sqlite3.Connection) -> None:
+    """The readers name `tracker` for an id or a name the user lacks, and list theirs."""
     uid = add_user(conn)
-    bad: Any = "food"
-    with pytest.raises(insights.InsightsError, match="section") as e:
-        insights.week_summary(conn, uid, bad, "2026-10-26", TODAY)
-    assert e.value.field == "section"
-    with pytest.raises(insights.InsightsError, match="section"):
-        insights.consistency(conn, uid, bad, 1, TODAY)
+    with pytest.raises(insights.InsightsError, match="tracker") as e:
+        insights.week_summary(conn, uid, "sleep", "2026-10-26", TODAY)
+    assert e.value.field == "tracker"
+    assert "the trackers are exercise (Strength), cardio (Cardio), diet (Food)" in str(e.value)
+    for bad in ("", " ", 7, None):
+        with pytest.raises(insights.InsightsError, match="tracker"):
+            insights.consistency(conn, uid, bad, 1, TODAY)  # type: ignore[arg-type]
+    # Another user's tracker is not this one's.
+    bob = add_user(conn, "bob")
+    yoga, _ = create_tracker(conn, bob, "xyoga1", "Yoga", "strength", "2026-10-26")
+    with pytest.raises(insights.InsightsError, match="tracker"):
+        insights.week_summary(conn, uid, yoga["id"], "2026-10-26", TODAY)
 
 
 # --- Cardio (K90) ---------------------------------------------------------------------------------
@@ -827,10 +891,203 @@ def test_cardio_has_no_daily_target_whatever_daily_goal_says(conn: sqlite3.Conne
         {"seconds": None, "distance_km": 5},
     ]
     goals = insights.goals(conn, uid, TODAY)
-    assert [it["id"] for it in goals["cardio"]] == ["cy", "ru"]
-    assert goals["cardio"][1]["distance_km"] == 5
+    cardio = goal_items(goals, "cardio")
+    assert [it["id"] for it in cardio] == ["cy", "ru"]
+    assert cardio[1]["distance_km"] == 5
     # An exercise's timed set is not a session: the readers leave it out, as its reps.
     plank = {"id": "pl", "name": "Plank", "reps": 0, "duration": 45, "target": 3}
-    assert insights.session_of("exercise", plank) == {}
+    assert insights.session_of("strength", plank) == {}
 
-    assert (goals["exercises_a_day"], goals["foods_a_day"]) == (1, 1)
+    assert daily_targets(goals) == {"exercise": 1, "cardio": None, "diet": 1}
+
+
+# --- The account's own trackers (spec §1, §2, §4) ------------------------------------------------
+
+THIS_WEEK = "2026-10-26"
+LAST_WEEK = "2026-10-19"
+
+
+def new_tracker(
+    conn: sqlite3.Connection,
+    uid: int,
+    name: str = "Yoga",
+    kind: TypeId = "strength",
+    week: str = LAST_WEEK,
+    tracker_id: str = "xyoga1",
+) -> Tracker:
+    tracker, added = create_tracker(conn, uid, tracker_id, name, kind, week)
+    assert added
+    return tracker
+
+
+def plan_in(conn: sqlite3.Connection, uid: int, tracker_id: str, week: str, items: Any) -> None:
+    assert isinstance(put_plan(conn, uid, tracker_id, week, items, 0, quota=QUOTA), PlanSaved)
+
+
+def test_default_items_are_for_the_first_strength_and_food_trackers_only() -> None:
+    """Spec §4: an account with no plan gets the default exercises and foods on the `exercise`
+    and `diet` trackers; any other tracker starts empty, whatever its kind."""
+    assert len(insights.default_items("exercise")) == 5
+    assert len(insights.default_items("diet")) == 4
+    assert insights.default_items("cardio") == []
+    assert insights.default_items("x123abcd") == []
+    assert insights.week_items("x123abcd", {}, THIS_WEEK) == []
+
+
+def test_a_new_tracker_starts_empty_and_reads_by_its_kind(conn: sqlite3.Connection) -> None:
+    uid = add_user(conn)
+    snacks = new_tracker(conn, uid, "Snacks", "food", tracker_id="xsnack1")
+    out = insights.week_summary(conn, uid, snacks["id"], THIS_WEEK, TODAY)
+    assert (out["items"], out["plan_week"], out["daily_target"]) == ([], None, 2)
+    plan_in(conn, uid, snacks["id"], LAST_WEEK, [{"id": "nut", "name": "Nuts", "target": 2}])
+    set_tick(conn, uid, snacks["id"], THIS_WEEK, "nut", 0, "great", quota=QUOTA)
+    set_tick(conn, uid, snacks["id"], THIS_WEEK, "nut", 1, "great", quota=QUOTA)
+    # Its daily target is its own, not foods a day.
+    patch = patch_tracker(conn, uid, snacks["id"], {"dailyTarget": 1}, snacks["rev"])
+    assert patch is not None
+    out = insights.week_summary(conn, uid, snacks["id"], THIS_WEEK, TODAY)
+    assert (out["plan_week"], out["daily_target"], out["days_met"], out["goals_met"]) == (
+        LAST_WEEK,
+        1,
+        2,
+        1,
+    )
+    assert insights.week_summary(conn, uid, "diet", THIS_WEEK, TODAY)["daily_target"] == 2
+    # A cardio tracker's items have their session, and no daily target.
+    rides = new_tracker(conn, uid, "Rides", "cardio", tracker_id="xride1")
+    plan_in(conn, uid, rides["id"], THIS_WEEK, [{"id": "r", "name": "Ride", "distance": 30}])
+    ride = insights.week_summary(conn, uid, rides["id"], THIS_WEEK, TODAY)
+    assert (ride["daily_target"], ride["items"][0]["distance_km"]) == (None, 30)
+
+
+def test_a_tracker_is_found_by_its_name_in_any_case(conn: sqlite3.Connection) -> None:
+    uid = add_user(conn)
+    yoga = new_tracker(conn, uid)
+    for ref in ("xyoga1", "Yoga", "yoga", " YOGA "):
+        assert insights.tracker_of(conn, uid, ref)["id"] == yoga["id"]
+    assert insights.tracker_of(conn, uid, "strength")["id"] == "exercise"
+    assert insights.item_history(conn, uid, "food", "veg", 1, TODAY)["tracker"] == "diet"
+
+
+def test_an_id_wins_over_a_name_and_a_shared_name_is_refused(conn: sqlite3.Connection) -> None:
+    uid = add_user(conn)
+    # A tracker named like another's id: the id names that other one.
+    new_tracker(conn, uid, "cardio", tracker_id="xnamed1")
+    assert insights.tracker_of(conn, uid, "cardio")["id"] == "cardio"
+    new_tracker(conn, uid, "Yoga", tracker_id="xyoga1")
+    new_tracker(conn, uid, "yoga", tracker_id="xyoga2", week=THIS_WEEK)
+    end_tracker(conn, uid, "xyoga1", THIS_WEEK)
+    with pytest.raises(insights.InsightsError) as e:
+        insights.tracker_of(conn, uid, "YOGA")
+    assert e.value.field == "tracker"
+    assert str(e.value) == (
+        "tracker: 2 trackers are named 'YOGA': xyoga1 (Yoga, deleted from the week of "
+        "2026-10-26), xyoga2 (yoga); give its id"
+    )
+    assert insights.tracker_of(conn, uid, "xyoga2")["name"] == "yoga"
+
+
+def test_trackers_lists_every_tracker_and_the_weeks_it_shows(conn: sqlite3.Connection) -> None:
+    uid = add_user(conn)
+    new_tracker(conn, uid)
+    new_tracker(conn, uid, "Snacks", "food", week=THIS_WEEK, tracker_id="xsnack1")
+    end_tracker(conn, uid, "xyoga1", THIS_WEEK)
+    out = insights.trackers(conn, uid, TODAY)
+    assert out["daily_goal"] is True
+    assert [(t["id"], t["shows_this_week"]) for t in out["trackers"]] == [
+        ("exercise", True),
+        ("cardio", True),
+        ("diet", True),
+        ("xyoga1", False),
+        ("xsnack1", True),
+    ]
+    assert out["trackers"][3] == {
+        "id": "xyoga1",
+        "name": "Yoga",
+        "kind": "strength",
+        "daily_target": 3,
+        "start_week": LAST_WEEK,
+        "end_week": THIS_WEEK,
+        "shows_this_week": False,
+    }
+    assert [t["daily_target"] for t in out["trackers"]] == [3, None, 2, 3, 2]
+    put_settings(conn, uid, {"dailyGoal": False})
+    off = insights.trackers(conn, uid, TODAY)
+    assert off["daily_goal"] is False
+    assert {t["daily_target"] for t in off["trackers"]} == {None}
+
+
+def test_an_ended_tracker_is_absent_from_its_end_week_on(conn: sqlite3.Connection) -> None:
+    """Spec §2: a tracker deleted this week shows in no week from this one on. Its earlier
+    weeks still read as they were."""
+    uid = add_user(conn)
+    yoga = new_tracker(conn, uid, week="2026-10-12")
+    plan = [{"id": "sun", "name": "Sun salute", "reps": 5, "target": 1}]
+    plan_in(conn, uid, yoga["id"], "2026-10-12", plan)
+    for week in ("2026-10-12", LAST_WEEK, THIS_WEEK):
+        set_tick(conn, uid, yoga["id"], week, "sun", 0, "great", quota=QUOTA)
+    assert patch_tracker(conn, uid, yoga["id"], {"dailyTarget": 1}, yoga["rev"]) is not None
+    end_tracker(conn, uid, yoga["id"], THIS_WEEK)
+    # Earlier weeks keep it.
+    assert insights.week_summary(conn, uid, "Yoga", LAST_WEEK, TODAY)["goals_met"] == 1
+    # From its end on, the week doesn't show it.
+    for week in (THIS_WEEK, "2026-11-02"):
+        with pytest.raises(insights.InsightsError) as e:
+            insights.week_summary(conn, uid, "Yoga", week, TODAY)
+        assert e.value.field == "week"
+        assert "Yoga (xyoga1) was deleted from the week of 2026-10-26 on" in str(e.value)
+    # Nor a week before it started.
+    with pytest.raises(insights.InsightsError, match="starts in the week of 2026-10-12"):
+        insights.week_summary(conn, uid, "Yoga", "2026-10-05", TODAY)
+    out = insights.weeks(conn, uid, "Yoga", "2026-10-05", "2026-11-02", TODAY)
+    assert [w["week"] for w in out["weeks"]] == ["2026-10-12", LAST_WEEK]
+    history = insights.item_history(conn, uid, "Yoga", "sun", 4, TODAY)
+    assert [(w["week"], w["in_plan"], w["done"]) for w in history["weeks"]] == [
+        ("2026-10-05", False, 0),
+        ("2026-10-12", True, 1),
+        (LAST_WEEK, True, 1),
+        (THIS_WEEK, False, 0),
+    ]
+    steady = insights.consistency(conn, uid, "Yoga", 4, TODAY)
+    assert (steady["days"], steady["finished_weeks"], steady["goals"]) == (14, 2, 2)
+    assert (steady["goals_met"], steady["goal_week_streak"]) == (2, 2)
+    # This week's Monday doesn't count: the week doesn't show it. Its last shown day, a Sunday,
+    # was not met, so the run is 0.
+    assert (steady["days_met"], steady["met_day_streak"]) == (2, 0)
+    assert [t["id"] for t in insights.goals(conn, uid, TODAY)["trackers"]] == [
+        "exercise",
+        "cardio",
+        "diet",
+    ]
+
+
+def test_consistency_of_a_tracker_no_week_shows(conn: sqlite3.Connection) -> None:
+    """A tracker created and deleted in the same week shows nowhere (spec §2)."""
+    uid = add_user(conn)
+    new_tracker(conn, uid, week=THIS_WEEK)
+    end_tracker(conn, uid, "xyoga1", THIS_WEEK)
+    out = insights.consistency(conn, uid, "xyoga1", 2, TODAY)
+    assert (out["days"], out["days_met"], out["met_day_rate"], out["met_day_streak"]) == (
+        0,
+        0,
+        None,
+        0,
+    )
+    assert insights.weeks(conn, uid, "xyoga1", LAST_WEEK, THIS_WEEK, TODAY)["weeks"] == []
+    assert "xyoga1" not in daily_targets(insights.goals(conn, uid, TODAY))
+
+
+def test_goals_report_a_tracker_from_the_week_it_starts(conn: sqlite3.Connection) -> None:
+    uid = add_user(conn)
+    new_tracker(conn, uid, "Next", week="2026-11-02", tracker_id="xnext1")
+    new_tracker(conn, uid, "Snacks", "food", week=THIS_WEEK, tracker_id="xsnack1")
+    plan_in(conn, uid, "xsnack1", THIS_WEEK, [{"id": "nut", "name": "Nuts", "target": 3}])
+    out = insights.goals(conn, uid, TODAY)
+    assert [t["id"] for t in out["trackers"]] == ["exercise", "cardio", "diet", "xsnack1"]
+    assert out["trackers"][3] == {
+        "id": "xsnack1",
+        "name": "Snacks",
+        "kind": "food",
+        "daily_target": 2,
+        "items": [{"id": "nut", "name": "Nuts", "target": 3, "notes": ""}],
+    }

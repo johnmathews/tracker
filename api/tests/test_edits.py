@@ -84,8 +84,8 @@ def details_row(
 
 def add(conn: sqlite3.Connection, config: Config, uid: int, **fields: object) -> edits.PlanEdit:
     week = str(fields.pop("week", WEEK))
-    section: Section = fields.pop("section", "exercise")  # type: ignore[assignment]
-    return edits.add_item(conn, config, uid, section, week, fields)
+    tracker = str(fields.pop("section", "exercise"))
+    return edits.add_item(conn, config, uid, tracker, week, fields)
 
 
 def error(exc: pytest.ExceptionInfo[edits.EditError]) -> tuple[str, str]:
@@ -215,7 +215,7 @@ def test_add_to_a_week_with_its_own_plan(
     }
     assert out["before"] == [SQUATS_WORDS]
     assert out["after"] == [SQUATS_WORDS, new]
-    assert (out["section"], out["week"], out["rev"], out["copied_from"]) == (
+    assert (out["tracker"], out["week"], out["rev"], out["copied_from"]) == (
         "exercise",
         WEEK,
         2,
@@ -706,10 +706,30 @@ def test_a_week_that_is_not_a_monday_is_refused(
     assert plans(conn, uid) == {}
 
 
-def test_an_unknown_section_is_refused(conn: sqlite3.Connection, config: Config, uid: int) -> None:
-    with pytest.raises(edits.EditError) as e:
-        edits.add_item(conn, config, uid, "sleep", WEEK, {"name": "Nap"})  # type: ignore[arg-type]
-    assert e.value.field == "section"
+def test_an_unknown_tracker_is_refused(conn: sqlite3.Connection, config: Config, uid: int) -> None:
+    """A tracker id or name the user lacks, another user's included, is refused by name for
+    every write, which lists the user's own."""
+    other = add_user(conn, "bob")
+    data.create_tracker(conn, other, "xbobs1", "Sleep", "strength", WEEK)
+    runs: list[Callable[[str], object]] = [
+        lambda t: edits.add_item(conn, config, uid, t, WEEK, {"name": "Nap"}),
+        lambda t: edits.update_item(conn, config, uid, t, WEEK, "sq", {"name": "Nap"}),
+        lambda t: edits.remove_item(conn, config, uid, t, WEEK, "sq"),
+        lambda t: edits.mark_day(conn, config, uid, t, FRIDAY, "sq", "great"),
+        lambda t: edits.own_week(conn, config, uid, t, WEEK),
+        lambda t: edits.set_daily_targets(conn, uid, {t: 3}),
+    ]
+    for run in runs:
+        for ref in ("sleep", "xbobs1", ""):
+            with pytest.raises(edits.EditError) as e:
+                run(ref)
+            assert e.value.field == "tracker"
+            if ref:
+                assert str(e.value) == (
+                    f"tracker: no tracker has the id or name {ref!r}; the trackers are "
+                    "exercise (Strength), cardio (Cardio), diet (Food)"
+                )
+    assert plans(conn, uid) == {}
 
 
 # --- marks --------------------------------------------------------------------------------------
@@ -722,7 +742,7 @@ def test_mark_day_on_an_unplanned_week_creates_its_plan_first(
     source_row = stored(conn, uid, SOURCE)
     out = edits.mark_day(conn, config, uid, "exercise", FRIDAY, "sq", "great")
     assert out == {
-        "section": "exercise",
+        "tracker": "exercise",
         "date": "2026-10-23",
         "week": WEEK,
         "day": 4,
@@ -832,16 +852,21 @@ def test_parse_date(text: str, ok: bool) -> None:
 # --- daily targets ------------------------------------------------------------------------------
 
 
+def targets(conn: sqlite3.Connection, uid: int) -> dict[str, int | None]:
+    return {t["id"]: t["dailyTarget"] for t in data.load_trackers(conn, uid)}
+
+
 def test_set_daily_targets_keeps_the_accent_and_the_other_target(
     conn: sqlite3.Connection, uid: int
 ) -> None:
+    """The older form: exercises a day and foods a day are the `exercise` and `diet` trackers'
+    targets, which the settings keep in step (W4)."""
     put_settings(
         conn, uid, {"accent": "#123456", "dailyPick": 3, "foodPick": 4, "goals": "Run 5 km."}
     )
     out = edits.set_daily_targets(conn, uid, exercises_a_day=5)
     assert out == {
-        "before": {"exercises_a_day": 3, "foods_a_day": 4},
-        "after": {"exercises_a_day": 5, "foods_a_day": 4},
+        "targets": [{"tracker": "exercise", "name": "Strength", "before": 3, "after": 5}],
         "daily_goal": True,
     }
     assert load_settings(conn, uid) == {
@@ -853,7 +878,7 @@ def test_set_daily_targets_keeps_the_accent_and_the_other_target(
         "dailyGoal": True,
     }
     out = edits.set_daily_targets(conn, uid, foods_a_day=1)
-    assert out["after"] == {"exercises_a_day": 5, "foods_a_day": 1}
+    assert out["targets"] == [{"tracker": "diet", "name": "Food", "before": 4, "after": 1}]
     assert load_settings(conn, uid) == {
         "accent": "#123456",
         "dailyPick": 5,
@@ -862,15 +887,15 @@ def test_set_daily_targets_keeps_the_accent_and_the_other_target(
         "limits": "",
         "dailyGoal": True,
     }
+    assert targets(conn, uid) == {"exercise": 5, "cardio": None, "diet": 1}
 
 
 def test_set_daily_targets_keeps_daily_goal_off(conn: sqlite3.Connection, uid: int) -> None:
     """K85: the targets change while Daily goal is off, which stays off; the result says so."""
     put_settings(conn, uid, {"dailyPick": 3, "foodPick": 4, "dailyGoal": False})
-    out = edits.set_daily_targets(conn, uid, foods_a_day=6)
+    out = edits.set_daily_targets(conn, uid, {"Food": 6})
     assert out == {
-        "before": {"exercises_a_day": 3, "foods_a_day": 4},
-        "after": {"exercises_a_day": 3, "foods_a_day": 6},
+        "targets": [{"tracker": "diet", "name": "Food", "before": 4, "after": 6}],
         "daily_goal": False,
     }
     stored = load_settings(conn, uid)
@@ -878,37 +903,114 @@ def test_set_daily_targets_keeps_daily_goal_off(conn: sqlite3.Connection, uid: i
 
 
 def test_set_daily_targets_starts_from_the_defaults(conn: sqlite3.Connection, uid: int) -> None:
+    """With no settings saved the trackers hold the targets alone (W4)."""
     out = edits.set_daily_targets(conn, uid, exercises_a_day=8, foods_a_day=1)
-    assert out["before"] == {"exercises_a_day": 3, "foods_a_day": 2}
-    assert load_settings(conn, uid) == {
-        "accent": "#30d158",
-        "dailyPick": 8,
-        "foodPick": 1,
-        "goals": "",
-        "limits": "",
-        "dailyGoal": True,
+    assert [(t["before"], t["after"]) for t in out["targets"]] == [(3, 8), (2, 1)]
+    assert out["daily_goal"] is True
+    assert targets(conn, uid) == {"exercise": 8, "cardio": None, "diet": 1}
+    # The same numbers again change nothing.
+    revs = {t["id"]: t["rev"] for t in data.load_trackers(conn, uid)}
+    again = edits.set_daily_targets(conn, uid, exercises_a_day=8, foods_a_day=1)
+    assert [(t["before"], t["after"]) for t in again["targets"]] == [(8, 8), (1, 1)]
+    assert {t["id"]: t["rev"] for t in data.load_trackers(conn, uid)} == revs
+
+
+def test_set_daily_targets_on_any_strength_or_food_tracker(
+    conn: sqlite3.Connection, uid: int
+) -> None:
+    """A tracker the person made keeps its own target: by its id or its name, and the settings
+    don't change."""
+    put_settings(conn, uid, {"dailyPick": 3, "foodPick": 2})
+    data.create_tracker(conn, uid, "xyoga1", "Yoga", "strength", WEEK)
+    data.create_tracker(conn, uid, "xsnack1", "Snacks", "food", WEEK)
+    out = edits.set_daily_targets(conn, uid, {"yoga": 6, "xsnack1": 4}, exercises_a_day=2)
+    assert out["targets"] == [
+        {"tracker": "xyoga1", "name": "Yoga", "before": 3, "after": 6},
+        {"tracker": "xsnack1", "name": "Snacks", "before": 2, "after": 4},
+        {"tracker": "exercise", "name": "Strength", "before": 3, "after": 2},
+    ]
+    assert targets(conn, uid) == {
+        "exercise": 2,
+        "cardio": None,
+        "diet": 2,
+        "xyoga1": 6,
+        "xsnack1": 4,
     }
+    saved = load_settings(conn, uid)
+    assert saved is not None and (saved["dailyPick"], saved["foodPick"]) == (2, 2)
+
+
+def test_set_daily_targets_replays_a_conflict(
+    conn: sqlite3.Connection, uid: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Another device's change since the read: the target is set again on the newer copy."""
+    real = data.patch_tracker
+    calls: list[int] = []
+
+    def racing(*args: Any) -> Any:
+        if not calls:
+            # Another device renames the tracker first.
+            real(conn, uid, "exercise", {"name": "Lifts"}, 1)
+        calls.append(1)
+        return real(*args)
+
+    monkeypatch.setattr(data, "patch_tracker", racing)
+    out = edits.set_daily_targets(conn, uid, {"exercise": 5})
+    assert len(calls) == 2
+    assert out["targets"] == [{"tracker": "exercise", "name": "Strength", "before": 3, "after": 5}]
+    stored = data.load_tracker(conn, uid, "exercise")
+    assert stored is not None
+    assert (stored["name"], stored["dailyTarget"], stored["rev"]) == ("Lifts", 5, 3)
+
+
+def test_set_daily_targets_gives_up_after_a_run_of_conflicts(
+    conn: sqlite3.Connection, uid: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stored = data.load_tracker(conn, uid, "exercise")
+    assert stored is not None
+    monkeypatch.setattr(data, "patch_tracker", lambda *_: data.TrackerConflict(stored))
+    with pytest.raises(edits.EditError) as e:
+        edits.set_daily_targets(conn, uid, {"exercise": 5})
+    assert error(e) == (
+        "tracker",
+        "tracker: another device changed Strength 3 times while this edit ran; nothing was "
+        "changed, so try again",
+    )
 
 
 @pytest.mark.parametrize(
-    ("kw", "field"),
+    ("args", "kw", "field", "words"),
     [
-        ({"exercises_a_day": 0}, "exercises_a_day"),
-        ({"exercises_a_day": 9}, "exercises_a_day"),
-        ({"foods_a_day": -1}, "foods_a_day"),
-        ({"foods_a_day": True}, "foods_a_day"),
-        ({"exercises_a_day": 3, "foods_a_day": 9}, "foods_a_day"),
-        ({}, "exercises_a_day"),
+        (None, {"exercises_a_day": 0}, "exercises_a_day", "1 to 8"),
+        (None, {"exercises_a_day": 9}, "exercises_a_day", "1 to 8"),
+        (None, {"foods_a_day": -1}, "foods_a_day", "1 to 8"),
+        (None, {"foods_a_day": True}, "foods_a_day", "1 to 8"),
+        (None, {"exercises_a_day": 3, "foods_a_day": 9}, "foods_a_day", "1 to 8"),
+        (None, {}, "daily_target", "give a tracker"),
+        ({}, {}, "daily_target", "give a tracker"),
+        ({"exercise": 9}, {}, "daily_target", "1 to 8"),
+        ({"diet": "two"}, {}, "daily_target", "1 to 8"),
+        ({"cardio": 2}, {}, "tracker", "Cardio is a cardio tracker: it has no daily target"),
+        ({"Strength": 2}, {"exercises_a_day": 3}, "exercises_a_day", "Strength is given twice"),
+        ({"sleep": 2}, {}, "tracker", "no tracker has the id or name 'sleep'"),
     ],
 )
-def test_set_daily_targets_refuses_out_of_range_values(
-    conn: sqlite3.Connection, uid: int, kw: dict[str, Any], field: str
+def test_set_daily_targets_refuses_and_writes_nothing(
+    conn: sqlite3.Connection,
+    uid: int,
+    args: dict[str, object] | None,
+    kw: dict[str, Any],
+    field: str,
+    words: str,
 ) -> None:
     put_settings(conn, uid, {"accent": "#123456", "dailyPick": 3, "foodPick": 2})
+    before = data.load_trackers(conn, uid)
     with pytest.raises(edits.EditError) as e:
-        edits.set_daily_targets(conn, uid, **kw)
+        # The first of two is checked before the second writes anything.
+        edits.set_daily_targets(conn, uid, {"diet": 5, **(args or {})} if args else args, **kw)
     assert e.value.field == field
-    assert ("1 to 8" in str(e.value)) or ("give" in str(e.value))
+    assert words in str(e.value)
+    assert data.load_trackers(conn, uid) == before
     assert load_settings(conn, uid) == {
         "accent": "#123456",
         "dailyPick": 3,
@@ -1011,3 +1113,116 @@ def test_cardio_takes_every_mark(conn: sqlite3.Connection, config: Config, uid: 
     with pytest.raises(edits.EditError) as e:
         edits.mark_day(conn, config, uid, "cardio", FRIDAY, "cy", "great")
     assert e.value.field == "item_id"
+
+
+# --- the account's own trackers (spec §1, §2) -------------------------------------------------
+
+
+def test_add_and_mark_on_a_new_tracker_by_id_and_by_name(
+    conn: sqlite3.Connection, config: Config, uid: int
+) -> None:
+    """A tracker the person made starts empty, takes its kind's fields and marks, and is named
+    by its id or by its name in any case. The result names it by id."""
+    data.create_tracker(conn, uid, "xsnack1", "Snacks", "food", SOURCE)
+    out = edits.add_item(conn, config, uid, "xsnack1", WEEK, {"name": "Nuts", "times_a_week": 4})
+    assert (out["tracker"], out["before"], out["copied_from"]) == ("xsnack1", [], "defaults")
+    nuts = out["item"]
+    out = edits.add_item(conn, config, uid, "SNACKS", WEEK, {"name": "Dates"})
+    assert out["tracker"] == "xsnack1"
+    assert [it["name"] for it in out["after"]] == ["Nuts", "Dates"]
+    # A food tracker's kind: no sets, and only `great` marks.
+    with pytest.raises(edits.EditError) as e:
+        edits.add_item(conn, config, uid, "Snacks", WEEK, {"name": "Figs", "sets": 2})
+    assert error(e) == (
+        "sets",
+        "sets: a food has no sets; it has name, times_a_week, note",
+    )
+    with pytest.raises(edits.EditError) as e:
+        edits.mark_day(conn, config, uid, "snacks", FRIDAY, nuts["id"], "partial")
+    assert e.value.field == "mark"
+    marked = edits.mark_day(conn, config, uid, "snacks", FRIDAY, nuts["id"], "great")
+    assert (marked["tracker"], marked["after"]) == ("xsnack1", "great")
+    assert load_tracked(conn, uid, "xsnack1")["log"][WEEK][nuts["id"]][4] == "great"
+    # Update and remove find it the same way.
+    out = edits.update_item(conn, config, uid, "Snacks", WEEK, nuts["id"], {"times_a_week": 5})
+    assert out["item"]["times_a_week"] == 5
+    out = edits.remove_item(conn, config, uid, "xsnack1", WEEK, nuts["id"])
+    assert [it["name"] for it in out["after"]] == ["Dates"]
+    # The first trackers' defaults stay theirs.
+    assert plans(conn, uid) == {}
+
+
+def test_a_new_strength_tracker_has_no_defaults(
+    conn: sqlite3.Connection, config: Config, uid: int
+) -> None:
+    data.create_tracker(conn, uid, "xyoga1", "Yoga", "strength", WEEK)
+    out = edits.add_item(conn, config, uid, "Yoga", WEEK, {"name": "Plank", "seconds": 60})
+    assert out["before"] == []
+    assert out["item"] == {**out["item"], "reps": 0, "seconds": 60}
+    with pytest.raises(edits.EditError) as e:
+        edits.mark_day(conn, config, uid, "Yoga", FRIDAY, "sq", "great")
+    assert e.value.field == "item_id"
+
+
+def test_an_ended_tracker_takes_no_change_from_its_end_week_on(
+    conn: sqlite3.Connection, config: Config, uid: int
+) -> None:
+    """Spec §2: deleted this week, a tracker shows in no week from this one on, so a change
+    there is refused in plain words. Its earlier weeks still take changes."""
+    data.create_tracker(conn, uid, "xyoga1", "Yoga", "strength", SOURCE)
+    plan(conn, uid, SOURCE, [SQUATS], section="xyoga1")
+    data.end_tracker(conn, uid, "xyoga1", WEEK)
+    message = (
+        "Yoga (xyoga1) was deleted from the week of 2026-10-19 on, so the week of 2026-10-19 "
+        "doesn't show it; its earlier weeks still do"
+    )
+    for run, field in (
+        (lambda: edits.add_item(conn, config, uid, "Yoga", WEEK, {"name": "Dips"}), "week"),
+        (lambda: edits.update_item(conn, config, uid, "Yoga", WEEK, "sq", {"name": "S"}), "week"),
+        (lambda: edits.remove_item(conn, config, uid, "Yoga", WEEK, "sq"), "week"),
+        (lambda: edits.own_week(conn, config, uid, "Yoga", WEEK), "week"),
+        (lambda: edits.mark_day(conn, config, uid, "Yoga", FRIDAY, "sq", "great"), "date"),
+    ):
+        with pytest.raises(edits.EditError) as e:
+            run()
+        assert error(e) == (field, f"{field}: {message}")
+    later = date(2026, 11, 4)
+    with pytest.raises(edits.EditError, match="the week of 2026-11-02 doesn't show it"):
+        edits.mark_day(conn, config, uid, "Yoga", later, "sq", "great")
+    assert list(plans(conn, uid, "xyoga1")) == [SOURCE]
+    assert load_tracked(conn, uid, "xyoga1")["log"] == {}
+    # The week before its end still takes changes.
+    out = edits.add_item(conn, config, uid, "Yoga", SOURCE, {"name": "Dips"})
+    assert [it["name"] for it in out["after"]] == ["Squats", "Dips"]
+    marked = edits.mark_day(conn, config, uid, "Yoga", date(2026, 10, 12), "sq", "great")
+    assert marked["after"] == "great"
+
+
+def test_a_week_before_a_tracker_starts_takes_no_change(
+    conn: sqlite3.Connection, config: Config, uid: int
+) -> None:
+    data.create_tracker(conn, uid, "xyoga1", "Yoga", "strength", WEEK)
+    with pytest.raises(edits.EditError) as e:
+        edits.add_item(conn, config, uid, "Yoga", SOURCE, {"name": "Dips"})
+    assert error(e) == (
+        "week",
+        "week: Yoga (xyoga1) starts in the week of 2026-10-19, so the week of 2026-10-12 "
+        "doesn't show it",
+    )
+    assert plans(conn, uid, "xyoga1") == {}
+
+
+def test_a_shared_name_is_refused_with_the_ids(
+    conn: sqlite3.Connection, config: Config, uid: int
+) -> None:
+    data.create_tracker(conn, uid, "xyoga1", "Yoga", "strength", WEEK)
+    data.create_tracker(conn, uid, "xyoga2", "yoga", "food", WEEK)
+    with pytest.raises(edits.EditError) as e:
+        edits.add_item(conn, config, uid, "Yoga", WEEK, {"name": "Dips"})
+    assert error(e) == (
+        "tracker",
+        "tracker: 2 trackers are named 'Yoga': xyoga1 (Yoga), xyoga2 (yoga); give its id",
+    )
+    assert edits.add_item(conn, config, uid, "xyoga2", WEEK, {"name": "Dips"})["tracker"] == (
+        "xyoga2"
+    )

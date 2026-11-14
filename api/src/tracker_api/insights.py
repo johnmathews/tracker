@@ -11,10 +11,15 @@ week keys. They read only that user's rows, write nothing, and carry no user or 
 Names and notes are cut in their output, since they reach a model as text (docs/api.md §1),
 except `item_history`'s note: one item's, given whole so it can be read before it is rewritten.
 
-While Daily goal is off (K85) the readers give no daily target and no met days: those fields are
-None, never False or 0, so nothing reads as a day missed. Cardio has no daily target at all (K90),
-so its are None whatever the switch says. The rules above stay as they are; the
-switch applies where a reader builds its output. Item goals don't depend on it.
+Each reader takes a tracker (`tracker_of`): its id, or its name without regard to case. A tracker
+shows in a week by `data.shows_in` (spec §2), and the readers follow it: a week it doesn't show in
+is refused, left out or read as empty, as each reader says.
+
+A tracker keeps its own daily target (W4). While Daily goal is off (K85) the readers give no daily
+target and no met days: those fields are None, never False or 0, so nothing reads as a day missed.
+A cardio tracker has no daily target at all (K90), so its are None whatever the switch says. The
+rules above stay as they are; the switch applies where a reader builds its output. Item goals don't
+depend on it.
 """
 
 import copy
@@ -23,19 +28,16 @@ from collections.abc import Mapping, Sequence
 from datetime import date, timedelta
 from typing import NotRequired, TypedDict, cast
 
-from .data import load_settings, load_tracked, notes_of
-from .types import CARDIO, EXERCISE, SECTION_TYPES
+from .data import load_settings, load_tracked, load_trackers, notes_of, shows_in
+from .types import CARDIO, TYPES, TypeId
 from .validate import (
-    DEFAULT_DAILY_PICK,
-    DEFAULT_FOOD_PICK,
     MAX_NOTES,
-    SECTIONS,
     DetailsMap,
     Item,
     MarkKind,
     Portable,
-    Section,
     Tracked,
+    Tracker,
     is_week,
 )
 
@@ -45,13 +47,12 @@ MAX_NAME = 100
 type WeekLog = Mapping[str, Sequence[str | None]]
 
 
-def default_items(section: Section) -> list[Item]:
-    """The items a week shows while nothing is planned: storage.ts's defaultExercises,
-    defaultCardio (none: an account from before Cardio shows an empty section) and
-    defaultFoods."""
-    if SECTION_TYPES[section] is CARDIO:
-        return []
-    if SECTION_TYPES[section] is EXERCISE:
+def default_items(tracker_id: str) -> list[Item]:
+    """The items a week shows while nothing is planned (spec §4, "Default items"): storage.ts's
+    defaultExercises on the `exercise` tracker and defaultFoods on the `diet` tracker. Every
+    other tracker starts empty: `cardio` (an account from before Cardio shows an empty section)
+    and each tracker the person makes."""
+    if tracker_id == "exercise":
         return [
             {"id": "pu", "name": "Push-ups", "reps": 10, "target": 4},
             {"id": "pl", "name": "Pull-ups", "reps": 3, "target": 4},
@@ -59,12 +60,14 @@ def default_items(section: Section) -> list[Item]:
             {"id": "be", "name": "Back extensions", "reps": 12, "target": 3},
             {"id": "kh", "name": "Kettlebell halos", "reps": 8, "perSide": True, "target": 3},
         ]
-    return [
-        {"id": "veg", "name": "Vegetables", "target": 7},
-        {"id": "fruit", "name": "Fruit", "target": 5},
-        {"id": "fish", "name": "Fish", "target": 2},
-        {"id": "nuts", "name": "Nuts", "target": 3},
-    ]
+    if tracker_id == "diet":
+        return [
+            {"id": "veg", "name": "Vegetables", "target": 7},
+            {"id": "fruit", "name": "Fruit", "target": 5},
+            {"id": "fish", "name": "Fish", "target": 2},
+            {"id": "nuts", "name": "Nuts", "target": 3},
+        ]
+    return []
 
 
 def plan_source(plans: Mapping[str, object], week: str) -> str | None:
@@ -81,10 +84,11 @@ def plan_source(plans: Mapping[str, object], week: str) -> str | None:
     return keys[0] if keys else None
 
 
-def week_items(section: Section, plans: Mapping[str, list[Item]], week: str) -> list[Item]:
-    """The items `week` shows: its plan source's, or the defaults. A copy, safe to change."""
+def week_items(tracker_id: str, plans: Mapping[str, list[Item]], week: str) -> list[Item]:
+    """The items `week` shows: its plan source's, or the tracker's defaults. A copy, safe to
+    change."""
     source = plan_source(plans, week)
-    return copy.deepcopy(plans[source]) if source is not None else default_items(section)
+    return copy.deepcopy(plans[source]) if source is not None else default_items(tracker_id)
 
 
 def _mark(week: WeekLog, item_id: str, day: int) -> str | None:
@@ -136,7 +140,7 @@ MAX_WEEKS = 26
 
 
 class InsightsError(ValueError):
-    """An argument a reader refuses; `field` names it (`section`, `week`, `start`, `end` or
+    """An argument a reader refuses; `field` names it (`tracker`, `week`, `start`, `end` or
     `weeks`). Nothing was read."""
 
     def __init__(self, field: str, message: str) -> None:
@@ -191,7 +195,8 @@ class WeekSummary(TypedDict):
 
 
 class Weeks(TypedDict):
-    section: Section
+    #: The tracker's id.
+    tracker: str
     start: str
     end: str
     weeks: list[WeekSummary]
@@ -212,7 +217,8 @@ class HistoryWeek(TypedDict):
 
 
 class ItemHistory(TypedDict):
-    section: Section
+    #: The tracker's id.
+    tracker: str
     item_id: str
     #: Its name in the latest week that shows it; None when no week in the range does.
     name: str | None
@@ -235,16 +241,23 @@ class GoalItem(TypedDict):
     notes: str
 
 
+class GoalTracker(TypedDict):
+    """One tracker shown in the week, and its items' goals."""
+
+    id: str
+    name: str
+    kind: TypeId
+    #: How many items a day make a met day. None while Daily goal is off (K85), and always for a
+    #: cardio tracker (K90).
+    daily_target: int | None
+    items: list[GoalItem]
+
+
 class Goals(TypedDict):
     #: Today's week, whose plan the goals are.
     week: str
-    exercise: list[GoalItem]
-    #: Cardio's items (K90), which have weekly goals and no daily target.
-    cardio: list[GoalItem]
-    diet: list[GoalItem]
-    #: Each None while Daily goal is off (K85); the saved numbers come back when it is on.
-    exercises_a_day: int | None
-    foods_a_day: int | None
+    #: The trackers this week shows, in the week's order.
+    trackers: list[GoalTracker]
     #: Daily goal's setting: false says why there are no daily targets.
     daily_goal: bool
     #: The "My goals" note; "" when there is none.
@@ -254,14 +267,15 @@ class Goals(TypedDict):
 
 
 class Consistency(TypedDict):
-    section: Section
+    #: The tracker's id.
+    tracker: str
     start: str
     end: str
     today: str
     #: None while Daily goal is off (K85), and so are `days_met`, `met_day_rate` and
     #: `met_day_streak`.
     daily_target: int | None
-    #: The days up to today, today included.
+    #: The days up to today, today included, in the weeks the tracker shows.
     days: int
     days_met: int | None
     #: `days_met / days`, to 2 places.
@@ -280,10 +294,75 @@ class Consistency(TypedDict):
     goal_week_streak: int
 
 
-def _section(section: object) -> Section:
-    if section in SECTIONS:
-        return section
-    raise InsightsError("section", f"must be {' or '.join(SECTIONS)}")
+class TrackerListed(TypedDict):
+    id: str
+    name: str
+    kind: TypeId
+    #: As `GoalTracker`'s: None while Daily goal is off, and always for a cardio tracker.
+    daily_target: int | None
+    #: The Monday of the week it was created in; None for the first three.
+    start_week: str | None
+    #: The Monday of the first week it no longer shows in; None while it is live.
+    end_week: str | None
+    #: It shows in this week.
+    shows_this_week: bool
+
+
+class TrackerList(TypedDict):
+    #: Every tracker, ended ones too, in the week's order.
+    trackers: list[TrackerListed]
+    daily_goal: bool
+
+
+def _listing(trackers: Sequence[Tracker]) -> str:
+    """Trackers as an error names them: `id` (name), with an ended one's end."""
+    parts = []
+    for t in trackers:
+        ended = f", deleted from the week of {t['endWeek']}" if t["endWeek"] else ""
+        parts.append(f"{t['id']} ({t['name']}{ended})")
+    return ", ".join(parts) if parts else "none"
+
+
+def find_tracker(trackers: Sequence[Tracker], ref: object) -> Tracker:
+    """The tracker `ref` names: its id, or else its name without regard to case or the spaces
+    around it. Ended trackers count, since their earlier weeks still show them. InsightsError
+    names `tracker` for no match and for a name that more than one tracker has."""
+    if not isinstance(ref, str) or not ref.strip():
+        raise InsightsError("tracker", "must be a tracker's id or name")
+    for t in trackers:
+        if t["id"] == ref:
+            return t
+    key = ref.strip().casefold()
+    named = [t for t in trackers if t["name"].strip().casefold() == key]
+    if len(named) == 1:
+        return named[0]
+    if named:
+        raise InsightsError(
+            "tracker",
+            f"{len(named)} trackers are named {ref.strip()!r}: {_listing(named)}; give its id",
+        )
+    raise InsightsError(
+        "tracker", f"no tracker has the id or name {ref!r}; the trackers are {_listing(trackers)}"
+    )
+
+
+def tracker_of(conn: sqlite3.Connection, user_id: int, ref: object) -> Tracker:
+    """The user's tracker that `ref` names, by `find_tracker`."""
+    return find_tracker(load_trackers(conn, user_id), ref)
+
+
+def not_shown(tracker: Tracker, week: str) -> str | None:
+    """Why the tracker doesn't show in `week`, in a plain sentence; None when it does."""
+    if shows_in(tracker, week):
+        return None
+    name = f"{tracker['name']} ({tracker['id']})"
+    end, start = tracker["endWeek"], tracker["startWeek"]
+    if end is not None and end <= week:
+        return (
+            f"{name} was deleted from the week of {end} on, so the week of {week} doesn't show "
+            "it; its earlier weeks still do"
+        )
+    return f"{name} starts in the week of {start}, so the week of {week} doesn't show it"
 
 
 def _monday(key: object, field: str) -> date:
@@ -298,15 +377,19 @@ def _week_count(weeks: object) -> int:
     return weeks
 
 
-def _daily_target(settings: Portable | None, section: Section) -> int | None:
-    """Exercises a day or foods a day: the section's type names the setting (K30, K57). None
-    while Daily goal is off (K85), and for a type with no daily target (cardio, K90)."""
-    key = SECTION_TYPES[section].pick_key
-    if key is None:
+def _daily_target(settings: Portable | None, tracker: Tracker) -> int | None:
+    """The tracker's daily target (W4: the tracker keeps it). None while Daily goal is off
+    (K85), and for a kind with no daily target (cardio, K90)."""
+    if TYPES[tracker["kind"]].daily_target is None:
         return None
-    if settings is None:
-        return DEFAULT_DAILY_PICK if key == "dailyPick" else DEFAULT_FOOD_PICK
-    return settings[key] if settings["dailyGoal"] else None
+    if settings is not None and not settings["dailyGoal"]:
+        return None
+    return tracker["dailyTarget"]
+
+
+def daily_goal(settings: Portable | None) -> bool:
+    """Daily goal's setting (K85): on while nothing is saved."""
+    return settings is None or settings["dailyGoal"]
 
 
 def _mondays(end: date, count: int) -> list[date]:
@@ -337,11 +420,11 @@ class Session(TypedDict, total=False):
     distance_km: int | float
 
 
-def session_of(section: Section, item: Item) -> Session:
+def session_of(kind: TypeId, item: Item) -> Session:
     """A cardio item's duration and distance in the edit tools' words, each when it has one
-    (K90). Other types give nothing: an exercise's sets and reps stay out of the readers."""
+    (K90). Other kinds give nothing: an exercise's sets and reps stay out of the readers."""
     out: Session = {}
-    if SECTION_TYPES[section] is not CARDIO:
+    if kind != CARDIO.id:
         return out
     if "duration" in item:
         out["seconds"] = item["duration"]
@@ -350,14 +433,14 @@ def session_of(section: Section, item: Item) -> Session:
     return out
 
 
-def _item_week(section: Section, item: Item, week: WeekLog, details: DetailsMap) -> ItemWeek:
+def _item_week(kind: TypeId, item: Item, week: WeekLog, details: DetailsMap) -> ItemWeek:
     marks = [_kind(_mark(week, item["id"], i)) for i in range(7)]
     done = total_for(week, item["id"])
     return {
         "id": item["id"],
         "name": _cut(item["name"], MAX_NAME),
         "target": item["target"],
-        **session_of(section, item),
+        **session_of(kind, item),
         # The item's notes, one copy for every week (its details), not the week's plan's.
         "notes": _cut_note(notes_of(details, item["id"])),
         "marks": marks,
@@ -370,11 +453,11 @@ def _item_week(section: Section, item: Item, week: WeekLog, details: DetailsMap)
 
 
 def _summary(
-    section: Section, tracked: Tracked, monday: date, today: date, target: int | None
+    tracker: Tracker, tracked: Tracked, monday: date, today: date, target: int | None
 ) -> WeekSummary:
     week = monday.isoformat()
     plan_week = plan_source(tracked["plans"], week)
-    items = week_items(section, tracked["plans"], week)
+    items = week_items(tracker["id"], tracked["plans"], week)
     log = tracked["log"].get(week, {})
     counts = day_counts(items, log)
     # No target, no met days: each is None rather than False (K85).
@@ -389,71 +472,104 @@ def _summary(
             {"date": d.isoformat(), "count": counts[i], "met": met[i], "future": d > today}
             for i, d in enumerate(dates)
         ],
-        "items": [_item_week(section, it, log, tracked["details"]) for it in items],
+        "items": [_item_week(tracker["kind"], it, log, tracked["details"]) for it in items],
         "goals_met": goals_met(items, log),
         "days_met": None if target is None else sum(1 for m in met if m),
     }
 
 
-def _load(conn: sqlite3.Connection, user_id: int, section: Section) -> tuple[Tracked, int | None]:
-    """The section's plans and log, and its daily target (None while Daily goal is off)."""
-    tracked = load_tracked(conn, user_id, section)
-    return tracked, _daily_target(load_settings(conn, user_id), section)
+def _load(conn: sqlite3.Connection, user_id: int, tracker: Tracker) -> tuple[Tracked, int | None]:
+    """The tracker's plans and log, and its daily target (None while Daily goal is off)."""
+    tracked = load_tracked(conn, user_id, tracker["id"])
+    return tracked, _daily_target(load_settings(conn, user_id), tracker)
+
+
+def trackers(conn: sqlite3.Connection, user_id: int, today: date) -> TrackerList:
+    """Every tracker the user has, ended ones too, in the week's order, and whether each shows
+    in today's week."""
+    week = monday_of(today).isoformat()
+    settings = load_settings(conn, user_id)
+    return {
+        "trackers": [
+            {
+                "id": t["id"],
+                "name": t["name"],
+                "kind": t["kind"],
+                "daily_target": _daily_target(settings, t),
+                "start_week": t["startWeek"],
+                "end_week": t["endWeek"],
+                "shows_this_week": shows_in(t, week),
+            }
+            for t in load_trackers(conn, user_id)
+        ],
+        "daily_goal": daily_goal(settings),
+    }
 
 
 def week_summary(
-    conn: sqlite3.Connection, user_id: int, section: Section, week: str, today: date
+    conn: sqlite3.Connection, user_id: int, tracker: str, week: str, today: date
 ) -> WeekSummary:
-    """One week of one section as its screen shows it: the items, each day's count and whether
-    it met the daily target, and each item's marks against its goal."""
-    section = _section(section)
+    """One week of one tracker as its screen shows it: the items, each day's count and whether
+    it met the daily target, and each item's marks against its goal. A week the tracker doesn't
+    show in is refused, naming `week`."""
+    found = tracker_of(conn, user_id, tracker)
     monday = _monday(week, "week")
-    tracked, target = _load(conn, user_id, section)
-    return _summary(section, tracked, monday, today, target)
+    why = not_shown(found, week)
+    if why is not None:
+        raise InsightsError("week", why)
+    tracked, target = _load(conn, user_id, found)
+    return _summary(found, tracked, monday, today, target)
 
 
 def weeks(
-    conn: sqlite3.Connection, user_id: int, section: Section, start: str, end: str, today: date
+    conn: sqlite3.Connection, user_id: int, tracker: str, start: str, end: str, today: date
 ) -> Weeks:
     """`week_summary` for every week from `start` to `end`, both Mondays and included, oldest
-    first; at most MAX_WEEKS of them."""
-    section = _section(section)
+    first; at most MAX_WEEKS of them. Weeks the tracker doesn't show in are left out."""
+    found = tracker_of(conn, user_id, tracker)
     first, last = _monday(start, "start"), _monday(end, "end")
     if last < first:
         raise InsightsError("end", "must not be before start")
     count = (last - first).days // 7 + 1
     if count > MAX_WEEKS:
         raise InsightsError("weeks", f"at most {MAX_WEEKS} weeks at a time")
-    tracked, target = _load(conn, user_id, section)
+    tracked, target = _load(conn, user_id, found)
     return {
-        "section": section,
+        "tracker": found["id"],
         "start": start,
         "end": end,
-        "weeks": [_summary(section, tracked, m, today, target) for m in _mondays(last, count)],
+        "weeks": [
+            _summary(found, tracked, m, today, target)
+            for m in _mondays(last, count)
+            if shows_in(found, m.isoformat())
+        ],
     }
 
 
 def item_history(
     conn: sqlite3.Connection,
     user_id: int,
-    section: Section,
+    tracker: str,
     item_id: str,
     weeks: int,
     today: date,
 ) -> ItemHistory:
     """One item over the last `weeks` weeks, today's included, oldest first: its goal and marks
-    in each week that shows it, and its whole note (the one reader that doesn't cut it)."""
-    section = _section(section)
+    in each week that shows it, and its whole note (the one reader that doesn't cut it). A week
+    the tracker doesn't show in doesn't show the item either."""
+    found = tracker_of(conn, user_id, tracker)
     count = _week_count(weeks)
-    tracked = load_tracked(conn, user_id, section)
+    tracked = load_tracked(conn, user_id, found["id"])
     mondays = _mondays(monday_of(today), count)
     rows: list[HistoryWeek] = []
     name: str | None = None
     for monday in mondays:
         week = monday.isoformat()
-        item = next(
-            (it for it in week_items(section, tracked["plans"], week) if it["id"] == item_id), None
+        # A week that doesn't show the tracker shows none of its items.
+        shown_items = (
+            week_items(found["id"], tracked["plans"], week) if shows_in(found, week) else []
         )
+        item = next((it for it in shown_items if it["id"] == item_id), None)
         if item is None:
             rows.append(
                 {
@@ -469,7 +585,7 @@ def item_history(
                 }
             )
             continue
-        shown = _item_week(section, item, tracked["log"].get(week, {}), tracked["details"])
+        shown = _item_week(found["kind"], item, tracked["log"].get(week, {}), tracked["details"])
         name = shown["name"]
         rows.append(
             {
@@ -485,7 +601,7 @@ def item_history(
             }
         )
     return {
-        "section": section,
+        "tracker": found["id"],
         "item_id": item_id,
         "name": name,
         "notes": notes_of(tracked["details"], item_id),
@@ -495,33 +611,43 @@ def item_history(
     }
 
 
+def _goal_tracker(
+    conn: sqlite3.Connection, user_id: int, tracker: Tracker, week: str, settings: Portable | None
+) -> GoalTracker:
+    tracked = load_tracked(conn, user_id, tracker["id"])
+    items: list[GoalItem] = [
+        {
+            "id": it["id"],
+            "name": _cut(it["name"], MAX_NAME),
+            "target": it["target"],
+            **session_of(tracker["kind"], it),
+            "notes": _cut_note(notes_of(tracked["details"], it["id"])),
+        }
+        for it in week_items(tracker["id"], tracked["plans"], week)
+    ]
+    return {
+        "id": tracker["id"],
+        "name": tracker["name"],
+        "kind": tracker["kind"],
+        "daily_target": _daily_target(settings, tracker),
+        "items": items,
+    }
+
+
 def goals(conn: sqlite3.Connection, user_id: int, today: date) -> Goals:
-    """What today's week asks for: each item's weekly goal in each section, both daily targets
-    (None while Daily goal is off; cardio has none), the "My goals" note and the limits note."""
+    """What today's week asks for, per tracker the week shows: each item's weekly goal and the
+    tracker's daily target (None while Daily goal is off; cardio has none). Then the "My goals"
+    note and the limits note."""
     week = monday_of(today).isoformat()
     settings = load_settings(conn, user_id)
-    tracked = {section: load_tracked(conn, user_id, section) for section in SECTIONS}
-    shown = {
-        section: [
-            {
-                "id": it["id"],
-                "name": _cut(it["name"], MAX_NAME),
-                "target": it["target"],
-                **session_of(section, it),
-                "notes": _cut_note(notes_of(tracked[section]["details"], it["id"])),
-            }
-            for it in week_items(section, tracked[section]["plans"], week)
-        ]
-        for section in SECTIONS
-    }
     return {
         "week": week,
-        "exercise": cast(list[GoalItem], shown["exercise"]),
-        "cardio": cast(list[GoalItem], shown["cardio"]),
-        "diet": cast(list[GoalItem], shown["diet"]),
-        "exercises_a_day": _daily_target(settings, "exercise"),
-        "foods_a_day": _daily_target(settings, "diet"),
-        "daily_goal": settings is None or settings["dailyGoal"],
+        "trackers": [
+            _goal_tracker(conn, user_id, t, week, settings)
+            for t in load_trackers(conn, user_id)
+            if shows_in(t, week)
+        ],
+        "daily_goal": daily_goal(settings),
         "note": "" if settings is None else settings["goals"],
         "limits": "" if settings is None else settings["limits"],
     }
@@ -532,17 +658,21 @@ def _rate(part: int, whole: int) -> float:
 
 
 def consistency(
-    conn: sqlite3.Connection, user_id: int, section: Section, weeks: int, today: date
+    conn: sqlite3.Connection, user_id: int, tracker: str, weeks: int, today: date
 ) -> Consistency:
     """How steady the last `weeks` weeks were, today's included: the share of days that met the
     daily target, the share of weekly goals met in the finished weeks, and the current runs.
-    While Daily goal is off there is no target, so the met-day fields are None."""
-    section = _section(section)
+    While Daily goal is off there is no target, so the met-day fields are None. Only the weeks
+    the tracker shows in count."""
+    found = tracker_of(conn, user_id, tracker)
     count = _week_count(weeks)
-    tracked, target = _load(conn, user_id, section)
+    tracked, target = _load(conn, user_id, found)
     mondays = _mondays(monday_of(today), count)
-    summaries = [_summary(section, tracked, m, today, target) for m in mondays]
-    # Today's week is in the range, so today is always the last of these.
+    summaries = [
+        _summary(found, tracked, m, today, target)
+        for m in mondays
+        if shows_in(found, m.isoformat())
+    ]
     elapsed = [d for s in summaries for d in s["days"] if not d["future"]]
     finished = [s for s in summaries if date.fromisoformat(s["week"]) + timedelta(days=6) < today]
     goal_count = sum(1 for s in finished for it in s["items"] if it["target"] > 0)
@@ -551,7 +681,9 @@ def consistency(
     day_streak: int | None = None
     days_met: int | None = None
     if target is not None:
-        run = elapsed if elapsed[-1]["met"] else elapsed[:-1]
+        # Today doesn't break the run before it is met.
+        ends_today = bool(elapsed) and elapsed[-1]["date"] == today.isoformat()
+        run = elapsed[:-1] if ends_today and not elapsed[-1]["met"] else elapsed
         day_streak = 0
         for d in reversed(run):
             if not d["met"]:
@@ -566,14 +698,14 @@ def consistency(
         week_streak += 1
 
     return {
-        "section": section,
+        "tracker": found["id"],
         "start": mondays[0].isoformat(),
         "end": mondays[-1].isoformat(),
         "today": today.isoformat(),
         "daily_target": target,
         "days": len(elapsed),
         "days_met": days_met,
-        "met_day_rate": None if days_met is None else _rate(days_met, len(elapsed)),
+        "met_day_rate": None if days_met is None or not elapsed else _rate(days_met, len(elapsed)),
         "finished_weeks": len(finished),
         "goals": goal_count,
         "goals_met": goals_hit,
