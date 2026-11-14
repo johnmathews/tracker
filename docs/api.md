@@ -42,15 +42,29 @@ scoped by `user_id`, and no endpoint reads another user's data.
 `insights.py` is a read-only view of one user's weeks. The /ask page and the MCP server both read
 through it. It counts the way the screen counts, so an answer never contradicts the week (§9).
 
-While Daily goal is off (K85), the readers give no daily target and no met days. `goals` has
-`exercises_a_day` and `foods_a_day` null and `daily_goal: false`. In `week_summary` and `weeks`,
+Each reader of one tracker takes `tracker`: an id, or a name matched without regard to case or
+surrounding spaces (`find_tracker`, `tracker_of`). The user's trackers count, ended ones too. An
+id the user lacks, or a name two trackers share, raises `InsightsError` naming `tracker`, with the
+user's trackers or the matching ids in its text. The readers follow `data.shows_in` (spec §2):
+
+- `week_summary` refuses a week the tracker doesn't show in, naming `week`, with why: it starts
+  later, or it was deleted from that week on.
+- `weeks` leaves those weeks out, so a range can come back with fewer weeks, or none.
+- `item_history` reads them as weeks that don't show the item: `in_plan` false.
+- `consistency` counts only the weeks the tracker shows in. The allowance for today applies only
+  when the last day counted is today.
+- `goals` lists only the trackers today's week shows.
+
+A tracker keeps its own daily target (W4). While Daily goal is off (K85), the readers give no
+daily target and no met days. In `goals` and `trackers`, each tracker's `daily_target` is null and
+`daily_goal` is false. In `week_summary` and `weeks`,
 `daily_target`, `days_met` and each day's `met` are null. In `consistency`, `daily_target`,
 `days_met`, `met_day_rate` and `met_day_streak` are null. Item goals (`goal_met`, `goals_met`,
 `goal_met_rate`, `goal_week_streak`) don't change. The rule functions stay as they are; the switch
 applies where a reader builds its output.
 
-Cardio (K90) has no daily target at all. Its `daily_target`, `days_met`, each day's `met` and the
-met-day fields of `consistency` are always null, whatever Daily goal says. A cardio item in
+A cardio tracker (K90) has no daily target at all. Its `daily_target`, `days_met`, each day's
+`met` and the met-day fields of `consistency` are always null, whatever Daily goal says. A cardio item in
 `week_summary`, `weeks` and `goals` also carries its session in the edit tools' words: `seconds`
 (the whole session) and `distance_km`, each only when it has one. An exercise's sets, reps and
 timed sets stay out of the readers.
@@ -59,26 +73,28 @@ The rules are ports of the web app's:
 
 - `plan_source` is `planSource` (architecture.md §2): a week's own plan, else the latest earlier
   one, else the earliest. `week_items` gives the items a week shows, and `default_items` the
-  defaults when nothing is planned. Cardio has no defaults: with no plan, its week is empty.
+  defaults when nothing is planned. Only the `exercise` and `diet` trackers have defaults
+  (spec §4). `cardio` and every tracker the person makes start empty.
 - `total_for`, `day_counts`, `goal_met`, `goals_met` and `met_days` are `src/lib/tracker.ts`'s.
   Every mark counts towards a goal, a missed day included. A goal of 0 is never met. Only the
-  items the week shows count. A day is met when its count reaches exercises or foods a day.
+  items the week shows count. A day is met when its count reaches the tracker's daily target.
 
 The readers each return a dict:
 
 | Reader                                                        | Returns                                                                                                                                                                                                                                                             |
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `week_summary(conn, user_id, section, week, today)`           | `week`, `plan_week` (None for the defaults), `carried`, `daily_target`; seven `days` (`date`, `count`, `met`, `future`); the `items` (`id`, `name`, `target`, `notes`, seven mark kinds, `done`, `great`, `partial`, `missed`, `goal_met`); `goals_met`, `days_met` |
-| `weeks(conn, user_id, section, start, end, today)`            | `week_summary` for each week from `start` to `end`, oldest first, at most 26                                                                                                                                                                                        |
-| `item_history(conn, user_id, section, item_id, weeks, today)` | one item over the last `weeks` weeks: its `name`, its whole `notes` (uncut), and per week `in_plan`, `target`, the marks and their counts. A week that doesn't show the item reads as empty, as on screen                                                           |
-| `goals(conn, user_id, today)`                                 | today's week's items with their goals per section (`exercise`, `cardio`, `diet`), `exercises_a_day`, `foods_a_day`, `daily_goal`, `note`, the My goals text from settings, and `limits`, the limits note (each `""` when there is none)                                                                                                                    |
-| `consistency(conn, user_id, section, weeks, today)`           | over the last `weeks` weeks: the days up to today, how many met the daily target and the rate; the goals of the finished weeks, how many were met and the rate; the current runs of met days and of weeks with every goal met                                       |
+| `trackers(conn, user_id, today)`                              | every tracker, ended ones too, in the week's order: `id`, `name`, `kind`, `daily_target`, `start_week`, `end_week`, `shows_this_week`; and `daily_goal`                                                                                                             |
+| `week_summary(conn, user_id, tracker, week, today)`           | `week`, `plan_week` (None for the defaults), `carried`, `daily_target`; seven `days` (`date`, `count`, `met`, `future`); the `items` (`id`, `name`, `target`, `notes`, seven mark kinds, `done`, `great`, `partial`, `missed`, `goal_met`); `goals_met`, `days_met` |
+| `weeks(conn, user_id, tracker, start, end, today)`            | `tracker` (its id), `start`, `end`, and `week_summary` for each week from `start` to `end` that shows the tracker, oldest first, at most 26                                                                                                                         |
+| `item_history(conn, user_id, tracker, item_id, weeks, today)` | one item over the last `weeks` weeks: `tracker`, its `name`, its whole `notes` (uncut), and per week `in_plan`, `target`, the marks and their counts. A week that doesn't show the item reads as empty, as on screen                                                |
+| `goals(conn, user_id, today)`                                 | `trackers`: each tracker today's week shows, in order, with its `id`, `name`, `kind`, `daily_target` and `items` (each item's goal); then `daily_goal`, `note`, the My goals text from settings, and `limits`, the limits note (each `""` when there is none)       |
+| `consistency(conn, user_id, tracker, weeks, today)`           | over the last `weeks` weeks that show the tracker: the days up to today, how many met the daily target and the rate; the goals of the finished weeks, how many were met and the rate; the current runs of met days and of weeks with every goal met                 |
 
 Every reader keeps these rules:
 
 - `today` is the asker's date, passed in. The server can't know the browser's date, so the
   module never reads the clock.
-- Weeks are Monday `YYYY-MM-DD` keys. Another key, an unknown section, or a week count outside
+- Weeks are Monday `YYYY-MM-DD` keys. Another key, an unknown tracker, or a week count outside
   1–26 raises `InsightsError`, a `ValueError` whose `field` names the argument.
 - Keys are snake_case, and no user or session field appears. The return types are `TypedDict`s.
 - Names are cut to 100 characters, because they reach a model as text. The readers of many items
@@ -520,47 +536,61 @@ the endpoint's rules. The tools are listed below.
 
 A token of either scope may call a `read` tool. Only a `write` token may call a write tool (below).
 
-**Read tools.** Each wraps the reader of the same name in `insights.py` (§1.1) and returns its
-result unchanged, with `this_week` (the Monday of today's week) and `today` added, both in the
-account's timezone, so the agent knows "now". Every read tool has `readOnlyHint`. The server
-passes `today` to the reader, since `insights.py` never reads the clock. `section` is `exercise`
-(the default), `cardio` (cycling, running and the like, K90) or `diet` (food). A week is a Monday written `YYYY-MM-DD`.
+**Read tools.** Each wraps the reader of the same name in `insights.py` (§1.1; `list_trackers`
+wraps `trackers`) and returns its result unchanged, with `this_week` (the Monday of today's week)
+and `today` added, both in the account's timezone, so the agent knows "now". `week_summary` also
+adds `tracker`, the id it read. Every read tool has `readOnlyHint`. The server
+passes `today` to the reader, since `insights.py` never reads the clock. A week is a Monday
+written `YYYY-MM-DD`.
 
-| Tool           | Arguments (defaults)                                                      | Returns                                                                   |
-| -------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `week_summary` | `section` (`exercise`), `week` (this week)                                | One week: each item's marks against its goal, and the met days            |
-| `weeks`        | `section` (`exercise`), `start` (3 weeks before `end`), `end` (this week) | `week_summary` for each week from `start` to `end`, 26 at most            |
-| `item_history` | `item_id`, `section` (`exercise`), `weeks` (8)                            | One item's goal and marks over the last `weeks` weeks, and its whole note |
-| `goals`        | none                                                                      | This week's goals for every section, daily targets and both notes        |
-| `consistency`  | `section` (`exercise`), `weeks` (8)                                       | Met-day and goal-met rates over the last `weeks` weeks, streaks           |
+`tracker` names one of the account's trackers: its id, or its name in any case (§1.1). It
+defaults to `exercise`, the first Strength tracker. `section`, its old name, stays on every tool
+that took it, so older clients keep working: its schema is the enum `exercise`, `cardio`, `diet`,
+and it reads as `tracker` does. A call that gives both must give the same string, or it gets
+`tracker: give tracker or section, not both`. The server's instructions and `list_trackers`
+describe the person's own trackers and their kinds.
+
+| Tool            | Arguments (defaults)                                                      | Returns                                                                                                                            |
+| --------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `list_trackers` | none                                                                      | Every tracker, ended ones too: `id`, `name`, `kind`, `daily_target`, `start_week`, `end_week`, `shows_this_week`; and `daily_goal` |
+| `week_summary`  | `tracker` (`exercise`), `week` (this week)                                | One week of one tracker: each item's marks against its goal, and the met days; with `tracker`, its id                              |
+| `weeks`         | `tracker` (`exercise`), `start` (3 weeks before `end`), `end` (this week) | `week_summary` for each week from `start` to `end` that shows the tracker, 26 at most                                              |
+| `item_history`  | `item_id`, `tracker` (`exercise`), `weeks` (8)                            | One item's goal and marks over the last `weeks` weeks, and its whole note                                                          |
+| `goals`         | none                                                                      | This week's goals per tracker the week shows, each tracker's daily target, and both notes                                          |
+| `consistency`   | `tracker` (`exercise`), `weeks` (8)                                       | Met-day and goal-met rates over the last `weeks` weeks that show the tracker, streaks                                              |
 
 `week_summary`, `weeks` and `goals` cut each item's `notes` at 500 characters, a longer note
 ending in "…", and their descriptions say so. `item_history` returns the item's whole note as
 `notes`. `NOTE_HELP` and the `note` argument of `add_item` and `update_item` tell the agent to read
 it there before writing a note back, since a `note` replaces the whole note.
 
-A refused argument (a `week` that is not a Monday, an unknown `section`, a `weeks` outside 1
-to 26) returns a tool result with `isError: true` whose text names the field, as `week: must be a
+A refused argument (a `week` that is not a Monday or doesn't show the tracker, an unknown
+`tracker`, a `weeks` outside 1 to 26) returns a tool result with `isError: true` whose text names the field, as `week: must be a
 Monday, written YYYY-MM-DD`. It is not a JSON-RPC error. A week so near the year 1 or 9999 that
 the weeks around it can't be counted gets `date: a week or date is out of range`.
 
 **Write tools.** These change John's plans, marks and daily targets as the app does. Each needs a
 `write` token or connection. A `read` one gets a tool error, "this connection is read-only", which
 tells the person to create a write token in Settings › Connections or to reconnect and allow changes. The rules live in `edits.py`, over `data.put_plan`'s rules, `data.set_tick`,
-`data.put_settings` and, for a note, `data.set_notes_locked` (`put_details`' rules), so REST's
+`data.patch_tracker` and, for a note, `data.set_notes_locked` (`put_details`' rules), so REST's
 endpoints and limits are unchanged.
 
-| Tool                | Arguments (defaults)                                                        | Annotations       |
-| ------------------- | --------------------------------------------------------------------------- | ----------------- |
-| `add_item`          | `name`, `section` (`exercise`), `week` (this week), the item fields below   | not idempotent    |
-| `update_item`       | `item_id`, `section` (`exercise`), `week` (this week), the fields to change | `idempotentHint`  |
-| `remove_item`       | `item_id`, `section` (`exercise`), `week` (this week)                       | `destructiveHint` |
-| `mark_day`          | `item_id`, `mark`, `section` (`exercise`), `date` (today)                   | `idempotentHint`  |
-| `set_daily_targets` | `exercises_a_day`, `foods_a_day` (each left as it is when not given)        | `idempotentHint`  |
+| Tool                | Arguments (defaults)                                                                                   | Annotations       |
+| ------------------- | ------------------------------------------------------------------------------------------------------ | ----------------- |
+| `add_item`          | `name`, `tracker` (`exercise`), `week` (this week), the item fields below                              | not idempotent    |
+| `update_item`       | `item_id`, `tracker` (`exercise`), `week` (this week), the fields to change                            | `idempotentHint`  |
+| `remove_item`       | `item_id`, `tracker` (`exercise`), `week` (this week)                                                  | `destructiveHint` |
+| `mark_day`          | `item_id`, `mark`, `tracker` (`exercise`), `date` (today)                                              | `idempotentHint`  |
+| `set_daily_targets` | `tracker` with `daily_target`; or `exercises_a_day`, `foods_a_day` (each left as it is when not given) | `idempotentHint`  |
 
 Every write tool has `readOnlyHint` false and `openWorldHint` false; only `remove_item` has
 `destructiveHint` true.
 
+- **The tracker is the user's own**, by id or name (`edits.find`), and its kind decides the item's
+  fields and marks. A week the tracker doesn't show in is refused, naming `week` (`date` for
+  `mark_day`), in a plain sentence: `week: Yoga (x…) was deleted from the week of 2026-10-19 on,
+  so the week of 2026-10-19 doesn't show it; its earlier weeks still do`. Earlier weeks of an
+  ended tracker take changes as before.
 - **A change to a week is a change to that week and the weeks that carry it forward**, as in the
   app (architecture.md §2). A week with no plan of its own gets a copy of the plan it shows: its
   source week's, or the defaults when nothing is planned. An item tool creates the week at `rev`
@@ -568,15 +598,16 @@ Every write tool has `readOnlyHint` false and `openWorldHint` false; only `remov
   and the edit. `mark_day` first creates the plain copy (`edits.own_week`), then sets the day, as
   a tick on the device does. A device creating the same week from the same source does not
   conflict (P7). The source week is never written. `copied_from` in the result names the week
-  copied, `defaults`, or null when nothing was copied: the week had its own plan, or the call
+  copied, `defaults` (the `exercise` and `diet` trackers' default items, or none for any other
+  tracker), or null when nothing was copied: the week had its own plan, or the call
   changed only the note. `rev` is the week's plan revision, 0 for a week still without its own.
-- **Item fields use the app's words.** An exercise has `name`, `sets` (0 to 20), `reps` (0 to
+- **Item fields use the app's words.** An exercise (a strength tracker's item) has `name`, `sets` (0 to 20), `reps` (0 to
   9999), `seconds` (0 to 3600), `per_side`, `weight_kg` (0 to 500), `times_a_week` (0 to 7) and
   `note` (up to 20,000 characters). A cardio item (K90) has `name`, `seconds` (the whole
   session's, 0 to 86,400), `distance_km` (0 to 1,000), `times_a_week` and `note`. A food has
   `name`, `times_a_week` and `note`. They are stored as `name`, `sets`, `reps`, `duration`,
   `perSide`, `weight`, `distance`, `target` and `notes`; `edits.WORDS` holds that mapping, and
-  `edits.TYPE_WORDS` each type's fields. A field another type has is refused by name, as
+  `edits.TYPE_WORDS` each kind's fields. A field another kind has is refused by name, as
   `reps: a cardio item has no reps; it has name, seconds, distance_km, times_a_week, note`. A 0,
   or an empty `note`, clears the field.
 - **A note is the item's, not the week's.** `note` is the item's notes in its details (§3), one
@@ -590,16 +621,19 @@ Every write tool has `readOnlyHint` false and `openWorldHint` false; only `remov
   `reps` drops its seconds. Names are trimmed, may not be empty, and are capped at 80 characters.
   A new exercise's `times_a_week` is 3, as is a new cardio item's and a new food's.
 - **Ids are made by the server**, in the app's shape: `x`, the time in milliseconds in base 36, and
-  four random base-36 characters. An id already used in the section is never reused.
+  four random base-36 characters. An id already used in the tracker is never reused.
 - **`mark_day`** marks one item on one date. The week is that date's Monday and the day its
   weekday. It may be in the future, as on screen. `mark` is one of the nine marks
   (§2), or null to clear the day. An exercise and a cardio item take any of them. A food takes
   only `great`, `great-solid` or `great-hatch`, the marks the app gives a food. An item the week does not show is refused.
-- **`set_daily_targets`** sets exercises a day and foods a day, each 1 to 8. Cardio has no daily
-  target. The accent and the
-  target not given keep their saved values, or the defaults while none are saved. It still saves
-  the numbers while Daily goal is off, which only the app can turn on, and its result has
-  `daily_goal`.
+- **`set_daily_targets`** sets a strength or food tracker's daily target, 1 to 8: `tracker` and
+  `daily_target` together. The older form still works: `exercises_a_day` sets the `exercise`
+  tracker's, `foods_a_day` the `diet` tracker's, and either can join the new form in one call. A
+  cardio tracker has no daily target, and a tracker given twice is refused. Every target is
+  checked before any is written. Each goes through `data.patch_tracker`, so the `exercise` and
+  `diet` trackers' targets reach `daily_pick` and `food_pick` too (W4), and a stale `rev` is
+  replayed up to three times. Nothing else changes. It still saves the numbers while Daily goal is
+  off, which only the app can turn on, and its result has `daily_goal`.
 - **Conflicts.** A plan write that meets a newer `rev` re-reads the week and applies the change
   again, up to three tries in all, then fails with a tool error. The app adopts the server's copy
   on its next read, as after any 409 (architecture.md §7).
@@ -618,9 +652,9 @@ table):
 
 | Tool                 | Returns                                                                                                                                                                 |
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| the three item tools | `section`, `week`, `item` (the item added, updated or removed), `before` and `after` (the week's items, in the app's words, each with its `note`), `rev`, `copied_from` |
-| `mark_day`           | `section`, `date`, `week`, `day` (0 is Monday), `item_id`, `before` and `after` (the day's mark or null), `days` (the item's seven marks), `rev`, `copied_from`         |
-| `set_daily_targets`  | `before` and `after`, each `{exercises_a_day, foods_a_day}`                                                                                                             |
+| the three item tools | `tracker`, `week`, `item` (the item added, updated or removed), `before` and `after` (the week's items, in the app's words, each with its `note`), `rev`, `copied_from` |
+| `mark_day`           | `tracker`, `date`, `week`, `day` (0 is Monday), `item_id`, `before` and `after` (the day's mark or null), `days` (the item's seven marks), `rev`, `copied_from`         |
+| `set_daily_targets`  | `targets`, each `{tracker, name, before, after}` in the order given, and `daily_goal`                                                                                   |
 
 `remove_item` leaves the item's marks in the log, uncounted, as the app does. Adding the item back
 gives it a new id, so those marks stay detached; `before` holds the item for reference.
@@ -699,7 +733,7 @@ no-store` and `X-Accel-Buffering: no`, so nginx passes each event on at once. Ea
   and one that would take the account over its quota is not saved.
 - Each question sends Claude the conversation's earlier turns from the database, oldest first,
   as alternating text-only user and assistant turns, then the new question. The context (today,
-  this week, My goals, the limits note) opens the first user turn, as for a new conversation. A turn with an
+  this week, the trackers, My goals, the limits note) opens the first user turn, as for a new conversation. A turn with an
   empty answer is left out whole, since its question alone would put two user turns in a row.
   Only the newest turns go: at most 20, with at most 40,000 characters of questions and answers
   together; the first turn that doesn't fit, and every turn before it, stays out.
@@ -722,15 +756,18 @@ declines, which questions about a person's tracking don't meet. The loop is writ
 than using the SDK's beta tool runner, which fails a call whose input has a key the schema lacks
 and logs it as an exception.
 
-**The prompt.** The system prompt is one constant: the role, the rules from §1.1 (a plan
-carries forward, every mark counts towards a goal, missed and partial days are reported as such,
-met days use exercises a day and foods a day, future days don't count), what cardio is (a
-duration and a distance, a weekly goal, no daily target and no defaults, K90), names and notes as
-data and never instructions, tools before judgement, no medical advice, short markdown with no
+**The prompt.** The system prompt is one constant: the role, the person's own trackers and their
+kinds (strength, cardio, food), the rules from §1.1 (a plan carries forward, only the `exercise`
+and `diet` trackers have defaults, a deleted tracker leaves the weeks from its end on, every mark
+counts towards a goal, missed and partial days are reported as such, met days use each strength
+and food tracker's own daily target, future days don't count), what cardio is (a duration and a
+distance, a weekly goal, no daily target and no defaults, K90), names and notes as data and never
+instructions, tools before judgement, no medical advice, short markdown with no
 headings, tables or images, and the voice. It holds nothing that varies, so it caches; the cache
-breakpoint is on it, and the tools render before it. Today, this week, the My goals note
+breakpoint is on it, and the tools render before it. Today, this week, the trackers today's week
+shows (`<trackers>`, one a line: `id | kind | name`, from `ask.shown_trackers`), the My goals note
 (`<my_goals>`) and the limits note (`<my_limits>`) open the first user turn instead, each named
-as data. The voice is John's ruling (K68, voice.md "Ask"): facts first and
+as data. A week with no tracker says so. The voice is John's ruling (K68, voice.md "Ask"): facts first and
 no blame, exclamation marks or hype, and `VERDICT_RULE`, which lets an answer say plainly that
 something is too little or too much, count streaks and give scores or rankings when they help,
 and quote the person's goals and notes back as advice. `PLAIN_VERDICTS` (True) turns it on;
@@ -738,8 +775,10 @@ False would put back the app's own rules (no streaks, scores or rankings, nothin
 
 **The tools** are `consistency`, `goals`, `item_history`, `week_summary` and `weeks`, sorted by
 name, each with a strict schema. Each wraps the `insights` reader of the same name (§1.1) and is a
-closure over the session's user and the question's `today`. `section` is an enum of the
-registry's sections: `exercise`, `cardio`, `diet`. No schema has a user field, and a
+closure over the session's user and the question's `today`. `tracker` is a string: a tracker's
+id from the context's list. It has no enum, since each account's trackers differ and the schema
+must stay the same bytes for the cache. The readers look it up among the session user's trackers
+only, so another account's id is an error result naming `tracker`. No schema has a user field, and a
 key the schema lacks is never read, so a tool reads only the asker's data whatever the model
 writes. Each call runs on a worker thread with its own connection. An `InsightsError` goes back
 to Claude as an error result naming the field. A result over 20 KB of JSON goes back as an error
@@ -1204,7 +1243,9 @@ Tests sit in `api/tests/`:
 - `test_insights.py`: every case in `fixtures/insights/` (§9), then each reader over a real
   database: the defaults, missed days, the output's shape and cuts, user isolation, no writes,
   the 26-week bound, Monday keys, item history, goals with both notes and consistency, and cardio's session with
-  no daily target.
+  no daily target. Then the account's trackers: defaults on the `exercise` and `diet` trackers
+  only, a new tracker by its kind and its own daily target, a tracker by id or by name, a shared
+  name refused, `trackers`, and an ended tracker absent from its end week on.
 - `test_api.py`: the HTTP layer: the write guard, error shapes, body limits (chunked too), every
   data endpoint, user isolation, `X-Expected-User`, sign-up and its refusals (closed included),
   the quota on plans, ticks and imports, every mark and the old `done` body, import and export
@@ -1245,7 +1286,8 @@ Tests sit in `api/tests/`:
   turn, the event order, user isolation against forged tool input, error results, the 20 KB cap,
   every validation refusal (forged tool and thinking blocks included), both caps and their
   `Retry-After`, parallel claims, keep-alives, a disconnect cancelling the answer, the prompt's
-  rules and the verdict switch, and that no question, history, answer, goals or limits reach the
+  rules and the verdict switch, the trackers the week shows in the context turn, a tracker id
+  from another account refused, and that no question, history, answer, goals or limits reach the
   logs.
   For the history: the earlier turn in a follow-up's request, read from the database; a
   `history` or any other key refused; what each stop saves, a client that leaves included; the
@@ -1267,15 +1309,21 @@ Tests sit in `api/tests/`:
   POST; an oversized body; a redirect). Where the endpoint's rule differs from REST's, the same
   test checks a REST route too, so an exemption wider than `/api/mcp` fails. Then every tool:
   the parity cases through `week_summary`, the read tools' defaults and refusals (a week at the
-  calendar's end included), a read token refused on writes, and each write's result.
+  calendar's end included), a read token refused on writes, and each write's result. For the
+  account's trackers: the instructions, `list_trackers`, `add_item` and `mark_day` on a new
+  tracker by id and by name, an ended tracker absent from its end week on, `section` as an alias,
+  and goals and daily targets per tracker.
 - `test_oauth.py`, `test_oauth_api.py`, `test_tokens_api.py`: OAuth's storage and rules (clients and
   redirects, codes, rotation and its grace, reuse, expiry, the caps, sweeping, ending credentials
   together), then its routes (discovery, authorize and each of its errors, the consent calls, the
   token and revoke guard, Connections) and the personal-token routes. `test_mcp.py` also covers the
   verifier's prefix dispatch, expiry on the clock, the grant's resource and the 503.
 - `test_edits.py`: the plan edits behind the write tools: copying a carried week first, the ids
-  the server makes, each field's bounds, replaying a conflict, the quota, marks per section, and
-  cardio's fields and refusals.
+  the server makes, each field's bounds, replaying a conflict, the quota, marks per tracker,
+  cardio's fields and refusals, daily targets on any strength or food tracker (the older form
+  too), and the account's trackers: one by id or name, another account's refused, a new tracker
+  empty, and an ended tracker's weeks from its end on refused while its earlier ones take
+  changes.
 - `test_validate.py`: the write checks REST and MCP share: week keys, plan bodies, item ids, days,
   marks, the stricter item shape for MCP writes, and cardio's normaliser.
 - `conftest.py` gives each test a temporary database, a controllable clock, a cheap hasher and a

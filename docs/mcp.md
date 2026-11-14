@@ -12,20 +12,38 @@
 The server lives at `/api/mcp` and lets an agent read the training log and, with a write token,
 change it. Each token or connection belongs to one account and acts only as that account.
 
-The log has three trackers, each a `section` the tools take: `exercise` (the default), `cardio`
-and `diet` (food). A cardio item, such as cycling or running, has a session time in seconds and a
-distance in km, either, both or neither. It has a weekly goal but no daily target.
+The log holds your trackers. Each has an id, a name and a kind:
+
+- **strength**: exercises, with sets, reps or seconds, each side, and weight;
+- **cardio**: sessions such as cycling or running, with a time in seconds and a distance in km,
+  either, both or neither, and no daily target;
+- **food**: foods eaten, marked only as eaten.
+
+Every account starts with three trackers: `exercise` (named Strength), `cardio` and `diet` (named
+Food). Trackers you add in the app get random ids. `list_trackers` gives every tracker's id.
+
+The tools that act on one tracker take `tracker`: its id, or its name in any case. A name that
+two trackers share is refused, with their ids. With no `tracker`, a tool acts on `exercise`.
+Older clients may still send `section` with `exercise`, `cardio` or `diet`; it works as
+`tracker` does.
+
+A tracker shows from the week it was created in. A deleted tracker shows in no week from the week
+it was deleted in, but its earlier weeks keep it, with their marks and notes. The tools follow
+the same rule: a week that doesn't show the tracker is refused, or left out of a range. Only the
+first Strength and Food trackers show default items while nothing is planned. Every other tracker
+starts empty.
 
 **Read tools** answer questions about the log. A `read` or a `write` token may call them.
 
-| Tool           | Answers                                                                     |
-| -------------- | --------------------------------------------------------------------------- |
-| `whoami`       | Which account and scope the token has. Use it to test the link.             |
-| `week_summary` | How one week went, item by item, against its goals.                         |
-| `weeks`        | Several weeks side by side, for a trend.                                    |
-| `item_history` | One item over the last weeks, and its whole note.                           |
-| `goals`        | This week's goals, the daily targets, and the "My goals" and limits notes.  |
-| `consistency`  | The share of days and goals met, and the current streaks.                   |
+| Tool            | Answers                                                                            |
+| --------------- | ---------------------------------------------------------------------------------- |
+| `whoami`        | Which account and scope the token has. Use it to test the link.                    |
+| `list_trackers` | Every tracker: id, name, kind, daily target, start and end weeks.                  |
+| `week_summary`  | How one week of one tracker went, item by item, against its goals.                 |
+| `weeks`         | Several weeks of one tracker side by side, for a trend.                            |
+| `item_history`  | One item over the last weeks, and its whole note.                                  |
+| `goals`         | This week's goals and daily target per tracker, and the My goals and limits notes. |
+| `consistency`   | The share of days and goals met in one tracker, and the current streaks.           |
 
 The "My goals" and limits notes are the person's own words: what they are working towards, and
 what they have to work around. Any agent connected to the account reads them through `goals`, as
@@ -33,13 +51,16 @@ Ask does in the app.
 
 **Write tools** change plans, items' notes, marks and daily targets as the app does. Only a `write` token or a Read and change connection may call them.
 
-| Tool                | Does                                                |
-| ------------------- | --------------------------------------------------- |
-| `add_item`          | Adds an item to a week's plan, in any tracker.      |
-| `update_item`       | Changes the fields given on one item, or its note.  |
-| `remove_item`       | Takes one item out of a week's plan.                |
-| `mark_day`          | Marks one item on one date, or clears the day.      |
-| `set_daily_targets` | Sets how many exercises and foods make a day count. |
+| Tool                | Does                                                                        |
+| ------------------- | --------------------------------------------------------------------------- |
+| `add_item`          | Adds an item to a week's plan, in any tracker.                              |
+| `update_item`       | Changes the fields given on one item, or its note.                          |
+| `remove_item`       | Takes one item out of a week's plan.                                        |
+| `mark_day`          | Marks one item on one date, or clears the day.                              |
+| `set_daily_targets` | Sets how many items a day make a day count, for a strength or food tracker. |
+
+`set_daily_targets` takes `tracker` and `daily_target`, 1 to 8. Its older form still works:
+`exercises_a_day` sets the `exercise` tracker's target and `foods_a_day` the `diet` tracker's.
 
 An item's note belongs to the item, not to a week. It is the note the item's row and its page show
 in the app, the same in every week. Changing it changes no week's plan. A note runs to 20,000
@@ -254,8 +275,9 @@ If ChatGPT says it cannot connect, see §6.
 
 After connecting, ask a question that needs the log:
 
+- "Which trackers do I have?"
 - "How is my training going this week?"
-- "Compare the last four weeks."
+- "Compare the last four weeks of Yoga."
 - "How are my squats going?"
 - "Am I consistent? What is my streak?"
 
@@ -266,10 +288,11 @@ With a write token or a Read and change connection, ask for a change:
 - "Set my daily target to 3 exercises."
 - "Add a note to squats: knees out."
 - "Add a 5 km run to cardio, twice a week."
+- "Set my Snacks tracker to two a day."
 
 Every write tool returns what it changed as it was (`before`) and as it is now (`after`): a week's
-items with their notes, a day's mark, or the two daily targets. To undo a change, ask the agent to restore the
-`before` values, or edit the plan in the app.
+items with their notes, a day's mark, or each daily target it set. To undo a change, ask the agent
+to restore the `before` values, or edit the plan in the app.
 
 ## 6. Troubleshooting
 
@@ -282,6 +305,8 @@ items with their notes, a day's mark, or the two daily targets. To undo a change
 | "this connection is read-only"                                                       | A write tool needs a write token or a Read and change connection. Create a write token in Settings › Connections, or remove the connection and connect again with Read and change.                                                                                                                                        |
 | 413 `too-large`                                                                      | The request body is over 1 MiB.                                                                                                                                                                                                                                                                                           |
 | 400 "Invalid Content-Type header"                                                    | The `Content-Type` is not `application/json`. MCP clients send it; a hand-made `curl` must too.                                                                                                                                                                                                                           |
+| "doesn't show it" in a tool error                                                    | The tracker was deleted from that week on, or starts after it. Its earlier weeks still take reads and changes. `list_trackers` gives each tracker's `start_week` and `end_week`.                                                                                                                                          |
+| `tracker` in a tool error                                                            | No tracker has that id or name, or two trackers share the name. The error lists the ids; send one.                                                                                                                                                                                                                        |
 | `quota` in a tool error                                                              | The account is full (5 MiB). Remove old plans or marks in the app, then retry.                                                                                                                                                                                                                                            |
 | 405                                                                                  | The client sent a GET or a `DELETE`. The server accepts POST only, so use a client that supports it.                                                                                                                                                                                                                      |
 | 503 `busy`                                                                           | The server could not check the token because its database was busy or failing. This is not a bad token. Retry in a few seconds; the API log has the error.                                                                                                                                                                |
