@@ -25,6 +25,7 @@ import SectionHeaderSection from './sections/SectionHeaderSection.vue'
 import WeekGridSection from './sections/WeekGridSection.vue'
 import RecentWeeksSection from './sections/RecentWeeksSection.vue'
 import ItemPageSection from './sections/ItemPageSection.vue'
+import NewTrackerPageSection from './sections/NewTrackerPageSection.vue'
 import TranscriptSection from './sections/TranscriptSection.vue'
 import AnswerProgressSection from './sections/AnswerProgressSection.vue'
 import QuotaChipSection from './sections/QuotaChipSection.vue'
@@ -210,7 +211,7 @@ export const SECTIONS: readonly StyleGuideSection[] = [
     id: 'sg-section-header',
     title: 'SectionHeader',
     summary:
-      'The heading over a WeekGrid: the section’s name in serif, the week beside it, and an optional line of hint.',
+      'The heading over a WeekGrid: the tracker’s name in serif, in Edit plan with its pen, Add and Delete tracker.',
     component: SectionHeaderSection,
   },
   {
@@ -233,6 +234,13 @@ export const SECTIONS: readonly StyleGuideSection[] = [
     summary:
       'An item’s own page, in rows like Settings: the name with its pen, this week’s plan first, then its notes, details and recent weeks, and Remove. Edit plan’s Add opens the new item page.',
     component: ItemPageSection,
+  },
+  {
+    id: 'sg-new-tracker-page',
+    title: 'NewTrackerPage',
+    summary:
+      'The page Edit plan’s Add tracker opens: a name, a kind with a line saying what it records, and when it starts.',
+    component: NewTrackerPageSection,
   },
   {
     id: 'sg-transcript',
