@@ -74,7 +74,7 @@
       <div class="content">
         <p class="lede">What each item in it records. The kind is set once.</p>
         <div class="kind">
-          <div class="seg-field"><span class="label" id="a-kind-label">Kind</span><div class="seg" role="group" aria-labelledby="a-kind-label"><button type="button" aria-pressed="true" data-kind="strength">Strength</button><button type="button" aria-pressed="false" data-kind="cardio">Cardio</button><button type="button" aria-pressed="false" data-kind="food">Food</button></div></div>
+          <div class="seg-field"><span class="label" id="a-kind-label">Kind</span><div class="seg" role="group" aria-labelledby="a-kind-label"><button type="button" aria-pressed="true" data-kind="strength">Strength</button><button type="button" aria-pressed="false" data-kind="cardio">Cardio</button><button type="button" aria-pressed="false" data-kind="food">Food</button><button type="button" aria-pressed="false" data-kind="mobility">Mobility</button></div></div>
           <p class="kind-line" aria-live="polite">Strength: sets, then reps or time, and weight. Marked great, partial or missed.</p>
         </div>
       </div>
@@ -98,7 +98,7 @@
       <div class="content">
         <p class="lede">What each item in it records. The kind is set once.</p>
         <div class="kind">
-          <div class="seg-field"><span class="label" id="b-kind-label">Kind</span><div class="seg" role="group" aria-labelledby="b-kind-label"><button type="button" aria-pressed="false" data-kind="strength">Strength</button><button type="button" aria-pressed="false" data-kind="cardio">Cardio</button><button type="button" aria-pressed="true" data-kind="food">Food</button></div></div>
+          <div class="seg-field"><span class="label" id="b-kind-label">Kind</span><div class="seg" role="group" aria-labelledby="b-kind-label"><button type="button" aria-pressed="false" data-kind="strength">Strength</button><button type="button" aria-pressed="false" data-kind="cardio">Cardio</button><button type="button" aria-pressed="true" data-kind="food">Food</button><button type="button" aria-pressed="false" data-kind="mobility">Mobility</button></div></div>
           <p class="kind-line" aria-live="polite">Food: a number of times a week. Marked eaten.</p>
         </div>
       </div>
@@ -116,6 +116,7 @@
     strength: 'Strength: sets, then reps or time, and weight. Marked great, partial or missed.',
     cardio: 'Cardio: time and distance. Marked great, partial or missed.',
     food: 'Food: a number of times a week. Marked eaten.',
+    mobility: 'Mobility: sets, then reps or a hold time, each side if you like. Marked great, partial or missed.',
   }
   for (const form of document.querySelectorAll('form[data-page]')) {
     const line = form.querySelector('.kind-line')
