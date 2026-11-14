@@ -6,6 +6,7 @@ import IconButtonSection from './sections/IconButtonSection.vue'
 import BarActionSection from './sections/BarActionSection.vue'
 import BrandMarkSection from './sections/BrandMarkSection.vue'
 import TextLinkSection from './sections/TextLinkSection.vue'
+import TabsSection from './sections/TabsSection.vue'
 import TextFieldSection from './sections/TextFieldSection.vue'
 import TextAreaSection from './sections/TextAreaSection.vue'
 import SegmentedControlSection from './sections/SegmentedControlSection.vue'
@@ -99,6 +100,13 @@ export const SECTIONS: readonly StyleGuideSection[] = [
     summary:
       'A link in ink with a visible underline, for going somewhere rather than doing something.',
     component: TextLinkSection,
+  },
+  {
+    id: 'sg-tabs',
+    title: 'Tabs',
+    summary:
+      'A row of tabs under a page’s title, one per part of the page, that shows one part at a time; the Settings page has one (K119).',
+    component: TabsSection,
   },
   {
     id: 'sg-text-field',
