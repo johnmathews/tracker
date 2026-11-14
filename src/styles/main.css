@@ -123,10 +123,10 @@
   --set-sec-y: calc(var(--u) * 32);
   /* A caption on these pages: what an answer read, the notes under a box, the history's links. */
   --set-caption: max(16px, calc(var(--u) * 16));
-  /* Edit plan's row button (K54): Remove, in a column of its own (no Edit button since K104). */
+  /* The pages' IconButton (K54's row button, whose Remove column K120 dropped): the item name's
+     pen (K121), a dialog's Close, arranging's moves and Show. */
   --edit-ib: max(44px, calc(var(--u) * 52));
   --edit-ib-icon: max(20px, calc(var(--u) * 28));
-  --grid-remove-w: max(56px, calc(var(--u) * 72));
   /* A folded row of boxes: a share of the screen's height, so a tall phone spreads the week. */
   --grid-box-h: clamp(48px, min(19vw, 7.5dvh), 110px);
 }

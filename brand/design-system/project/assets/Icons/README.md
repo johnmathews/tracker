@@ -12,8 +12,8 @@ Size: 20px inside buttons and icon buttons, 16px beside text. An icon never carr
 | settings | Opens Settings |
 | x | Closes a dialog or popover; clears a search |
 | plus, minus | Stepper buttons; add a row |
-| pencil | Edit notes and Add notes on an item's page |
-| trash-2 | Remove a row (always confirmed) |
+| pencil | Edit notes and Add notes on an item's page; the name's pen, Rename (K121) |
+| trash-2 | Remove an item from the week, on its page (always confirmed, K120) |
 | search | Search field |
 | cloud-off | Offline banner |
 | mail | Confirm-your-email banner |

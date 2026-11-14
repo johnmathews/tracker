@@ -93,11 +93,10 @@ paths to the API as well ([deployment.md](deployment.md) §2).
 
 Every screen is built from the primitives in `src/components/ui/` (§6.3), which follow the design
 system's cards ([brand.md](brand.md)). `TrackerGrid` and `TrackerRow` (on the `DayMark`, `Chip`
-and `IconButton` primitives) take props, emit events, and serve every section.
+and `Popover` primitives) take props, emit `toggle`, and serve every section. They are the same in
+Edit plan: no Remove column (K120).
 `TrackerGrid` runs the grid's keyboard model (`useGridNav`, §6.5) and links each name to its item's
-page. `TrackerRow` asks the
-`ConfirmDialog` (through `useConfirm`, §6.4) before emitting `remove`, and names where focus goes
-once the row has gone. `ExerciseGrid`, `CardioSection` and `DietSection` wire them to their store,
+page, the one place an item is renamed or removed. `ExerciseGrid`, `CardioSection` and `DietSection` wire them to their store,
 and their Add buttons open the new item page (K104). The item page and the new item page share the
 plan's controls, `PlanFields.vue`. It takes an exercise's field state and input cleaning through
 `useExerciseForm` (`src/composables/exerciseForm.ts`) and the `PerSideToggle` segmented control,
@@ -148,10 +147,11 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 │                       Conversation, kept per device), the Transcript and the question box with
 │                       the QuotaChip; deleting asks in a ConfirmDialog of its own
 ├── ItemPage.vue        the ItemPage card, at #/item/<section>/<id> (K64, K65): Back to the week
-│   │                   and Arrange sections, the type, the name and its chips (in Edit plan the
-│   │                   Name field, K104); then rows like Settings: the week's plan (or the
-│   │                   latest, read-only), Notes, Details and Recent weeks, as the type's
-│   │                   arrangement shows them (K66, K104); in Edit plan Remove last
+│   │                   and Arrange sections, the type, the name with its pen (renaming in
+│   │                   a field in the title's type, K121) and its chips; then rows like
+│   │                   Settings: the week's plan (or the latest, read-only), Notes, Details
+│   │                   and Recent weeks, as the type's arrangement shows them (K66, K104);
+│   │                   Remove last, in both modes (K120)
 │   ├── PlanFields.vue  the plan's controls: an exercise's, a cardio item's or a food's, with
 │   │                   Times a week
 │   └── RecentWeeks.vue the RecentWeeks card: up to eight weeks, newest first, a met week's count
@@ -174,8 +174,8 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 │       │               the days that met the daily pick
 │       └── TrackerRow.vue  name (a link to the item's page) and chips on one line, the
 │                           item's notes under them, from the details store (a button
-│                           opening a Popover, K43); 7 × DayMark; in config
-│                           mode the remove IconButton in a last cell of its own
+│                           opening a Popover, K43); 7 × DayMark, the same in
+│                           Edit plan (K120)
 ├── CardioSection.vue   the Cardio section (K90): SectionHeader with no Stepper (no daily
 │   │                   target), kept with its grid; on the screens "Back to Exercises" on its
 │   │                   title line and "Go to Food" at its foot (K42)
@@ -625,12 +625,19 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
   October" for another week. An item not in that week (an old address, or an item since removed)
   shows "Latest plan", read-only, from the latest week whose own plan holds it.
 
-  **In Edit plan** (K104) the page is the one place an item changes. The `<h1>` is visually hidden
-  and a Name field takes its place, renaming the item in this week's plan as you type
-  (`updateExercise`, `updateCardio`, `updateFood`); an empty name shows "Enter a name." and waits.
-  The chips go. A Remove row ends the page, outside the arrangement: a line saying what it does and
-  "Remove from this week", which asks the row's question through `useConfirm`, notes the week, and
-  removes the item and leaves for the week (`leaveForWeek`) only when that week still shows.
+  **The name and Remove** (K120, K121) are the same in Edit plan and outside it, for an item in the
+  week the page shows: the page is the one place an item changes. The `<h1>` (`title-1` at
+  `--fs-title`) is followed by the pen, an IconButton named "Rename <name>" (`data-testid=
+  "item-rename"`), then the chips. The pen swaps the title for an input in the title's own type
+  with "Done" beside it, the `<h1>` staying visually hidden and the chips hiding; focus goes to the
+  input with its text selected. Enter or Done saves the trimmed name into the week's plan
+  (`updateExercise`, `updateCardio`, `updateFood`) on commit, not per keystroke; Escape puts the old
+  name back (and stops there, so arranging stays on); either way focus returns to the pen. An empty
+  name shows "Enter a name." and saves nothing. Outside renaming the title is the store's name; a
+  rename from elsewhere replaces the draft only while it is untouched. A Remove row ends the page,
+  outside the arrangement and hidden while arranging: a line saying what it does and "Remove from
+  this week", which asks through `useConfirm`, notes the week, and removes the item and leaves for
+  the week (`leaveForWeek`) only when that week still shows.
 
   **The new item page** (`NewItemPage.vue`, K104), at `#/new/<section>`, is what Edit plan's Add
   opens. It shares the item page's `data-slot`, so it takes the same sizes. The head's first line
@@ -654,7 +661,7 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
   hash, as on Settings.
 - **The name is a link.** In the week and in Edit plan, each row's name is an `<a href>` to its
   item's page (`data-slot="item-link"`). It looks as it always has, underlines under the pointer and
-  prints as plain text. There is no Edit button: the page is where an item changes (K104). In the grid the link is the
+  prints as plain text. There is no Edit button and no Remove: the page is where an item changes (K104, K120). In the grid the link is the
   name cell's widget, so Enter opens the page in one press, and F2 reaches the cell's other controls
   (§6.5).
 - **Config mode and normal mode.** Normal mode, the default on every load, only marks cells. A
@@ -666,17 +673,16 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
   screen showing most under the bar (K109). `App.vue` adds H or B for back and L for forward,
   signed in, on every page (K105). `ownedElsewhere` leaves a key alone in a field,
   with Ctrl, ⌘ or Alt, repeating, mid-composition, or while a dialog or popover is open. Edit plan
-  shows the
-  remove IconButtons, "Add exercise", "Add cardio" and "Add food" buttons at the end of each title line (K113), and
+  shows "Add exercise", "Add cardio" and "Add food" buttons at the end of each title line (K113), and
   the daily targets centred on each title line, under the bar's week: a Stepper at max(44px, 40u)
   reading "4 per day", its label ("Exercises a day", "Foods a day") for a screen reader only
-  (K56, K62, K63). The week beside the titles is left out there. An item is added on the new item page and changed
-  on its page (K64, K104), so rows have no Stepper; the remove button ends each
-  row, in a "Remove" column after the days. The mode is not saved, so the
+  (K56, K62, K63). The week beside the titles is left out there. An item is added on the new item page, and changed
+  and removed on its page (K64, K104, K120), so rows have no Stepper and no Remove: Edit plan's grid
+  has the week's columns. The mode is not saved, so the
   app always opens ready for ticking.
 - **Exercises and foods are editable.** The handoff had no way to change an item after adding it.
-  The item's page changes everything about it: its plan in both modes, and in Edit plan its name
-  and Remove (K104). The Edit dialogs of K54 are gone. Sets and
+  The item's page changes everything about it, the same in both modes: its name (the pen, K121),
+  its plan, and Remove (K104, K120). The Edit dialogs of K54 are gone. Sets and
   weight can be left empty (an empty weight shows a grey "Bodyweight" placeholder; no field is
   marked optional), weight in kg; the sets/reps chip and the weight chip are separate so they
   wrap in the narrow name column.
@@ -810,7 +816,7 @@ the properties they animate, so the focus ring never fades in.
 true for the verb, false for Cancel or Escape. One `<ConfirmHost />`, mounted once in `App.vue`,
 shows the open question in a ConfirmDialog (Reka's AlertDialog). A newer question answers an older
 one false. `returnFocus` names where focus goes on closing when the control that asked has gone, as
-after a removal. Removing a row (`TrackerRow`) asks this way. Sign out uses a ConfirmDialog of its own, on the Profile page and from the bar's profile menu
+after a removal. Removing an item on its page (`ItemPage`, K120) asks this way. Sign out uses a ConfirmDialog of its own, on the Profile page and from the bar's profile menu
 (`useSignOut`), because it shows the unsynced count, a busy state and an error. From the menu, a
 sign-out the server refuses opens the same dialog with the reason, since the bar has no room for it. So do the Ask page's two deletes (one conversation,
 or all): Cancel returns focus to the bin that asked (its `data-history-delete`), and a delete moves
@@ -835,10 +841,10 @@ Each grid is one tab stop, following the WAI-ARIA grid pattern with a roving tab
 - **Keys.** Arrows move cell by cell over the names and days, and never
   wrap. Home and End go along the row, Ctrl+Home and Ctrl+End to the grid's ends. An `aria-hidden`
   cell is skipped.
-- **Controls in a cell.** The other controls in a cell (the note's button, and in Edit plan Remove
-  in the last cell) stay out of the Tab order. F2 on the cell
-  lets them in, as does Enter on a cell without a widget (Remove's). Tab moves among them, and
-  Escape puts focus back on the cell, or on its widget: the name's link, in a name cell.
+- **Controls in a cell.** The other controls in a cell (the note's button beside the name's link)
+  stay out of the Tab order. F2 on the cell lets them in; Enter stays the widget's own. Tab moves
+  among them, and Escape puts focus back on the cell, or on its widget: the name's link, in a name
+  cell.
 
 "Skip to today", first in the tab order in `AppNavbar.vue`, focuses today's first mark in the
 first grid that has today. Tabbing to it brings the navbar into view on the planner's screens.
@@ -914,9 +920,10 @@ wide) and `short:` (landscape, 540px tall or less).
   they switch to `--n` (1 on a phone, up to 1.4). Components set `text-(length:--fs-name)` beside a
   type class, so the class keeps the font and weight and the size follows the screen. The other
   families: `--bar-*` sizes the Header and its BarActions (K47); `--set-*` the Settings and Ask
-  pages' and the dialogs' type and controls (K51, K55); `--edit-ib`, `--edit-ib-icon` and
-  `--grid-remove-w` Edit plan's row buttons and the Remove column (K54; K104 dropped the edit
-  button's `--grid-edit-w`). Outside the planner's screens
+  pages' and the dialogs' type and controls (K51, K55); `--edit-ib` and `--edit-ib-icon` the
+  pages' IconButtons: the item name's pen (K121), a dialog's Close, arranging's moves (K54's row
+  button; K104 dropped the edit button's `--grid-edit-w`, K120 the Remove column's
+  `--grid-remove-w`). Outside the planner's screens
   (Edit plan) `--grid-row-min` and `--grid-row-max` are a fixed max(76px, 100u), since that page
   scrolls rather than filling the window.
 - **The grid.** `TrackerGrid` makes the table `display: grid` with its row groups and rows

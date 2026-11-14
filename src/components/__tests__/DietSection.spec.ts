@@ -112,14 +112,21 @@ describe('DietSection', () => {
     const plan = api.accounts.get(USER)!.plans.diet['2026-10-19']!.items as { name: string }[]
     expect(plan.at(-1)!.name).toBe('Beans')
 
-    await diet().get('button[aria-label="Remove Nuts"]').trigger('click')
+    // Removing is on the food's page (K120): the row has no Remove.
+    expect(diet().find('button[aria-label="Remove Nuts"]').exists()).toBe(false)
+    location.hash = diet().findAll('[data-testid="item-name"]').at(-2)!.attributes('href')!
+    await settle()
+    expect(wrapper.get('[data-testid="item-page"] h1').text()).toBe('Nuts')
+    await wrapper.get('[data-testid="item-remove-button"]').trigger('click')
     await flushPromises()
     // Reka renders the ConfirmDialog in a portal on document.body.
     const dialog = document.querySelector<HTMLElement>('[role="alertdialog"]')!
     expect(dialog.querySelector('h2')!.textContent).toBe('Remove Nuts?')
     ;[...dialog.querySelectorAll('button')].find((b) => b.textContent === 'Remove')!.click()
     await flushPromises()
+    await settle()
     expect(cells('Nuts')).toHaveLength(0)
+    expect(cells('Beans')).toHaveLength(7)
   })
 
   it('adopts another tab’s diet changes', async () => {

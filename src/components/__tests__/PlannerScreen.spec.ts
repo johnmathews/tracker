@@ -485,16 +485,17 @@ describe('the planner’s screens (K24–K27)', () => {
   it('never presses the button held in Edit plan to leave it', async () => {
     mountApp()
     await longPress()
-    // Hold an item's Remove button: Edit plan goes off, and its question never opens.
-    const removePushUps = wrapper.get('button[aria-label="Remove Push-ups"]').element
-    await hold(removePushUps, HOLD_MS)
+    // Hold Add exercise: Edit plan goes off, and the new item page never opens.
+    const add = wrapper.get('[data-testid="add-exercise"]').element
+    await hold(add, HOLD_MS)
     expect(editing()).toBe(false)
     // Leaving Edit plan takes the button away, so the release lands on what is under the
     // pointer now: the week. That click is swallowed too.
-    expect(removePushUps.isConnected).toBe(false)
+    expect(add.isConnected).toBe(false)
     const under = dayCell().element
     await release(under)
-    expect(document.querySelector('[role="alertdialog"]')).toBeNull()
+    expect(location.hash).not.toBe('#/new/exercise')
+    expect(wrapper.find('[data-testid="new-item-page"]').exists()).toBe(false)
     expect(under.getAttribute('aria-pressed')).toBe('false')
   })
 

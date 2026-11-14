@@ -110,7 +110,7 @@ describe('the head', () => {
     expect(document.activeElement).not.toBe(wrapper!.get('h1').element)
   })
 
-  it('has the sections as rows in layout A’s order, the plan first, each labelled by its heading (K65, K104)', () => {
+  it('has the sections as rows in layout A’s order, the plan first and Remove last, each labelled by its heading (K65, K104, K120)', () => {
     mountPage()
     const sections = page().findAll('section')
     expect(sections.map((s) => s.get('h2').text())).toEqual([
@@ -118,6 +118,7 @@ describe('the head', () => {
       'Notes',
       'Details',
       'Recent weeks',
+      'Remove',
     ])
     for (const s of sections) {
       expect(s.attributes('aria-labelledby')).toBe(s.get('h2').attributes('id'))
@@ -133,6 +134,7 @@ describe('the head', () => {
     expect(section('weeks').attributes('data-noprint')).toBeDefined()
     expect(section('notes').attributes('data-noprint')).toBeUndefined()
     expect(section('details').attributes('data-noprint')).toBeUndefined()
+    expect(section('remove').attributes('data-noprint')).toBeDefined()
   })
 })
 
@@ -676,9 +678,10 @@ describe('recent weeks', () => {
 
 describe('arranging the sections (K66)', () => {
   const arrange = () => wrapper!.get<HTMLButtonElement>('[data-testid="item-arrange"]')
+  /** The arranged sections' headings: Remove ends the page, and no type arranges it (K120). */
   const headings = () =>
     page()
-      .findAll('section h2')
+      .findAll('section:not([data-testid="item-remove"]) h2')
       .map((h) => h.text())
   const control = (label: string) =>
     wrapper!.get<HTMLButtonElement>(`button[aria-label="${label}"]`)
@@ -828,17 +831,21 @@ describe('arranging the sections (K66)', () => {
     }
     expect(wrapper!.find('[data-testid="item-all-hidden"]').exists()).toBe(false)
     await arrange().trigger('click')
-    expect(page().findAll('section')).toHaveLength(0)
+    // Only Remove is left: it isn't one of the sections a type arranges.
+    expect(
+      page()
+        .findAll('section')
+        .map((s) => s.attributes('data-testid')),
+    ).toEqual(['item-remove'])
     expect(wrapper!.get('[data-testid="item-all-hidden"]').text()).toBe(
       'Every section is hidden. Arrange sections to show one.',
     )
   })
 })
 
-describe('in Edit plan: the name and Remove on the page (K104)', () => {
+describe('the name’s pen and Remove, the same in both modes (K120, K121)', () => {
   let host: VueWrapper | undefined
   beforeEach(() => {
-    usePlannerStore().setConfigMode(true)
     host = mount(ConfirmHost, { attachTo: document.body })
   })
   afterEach(() => {
@@ -847,7 +854,15 @@ describe('in Edit plan: the name and Remove on the page (K104)', () => {
     history.replaceState(null, '', '/')
   })
 
+  const pen = () => wrapper!.get<HTMLButtonElement>('[data-testid="item-rename"]')
   const nameField = () => wrapper!.get<HTMLInputElement>('[data-testid="item-name-field"]')
+  const done = () => wrapper!.get('[data-testid="item-rename-done"]')
+  const chipTexts = () => wrapper!.findAll('[data-testid="item-chip"]').map((c) => c.text())
+  /** Presses a key in the name field, as a person does. */
+  async function key(name: string): Promise<void> {
+    await nameField().trigger('keydown', { key: name })
+    await flushPromises()
+  }
   /** Answers the open question with the button of this name. */
   async function answer(label: string): Promise<void> {
     await flushPromises()
@@ -856,30 +871,37 @@ describe('in Edit plan: the name and Remove on the page (K104)', () => {
     await flushPromises()
   }
 
-  it('turns the title into a Name field, drops the chips, and ends with Remove', () => {
-    mountPage()
-    expect(nameField().element.value).toBe('Kettlebell swings')
-    // The h1 stays for a screen reader and for focus, out of sight.
-    expect(wrapper!.get('h1').classes()).toContain('sr-only')
-    expect(wrapper!.findAll('[data-testid="item-chip"]')).toHaveLength(0)
-    const sections = page().findAll('section')
-    expect(sections.at(-1)!.attributes('data-testid')).toBe('item-remove')
-    expect(section('remove').text()).toContain(
-      'Takes Kettlebell swings off this week’s plan. Weeks with their own plan keep it, and its marks stay.',
-    )
-    expect(section('remove').get('button').text()).toBe('Remove from this week')
-  })
+  for (const configMode of [false, true]) {
+    it(`shows the title, the pen right after it, the chips and Remove last, Edit plan ${configMode ? 'on' : 'off'}`, () => {
+      usePlannerStore().setConfigMode(configMode)
+      mountPage()
+      const h1 = wrapper!.get('h1')
+      expect(h1.text()).toBe('Kettlebell swings')
+      expect(h1.classes()).toContain('title-1')
+      expect(h1.classes()).not.toContain('sr-only')
+      // The pen sits between the name and the chips (option A).
+      expect(h1.element.nextElementSibling).toBe(pen().element)
+      expect(pen().element.nextElementSibling!.getAttribute('data-testid')).toBe('item-chip')
+      expect(pen().attributes('aria-label')).toBe('Rename Kettlebell swings')
+      expect(pen().attributes('data-slot')).toBe('icon-button')
+      expect(pen().classes()).toEqual(
+        expect.arrayContaining(['text-ink-secondary', 'hover:text-ink', 'size-(--edit-ib)']),
+      )
+      expect(pen().classes()).not.toContain('text-ink')
+      expect(chipTexts()).toEqual(['3 × 15', '16 kg'])
+      expect(wrapper!.find('[data-testid="item-name-field"]').exists()).toBe(false)
+      const sections = page().findAll('section')
+      expect(sections.at(-1)!.attributes('data-testid')).toBe('item-remove')
+      expect(section('remove').text()).toContain(
+        'Takes Kettlebell swings off this week’s plan. Weeks with their own plan keep it, and its marks stay.',
+      )
+      expect(section('remove').get('button').text()).toBe('Remove from this week')
+    })
+  }
 
-  it('shows neither outside Edit plan, nor for an item not in the week, nor while arranging', async () => {
-    usePlannerStore().setConfigMode(false)
-    mountPage()
-    expect(wrapper!.find('[data-testid="item-name-field"]').exists()).toBe(false)
-    expect(wrapper!.find('[data-testid="item-remove"]').exists()).toBe(false)
-    expect(wrapper!.get('h1').classes()).not.toContain('sr-only')
-    wrapper!.unmount()
-    usePlannerStore().setConfigMode(true)
+  it('has no pen and no Remove for an item not in the week, nor Remove while arranging', async () => {
     mountPage('diet', 'nuts') // in an older week's plan only
-    expect(wrapper!.find('[data-testid="item-name-field"]').exists()).toBe(false)
+    expect(wrapper!.find('[data-testid="item-rename"]').exists()).toBe(false)
     expect(wrapper!.find('[data-testid="item-remove"]').exists()).toBe(false)
     wrapper!.unmount()
     mountPage()
@@ -887,26 +909,118 @@ describe('in Edit plan: the name and Remove on the page (K104)', () => {
     expect(wrapper!.find('[data-testid="item-remove"]').exists()).toBe(false)
   })
 
-  it('renames the item as you type, keeping its plan; an empty name waits with an error', async () => {
+  it('turns the title into a field in its own type, the name selected, with Done; the chips hide', async () => {
     mountPage()
-    await type(nameField(), 'Swings')
+    await pen().trigger('click')
+    await flushPromises()
+    const input = nameField()
+    expect(input.element.value).toBe('Kettlebell swings')
+    expect(document.activeElement).toBe(input.element)
+    expect(input.element.selectionStart).toBe(0)
+    expect(input.element.selectionEnd).toBe('Kettlebell swings'.length)
+    expect(input.attributes('aria-label')).toBe('Name')
+    expect(input.classes()).toEqual(
+      expect.arrayContaining([
+        'title-1',
+        'text-(length:--fs-title)',
+        'leading-tight',
+        'bg-panel',
+        'border-control-border',
+        'rounded-sm',
+      ]),
+    )
+    expect(done().text()).toBe('Done')
+    expect(done().attributes('data-variant')).toBe('quiet')
+    expect(chipTexts()).toEqual([])
+    expect(wrapper!.find('[data-testid="item-rename"]').exists()).toBe(false)
+    // The page keeps its one <h1>, out of sight, while the field shows.
+    expect(wrapper!.findAll('h1')).toHaveLength(1)
+    expect(wrapper!.get('h1').classes()).toContain('sr-only')
+  })
+
+  it('saves on Enter, not as you type, and puts focus back on the pen', async () => {
+    mountPage()
+    await pen().trigger('click')
+    await nameField().setValue('Swings')
+    expect(stored().name).toBe('Kettlebell swings')
+    await key('Enter')
     expect(stored()).toEqual({ ...KS, name: 'Swings' })
-    await type(nameField(), '   ')
-    expect(stored().name).toBe('Swings')
+    expect(wrapper!.find('[data-testid="item-name-field"]').exists()).toBe(false)
+    expect(wrapper!.get('h1').text()).toBe('Swings')
+    expect(document.activeElement).toBe(pen().element)
+    expect(pen().attributes('aria-label')).toBe('Rename Swings')
+    expect(chipTexts()).toEqual(['3 × 15', '16 kg'])
+  })
+
+  it('saves on Done, trimmed, in Edit plan too', async () => {
+    usePlannerStore().setConfigMode(true)
+    mountPage()
+    await pen().trigger('click')
+    await nameField().setValue('  Two-hand swings ')
+    await done().trigger('click')
+    await flushPromises()
+    expect(stored()).toEqual({ ...KS, name: 'Two-hand swings' })
+    expect(document.activeElement).toBe(pen().element)
+  })
+
+  it('puts the old name back on Escape, saving nothing, and keeps arranging on', async () => {
+    mountPage()
+    await wrapper!.get('[data-testid="item-arrange"]').trigger('click')
+    await pen().trigger('click')
+    await nameField().setValue('Swings')
+    await key('Escape')
+    expect(stored().name).toBe('Kettlebell swings')
+    expect(wrapper!.find('[data-testid="item-name-field"]').exists()).toBe(false)
+    expect(wrapper!.get('h1').text()).toBe('Kettlebell swings')
+    expect(document.activeElement).toBe(pen().element)
+    // The field's Escape is its own: the page stays in arranging.
+    expect(wrapper!.find('[data-testid="item-arrange-line"]').exists()).toBe(true)
+    // The next rename starts from the stored name.
+    await pen().trigger('click')
+    expect(nameField().element.value).toBe('Kettlebell swings')
+  })
+
+  it('says “Enter a name.” for an empty name and saves nothing, until there is one', async () => {
+    mountPage()
+    await pen().trigger('click')
+    await nameField().setValue('   ')
+    await key('Enter')
+    expect(stored().name).toBe('Kettlebell swings')
     expect(wrapper!.text()).toContain('Enter a name.')
-    expect(nameField().attributes('aria-invalid')).toBe('true')
-    await type(nameField(), 'Two-hand swings ')
-    expect(stored().name).toBe('Two-hand swings')
-    expect(nameField().attributes('aria-invalid')).toBeUndefined()
+    const input = nameField()
+    expect(input.attributes('aria-invalid')).toBe('true')
+    const error = document.getElementById(input.attributes('aria-describedby')!)!
+    expect(error.textContent!.trim()).toBe('Enter a name.')
+    expect(document.activeElement).toBe(input.element)
+    await done().trigger('click')
+    expect(stored().name).toBe('Kettlebell swings')
+    await nameField().setValue('Swings')
+    await done().trigger('click')
+    await flushPromises()
+    expect(stored().name).toBe('Swings')
+    expect(wrapper!.text()).not.toContain('Enter a name.')
+  })
+
+  it('saves nothing on an Enter that ends an input method’s composition', async () => {
+    mountPage()
+    await pen().trigger('click')
+    await nameField().setValue('Swings')
+    await nameField().trigger('keydown', { key: 'Enter', isComposing: true })
+    expect(stored().name).toBe('Kettlebell swings')
+    expect(wrapper!.find('[data-testid="item-name-field"]').exists()).toBe(true)
   })
 
   it('renames a cardio item and a food the same way', async () => {
     mountPage('cardio', 'ru')
-    await type(nameField(), 'Jogging')
+    await pen().trigger('click')
+    await nameField().setValue('Jogging')
+    await key('Enter')
     expect(useCardioStore().items.find((c) => c.id === 'ru')).toEqual({ ...RUN, name: 'Jogging' })
     wrapper!.unmount()
     mountPage('diet', 'fish')
-    await type(nameField(), 'Salmon')
+    await pen().trigger('click')
+    await nameField().setValue('Salmon')
+    await key('Enter')
     expect(useDietStore().foods).toEqual([{ ...FISH, name: 'Salmon' }])
   })
 
@@ -914,31 +1028,45 @@ describe('in Edit plan: the name and Remove on the page (K104)', () => {
     const { perSide: _, ...bare } = KS
     usePlannerStore().plans['2026-10-19'] = [bare as Exercise]
     mountPage()
-    await type(nameField(), 'Swings')
+    await pen().trigger('click')
+    await nameField().setValue('Swings')
+    await key('Enter')
     expect(stored()).toEqual({ ...KS, name: 'Swings' })
   })
 
-  it('keeps the field as it is when another tab takes the item out of the week', async () => {
-    mountPage()
-    usePlannerStore().removeExercise('ks')
-    await nextTick()
-    // The page shows its latest plan now, read-only, with no Name field.
-    expect(wrapper!.find('[data-testid="item-name-field"]').exists()).toBe(false)
-    expect(wrapper!.get('h1').text()).toBe('Kettlebell swings')
-  })
-
-  it('takes a rename from elsewhere into the field', async () => {
+  it('shows the store’s name in the title, and a rename from elsewhere replaces an untouched draft', async () => {
     mountPage()
     usePlannerStore().updateExercise('ks', { ...KS, perSide: false, name: 'KB swings' })
     await nextTick()
-    expect(nameField().element.value).toBe('KB swings')
+    expect(wrapper!.get('h1').text()).toBe('KB swings')
+    await pen().trigger('click')
+    usePlannerStore().updateExercise('ks', { ...KS, perSide: false, name: 'Swings' })
+    await nextTick()
+    expect(nameField().element.value).toBe('Swings')
+    // Once typed in, the draft is the person's own.
+    await nameField().setValue('My swings')
+    usePlannerStore().updateExercise('ks', { ...KS, perSide: false, name: 'Other swings' })
+    await nextTick()
+    expect(nameField().element.value).toBe('My swings')
     // A change to something else leaves the field alone.
     usePlannerStore().changeTarget('ks', 1)
     await nextTick()
-    expect(nameField().element.value).toBe('KB swings')
+    expect(nameField().element.value).toBe('My swings')
   })
 
-  it('asks before Remove; Cancel keeps the item, Remove takes it off and goes to the week', async () => {
+  it('leaves renaming when another tab takes the item out of the week', async () => {
+    mountPage()
+    await pen().trigger('click')
+    usePlannerStore().removeExercise('ks')
+    await nextTick()
+    // The page shows its latest plan now, read-only, with no field and no pen.
+    expect(wrapper!.find('[data-testid="item-name-field"]').exists()).toBe(false)
+    expect(wrapper!.find('[data-testid="item-rename"]').exists()).toBe(false)
+    expect(wrapper!.get('h1').text()).toBe('Kettlebell swings')
+    expect(wrapper!.get('h1').classes()).not.toContain('sr-only')
+  })
+
+  it('asks before Remove outside Edit plan; Cancel keeps the item, Remove takes it off', async () => {
     history.replaceState(null, '', '/#/item/exercise/ks')
     mountPage()
     await section('remove').get('button').trigger('click')
@@ -953,7 +1081,8 @@ describe('in Edit plan: the name and Remove on the page (K104)', () => {
     expect(location.hash).toBe('#/')
   })
 
-  it('removes a cardio item and a food from this week only', async () => {
+  it('removes a cardio item and a food from this week only, in Edit plan too', async () => {
+    usePlannerStore().setConfigMode(true)
     mountPage('cardio', 'ru')
     await section('remove').get('button').trigger('click')
     await answer('Remove')

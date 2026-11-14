@@ -41,6 +41,7 @@ import RecentWeeks from '@/components/RecentWeeks.vue'
 import { Button } from '@/components/ui/button'
 import { Chip } from '@/components/ui/chip'
 import { IconButton } from '@/components/ui/icon-button'
+import { InlineMessage } from '@/components/ui/inline-message'
 import { Switch } from '@/components/ui/switch'
 import { TextArea } from '@/components/ui/text-area'
 import { TextField } from '@/components/ui/text-field'
@@ -193,40 +194,84 @@ const latestRows = computed<[string, string][]>(() => {
   return rows
 })
 
-/* ---- Edit plan: the name and Remove, on the page rather than in a dialog (K104). ---- */
+/* ---- The name's pen and Remove, the same in Edit plan and outside it (K120, K121). ---- */
 
-/** In Edit plan, for an item in the week: the title is the Name field and Remove ends the page. */
-const editable = computed(() => planner.configMode && inWeek.value !== null)
-const nameDraft = ref(shown.value!.name)
+const pen = useTemplateRef<InstanceType<typeof IconButton>>('pen')
+const nameInput = useTemplateRef<HTMLInputElement>('nameInput')
+/** Renaming: the title is a field in its own type, with Done (K121). */
+const renaming = ref(false)
+const nameDraft = ref('')
 const nameError = ref<string | undefined>()
-/** The name as this page last left it: a change from elsewhere replaces the draft. */
-let nameSeen = nameDraft.value
+/** The name renaming started from: a change from elsewhere replaces a draft still the same. */
+let nameFrom = ''
 watch(
   () => inWeek.value?.name,
   (now) => {
-    if (now === undefined || now === nameSeen) return
-    nameSeen = nameDraft.value = now
-    nameError.value = undefined
+    if (!renaming.value) return
+    // Another tab took the item out of the week: there is nothing left to rename.
+    if (now === undefined) {
+      renaming.value = false
+      nameError.value = undefined
+      return
+    }
+    if (nameDraft.value === nameFrom) nameDraft.value = now
+    nameFrom = now
   },
 )
 
-/** Renames the item in this week's plan as you type; an empty name shows an error and waits. */
-function onName(value: string | number | undefined): void {
-  const text = String(value ?? '')
-  nameDraft.value = text
-  const name = text.trim()
+function focusPen(): void {
+  ;(pen.value?.$el as HTMLElement | undefined)?.focus()
+}
+
+/** The pen: the title becomes the field, with the name selected. */
+async function rename(): Promise<void> {
+  nameDraft.value = nameFrom = inWeek.value!.name
+  nameError.value = undefined
+  renaming.value = true
+  await nextTick()
+  nameInput.value!.focus()
+  nameInput.value!.select()
+}
+
+/** Leaves renaming with focus back on the pen. */
+async function stopRenaming(): Promise<void> {
+  renaming.value = false
+  nameError.value = undefined
+  await nextTick()
+  focusPen()
+}
+
+/** Enter or Done: saves the name into this week's plan; an empty name shows an error and waits. */
+function commitName(): void {
+  const name = nameDraft.value.trim()
   if (!name) {
     nameError.value = 'Enter a name.'
+    nameInput.value?.focus()
     return
   }
-  nameError.value = undefined
   const item = inWeek.value!
-  if (isExercise.value) {
-    const e = item as Exercise
-    planner.updateExercise(item.id, { ...e, perSide: e.perSide ?? false, name })
-  } else if (isCardio.value) cardio.updateCardio(item.id, { ...(item as Cardio), name })
-  else diet.updateFood(item.id, { name, target: item.target })
-  nameSeen = name
+  if (name !== item.name) {
+    if (isExercise.value) {
+      const e = item as Exercise
+      planner.updateExercise(item.id, { ...e, perSide: e.perSide ?? false, name })
+    } else if (isCardio.value) cardio.updateCardio(item.id, { ...(item as Cardio), name })
+    else diet.updateFood(item.id, { name, target: item.target })
+  }
+  void stopRenaming()
+}
+
+/** Enter in the field saves, unless it ends an input method's composition. */
+function onNameEnter(ev: KeyboardEvent): void {
+  if (ev.isComposing) return
+  ev.preventDefault()
+  commitName()
+}
+
+/** Escape: the old name back, and the title again. Arranging keeps on (the page's Escape). */
+function cancelName(ev: KeyboardEvent): void {
+  ev.preventDefault()
+  ev.stopPropagation()
+  void stopRenaming()
 }
 
 const { confirm } = useConfirm()
@@ -236,9 +281,9 @@ const removeLine = computed(
 )
 
 /**
- * Remove asks first, as the row's Remove does (TrackerRow), then takes the item off the week the
- * page shows and goes back to it. The week is pinned when asking: past midnight on Sunday the
- * question no longer applies, and nothing is removed.
+ * Remove asks first, then takes the item off the week the page shows and goes back to it. It is
+ * the one way an item comes off the week (K120). The week is pinned when asking: past midnight on
+ * Sunday the question no longer applies, and nothing is removed.
  */
 async function remove(ev: MouseEvent): Promise<void> {
   const button = ev.currentTarget as HTMLElement
@@ -451,7 +496,7 @@ const filled = computed(() =>
 <!--
   An item's own page (brand/design-system/project/components/ItemPage), at #/item/<section>/<id>,
   one of the Settings page's family: no Header (K52), Settings' sizes (K51). The head (Back to the
-  week, the type, the name with its chips), then layout A (K65), rows like Settings: Notes,
+  week, the type, the name with its pen and chips), then layout A (K65), rows like Settings: Notes,
   Details, This week's plan and Recent weeks, each heading in the week's name column and its
   content beside it, a line rule above each row. Folded, one column in the same order. On paper:
   the head, the notes and the details.
@@ -498,29 +543,63 @@ const filled = computed(() =>
         ref="heading"
         tabindex="-1"
         class="title-1 min-w-0 text-(length:--fs-title) leading-tight break-words text-ink focus:outline-none"
-        :class="editable && 'sr-only'"
+        :class="renaming && 'sr-only'"
       >
         {{ shown!.name }}
       </h1>
-      <!-- In Edit plan the title is the Name field, where the name was (K104). -->
-      <TextField
-        v-if="editable"
-        :id="ids.name"
-        :model-value="nameDraft"
-        label="Name"
-        :error="nameError"
-        class="w-full max-w-[max(20rem,calc(var(--u)*560))]"
-        data-noprint
-        data-testid="item-name-field"
-        @update:model-value="onName"
-      />
-      <Chip
-        v-for="chip in editable ? [] : chips"
-        :key="chip"
-        class="text-(length:--set-label) leading-normal"
-        data-testid="item-chip"
-        >{{ chip }}</Chip
-      >
+      <!-- Renaming (K121): a field in the title's own type where the name was, with Done. The
+           <h1> stays, visually hidden. -->
+      <template v-if="renaming">
+        <div
+          class="flex w-[min(100%,max(20rem,calc(var(--u)*640)))] min-w-0 flex-col gap-1"
+          data-noprint
+        >
+          <input
+            :id="ids.name"
+            ref="nameInput"
+            v-model="nameDraft"
+            type="text"
+            aria-label="Name"
+            autocomplete="off"
+            :aria-invalid="nameError ? 'true' : undefined"
+            :aria-describedby="nameError ? `${ids.name}-error` : undefined"
+            class="title-1 w-full min-w-0 rounded-sm border border-control-border bg-panel px-[max(10px,calc(var(--u)*14))] py-[calc(var(--u)*6)] text-(length:--fs-title) leading-tight text-ink hover:not-aria-invalid:border-ink aria-invalid:border-error-ink motion-safe:transition-[border-color] motion-safe:duration-120 motion-safe:ease-out"
+            data-testid="item-name-field"
+            @keydown.enter="onNameEnter"
+            @keydown.esc="cancelName"
+          />
+          <InlineMessage
+            v-if="nameError"
+            :id="`${ids.name}-error`"
+            tone="error"
+            class="mt-1 text-(length:--set-caption)"
+            >{{ nameError }}</InlineMessage
+          >
+        </div>
+        <Button variant="quiet" data-noprint data-testid="item-rename-done" @click="commitName"
+          ><Check :stroke-width="1.5" />Done</Button
+        >
+      </template>
+      <template v-else>
+        <!-- The pen renames the item in the week on show, in both modes (K121). -->
+        <IconButton
+          v-if="inWeek"
+          ref="pen"
+          :label="`Rename ${shown!.name}`"
+          class="size-(--edit-ib) text-ink-secondary hover:text-ink [&_svg]:size-(--edit-ib-icon)"
+          data-noprint
+          data-testid="item-rename"
+          @click="rename"
+          ><Pencil
+        /></IconButton>
+        <Chip
+          v-for="chip in chips"
+          :key="chip"
+          class="text-(length:--set-label) leading-normal"
+          data-testid="item-chip"
+          >{{ chip }}</Chip
+        >
+      </template>
     </div>
 
     <!-- Arranging (K66): every section, hidden ones too, as its heading over Show and the moves. -->
@@ -721,10 +800,10 @@ const filled = computed(() =>
         </div>
       </section>
     </template>
-    <!-- Edit plan's Remove, last on the page in a section of its own (K104). Not one of the
-         sections a type arranges. -->
+    <!-- Remove, last on the page in a section of its own, in Edit plan and outside it (K104,
+         K120). Not one of the sections a type arranges. -->
     <section
-      v-if="editable && !arranging"
+      v-if="inWeek && !arranging"
       :aria-labelledby="ids.remove"
       :class="ROW"
       data-noprint

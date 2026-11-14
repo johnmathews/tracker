@@ -132,7 +132,7 @@ hand.
 clock is fixed to Wednesday 21 October 2026, so every run sees the same week.
 
 - `a11y.spec.ts`: axe (WCAG 2.0–2.2 A and AA plus best practice) on the style guide in both themes,
-  and on the app's (its mocked week holds every kind of mark) week view, the bar called up, Edit plan, Settings on each of its tabs (K119), an item's page (desktop with its notes being edited, folded at 390px, and while arranging at both sizes, with nothing scrolling sideways), a cardio item's page in Edit plan with its Name field and Remove, the new item page (K104), the Ask page (an answer with the history beside it, its Delete all question open, and at 375px with the history drawer open), the folded week at 375px,
+  and on the app's (its mocked week holds every kind of mark) week view, the bar called up, Edit plan, Settings on each of its tabs (K119), an item's page (desktop with its notes being edited, folded at 390px, and while arranging at both sizes, with nothing scrolling sideways), a cardio item's page with its pen and Remove, and renaming one in Edit plan (K120, K121), the new item page (K104), the Ask page (an answer with the history beside it, its Delete all question open, and at 375px with the history drawer open), the folded week at 375px,
   sign-in, and create an account (empty and with errors showing), in light and dark; and the focus ring's shape, a solid 2px outline at 2px offset. Two
   "dark really is dark" tests guard the audit: on the style guide and on the app, the `.dark` class
   must be set and `--canvas` must differ from light, so a dark audit can never quietly re-run
@@ -308,8 +308,8 @@ listed in [api.md](api.md) §10):
   values, and the surfaces go transparent.
 - `src/composables/__tests__/gridNav.spec.ts`: the grid keyboard model on a small table: the one
   tab stop (today, the first day, the last cell focused), arrows, Home and End with and without
-  Ctrl, Space and Enter left to the DayMark, Edit plan's
-  controls (Enter or F2 in, Escape out, parked when focus leaves), rows coming and going, and a name
+  Ctrl, Space and Enter left to the DayMark, a cell's other
+  controls (F2 in, not Enter, Escape out, parked when focus leaves), rows coming and going, and a name
   that is a link (its cell's widget, Enter its own in one press, Space doing nothing, F2 into the
   cell's other controls and Escape back to the link).
 - `src/components/ui/__tests__/`: one spec per primitive (AnswerProgress, BarAction, Banner,
@@ -427,7 +427,7 @@ listed in [api.md](api.md) §10):
   wording behind them, all against the fake API.
 - `src/components/__tests__/App.spec.ts`: the mounted app in jsdom. Covers rendering, the today
   column, stepping a cell through its marks with `aria-pressed` (a food only on and off), the goal stepper and its bounds,
-  navigation, confirm-before-remove, print, the visibility and one-minute clock refresh, another
+  navigation, confirm-before-remove on the item's page outside Edit plan too (K120), print, the visibility and one-minute clock refresh, another
   tab's writes to the cache, Add opening the new item page with no bar and coming back with focus on that Add button (K104), the Settings page (the hash, focus on arrival and on the way back; no Ink setting, and a saved accent kept as it is; its tabs, K119: the order, only the open tab's section, each tab's address opening it, choosing a tab replacing the address so a reload keeps it, the address followed from tab to tab, focus back on the Settings button from any tab, and a tab Settings doesn't have opening the week), and the
   theme: the `dark` class following the OS (with a stubbed `matchMedia`), the theme control and
   its persistence. Also adding an exercise with sets from the new item page, Edit plan's rows with
@@ -454,25 +454,30 @@ listed in [api.md](api.md) §10):
 - `src/components/__tests__/Planner.spec.ts`: the planner on the design system's marks, in the
   mounted app: a day that meets the daily pick (its name in pen, underlined, and its words, K30, K60),
   today (full-date names with "today", `aria-current`, no band, K36), rows with no goal or total
-  (K33), Edit plan's rows (only the name in the
-  name cell, K104; Remove in its own last column, stable row height, focus after a removal), the keyboard (one tab stop per grid,
+  (K33), Edit plan's rows (the week's columns: only the name in the
+  name cell, K104, and no Remove, K120; stable row height), the keyboard (one tab stop per grid,
   arrows, the skip link, the arrows between the screens, the name as its cell's one control in Edit plan), an
   item's note on its own line, parked behind its cell and the same on every week (K43), and headings
   and print attributes. The layouts themselves (filling, folding, the out-of-sight navbar) depend on media
   queries jsdom doesn't apply, so the e2e suite covers them.
 - `src/components/__tests__/TrackerRow.spec.ts`: one row on its own: a note's popover opening with
   the note rendered and its link opening a new tab, no note line without a note or with an empty
-  one (K43), and a long note kept to one line in the row and whole in a panel that scrolls.
+  one (K43), a long note kept to one line in the row and whole in a panel that scrolls, and no
+  Remove cell (K120).
+- `src/components/__tests__/TrackerGrid.spec.ts`: one grid on its own: the names and the seven days
+  with no Remove column or header (K120), and a day's press emitted as the item and the day.
 - `src/components/__tests__/ItemPage.spec.ts`: the item page on its own: the head and focus on the
   name, layout A's rows in order, each labelled by its heading (K65), notes (markdown, Add or Edit notes, saving
   as you type, Done and Escape, the count from 19,000, over 20,000 and over 32 KB, the server's copy
   arriving while editing), details (the type's fields, the 500 limit, the Link's "Open … in a new
   tab", printing filled fields), this week's plan (each change applied at once, a number that isn't
   valid, another week, a food's goal, a cardio item's Minutes and Distance in km with their limits,
-  K90), an item not in the week (its latest plan, read-only), Edit plan (K104: the Name field
-  in the title's place, renaming as you type for every type, "Enter a name." while empty, a rename
-  from elsewhere, and Remove asking first, going back to the week, and doing nothing when the week
-  changes while it asks),
+  K90), an item not in the week (its latest plan, read-only), the name's pen and Remove
+  (K120, K121: the same title, pen and chips with Edit plan on and off; the pen turning the title
+  into a field in its type with the name selected, saving on Enter and on Done for every type,
+  Escape putting the old name back, "Enter a name." for an empty name, a rename from elsewhere, and
+  Remove outside Edit plan too, asking first, going back to the week, and doing nothing when the
+  week changes while it asks),
   recent weeks, and arranging (K66: the shown sections in the type's order, Show, Move up and
   Move down, focus kept on the moved section's button, the ends, Escape, every section hidden).
 - `src/components/__tests__/NewItemPage.spec.ts`: the new item page (K104): an empty Name, one set
@@ -506,12 +511,13 @@ listed in [api.md](api.md) §10):
   and each sprinting to its screen (K42, K90).
 - `src/components/__tests__/DietSection.spec.ts`: the diet section in the mounted app: default
   foods, ticking (totals checked in the store), shared week navigation, Add food opening the new
-  item page and adding there (K104), remove (after a confirmation), cross-tab sync.
+  item page and adding there (K104), no Remove on the row and removing from the food's page (after
+  a confirmation, K120), cross-tab sync.
 - `src/components/__tests__/CardioSection.spec.ts`: the Cardio section in the mounted app (K90):
   between Exercises and Food and empty for an account with none, the time and distance chips, no
   day turning green and no daily target in Edit plan, the exercise's marks, Add cardio opening
-  the new item page (K104: cleaned Minutes and Distance in km, notes), and removing after a
-  confirmation.
+  the new item page (K104: cleaned Minutes and Distance in km, notes), and removing from the
+  item's page after a confirmation (K120).
 
 `vitest.config.ts` sets coverage thresholds (100% lines and functions, 99% statements, 98%
 branches), so `npm run test:coverage` and CI fail when coverage drops below them. Coverage covers
