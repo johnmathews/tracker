@@ -197,9 +197,9 @@
   ],
   "lastChange": {
     "by": "John Mathews",
-    "at": "2026-11-11T12:49:11Z",
+    "at": "2026-11-14T19:16:52Z",
     "via": "Claude Code",
-    "note": "A new colour role, edit, frames the window while Edit plan is on, 8px and 4px on a phone (K112, K117). SectionHeader gains an end slot, where Edit plan's Add now sits (K113). WeekGrid rows stop at 82u (K110). PlannerScreen: a screen's content starts at its top (K114), Edit plan on or off keeps the tracker on show (K115), and on touch a swipe onto a new tracker ends at its top, up onto a tall one in one movement (K116, K118). Header and BarAction: A opens Ask, or adds in Edit plan (K109)."
+    "note": "A new Tabs component; Settings puts each section on a tab, at #/settings/<tab> (K119). WeekGrid: Edit plan's rows have no Remove column (K120). ItemPage: the same in both modes, the name with a pen that renames it in the title's own type, and Remove at the foot in both modes (K120, K121)."
   },
 
   "layout": "files",
