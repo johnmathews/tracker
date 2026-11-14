@@ -54,7 +54,7 @@ def stored(conn: sqlite3.Connection, uid: int, week: str, section: str = "exerci
     return None if row is None else (row["items_json"], row["rev"])
 
 
-def plans(conn: sqlite3.Connection, uid: int, section: Section = "exercise") -> dict[str, Any]:
+def plans(conn: sqlite3.Connection, uid: int, section: str = "exercise") -> dict[str, Any]:
     return load_tracked(conn, uid, section)["plans"]
 
 

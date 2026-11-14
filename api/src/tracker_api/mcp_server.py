@@ -726,8 +726,6 @@ def _add_tools(server: MCPServer, config: Config) -> None:
         if (tracker is None) != (daily_target is None):
             missing = "daily_target" if daily_target is None else "tracker"
             raise ToolError(f"{missing}: give tracker and daily_target together")
-        if tracker is None and daily_target is not None:
-            raise ToolError("tracker: give the tracker whose daily_target this is")
         return _writing(
             config,
             lambda c, uid: edits.set_daily_targets(

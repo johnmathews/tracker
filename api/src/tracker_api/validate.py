@@ -712,11 +712,6 @@ def normalise_kind_items(kind: TypeId, v: list[Any]) -> list[Item]:
     return [it for it in map(normalise, v) if it is not None]
 
 
-def normalise_items(section: Section, v: list[Any]) -> list[Item]:
-    """A plan's items for one of the first three trackers."""
-    return normalise_kind_items(SECTION_TYPES[section].id, v)
-
-
 def normalise_plans(kind: TypeId, v: object) -> Plans:
     plans: Plans = {}
     if not isinstance(v, dict):
