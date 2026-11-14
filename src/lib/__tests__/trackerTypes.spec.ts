@@ -27,6 +27,7 @@ import {
   exerciseDetails,
   isSection,
   isTrackerKind,
+  type TrackerType,
 } from '@/lib/trackerTypes'
 import { defaultExercises, defaultFoods } from '@/lib/storage'
 
@@ -89,13 +90,12 @@ describe('the tracker-type registry', () => {
     expect(SECTIONS.cardio.newTarget).toBe(NEW_CARDIO_TARGET)
   })
 
-  it('names each section and its items as the week shows them', () => {
-    expect([SECTIONS.exercise.label, SECTIONS.exercise.itemLabel]).toEqual([
-      'Exercises',
-      'Exercise',
-    ])
-    expect([SECTIONS.diet.label, SECTIONS.diet.itemLabel]).toEqual(['Food', 'Food'])
-    expect([SECTIONS.cardio.label, SECTIONS.cardio.itemLabel]).toEqual(['Cardio', 'Cardio'])
+  it('names each kind, its items and its Add as the week shows them (K123, K124)', () => {
+    const words = (k: TrackerType) => [k.label, k.itemLabel, k.itemsLabel, k.addLabel]
+    expect(words(SECTIONS.exercise)).toEqual(['Strength', 'Exercise', 'Exercises', 'Add exercise'])
+    expect(words(SECTIONS.diet)).toEqual(['Food', 'Food', 'Foods', 'Add food'])
+    expect(words(SECTIONS.cardio)).toEqual(['Cardio', 'Cardio', 'Cardio', 'Add cardio'])
+    expect(SECTIONS.cardio.records).toBe('time and distance. Marked great, partial or missed.')
   })
 
   it('gives cardio no daily target, and the others theirs (K90)', () => {

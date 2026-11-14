@@ -43,10 +43,16 @@ export type ItemField = { key: string; label: string }
 
 export type TrackerType = {
   id: TrackerTypeId
-  /** The section's heading: "Exercises". */
+  /** The kind's name, as the new tracker page's Kind control says it: "Strength" (K124). */
   label: string
+  /** What an item of the kind records, after the kind's name on the new tracker page (K124). */
+  records: string
   /** One item, as the grid's row header says it: "Exercise". */
   itemLabel: string
+  /** Items in the plural, for the daily target's Stepper: "Exercises a day" (K63). */
+  itemsLabel: string
+  /** Edit plan's Add button and the new item page's Add: "Add exercise" (K104, K113). */
+  addLabel: string
   /** The marks a press steps through in the device's mark set. */
   cycle: (set: MarkSet) => readonly Mark[]
   /** The chips under an item's name; none for a type without them. */
@@ -113,8 +119,11 @@ export function exerciseDetails(e: Exercise): string[] {
 export const TRACKER_TYPES: Readonly<Record<TrackerTypeId, TrackerType>> = {
   strength: {
     id: 'strength',
-    label: 'Exercises',
+    label: 'Strength',
+    records: 'sets, then reps or time, and weight. Marked great, partial or missed.',
     itemLabel: 'Exercise',
+    itemsLabel: 'Exercises',
+    addLabel: 'Add exercise',
     cycle: (set) => (set === 'squiggles' ? EXERCISE_CYCLE : EXERCISE_KIND_CYCLE),
     // An exercise section holds only exercises.
     details: (item) => exerciseDetails(item as Exercise),
@@ -131,7 +140,10 @@ export const TRACKER_TYPES: Readonly<Record<TrackerTypeId, TrackerType>> = {
   cardio: {
     id: 'cardio',
     label: 'Cardio',
+    records: 'time and distance. Marked great, partial or missed.',
     itemLabel: 'Cardio',
+    itemsLabel: 'Cardio',
+    addLabel: 'Add cardio',
     // Marked like an exercise: done well, in part, or tried and missed (K90).
     cycle: (set) => (set === 'squiggles' ? EXERCISE_CYCLE : EXERCISE_KIND_CYCLE),
     details: (item) => cardioDetails(item as Cardio),
@@ -147,7 +159,10 @@ export const TRACKER_TYPES: Readonly<Record<TrackerTypeId, TrackerType>> = {
   food: {
     id: 'food',
     label: 'Food',
+    records: 'a number of times a week. Marked eaten.',
     itemLabel: 'Food',
+    itemsLabel: 'Foods',
+    addLabel: 'Add food',
     cycle: (set) => (set === 'squiggles' ? FOOD_CYCLE : FOOD_KIND_CYCLE),
     details: () => [],
     fields: [
