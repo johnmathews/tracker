@@ -12,8 +12,7 @@ import {
 } from 'vue'
 import { ArrowDown, ArrowUp, Check, ChevronLeft, List, Pencil, Trash2 } from '@lucide/vue'
 import { usePlannerStore } from '@/stores/planner'
-import { useCardioStore } from '@/stores/cardio'
-import { useDietStore } from '@/stores/diet'
+import { useTrackersStore } from '@/stores/trackers'
 import { useDetailsStore } from '@/stores/details'
 import { useItemSource } from '@/composables/itemSource'
 import { useExerciseForm } from '@/composables/exerciseForm'
@@ -33,7 +32,7 @@ import {
   type Cardio,
   type Exercise,
 } from '@/lib/storage'
-import { SECTIONS, type Section } from '@/lib/trackerTypes'
+import type { Item } from '@/lib/trackerTypes'
 import { ARRANGE_ROW, BODY, FIELDS, H2, LEDE, MOVE, ROW } from '@/lib/itemPage'
 import { moveSection, showSection, shownSections, type SectionKey } from '@/lib/itemSections'
 import PlanFields, { type PlanErrors } from '@/components/PlanFields.vue'
@@ -48,7 +47,8 @@ import { TextField } from '@/components/ui/text-field'
 import { TextLink } from '@/components/ui/text-link'
 
 const props = defineProps<{
-  section: Section
+  /** The item's tracker id. */
+  section: string
   /** The item's id; App opens the page only for an item in the week or in some week's plan. */
   itemId: string
   /** A style-guide example: it doesn't take focus as it arrives. */
@@ -69,8 +69,7 @@ const LINES = {
 }
 
 const planner = usePlannerStore()
-const cardio = useCardioStore()
-const diet = useDietStore()
+const trackers = useTrackersStore()
 const details = useDetailsStore()
 const source = useItemSource()
 const heading = useTemplateRef<HTMLHeadingElement>('heading')
@@ -85,8 +84,9 @@ const ids = {
   remove: useId(),
 }
 
-const type = computed(() => SECTIONS[props.section])
-const isExercise = computed(() => type.value.id === 'exercise')
+/** The tracker's kind: its labels, fields and chips (src/lib/trackerTypes.ts). */
+const type = computed(() => trackers.typeOf(props.section))
+const isExercise = computed(() => type.value.id === 'strength')
 const isCardio = computed(() => type.value.id === 'cardio')
 const src = computed(() => source(props.section))
 /** The item in the week the page was opened from (the week the planner shows), if it's there. */
@@ -149,7 +149,11 @@ function applyCardio(): void {
   const item = inWeek.value!
   Object.assign(planErrors, cardioPlanErrors(cardioForm))
   if (hasPlanErrors(planErrors)) return
-  cardio.updateCardio(item.id, { ...cardioForm.value(), name: item.name, target: item.target })
+  trackers.updateItem(props.section, item.id, {
+    ...cardioForm.value(),
+    name: item.name,
+    target: item.target,
+  })
   planSeen = planJson()
 }
 
@@ -158,7 +162,11 @@ function applyPlan(): void {
   const item = inWeek.value!
   Object.assign(planErrors, exercisePlanErrors(form))
   if (hasPlanErrors(planErrors)) return
-  planner.updateExercise(item.id, { ...form.value(), name: item.name, target: item.target })
+  trackers.updateItem(props.section, item.id, {
+    ...form.value(),
+    name: item.name,
+    target: item.target,
+  })
   planSeen = planJson()
 }
 
@@ -250,13 +258,7 @@ function commitName(): void {
     return
   }
   const item = inWeek.value!
-  if (name !== item.name) {
-    if (isExercise.value) {
-      const e = item as Exercise
-      planner.updateExercise(item.id, { ...e, perSide: e.perSide ?? false, name })
-    } else if (isCardio.value) cardio.updateCardio(item.id, { ...(item as Cardio), name })
-    else diet.updateFood(item.id, { name, target: item.target })
-  }
+  if (name !== item.name) trackers.updateItem(props.section, item.id, { ...(item as Item), name })
   void stopRenaming()
 }
 
@@ -297,9 +299,7 @@ async function remove(ev: MouseEvent): Promise<void> {
   })
   if (!yes || planner.weekKey !== week || !inWeek.value) return
   leaveForWeek()
-  if (isExercise.value) planner.removeExercise(props.itemId)
-  else if (isCardio.value) cardio.removeCardio(props.itemId)
-  else diet.removeFood(props.itemId)
+  trackers.removeItem(props.section, props.itemId)
 }
 
 /* ---- Recent weeks ---- */

@@ -213,29 +213,32 @@ listed in [api.md](api.md) §10):
   opening a new tab; raw HTML, script links and images never rendered; headings and rules left as
   text; and the row's one line, where a link is its text.
 - `src/lib/__tests__/format.spec.ts`: K14 as a test (K41). Each cache key version has a row
-  recording what it stores (the marks, the fields an exercise, a cardio item and a food keep, and
-  the sections a cache holds; `-v5` added Cardio, K90). It fails when
-  the stored format changes under the same key, and when an older key isn't moved at sign-in.
+  recording what it stores (the marks, the fields an exercise, a cardio item and a food keep, the
+  keys a cache holds, a cached section's and a cached tracker's; `-v5` added Cardio, K90; `-v6` the
+  account's trackers, K123). It fails when the stored format changes under the same key, and when
+  an older key isn't moved at sign-in.
 - `src/lib/__tests__/transfer.spec.ts`: every case in `fixtures/transfer/` (parsing an export and
   merging one), plus building an export, the merge summary and the download. Add a fixture rather
   than an inline case when the behaviour is part of the export contract: the API's tests
   (`api/tests/test_parity.py`) read the same files.
-- `fixtures/transfer/sample/`: `storage.json` is a realistic `localStorage` snapshot: alice's cache
-  under the current key, `tracker-cache-v5:alice`, as the sync store keeps it, and a
-  `tracker-settings-v1` holding the dark theme. Each section holds `plans`, `log`, `details`,
-  `revs` and `detailRevs`. It spans five weeks (2026-09-21 to 2026-10-19): four with data, and
-  2026-09-28 left empty so it carries the plan before it forward. It has plans edited over time
-  (sets, weights, Back extensions removed, Plank added), 108 ticks, a diet with an added food,
-  cardio (Cycling with a time, Running with a distance and a Route, K90), details for Push-ups
-  (notes and two fields), Fish (one field) and Running, and non-default settings.
-  `export.json` is the version 5 export it must produce. A new cache format needs a new snapshot:
-  `App.spec.ts` fails when the key isn't `CACHE_PREFIX`'s. `App.spec.ts` seeds the snapshot and checks Export gives
-  `export.json`. It also imports `export.json` into an empty account and checks the cache and the
-  (fake) server both end up holding the sample, with the theme left on the device. To see the app populated while
-  developing, import `fixtures/transfer/sample/export.json` from Settings → Import… on a scratch
-  origin. Tests read fixtures through `src/lib/__tests__/fixtures.ts`.
-- `fixtures/types/registry.json`: the tracker-type registry, each section's type and each type's
-  fields, daily-target key and new-item goal. `src/lib/__tests__/trackerTypes.spec.ts` and the
+- `fixtures/transfer/sample/`: two pairs of a realistic `localStorage` snapshot and the export it
+  makes. `storage-v6.json` is alice's cache under the current key, `tracker-cache-v6:alice`, as the
+  sync store keeps it, and a `tracker-settings-v1` holding the dark theme; `export-v6.json` is the
+  version 6 export it must produce. It has the first three trackers and two of the account's own
+  (Upper body, and Swimming, ended), each tracker's `plans`, `log`, `details`, `revs` and
+  `detailRevs`. `storage.json` and `export.json` are the version 5 pair, from before trackers: five
+  weeks (2026-09-21 to 2026-10-19), four with data, and 2026-09-28 left empty so it carries the plan
+  before it forward; plans edited over time (sets, weights, Back extensions removed, Plank added),
+  108 ticks, a diet with an added food, cardio (Cycling with a time, Running with a distance and a
+  Route, K90), details for Push-ups (notes and two fields), Fish (one field) and Running, and
+  non-default settings. A new cache format needs a new snapshot: `App.spec.ts` fails when the key
+  isn't `CACHE_PREFIX`'s. `App.spec.ts` seeds `storage-v6.json` and checks Export gives
+  `export-v6.json`. It also imports each export into an empty account and checks the cache and the
+  (fake) server both end up holding the sample, with the theme left on the device. To see the app
+  populated while developing, import `fixtures/transfer/sample/export-v6.json` from Settings →
+  Import… on a scratch origin. Tests read fixtures through `src/lib/__tests__/fixtures.ts`.
+- `fixtures/types/registry.json`: the tracker-kind registry, the first three trackers' kinds and
+  names, and each kind's fields, daily-target key, new tracker's daily target and new-item goal. `src/lib/__tests__/trackerTypes.spec.ts` and the
   API's `test_types.py` both check their registry against it, so a field added on one side only
   fails a suite.
 - `fixtures/item-sections/normalise.json`: the item pages' arrangement (K66, P29), inputs and their

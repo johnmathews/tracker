@@ -5,8 +5,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import ItemPage from '@/components/ItemPage.vue'
 import { ConfirmHost } from '@/components/ui/confirm-dialog'
 import { usePlannerStore } from '@/stores/planner'
-import { useCardioStore } from '@/stores/cardio'
-import { useDietStore } from '@/stores/diet'
+import { trackerView } from '@/lib/__tests__/trackerView'
 import { useDetailsStore } from '@/stores/details'
 import type { Cardio, Exercise, Food } from '@/lib/storage'
 import type { Section } from '@/lib/trackerTypes'
@@ -36,18 +35,21 @@ beforeEach(() => {
   setActivePinia(createPinia())
   const planner = usePlannerStore()
   planner.now = NOW
-  planner.plans = {
+  trackerView('exercise').plans = {
     '2026-10-05': [PL, PU],
     '2026-10-12': [{ ...KS }, { ...PU }],
     '2026-10-19': [{ ...KS }, { ...PU }],
   }
-  planner.log = {
+  trackerView('exercise').log = {
     '2026-10-19': { ks: ['great', null, 'partial', null, null, null, null] },
     '2026-10-12': { ks: ['great', 'great', null, 'missed', null, null, null] },
   }
-  const diet = useDietStore()
+  const diet = trackerView('diet')
   diet.plans = { '2026-10-12': [{ ...NUTS }, { ...FISH }], '2026-10-19': [{ ...FISH }] }
-  useCardioStore().plans = { '2026-10-12': [{ ...RIDE }, { ...RUN }], '2026-10-19': [{ ...RUN }] }
+  trackerView('cardio').plans = {
+    '2026-10-12': [{ ...RIDE }, { ...RUN }],
+    '2026-10-19': [{ ...RUN }],
+  }
   useDetailsStore().adopt({
     exercise: {
       ks: {
@@ -76,7 +78,7 @@ const section = (id: string) => wrapper!.get(`[data-testid="item-${id}"]`)
 const button = () => wrapper!.get<HTMLButtonElement>('[data-testid="item-notes-button"]')
 const area = () => wrapper!.find<HTMLTextAreaElement>('textarea')
 const field = (key: string) => wrapper!.get<HTMLInputElement>(`input[data-field="${key}"]`)
-const stored = () => usePlannerStore().plans['2026-10-19']!.find((e) => e.id === 'ks')!
+const stored = () => trackerView('exercise').plans['2026-10-19']!.find((e) => e.id === 'ks')!
 
 /** Type into an input as a person does: the value, then the input event. */
 async function type(el: { setValue(value: string): Promise<void> }, text: string) {
@@ -236,7 +238,7 @@ describe('notes', () => {
   })
 
   it('says an item whose id has a slash can’t keep notes, and saves nothing', async () => {
-    usePlannerStore().plans['2026-10-19']!.push({ ...PU, id: 'a/b', name: 'Slashed' })
+    trackerView('exercise').plans['2026-10-19']!.push({ ...PU, id: 'a/b', name: 'Slashed' })
     mountPage('exercise', 'a/b')
     await button().trigger('click')
     await type(area(), 'Elbows in')
@@ -387,7 +389,7 @@ describe('this week’s plan', () => {
       '20.5 kg',
     ])
     // The week before keeps its own plan.
-    expect(usePlannerStore().plans['2026-10-12']![0]!.sets).toBe(3)
+    expect(trackerView('exercise').plans['2026-10-12']![0]!.sets).toBe(3)
   })
 
   it('shows the TextField’s error for a number that isn’t valid, and changes nothing', async () => {
@@ -421,7 +423,7 @@ describe('this week’s plan', () => {
   it('reloads its controls when the plan changes from elsewhere', async () => {
     mountPage()
     await type(field('sets'), '25')
-    usePlannerStore().updateExercise('ks', { ...KS, perSide: false, sets: 6 })
+    trackerView('exercise').updateItem('ks', { ...KS, perSide: false, sets: 6 })
     await nextTick()
     expect(field('sets').element.value).toBe('6')
     expect(field('sets').attributes('aria-invalid')).toBeUndefined()
@@ -444,7 +446,7 @@ describe('this week’s plan', () => {
     expect(plan.findAll('input[data-field]')).toHaveLength(0)
     expect(plan.find('[data-slot="segmented-control"]').exists()).toBe(false)
     await plan.get('button[aria-label="Fewer times a week"]').trigger('click')
-    expect(useDietStore().plans['2026-10-19']![0]!.target).toBe(1)
+    expect(trackerView('diet').plans['2026-10-19']![0]!.target).toBe(1)
     expect(
       section('details')
         .findAll('label')
@@ -455,7 +457,7 @@ describe('this week’s plan', () => {
 })
 
 describe('a cardio item (K90)', () => {
-  const runs = () => useCardioStore().plans['2026-10-19']!
+  const runs = () => trackerView('cardio').plans['2026-10-19']!
 
   it('has its type, chips, Minutes and Distance in km, and the goal; Route and Link as details', () => {
     mountPage('cardio', 'ru')
@@ -494,7 +496,7 @@ describe('a cardio item (K90)', () => {
     expect(runs()[0]!.target).toBe(4)
     expect(wrapper!.findAll('[data-testid="item-chip"]').map((c) => c.text())).toEqual(['7.25 km'])
     // The week before keeps its own plan.
-    expect(useCardioStore().plans['2026-10-12']![1]).toEqual(RUN)
+    expect(trackerView('cardio').plans['2026-10-12']![1]).toEqual(RUN)
   })
 
   it('says when a time or a distance is over its limit, and changes nothing', async () => {
@@ -518,7 +520,7 @@ describe('a cardio item (K90)', () => {
   it('reloads its controls when the plan changes from elsewhere', async () => {
     mountPage('cardio', 'ru')
     await type(field('minutes'), '5000')
-    useCardioStore().updateCardio('ru', { name: 'Running', duration: 1830 })
+    trackerView('cardio').updateItem('ru', { name: 'Running', duration: 1830 })
     await nextTick()
     expect(field('minutes').element.value).toBe('30.5')
     expect(field('minutes').attributes('aria-invalid')).toBeUndefined()
@@ -535,7 +537,7 @@ describe('a cardio item (K90)', () => {
     expect(wrapper!.findAll('[data-testid="item-chip"]').map((c) => c.text())).toEqual([
       '90 min 30 s',
     ])
-    useCardioStore().plans['2026-10-12']![0] = {
+    trackerView('cardio').plans['2026-10-12']![0] = {
       id: 'cy',
       name: 'Cycling',
       distance: 40,
@@ -544,7 +546,7 @@ describe('a cardio item (K90)', () => {
   })
 
   it('writes only the distance of a latest plan with no time', async () => {
-    useCardioStore().plans['2026-10-12']![0] = {
+    trackerView('cardio').plans['2026-10-12']![0] = {
       id: 'cy',
       name: 'Cycling',
       distance: 40,
@@ -573,7 +575,7 @@ describe('a cardio item (K90)', () => {
 
 describe('an item not in the week', () => {
   it('shows its latest plan as words, read-only, and its chips from that plan', () => {
-    usePlannerStore().plans['2026-10-19'] = [{ ...PU }]
+    trackerView('exercise').plans['2026-10-19'] = [{ ...PU }]
     mountPage()
     const plan = section('plan')
     expect(plan.get('h2').text()).toBe('Latest plan')
@@ -617,7 +619,7 @@ describe('an item not in the week', () => {
   })
 
   it('leaves out an exercise’s missing amount, and has only the goal for a food', () => {
-    usePlannerStore().plans['2026-10-12']!.push({
+    trackerView('exercise').plans['2026-10-12']!.push({
       id: 'st',
       name: 'Stretch',
       reps: 0,
@@ -641,8 +643,7 @@ describe('an item not in the week', () => {
 
   it('shows nothing once no plan holds it', async () => {
     mountPage()
-    const planner = usePlannerStore()
-    planner.plans = { '2026-10-19': [{ ...PU }] }
+    trackerView('exercise').plans = { '2026-10-19': [{ ...PU }] }
     await nextTick()
     expect(wrapper!.find('[data-testid="item-page"]').exists()).toBe(false)
   })
@@ -669,7 +670,7 @@ describe('recent weeks', () => {
   })
 
   it('reads the default plan for an item while nothing is planned', () => {
-    usePlannerStore().plans = {}
+    trackerView('exercise').plans = {}
     mountPage('exercise', 'pu')
     expect(section('weeks').findAll('[data-testid="recent-week"]')).toHaveLength(8)
     expect(section('plan').get('h2').text()).toBe('This week’s plan')
@@ -703,7 +704,7 @@ describe('arranging the sections (K66)', () => {
   })
 
   it('shows only the shown sections, in the type’s order, on every page of the type', () => {
-    usePlannerStore().setArrangement('exercise', {
+    usePlannerStore().setArrangement('strength', {
       order: ['history', 'notes', 'details', 'plan'],
       hidden: ['details'],
     })
@@ -720,7 +721,7 @@ describe('arranging the sections (K66)', () => {
   })
 
   it('lists every section with Show, Move up and Move down; focus stays on the button', async () => {
-    usePlannerStore().setArrangement('exercise', {
+    usePlannerStore().setArrangement('strength', {
       order: ['notes', 'details', 'plan', 'history'],
       hidden: ['details'],
     })
@@ -770,7 +771,7 @@ describe('arranging the sections (K66)', () => {
     mountPage()
     await arrange().trigger('click')
     await toggle('Details').trigger('click')
-    expect(usePlannerStore().arrangementFor('exercise').hidden).toEqual(['details'])
+    expect(usePlannerStore().arrangementFor('strength').hidden).toEqual(['details'])
     expect(usePlannerStore().arrangementFor('food').hidden).toEqual([])
     expect(toggle('Details').attributes('aria-checked')).toBe('false')
     expect(section('details').get('[data-testid="item-arrange-state"]').text()).toBe('Hidden')
@@ -797,7 +798,7 @@ describe('arranging the sections (K66)', () => {
     await control('Move Recent weeks up').trigger('click')
     await control('Move Details down').trigger('click')
     expect(headings()).toEqual(['Recent weeks', 'This week’s plan', 'Notes', 'Details'])
-    expect(usePlannerStore().arrangementFor('exercise').order).toEqual([
+    expect(usePlannerStore().arrangementFor('strength').order).toEqual([
       'history',
       'plan',
       'notes',
@@ -1015,18 +1016,21 @@ describe('the name’s pen and Remove, the same in both modes (K120, K121)', () 
     await pen().trigger('click')
     await nameField().setValue('Jogging')
     await key('Enter')
-    expect(useCardioStore().items.find((c) => c.id === 'ru')).toEqual({ ...RUN, name: 'Jogging' })
+    expect(trackerView('cardio').items.find((c) => c.id === 'ru')).toEqual({
+      ...RUN,
+      name: 'Jogging',
+    })
     wrapper!.unmount()
     mountPage('diet', 'fish')
     await pen().trigger('click')
     await nameField().setValue('Salmon')
     await key('Enter')
-    expect(useDietStore().foods).toEqual([{ ...FISH, name: 'Salmon' }])
+    expect(trackerView('diet').items).toEqual([{ ...FISH, name: 'Salmon' }])
   })
 
   it('renames an exercise saved without a per-side count as counted per set', async () => {
     const { perSide: _, ...bare } = KS
-    usePlannerStore().plans['2026-10-19'] = [bare as Exercise]
+    trackerView('exercise').plans['2026-10-19'] = [bare as Exercise]
     mountPage()
     await pen().trigger('click')
     await nameField().setValue('Swings')
@@ -1036,20 +1040,20 @@ describe('the name’s pen and Remove, the same in both modes (K120, K121)', () 
 
   it('shows the store’s name in the title, and a rename from elsewhere replaces an untouched draft', async () => {
     mountPage()
-    usePlannerStore().updateExercise('ks', { ...KS, perSide: false, name: 'KB swings' })
+    trackerView('exercise').updateItem('ks', { ...KS, perSide: false, name: 'KB swings' })
     await nextTick()
     expect(wrapper!.get('h1').text()).toBe('KB swings')
     await pen().trigger('click')
-    usePlannerStore().updateExercise('ks', { ...KS, perSide: false, name: 'Swings' })
+    trackerView('exercise').updateItem('ks', { ...KS, perSide: false, name: 'Swings' })
     await nextTick()
     expect(nameField().element.value).toBe('Swings')
     // Once typed in, the draft is the person's own.
     await nameField().setValue('My swings')
-    usePlannerStore().updateExercise('ks', { ...KS, perSide: false, name: 'Other swings' })
+    trackerView('exercise').updateItem('ks', { ...KS, perSide: false, name: 'Other swings' })
     await nextTick()
     expect(nameField().element.value).toBe('My swings')
     // A change to something else leaves the field alone.
-    usePlannerStore().changeTarget('ks', 1)
+    trackerView('exercise').changeTarget('ks', 1)
     await nextTick()
     expect(nameField().element.value).toBe('My swings')
   })
@@ -1057,7 +1061,7 @@ describe('the name’s pen and Remove, the same in both modes (K120, K121)', () 
   it('leaves renaming when another tab takes the item out of the week', async () => {
     mountPage()
     await pen().trigger('click')
-    usePlannerStore().removeExercise('ks')
+    trackerView('exercise').removeItem('ks')
     await nextTick()
     // The page shows its latest plan now, read-only, with no field and no pen.
     expect(wrapper!.find('[data-testid="item-name-field"]').exists()).toBe(false)
@@ -1074,10 +1078,10 @@ describe('the name’s pen and Remove, the same in both modes (K120, K121)', () 
     const dialog = document.querySelector<HTMLElement>('[role="alertdialog"]')!
     expect(dialog.querySelector('h2')!.textContent).toBe('Remove Kettlebell swings?')
     await answer('Cancel')
-    expect(usePlannerStore().exercises.map((e) => e.id)).toEqual(['ks', 'pu'])
+    expect(trackerView('exercise').items.map((e) => e.id)).toEqual(['ks', 'pu'])
     await section('remove').get('button').trigger('click')
     await answer('Remove')
-    expect(usePlannerStore().exercises.map((e) => e.id)).toEqual(['pu'])
+    expect(trackerView('exercise').items.map((e) => e.id)).toEqual(['pu'])
     expect(location.hash).toBe('#/')
   })
 
@@ -1086,13 +1090,13 @@ describe('the name’s pen and Remove, the same in both modes (K120, K121)', () 
     mountPage('cardio', 'ru')
     await section('remove').get('button').trigger('click')
     await answer('Remove')
-    expect(useCardioStore().items).toEqual([])
-    expect(useCardioStore().plans['2026-10-12']).toHaveLength(2)
+    expect(trackerView('cardio').items).toEqual([])
+    expect(trackerView('cardio').plans['2026-10-12']).toHaveLength(2)
     wrapper!.unmount()
     mountPage('diet', 'fish')
     await section('remove').get('button').trigger('click')
     await answer('Remove')
-    expect(useDietStore().foods).toEqual([])
+    expect(trackerView('diet').items).toEqual([])
   })
 
   it('removes nothing when the week changes while it asks', async () => {
@@ -1101,6 +1105,6 @@ describe('the name’s pen and Remove, the same in both modes (K120, K121)', () 
     await flushPromises()
     usePlannerStore().weekOffset = -1
     await answer('Remove')
-    expect(usePlannerStore().plans['2026-10-19']!.map((e) => e.id)).toEqual(['ks', 'pu'])
+    expect(trackerView('exercise').plans['2026-10-19']!.map((e) => e.id)).toEqual(['ks', 'pu'])
   })
 })

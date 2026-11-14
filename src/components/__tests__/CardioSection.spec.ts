@@ -2,9 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import App from '@/App.vue'
-import { useCardioStore } from '@/stores/cardio'
 import { useDetailsStore } from '@/stores/details'
-import { usePlannerStore } from '@/stores/planner'
+import { trackerView } from '@/lib/__tests__/trackerView'
 import type { SyncState } from '@/stores/sync'
 import type { FakeApi } from '@/lib/__tests__/fakeApi'
 import { USER, emptyState, signedIn } from '@/lib/__tests__/signedIn'
@@ -21,7 +20,7 @@ let api: FakeApi
 /** A cache with this week's cardio plan: Cycling (30 min) and Running (5 km). */
 function withCardio(): SyncState {
   const state = emptyState()
-  state.cardio.plans = { [WEEK]: [CYCLING, RUNNING] }
+  state.sections.cardio.plans = { [WEEK]: [CYCLING, RUNNING] }
   return state
 }
 
@@ -105,15 +104,14 @@ describe('CardioSection (K90)', () => {
 
   it('marks a day like an exercise: great, partial, missed, then empty', async () => {
     mountApp(withCardio())
-    const cardio = useCardioStore()
+    const cardio = trackerView('cardio')
     for (const mark of ['great', 'partial', 'missed']) {
       await cells('Running')[1]!.trigger('click')
       expect(cardio.markOf('ru', 1)).toBe(mark)
     }
     expect(cells('Running')[1]!.attributes('aria-pressed')).toBe('true')
     // The exercises are untouched.
-    const planner = usePlannerStore()
-    expect(planner.totalFor(planner.exercises[0]!.id)).toBe(0)
+    expect(trackerView('exercise').totalFor(trackerView('exercise').items[0]!.id)).toBe(0)
   })
 
   it('has no daily target on its title line in Edit plan', async () => {
@@ -143,7 +141,7 @@ describe('CardioSection (K90)', () => {
     await add.get('form').trigger('submit')
     await settle()
     expect(wrapper.find('[data-testid="new-item-page"]').exists()).toBe(false)
-    const swim = useCardioStore().items.at(-1)!
+    const swim = trackerView('cardio').items.at(-1)!
     expect(swim).toEqual({
       id: swim.id,
       name: 'Swimming',

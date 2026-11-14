@@ -58,14 +58,14 @@ describe('the planner grids (W10)', () => {
         { id: 'sq', name: 'Squats', sets: 3, reps: 15, target: 3 },
         { id: 'kh', name: 'Halos', reps: 8, target: 2 },
       ]
-      state.exercise.plans = { [WEEK]: exercises, '2026-10-26': exercises }
-      state.exercise.details = {
+      state.sections.exercise.plans = { [WEEK]: exercises, '2026-10-26': exercises }
+      state.sections.exercise.details = {
         pu: { notes: 'Slow **down**.\n[Form video](https://example.com/push-ups)' },
         kh: { notes: '<script>alert(1)</script>', fields: { equipment: 'Kettlebell' } },
         sq: { fields: { works: 'Legs' } },
       }
-      state.diet.plans = { [WEEK]: [{ id: 'fr', name: 'Fruit', target: 5 }] }
-      state.diet.details = { fr: { notes: 'Not juice' } }
+      state.sections.diet.plans = { [WEEK]: [{ id: 'fr', name: 'Fruit', target: 5 }] }
+      state.sections.diet.details = { fr: { notes: 'Not juice' } }
       return state
     }
     const row = (name: string) =>
@@ -108,7 +108,7 @@ describe('the planner grids (W10)', () => {
     function mondayWith(n: number): SyncState {
       const state = emptyState()
       const ids = ['pu', 'pl', 'sq', 'be', 'kh'].slice(0, n)
-      state.exercise.log = {
+      state.sections.exercise.log = {
         [WEEK]: Object.fromEntries(
           ids.map((id) => [id, ['great', null, null, null, null, null, null]]),
         ),
@@ -318,7 +318,7 @@ describe('the planner grids (W10)', () => {
 
     it('skips to the Food grid when there are no exercises', async () => {
       const state = emptyState()
-      state.exercise.plans = { [WEEK]: [] }
+      state.sections.exercise.plans = { [WEEK]: [] }
       mountApp(state)
       await wrapper.get('a[data-testid="skip-to-today"]').trigger('click')
       expect(name(focused())).toBe('Vegetables, Friday 23 October, today')
@@ -327,8 +327,8 @@ describe('the planner grids (W10)', () => {
     it('skips to the first day in another week, and to the grid when it has no rows', async () => {
       // This week has nothing planned; the week before falls back to the default plan.
       const state = emptyState()
-      state.exercise.plans = { [WEEK]: [] }
-      state.diet.plans = { [WEEK]: [] }
+      state.sections.exercise.plans = { [WEEK]: [] }
+      state.sections.diet.plans = { [WEEK]: [] }
       mountApp(state)
       const skip = wrapper.get('a[data-testid="skip-to-today"]')
       await skip.trigger('click')

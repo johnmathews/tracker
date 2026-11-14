@@ -3,34 +3,18 @@ import { defineStore } from 'pinia'
 import { DAY_NAMES, dateKey, fullDate, mondayOf, weekDates, weekTitle } from '@/lib/dates'
 import {
   DEFAULT_SETTINGS,
-  MAX_DAILY_PICK,
-  MAX_DURATION,
-  MAX_SETS,
-  MAX_TARGET,
-  MIN_DAILY_PICK,
-  MIN_TARGET,
-  NEW_EXERCISE_TARGET,
   SETTINGS_KEY,
-  clamp,
-  defaultExercises,
   isRecord,
   normaliseGoals,
   normaliseLimits,
-  normaliseWeight,
   parseJson,
   parseSettings,
   readKey,
   writeKey,
-  type Exercise,
-  type Log,
-  type Mark,
-  type MarkSet,
-  type PlannerData,
   type KnownSettings,
+  type MarkSet,
 } from '@/lib/storage'
-import * as tracker from '@/lib/tracker'
 import type { Theme } from '@/lib/theme'
-import { copyPlan, planSource, type Plans } from '@/lib/plans'
 import {
   arrangementOf,
   normaliseItemSections,
@@ -54,46 +38,15 @@ export type Day = {
   isFuture: boolean
 }
 
-export type NewExercise = {
-  name: string
-  sets?: number
-  /** Reps per set; ignored when `duration` is set. */
-  reps: number
-  /** Seconds per set for a timed exercise. */
-  duration?: number
-  perSide: boolean
-  weight?: number
-  /** The weekly goal; left out, an added exercise gets NEW_EXERCISE_TARGET. */
-  target?: number
-}
-
-/** The chips under an exercise name: the exercise type's (src/lib/trackerTypes.ts). */
-export { exerciseDetails } from '@/lib/trackerTypes'
-
 /**
- * Cleans form input into the stored fields; null when the trimmed name is empty. An exercise
- * counts reps or time, never both: a duration keeps reps at 0.
+ * The settings the planner keeps: everything the person owns but the daily targets, which live on
+ * their trackers (K123). The sync store adds `dailyPick` and `foodPick` from the `exercise` and
+ * `diet` trackers wherever settings are sent or cached, so a tab on older code still reads them.
  */
-function exerciseFields(input: NewExercise): Omit<Exercise, 'id' | 'target'> | null {
-  const name = input.name.trim()
-  if (!name) return null
-  const duration =
-    input.duration !== undefined && Number.isFinite(input.duration) && input.duration > 0
-      ? Math.min(MAX_DURATION, Math.floor(input.duration))
-      : 0
-  const reps =
-    !duration && Number.isFinite(input.reps) && input.reps > 0 ? Math.floor(input.reps) : 0
-  const sets = Math.min(MAX_SETS, Math.floor(input.sets ?? 0))
-  const weight = normaliseWeight(input.weight)
-  return {
-    name,
-    ...(sets > 0 ? { sets } : {}),
-    reps,
-    ...(duration ? { duration } : {}),
-    perSide: input.perSide,
-    ...(weight !== undefined ? { weight } : {}),
-  }
-}
+export type PlannerSettings = Omit<KnownSettings, 'dailyPick' | 'foodPick'>
+
+/** The chips under an exercise name: the strength kind's (src/lib/trackerTypes.ts). */
+export { exerciseDetails } from '@/lib/trackerTypes'
 
 export const usePlannerStore = defineStore('planner', () => {
   /** "Now" as a ref so the today column moves when the tab is revisited after midnight. */
@@ -101,18 +54,13 @@ export const usePlannerStore = defineStore('planner', () => {
   /** Monday of the real current week, whichever week is on screen. */
   const currentWeekKey = computed(() => dateKey(mondayOf(now.value, 0)))
 
-  // Plans, the log, accent, daily picks and goals are the signed-in user's: the sync store fills
-  // them through `adopt` and saves them. Only the theme and the mark set belong to the device, and are
-  // stored here. The accent no longer draws anything, since the marks' pens
-  // are fixed (DayMark card); it is kept as it was saved, so the server and exports still agree.
-  // Nothing in the app changes it now.
-  const plans = ref<Plans<Exercise>>({})
-  const log = ref<Log>({})
+  // The accent and goals are the signed-in user's: the sync store fills them through `adopt` and
+  // saves them. Each tracker's plans, log and daily target are the trackers store's. Only the
+  // theme and the mark set belong to the device, and are stored here. The accent no longer draws
+  // anything, since the marks' pens are fixed (DayMark card); it is kept as it was saved, so the
+  // server and exports still agree. Nothing in the app changes it now.
   const weekOffset = ref(0)
   const accent = ref(DEFAULT_SETTINGS.accent)
-  const dailyPick = ref(DEFAULT_SETTINGS.dailyPick)
-  /** Foods a day (K57). It lives here with the other settings, though the diet store's days use it. */
-  const foodPick = ref(DEFAULT_SETTINGS.foodPick)
   /** My goals, in the person's words; Ask and the MCP read them. */
   const goals = ref(DEFAULT_SETTINGS.goals)
   /**
@@ -125,11 +73,11 @@ export const usePlannerStore = defineStore('planner', () => {
   const limits = ref(DEFAULT_SETTINGS.limits)
   /** Whether `limits` are known, as `goalsKnown` (a tab from before them carries goals only). */
   const limitsKnown = ref(false)
-  /** Daily goal (K85): on unless the person turned it off; the picks are kept either way. */
+  /** Daily goal (K85): on unless the person turned it off; the daily targets are kept either way. */
   const dailyGoal = ref(DEFAULT_SETTINGS.dailyGoal)
   /** Whether `dailyGoal` came from the server, a cache that carried it, or the person (as goals). */
   const dailyGoalKnown = ref(false)
-  /** Each type's item-page arrangement (K66); a type left out shows every section in order. */
+  /** Each kind's item-page arrangement (K66); a kind left out shows every section in order. */
   const itemSections = ref<ItemSections>({})
   const theme = ref<Theme>(parseSettings(readKey(SETTINGS_KEY)).theme)
   const markSet = ref<MarkSet>(parseSettings(readKey(SETTINGS_KEY)).markSet)
@@ -142,19 +90,6 @@ export const usePlannerStore = defineStore('planner', () => {
   const weekKey = computed(() => dateKey(monday.value))
   /** The page heading: "19–25 October", with the year when it isn't this one. */
   const label = computed(() => weekTitle(monday.value, now.value))
-  const week = computed(() => log.value[weekKey.value] ?? {})
-
-  /** The week whose plan is showing; null while only the defaults exist. */
-  const planWeek = computed(() => planSource(plans.value, weekKey.value))
-  /** This week's exercises: its own plan, or the one it carries forward (see `planSource`). */
-  const exercises = computed<Exercise[]>(() =>
-    planWeek.value ? plans.value[planWeek.value]! : defaultExercises(),
-  )
-
-  /** The visible week's own plan, copied from what it shows on its first change. */
-  function own(): Exercise[] {
-    return (plans.value[weekKey.value] ??= copyPlan(exercises.value))
-  }
 
   const days = computed<Day[]>(() => {
     const todayKey = dateKey(now.value)
@@ -168,69 +103,6 @@ export const usePlannerStore = defineStore('planner', () => {
       isFuture: dateKey(d) > todayKey,
     }))
   })
-
-  function isDone(id: string, day: number): boolean {
-    return tracker.isDone(week.value, id, day)
-  }
-
-  function markOf(id: string, day: number): Mark | null {
-    return tracker.markOf(week.value, id, day)
-  }
-
-  function totalFor(id: string): number {
-    return tracker.totalFor(week.value, id)
-  }
-
-  const dayCounts = computed(() => tracker.dayCounts(exercises.value, week.value))
-  const grandTotal = computed(() => tracker.grandTotal(exercises.value, week.value))
-
-  // Any change to a week, marks included, gives it its own plan, so later edits to the week it was
-  // carried from no longer move it.
-  /**
-   * Steps the day to its next mark: great, partial and missed in each drawing, then empty; in a
-   * tick or face set, the three kinds once (K21).
-   */
-  function toggle(id: string, day: number): void {
-    own()
-    tracker.cycleDay(log.value, weekKey.value, id, day, tracker.cycleFor('exercise', markSet.value))
-  }
-
-  function changeTarget(id: string, delta: number): void {
-    const e = own().find((x) => x.id === id)
-    if (e) e.target = clamp(e.target + delta, MIN_TARGET, MAX_TARGET)
-  }
-
-  /**
-   * Adds an exercise to this week; returns its id, or null (and adds nothing) when the trimmed name
-   * is empty. Its notes are its details (the details store), not the week's.
-   */
-  function addExercise(input: NewExercise): string | null {
-    const fields = exerciseFields(input)
-    if (!fields) return null
-    const target = clamp(input.target ?? NEW_EXERCISE_TARGET, MIN_TARGET, MAX_TARGET)
-    const id = tracker.newId()
-    own().push({ id, ...fields, target })
-    return id
-  }
-
-  /**
-   * Replaces name, sets, reps, per-side and weight this week, keeping the id and history; the goal
-   * stays as it is when the input leaves it out.
-   */
-  function updateExercise(id: string, input: NewExercise): boolean {
-    const fields = exerciseFields(input)
-    if (!fields || !exercises.value.some((e) => e.id === id)) return false
-    const list = own()
-    const i = list.findIndex((e) => e.id === id)
-    const target = clamp(input.target ?? list[i]!.target, MIN_TARGET, MAX_TARGET)
-    list[i] = { id, ...fields, target }
-    return true
-  }
-
-  /** Removes the exercise from this week; its log history stays in storage. */
-  function removeExercise(id: string): void {
-    plans.value[weekKey.value] = own().filter((e) => e.id !== id)
-  }
 
   function setConfigMode(on: boolean): void {
     configMode.value = on
@@ -252,16 +124,13 @@ export const usePlannerStore = defineStore('planner', () => {
   }
 
   /**
-   * Replace the user's data wholesale: from the cache, the server, or another tab. Settings
+   * Replace the user's settings wholesale: from the cache, the server, or another tab. Settings
    * without goals (a tab from before My goals wrote them) keep the goals this tab has, those
-   * without limits keep its limits (K107), and those without Daily goal its Daily goal (K85).
+   * without limits keep its limits (K107), and those without Daily goal its Daily goal (K85). The
+   * daily picks they carry are the trackers' (K123), which the trackers store adopts.
    */
-  function adopt(data: PlannerData, settings: KnownSettings | null): void {
-    plans.value = data.plans
-    log.value = data.log
+  function adopt(settings: KnownSettings | PlannerSettings | null): void {
     accent.value = settings?.accent ?? DEFAULT_SETTINGS.accent
-    dailyPick.value = settings?.dailyPick ?? DEFAULT_SETTINGS.dailyPick
-    foodPick.value = settings?.foodPick ?? DEFAULT_SETTINGS.foodPick
     if (settings?.goals !== undefined) {
       goals.value = settings.goals
       goalsKnown.value = true
@@ -278,17 +147,13 @@ export const usePlannerStore = defineStore('planner', () => {
     settingsSaved.value = settings !== null
   }
 
-  /** Replace one week's plan, e.g. with the server's copy after a conflict. */
-  function adoptWeek(week: string, items: Exercise[]): void {
-    plans.value[week] = items
-  }
-
   /**
-   * Forget the user's data on sign-out, their items' details included (the session clears the
-   * planner whenever it clears the user's data); the theme stays with the device.
+   * Forget the user's settings on sign-out, their items' details included (the session clears the
+   * planner and the trackers store whenever it clears the user's data); the theme stays with the
+   * device.
    */
   function clear(): void {
-    adopt({ plans: {}, log: {} }, null)
+    adopt(null)
     goals.value = DEFAULT_SETTINGS.goals
     goalsKnown.value = false
     limits.value = DEFAULT_SETTINGS.limits
@@ -300,14 +165,6 @@ export const usePlannerStore = defineStore('planner', () => {
     weekOffset.value = 0
   }
 
-  function changeDailyPick(delta: number): void {
-    dailyPick.value = clamp(dailyPick.value + delta, MIN_DAILY_PICK, MAX_DAILY_PICK)
-    settingsSaved.value = true
-  }
-  function changeFoodPick(delta: number): void {
-    foodPick.value = clamp(foodPick.value + delta, MIN_DAILY_PICK, MAX_DAILY_PICK)
-    settingsSaved.value = true
-  }
   /**
    * The person's goals, normalised as the API stores them. The same text again is no change, so it
    * sends nothing. The Profile page calls it when the person stops typing, not on each key (F18).
@@ -327,7 +184,7 @@ export const usePlannerStore = defineStore('planner', () => {
     limitsKnown.value = true
     settingsSaved.value = true
   }
-  /** Daily goal on or off (K85), from Settings. The picks stay as they are. */
+  /** Daily goal on or off (K85), from Settings. The daily targets stay as they are. */
   function setDailyGoal(on: boolean): void {
     if (dailyGoalKnown.value && on === dailyGoal.value) return
     dailyGoal.value = on
@@ -349,14 +206,13 @@ export const usePlannerStore = defineStore('planner', () => {
   }
 
   /**
-   * The settings to send and cache: the accent, daily picks, the goals and the limits only once
-   * each is known, and the item pages' arrangement (left out while every page has the default).
+   * The settings to send and cache, but the daily picks: the accent, the goals and the limits only
+   * once each is known, and the item pages' arrangement (left out while every page has the
+   * default).
    */
-  function portableSettings(): KnownSettings {
+  function portableSettings(): PlannerSettings {
     return {
       accent: accent.value,
-      dailyPick: dailyPick.value,
-      foodPick: foodPick.value,
       ...(dailyGoalKnown.value ? { dailyGoal: dailyGoal.value } : {}),
       ...(goalsKnown.value ? { goals: goals.value } : {}),
       ...(limitsKnown.value ? { limits: limits.value } : {}),
@@ -367,7 +223,7 @@ export const usePlannerStore = defineStore('planner', () => {
   }
 
   /** `portableSettings()`, or null while no settings have been stored, changed or imported. */
-  function savedSettings(): KnownSettings | null {
+  function savedSettings(): PlannerSettings | null {
     return settingsSaved.value ? portableSettings() : null
   }
 
@@ -385,13 +241,8 @@ export const usePlannerStore = defineStore('planner', () => {
 
   return {
     markSet,
-    plans,
-    exercises,
-    log,
     weekOffset,
     accent,
-    dailyPick,
-    foodPick,
     goals,
     goalsKnown,
     limits,
@@ -406,16 +257,6 @@ export const usePlannerStore = defineStore('planner', () => {
     currentWeekKey,
     label,
     days,
-    dayCounts,
-    grandTotal,
-    isDone,
-    markOf,
-    totalFor,
-    toggle,
-    changeTarget,
-    addExercise,
-    updateExercise,
-    removeExercise,
     configMode,
     setConfigMode,
     prevWeek,
@@ -423,10 +264,7 @@ export const usePlannerStore = defineStore('planner', () => {
     thisWeek,
     refreshNow,
     adopt,
-    adoptWeek,
     clear,
-    changeDailyPick,
-    changeFoodPick,
     setGoals,
     setLimits,
     setDailyGoal,

@@ -1,12 +1,19 @@
 import {
+  DEFAULT_SETTINGS,
   MARKS,
   MARK_KINDS,
   NEW_CARDIO_TARGET,
   NEW_EXERCISE_TARGET,
   NEW_FOOD_TARGET,
+  defaultExercises,
+  defaultFoods,
   markKind,
+  normaliseCardio,
+  normaliseExercise,
+  normaliseFood,
   type Cardio,
   type Exercise,
+  type Food,
   type Mark,
   type MarkSet,
   type PortableSettings,
@@ -15,13 +22,18 @@ import type { Tracked } from '@/lib/tracker'
 import { durationText } from '@/lib/words'
 
 /**
- * Tracker types (docs/architecture.md §1): what kind of thing a section tracks, and what follows
- * from it. A section is the stored name (`exercise`, `cardio`, `diet`: in URLs, the database, the
- * cache and the outbox); its type is an attribute of it. `api/src/tracker_api/types.py` holds the same
- * registry, and `fixtures/types/registry.json` keeps the two in step.
+ * Tracker kinds (docs/architecture.md §1, K123): what a tracker records, and what follows from it.
+ * A kind is code; a tracker is data, each account's own (src/lib/trackers.ts), with an id, a name
+ * and a kind. The first three trackers keep the old section names as their ids (`exercise`,
+ * `cardio`, `diet`: in URLs, the database, the cache and the outbox). `api/src/tracker_api/types.py`
+ * holds the same registry, and `fixtures/types/registry.json` keeps the two in step.
  */
 
-export type TrackerTypeId = 'exercise' | 'cardio' | 'food'
+/** A kind's id. `strength` was `exercise` before trackers were the account's own (K123). */
+export type TrackerTypeId = 'strength' | 'cardio' | 'food'
+
+/** A plan item of any kind. */
+export type Item = Exercise | Cardio | Food
 
 /** The settings that hold a daily target: how many items a day count as a met day (K30, K57). */
 export type PickKey = Extract<keyof PortableSettings, 'dailyPick' | 'foodPick'>
@@ -48,6 +60,10 @@ export type TrackerType = {
   pickKey: PickKey | null
   /** The weekly goal an added item starts with. */
   newTarget: number
+  /** The daily target a new tracker of this kind starts with; null for a kind with none. */
+  dailyTarget: number | null
+  /** A stored plan item of this kind, cleaned as the API cleans it; null when it isn't one. */
+  normalise: (item: unknown) => Item | null
 }
 
 /**
@@ -95,8 +111,8 @@ export function exerciseDetails(e: Exercise): string[] {
 }
 
 export const TRACKER_TYPES: Readonly<Record<TrackerTypeId, TrackerType>> = {
-  exercise: {
-    id: 'exercise',
+  strength: {
+    id: 'strength',
     label: 'Exercises',
     itemLabel: 'Exercise',
     cycle: (set) => (set === 'squiggles' ? EXERCISE_CYCLE : EXERCISE_KIND_CYCLE),
@@ -109,6 +125,8 @@ export const TRACKER_TYPES: Readonly<Record<TrackerTypeId, TrackerType>> = {
     ],
     pickKey: 'dailyPick',
     newTarget: NEW_EXERCISE_TARGET,
+    dailyTarget: DEFAULT_SETTINGS.dailyPick,
+    normalise: normaliseExercise,
   },
   cardio: {
     id: 'cardio',
@@ -123,6 +141,8 @@ export const TRACKER_TYPES: Readonly<Record<TrackerTypeId, TrackerType>> = {
     ],
     pickKey: null,
     newTarget: NEW_CARDIO_TARGET,
+    dailyTarget: null,
+    normalise: normaliseCardio,
   },
   food: {
     id: 'food',
@@ -136,24 +156,52 @@ export const TRACKER_TYPES: Readonly<Record<TrackerTypeId, TrackerType>> = {
     ],
     pickKey: 'foodPick',
     newTarget: NEW_FOOD_TARGET,
+    dailyTarget: DEFAULT_SETTINGS.foodPick,
+    normalise: normaliseFood,
   },
 }
 
+/** The kinds, in the registry's order. */
+export const TRACKER_KINDS = Object.keys(TRACKER_TYPES) as readonly TrackerTypeId[]
+
+export function isTrackerKind(v: unknown): v is TrackerTypeId {
+  return typeof v === 'string' && Object.hasOwn(TRACKER_TYPES, v)
+}
+
 /**
- * Each section's type, in the order the week shows them: Exercises, Cardio, Food (K90). A second
- * tracker of a type would be a new section here (D1).
+ * The kind of each of the account's first three trackers, by id, in the order the week first
+ * showed them: Strength, Cardio, Food (K90, K123). Files and caches from before trackers were the
+ * account's own (export version 5, cache `-v5`) hold these three under these keys.
  */
 export const SECTIONS = {
-  exercise: TRACKER_TYPES.exercise,
+  exercise: TRACKER_TYPES.strength,
   cardio: TRACKER_TYPES.cardio,
   diet: TRACKER_TYPES.food,
 } as const satisfies Record<string, TrackerType>
 
+/** The id of one of the first three trackers. */
 export type Section = keyof typeof SECTIONS
 
-/** The sections in the order the week shows them. */
+/** The first three trackers' ids, in order. */
 export const SECTION_NAMES = Object.keys(SECTIONS) as readonly Section[]
+
+/** The names the first three trackers start with (K123: the Exercises tracker reads "Strength"). */
+export const FIRST_NAMES: Readonly<Record<Section, string>> = {
+  exercise: 'Strength',
+  cardio: 'Cardio',
+  diet: 'Food',
+}
 
 export function isSection(v: unknown): v is Section {
   return typeof v === 'string' && Object.hasOwn(SECTIONS, v)
+}
+
+/**
+ * The items a week shows while its tracker has no plan at all: today's default exercises and
+ * foods, on the `exercise` and `diet` trackers only. Every other tracker starts empty (spec §4).
+ */
+export function defaultItems(trackerId: string): Item[] {
+  if (trackerId === 'exercise') return defaultExercises()
+  if (trackerId === 'diet') return defaultFoods()
+  return []
 }

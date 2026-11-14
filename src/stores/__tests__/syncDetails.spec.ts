@@ -3,6 +3,7 @@ import { nextTick } from 'vue'
 import { flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { usePlannerStore } from '@/stores/planner'
+import { useTrackersStore } from '@/stores/trackers'
 import { useDetailsStore } from '@/stores/details'
 import {
   CACHE_PREFIX,
@@ -14,6 +15,7 @@ import {
   QUOTA_NOTICE,
   REFUSED_NOTICE,
   diff,
+  legacyState,
   normaliseState,
   useSyncStore,
   type SyncState,
@@ -49,7 +51,12 @@ async function start(cache?: SyncState) {
   const sync = useSyncStore()
   sync.start(USER, lost)
   await flushPromises()
-  return { sync, details: useDetailsStore(), planner: usePlannerStore() }
+  return {
+    sync,
+    details: useDetailsStore(),
+    planner: usePlannerStore(),
+    trackers: useTrackersStore(),
+  }
 }
 
 /** Let a change reach the watcher, wait out the details delay, then let the writes finish. */
@@ -85,10 +92,10 @@ describe('sync of item details', () => {
     api.accounts.get(USER)!.details.diet.veg = { doc: {}, rev: 3 }
     const { details } = await start()
     expect(details.notesOf('exercise', 'sq')).toBe('Knees out')
-    expect(cached().exercise.details).toEqual({ sq: { notes: 'Knees out' } })
-    expect(cached().exercise.detailRevs).toEqual({ sq: 2 })
-    expect(cached().diet.details).toEqual({})
-    expect(cached().diet.detailRevs).toEqual({ veg: 3 })
+    expect(cached().sections.exercise.details).toEqual({ sq: { notes: 'Knees out' } })
+    expect(cached().sections.exercise.detailRevs).toEqual({ sq: 2 })
+    expect(cached().sections.diet.details).toEqual({})
+    expect(cached().sections.diet.detailRevs).toEqual({ veg: 3 })
   })
 
   it('sends a note as the item’s details, with the revision last seen', async () => {
@@ -102,7 +109,7 @@ describe('sync of item details', () => {
       doc: { notes: 'Knees **out**' },
       rev: 1,
     })
-    expect(cached().exercise.detailRevs).toEqual({ sq: 1 })
+    expect(cached().sections.exercise.detailRevs).toEqual({ sq: 1 })
     details.setField('exercise', 'sq', 'equipment', 'Kettlebell')
     await settle()
     expect(detailsPuts().at(-1)!.body).toEqual({
@@ -130,7 +137,7 @@ describe('sync of item details', () => {
       ]),
     )
     const cache = emptyState()
-    cache.exercise.details = {
+    cache.sections.exercise.details = {
       'a/b': { notes: 'Slash' },
       '..': { notes: 'Dots' },
       sq: { notes: 'Fine' },
@@ -147,8 +154,8 @@ describe('sync of item details', () => {
     details.setNotes('exercise', 'sq', '')
     await settle()
     expect(detailsPuts()).toEqual([{ path: '/details/exercise/sq', body: { details: {}, rev: 1 } }])
-    expect(cached().exercise.details).toEqual({})
-    expect(cached().exercise.detailRevs).toEqual({ sq: 2 })
+    expect(cached().sections.exercise.details).toEqual({})
+    expect(cached().sections.exercise.detailRevs).toEqual({ sq: 2 })
   })
 
   it('waits for typing to pause, then sends the latest text once', async () => {
@@ -189,10 +196,10 @@ describe('sync of item details', () => {
   })
 
   it('sends a tick at once, whatever details wait behind it', async () => {
-    const { details, planner } = await start(emptyState())
+    const { details, trackers } = await start(emptyState())
     details.setNotes('exercise', 'sq', 'Knees out')
     await nextTick()
-    planner.toggle('pu', 0)
+    trackers.toggle('exercise', 'pu', 0)
     await nextTick()
     await flushPromises()
     // The plan and the tick queued after the note go first; the note waits for its pause.
@@ -226,15 +233,15 @@ describe('sync of item details', () => {
     api.accounts.get(USER)!.details.exercise.sq = { doc: { notes: 'Theirs' }, rev: 2 }
     api.stall('GET', '/state')
     const cache = emptyState()
-    cache.exercise.details = { sq: { notes: 'Mine' } }
-    cache.exercise.detailRevs = { sq: 1 }
+    cache.sections.exercise.details = { sq: { notes: 'Mine' } }
+    cache.sections.exercise.detailRevs = { sq: 1 }
     const { sync, details } = await start(cache)
     details.setNotes('exercise', 'sq', 'Mine, edited')
     await settle()
     expect(details.notesOf('exercise', 'sq')).toBe('Theirs')
     expect(sync.notice).toBe(DETAILS_CONFLICT_NOTICE)
-    expect(cached().exercise.details).toEqual({ sq: { notes: 'Theirs' } })
-    expect(cached().exercise.detailRevs).toEqual({ sq: 2 })
+    expect(cached().sections.exercise.details).toEqual({ sq: { notes: 'Theirs' } })
+    expect(cached().sections.exercise.detailRevs).toEqual({ sq: 2 })
     await settle()
     expect(detailsPuts()).toHaveLength(1) // adopting their copy queues nothing
   })
@@ -243,8 +250,8 @@ describe('sync of item details', () => {
     api.accounts.get(USER)!.details.exercise.sq = { doc: {}, rev: 3 }
     api.stall('GET', '/state')
     const cache = emptyState()
-    cache.exercise.details = { sq: { notes: 'Mine' } }
-    cache.exercise.detailRevs = { sq: 1 }
+    cache.sections.exercise.details = { sq: { notes: 'Mine' } }
+    cache.sections.exercise.detailRevs = { sq: 1 }
     const { details } = await start(cache)
     details.setField('exercise', 'sq', 'works', 'Legs')
     await settle()
@@ -254,14 +261,14 @@ describe('sync of item details', () => {
   it('reads a server copy that is not an object as no details', async () => {
     api.stall('GET', '/state')
     const cache = emptyState()
-    cache.exercise.details = { sq: { notes: 'Mine' } }
-    cache.exercise.detailRevs = { sq: 1 }
+    cache.sections.exercise.details = { sq: { notes: 'Mine' } }
+    cache.sections.exercise.detailRevs = { sq: 1 }
     const { details } = await start(cache)
     api.failNext('PUT', '/details', 409, { error: 'conflict', details: 'damaged', rev: 2 })
     details.setNotes('exercise', 'sq', 'Mine, edited')
     await settle()
     expect(details.get('exercise', 'sq')).toEqual({})
-    expect(cached().exercise.detailRevs).toEqual({ sq: 2 })
+    expect(cached().sections.exercise.detailRevs).toEqual({ sq: 2 })
   })
 
   it('lets the reply to a details write that lands after sign-out touch nothing', async () => {
@@ -281,8 +288,8 @@ describe('sync of item details', () => {
   it('sends details again as a create when the server has none', async () => {
     api.stall('GET', '/state')
     const cache = emptyState()
-    cache.exercise.details = { sq: { notes: 'Mine' } }
-    cache.exercise.detailRevs = { sq: 4 }
+    cache.sections.exercise.details = { sq: { notes: 'Mine' } }
+    cache.sections.exercise.detailRevs = { sq: 4 }
     const { sync, details } = await start(cache)
     details.setNotes('exercise', 'sq', 'Mine, edited')
     await settle()
@@ -298,7 +305,7 @@ describe('sync of item details', () => {
     details.setNotes('exercise', 'sq', 'Same')
     await settle()
     expect(sync.notice).toBeNull()
-    expect(cached().exercise.detailRevs).toEqual({ sq: 5 })
+    expect(cached().sections.exercise.detailRevs).toEqual({ sq: 5 })
   })
 
   it('keeps a details write on a 404, as an API older than details answers, and retries', async () => {
@@ -317,9 +324,9 @@ describe('sync of item details', () => {
 
   it('still drops a tick write the server answers with a 404', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const { sync, planner } = await start(emptyState())
+    const { sync, trackers } = await start(emptyState())
     api.failNext('PUT', '/ticks', 404, { error: 'not-found' })
-    planner.toggle('sq', 0)
+    trackers.toggle('exercise', 'sq', 0)
     await settle()
     expect(sync.pending).toBe(0)
     expect(sync.notice).toBe(REFUSED_NOTICE)
@@ -350,7 +357,7 @@ describe('sync of item details', () => {
       ]),
     )
     const cache = emptyState()
-    cache.exercise.details = { sq: { notes: 'Queued before the reload' } }
+    cache.sections.exercise.details = { sq: { notes: 'Queued before the reload' } }
     const { sync } = await start(cache)
     expect(api.accounts.get(USER)!.details.exercise.sq!.doc).toEqual({
       notes: 'Queued before the reload',
@@ -362,17 +369,22 @@ describe('sync of item details', () => {
     const { sync, details } = await start(emptyState())
     details.setNotes('exercise', 'sq', 'Before the import')
     const outcome = await sync.importFile({
-      exercise: { plans: {}, log: {}, details: { pl: { notes: 'From the file' } } },
-      cardio: { plans: {}, log: {}, details: {} },
-      diet: { plans: {}, log: {}, details: {} },
+      trackers: [],
+      sections: {
+        exercise: { plans: {}, log: {}, details: { pl: { notes: 'From the file' } } },
+        cardio: { plans: {}, log: {}, details: {} },
+        diet: { plans: {}, log: {}, details: {} },
+      },
       settings: null,
     })
     expect(outcome).toEqual({
       ok: true,
-      added: { weeks: 0, ticks: 0, details: 1, settings: false, conversations: 0 },
+      added: { trackers: 0, weeks: 0, ticks: 0, details: 1, settings: false, conversations: 0 },
     })
-    const imported = api.calls.find((c) => c.path === '/import')!.body as SyncState
-    expect(imported.exercise.details).toEqual({ pl: { notes: 'From the file' } })
+    const imported = api.calls.find((c) => c.path === '/import')!.body as {
+      details: Record<string, unknown>
+    }
+    expect(imported.details.exercise).toEqual({ pl: { notes: 'From the file' } })
     expect(details.notesOf('exercise', 'sq')).toBe('Before the import')
     expect(details.notesOf('exercise', 'pl')).toBe('From the file')
   })
@@ -438,11 +450,11 @@ describe('moving a -v3 cache and outbox', () => {
     expect(details.notesOf('exercise', 'sq')).toBe('Latest note')
     expect(details.notesOf('exercise', 'pu')).toBe('Push')
     expect(details.notesOf('diet', 'veg')).toBe('Not juice')
-    expect(cached().exercise.plans[WEEK]).toEqual([
+    expect(cached().sections.exercise.plans[WEEK]).toEqual([
       SQUATS,
       { id: 'pu', name: 'Push-ups', reps: 10, target: 4 },
     ])
-    expect(cached().exercise.details).toEqual({
+    expect(cached().sections.exercise.details).toEqual({
       sq: { notes: 'Latest note' },
       pu: { notes: 'Push' },
     })
@@ -466,6 +478,17 @@ describe('moving a -v3 cache and outbox', () => {
     ).toEqual(['/details/exercise/pu', '/details/exercise/sq'])
     expect(api.accounts.get(USER)!.details.exercise.sq!.doc).toEqual({ notes: 'Latest note' })
     expect(localStorage.getItem(V3_OUTBOX + USER)).toBeNull()
+  })
+
+  it('lifts nothing for a queued plan write of a section the old cache doesn’t hold', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    localStorage.setItem(V3_CACHE + USER, JSON.stringify(v3))
+    localStorage.setItem(
+      V3_OUTBOX + USER,
+      JSON.stringify([{ kind: 'plan', section: 'xother', week: WEEK, id: 'old' }]),
+    )
+    await start()
+    expect(detailsPuts()).toEqual([])
   })
 
   /**
@@ -592,18 +615,31 @@ describe('moving a -v3 cache and outbox', () => {
     sync.onStorage(V3_OUTBOX + USER)
     await settle()
     expect(details.notesOf('exercise', 'sq')).toBe('Knees out')
-    expect(cached().exercise.details).toEqual({ sq: { notes: 'Knees out' } })
+    expect(cached().sections.exercise.details).toEqual({ sq: { notes: 'Knees out' } })
     expect(api.paths('PUT')).toEqual([])
   })
 })
 
 describe('details in diff and normaliseState', () => {
   const empty = () => ({ plans: {}, log: {}, details: {} })
+  const tracker = (id: string, kind: 'strength' | 'cardio' | 'food', position: number) => ({
+    id,
+    name: id,
+    kind,
+    position,
+    dailyTarget: null,
+    startWeek: null,
+    endWeek: null,
+  })
+  const trackers = {
+    exercise: tracker('exercise', 'strength', 0),
+    cardio: tracker('cardio', 'cardio', 1),
+    diet: tracker('diet', 'food', 2),
+  }
   const snapshot = (exercise = empty(), diet = empty(), cardio = empty()) => ({
-    exercise,
-    cardio,
-    diet,
-    settings: { accent: '#30d158', dailyPick: 3, foodPick: 2, goals: '', limits: '' },
+    trackers,
+    sections: { exercise, cardio, diet },
+    settings: { accent: '#30d158', goals: '', limits: '' },
   })
 
   it('finds each item whose details changed, were added, or were cleared', () => {
@@ -622,22 +658,30 @@ describe('details in diff and normaliseState', () => {
   })
 
   it('validates details like stored data, lifting plan notes only from an older cache', () => {
+    const exercise = {
+      plans: { [WEEK]: [{ ...SQUATS, notes: 'In the plan' }] },
+      log: {},
+      details: { pu: { notes: '  Trimmed  ', other: 'dropped' }, bad: 'x', kh: {} },
+      revs: {},
+      detailRevs: { pu: 2, bad: 'x', zero: 0, kh: 3 },
+    }
     const raw = {
-      exercise: {
-        plans: { [WEEK]: [{ ...SQUATS, notes: 'In the plan' }] },
-        log: {},
-        details: { pu: { notes: '  Trimmed  ', other: 'dropped' }, bad: 'x', kh: {} },
-        revs: {},
-        detailRevs: { pu: 2, bad: 'x', zero: 0, kh: 3 },
-      },
-      diet: { plans: {}, log: {} },
+      trackers: [
+        { ...trackers.exercise, name: 'Strength', rev: 1 },
+        { ...trackers.diet, name: 'Food', rev: 1 },
+      ],
+      sections: { exercise, diet: { plans: {}, log: {} } },
     }
     const state = normaliseState(raw)!
-    expect(state.exercise.plans[WEEK]).toEqual([SQUATS])
-    expect(state.exercise.details).toEqual({ pu: { notes: 'Trimmed' } })
-    expect(state.exercise.detailRevs).toEqual({ pu: 2, kh: 3 })
-    expect(state.diet.details).toEqual({})
-    expect(state.diet.detailRevs).toEqual({})
-    expect(normaliseState(raw, true)!.exercise.details).toEqual({ sq: { notes: 'In the plan' } })
+    expect(state.sections.exercise!.plans[WEEK]).toEqual([SQUATS])
+    expect(state.sections.exercise!.details).toEqual({ pu: { notes: 'Trimmed' } })
+    expect(state.sections.exercise!.detailRevs).toEqual({ pu: 2, kh: 3 })
+    expect(state.sections.diet!.details).toEqual({})
+    expect(state.sections.diet!.detailRevs).toEqual({})
+    const old = { exercise, diet: { plans: {}, log: {} } }
+    expect(legacyState(old, true)!.sections.exercise!.details).toEqual({
+      sq: { notes: 'In the plan' },
+    })
+    expect(legacyState(old)!.sections.exercise!.details).toEqual({ pu: { notes: 'Trimmed' } })
   })
 })

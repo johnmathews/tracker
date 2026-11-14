@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { usePlannerStore } from '@/stores/planner'
-import { useCardioStore } from '@/stores/cardio'
+import { useTrackersStore } from '@/stores/trackers'
 import { useDetailsStore } from '@/stores/details'
 import { dayMonth } from '@/lib/dates'
 import type { Mark } from '@/lib/storage'
@@ -15,23 +15,29 @@ import { Button } from '@/components/ui/button'
 import { newItemHref } from '@/lib/routes'
 
 const planner = usePlannerStore()
-const cardio = useCardioStore()
+const trackers = useTrackersStore()
+/** The tracker this section shows: the account's second, `cardio` (K123). */
+const ID = 'cardio'
 const details = useDetailsStore()
 /** The section's type: its names and its chips, a time and a distance (src/lib/trackerTypes.ts). */
 const type = SECTIONS.cardio
 
 function marksFor(id: string): (Mark | null)[] {
-  return planner.days.map((_, i) => cardio.markOf(id, i))
+  return planner.days.map((_, i) => trackers.markOf(ID, id, i))
+}
+
+function toggle(id: string, day: number): void {
+  trackers.toggle(ID, id, day)
 }
 
 /** An item's notes, from its details: one copy for every week (D2). */
 function noteFor(item: { id: string }): string {
-  return details.notesOf('cardio', item.id)
+  return details.notesOf(ID, item.id)
 }
 
 /** Edit plan's Add opens the new item page (K104), not a dialog. */
 function add(): void {
-  location.hash = newItemHref('cardio')
+  location.hash = newItemHref(ID)
 }
 </script>
 
@@ -92,13 +98,13 @@ function add(): void {
         :mark-set="planner.markSet"
         section="cardio"
         :table-label="`${type.label}, week of ${dayMonth(planner.monday)}`"
-        :items="cardio.items"
+        :items="trackers.itemsOf(ID)"
         :days="planner.days"
         :marks-for="marksFor"
         :details-for="type.details"
         :note-for="noteFor"
         data-testid="cardio-grid"
-        @toggle="cardio.toggle"
+        @toggle="toggle"
       >
         <template #corner>
           <span class="title-1 text-[24px] leading-7 text-ink">{{ type.label }}</span>

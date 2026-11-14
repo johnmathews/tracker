@@ -55,13 +55,13 @@ const ARRANGED: Arrangement = {
 
 describe('arranging a type’s page', () => {
   it('reads the default for a type with none, as a copy', () => {
-    const a = arrangementOf({}, 'exercise')
+    const a = arrangementOf({}, 'strength')
     // This week's plan first (K104).
     expect(a).toEqual({ order: ['plan', 'notes', 'details', 'history'], hidden: [] })
     a.order.reverse()
-    expect(arrangementOf({}, 'exercise').order[0]).toBe('plan')
+    expect(arrangementOf({}, 'strength').order[0]).toBe('plan')
     expect(arrangementOf({ food: ARRANGED }, 'food')).toEqual(ARRANGED)
-    expect(arrangementOf({ food: ARRANGED }, 'exercise').hidden).toEqual([])
+    expect(arrangementOf({ food: ARRANGED }, 'strength').hidden).toEqual([])
   })
 
   it('shows and hides a section, keeping hidden ones in the default order', () => {
@@ -74,7 +74,7 @@ describe('arranging a type’s page', () => {
   })
 
   it('moves a section one place, and not past either end', () => {
-    const base = arrangementOf({}, 'exercise')
+    const base = arrangementOf({}, 'strength')
     expect(moveSection(base, 'history', -1).order).toEqual(['plan', 'notes', 'history', 'details'])
     expect(moveSection(base, 'plan', 1).order).toEqual(['notes', 'plan', 'details', 'history'])
     expect(moveSection(base, 'plan', -1)).toEqual(base)
@@ -88,12 +88,12 @@ describe('arranging a type’s page', () => {
   })
 
   it('stores a type’s arrangement, leaving out the default', () => {
-    const one = withArrangement({}, 'exercise', ARRANGED)
-    expect(one).toEqual({ exercise: ARRANGED })
+    const one = withArrangement({}, 'strength', ARRANGED)
+    expect(one).toEqual({ strength: ARRANGED })
     const two = withArrangement(one, 'food', ARRANGED)
-    expect(two).toEqual({ exercise: ARRANGED, food: ARRANGED })
-    expect(one).toEqual({ exercise: ARRANGED })
-    expect(withArrangement(two, 'exercise', arrangementOf({}, 'exercise'))).toEqual({
+    expect(two).toEqual({ strength: ARRANGED, food: ARRANGED })
+    expect(one).toEqual({ strength: ARRANGED })
+    expect(withArrangement(two, 'strength', arrangementOf({}, 'strength'))).toEqual({
       food: ARRANGED,
     })
   })

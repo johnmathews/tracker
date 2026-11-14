@@ -2,10 +2,7 @@
 import { computed, onMounted, ref, useId, useTemplateRef } from 'vue'
 import { ChevronLeft, Download, Upload } from '@lucide/vue'
 import { usePlannerStore } from '@/stores/planner'
-import { useCardioStore } from '@/stores/cardio'
-import { useDietStore } from '@/stores/diet'
 import { useAskStore } from '@/stores/ask'
-import { useDetailsStore } from '@/stores/details'
 import { useSessionStore } from '@/stores/session'
 import { useSyncStore } from '@/stores/sync'
 import { request } from '@/lib/api'
@@ -14,13 +11,7 @@ import { MARK_KINDS, MARK_SETS, isMarkSet, type MarkSet } from '@/lib/storage'
 import { THEMES, type Theme } from '@/lib/theme'
 import { APP_NAME } from '@/lib/app'
 import { SETTINGS_TABS, settingsHref, type SettingsTab } from '@/lib/routes'
-import {
-  buildExport,
-  downloadExport,
-  parseExport,
-  type ExportData,
-  type ParseError,
-} from '@/lib/transfer'
+import { downloadExport, parseExport, type ExportData, type ParseError } from '@/lib/transfer'
 import { Button } from '@/components/ui/button'
 import { DayMarkDrawing } from '@/components/ui/day-mark'
 import { InlineMessage } from '@/components/ui/inline-message'
@@ -69,10 +60,7 @@ const EXPORT_WITHOUT_HISTORY =
   'Exported without your Ask conversations, because the server couldn’t be reached.'
 
 const store = usePlannerStore()
-const cardio = useCardioStore()
-const diet = useDietStore()
 const ask = useAskStore()
-const details = useDetailsStore()
 const session = useSessionStore()
 const sync = useSyncStore()
 const heading = useTemplateRef<HTMLHeadingElement>('heading')
@@ -134,20 +122,7 @@ const markSet = computed({
  */
 async function exportData(): Promise<void> {
   notice.value = null
-  const file = buildExport({
-    exercise: { plans: store.plans, log: store.log, details: details.docs.exercise },
-    cardio: { plans: cardio.plans, log: cardio.log, details: details.docs.cardio },
-    diet: { plans: diet.plans, log: diet.log, details: details.docs.diet },
-    settings: {
-      accent: store.accent,
-      dailyPick: store.dailyPick,
-      foodPick: store.foodPick,
-      ...(store.dailyGoalKnown ? { dailyGoal: store.dailyGoal } : {}),
-      goals: store.goals,
-      limits: store.limits,
-      itemSections: store.itemSections,
-    },
-  })
+  const file = sync.exportFile()
   const res = await request<{ conversations?: unknown }>('GET', '/export', undefined, {
     'X-Expected-User': session.user ?? '',
   })

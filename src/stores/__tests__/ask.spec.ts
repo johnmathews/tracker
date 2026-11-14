@@ -6,7 +6,7 @@ import { ASK_COPY } from '@/lib/ask'
 import { useAskStore } from '@/stores/ask'
 import { SESSION_KEY, useSessionStore } from '@/stores/session'
 import { useSyncStore } from '@/stores/sync'
-import { usePlannerStore } from '@/stores/planner'
+import { useTrackersStore } from '@/stores/trackers'
 import { ANSWER, sse, type FakeApi } from '@/lib/__tests__/fakeApi'
 import { USER, signedIn } from '@/lib/__tests__/signedIn'
 
@@ -105,8 +105,8 @@ describe('the ask store', () => {
 
   it('sends this device’s changes first, and notes the ones that couldn’t go (F11)', async () => {
     const { ask } = await start()
-    const planner = usePlannerStore()
-    planner.toggle('pu', 0)
+    const trackers = useTrackersStore()
+    trackers.toggle('exercise', 'pu', 0)
     // The sync store's watcher queues the mark before anyone can press Send.
     await nextTick()
     await ask.ask('Did I train today?')
@@ -116,7 +116,7 @@ describe('the ask store', () => {
 
     // The next mark can't reach the server: the question still goes, and says so.
     api.failNext('PUT', '/ticks', 502)
-    planner.toggle('pu', 1)
+    trackers.toggle('exercise', 'pu', 1)
     await nextTick()
     await ask.ask('And now?')
     expect(ask.unsynced).toBe(1)
@@ -457,7 +457,7 @@ describe('the ask store', () => {
     expect(ask.status).toBe('idle')
     // A question asked while its changes were still being sent, then left.
     const held = api.holdNext('PUT', '/ticks')
-    usePlannerStore().toggle('pu', 0)
+    useTrackersStore().toggle('exercise', 'pu', 0)
     const later = ask.ask('Q2')
     ask.newConversation()
     held()

@@ -1,19 +1,22 @@
 import { isItemId, isRecord } from '@/lib/storage'
-import { isSection, type Section } from '@/lib/trackerTypes'
+import { isTrackerId } from '@/lib/trackers'
 
 /**
- * The item page's address, `#/item/<section>/<id>` (ItemPage card, D5), and the way back from it.
- * The section is a registry section (`exercise`, `cardio`, `diet`); the id is encoded, so any id the API's
- * paths can name fits in one segment.
+ * The item page's address, `#/item/<tracker>/<id>` (ItemPage card, D5), and the way back from it.
+ * The tracker is a tracker id (`exercise`, `cardio`, `diet` for the first three, K123); the id is
+ * encoded, so any id the API's paths can name fits in one segment. These functions check an
+ * address's shape only: whether the account has the tracker is the app's to check, once the
+ * trackers have loaded (App.vue).
  */
 
-export type ItemRoute = { section: Section; id: string }
+/** An item page's tracker id (`section`, as the API's paths name it) and item id. */
+export type ItemRoute = { section: string; id: string }
 
 const ITEM_PREFIX = '#/item/'
 const ITEM = /^#\/item\/([^/]+)\/([^/]+)$/
 
 /** The address of an item's page. */
-export function itemHref(section: Section, id: string): string {
+export function itemHref(section: string, id: string): string {
   return `${ITEM_PREFIX}${section}/${encodeURIComponent(id)}`
 }
 
@@ -22,7 +25,7 @@ export function isItemHash(hash: string): boolean {
   return hash.startsWith(ITEM_PREFIX)
 }
 
-/** The item an address names, or null when it names no section or no id the API could name. */
+/** The item an address names, or null when it names no tracker id or item id the API could name. */
 export function parseItemHash(hash: string): ItemRoute | null {
   const match = ITEM.exec(hash)
   if (!match) return null
@@ -33,21 +36,29 @@ export function parseItemHash(hash: string): ItemRoute | null {
     return null
   }
   const section = match[1]
-  return isSection(section) && isItemId(id) ? { section, id } : null
+  return isTrackerId(section) && isItemId(id) ? { section, id } : null
 }
 
-/** The new item page's address, `#/new/<section>` (K104): Edit plan's Add opens it. */
+/** The new item page's address, `#/new/<tracker>` (K104): Edit plan's Add opens it. */
 const NEW = /^#\/new\/([^/]+)$/
 
-/** The address of the page that adds an item to a section. */
-export function newItemHref(section: Section): string {
+/** The address of the page that adds an item to a tracker. */
+export function newItemHref(section: string): string {
   return `#/new/${section}`
 }
 
-/** The section a new-item address names, or null for any other address. */
-export function parseNewHash(hash: string): Section | null {
+/** The tracker id a new-item address names, or null for any other address. */
+export function parseNewHash(hash: string): string | null {
   const section = NEW.exec(hash)?.[1]
-  return isSection(section) ? section : null
+  return isTrackerId(section) ? section : null
+}
+
+/** The new tracker page's address (K124): Edit plan's Add tracker opens it. */
+export const NEW_TRACKER_HREF = '#/new-tracker'
+
+/** Whether the address is the new tracker page's. */
+export function isNewTrackerHash(hash: string): boolean {
+  return hash === NEW_TRACKER_HREF
 }
 
 /**

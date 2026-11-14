@@ -7,6 +7,7 @@ import { ASK_COPY } from '@/lib/ask'
 import { FOLDED } from '@/components/ui/side-panel'
 import { useAskStore } from '@/stores/ask'
 import { usePlannerStore } from '@/stores/planner'
+import { useTrackersStore } from '@/stores/trackers'
 import { SESSION_KEY, useSessionStore } from '@/stores/session'
 import { ANSWER, PASSWORD, sse, type FakeApi } from '@/lib/__tests__/fakeApi'
 import { USER, emptyState, signedIn } from '@/lib/__tests__/signedIn'
@@ -436,7 +437,7 @@ describe('the Ask page', () => {
   it('says when changes on this device weren’t in the answer (F11)', async () => {
     await mountApp({ hash: '#/ask' })
     api.failNext('PUT', '/ticks', 502)
-    usePlannerStore().toggle('pu', 0)
+    useTrackersStore().toggle('exercise', 'pu', 0)
     await nextTick()
     await ask('Did I train today?')
     expect(note()).toBe(

@@ -3,7 +3,7 @@ import { flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { SESSION_KEY, useSessionStore } from '@/stores/session'
 import { CACHE_PREFIX, OUTBOX_PREFIX, useSyncStore } from '@/stores/sync'
-import { usePlannerStore } from '@/stores/planner'
+import { useTrackersStore } from '@/stores/trackers'
 import { FakeApi, PASSWORD } from '@/lib/__tests__/fakeApi'
 import { USER, emptyState, signedIn } from '@/lib/__tests__/signedIn'
 
@@ -88,12 +88,12 @@ describe('session', () => {
     api.signedIn = 'bob'
     const session = useSessionStore()
     const init = session.init()
-    usePlannerStore().toggle('pu', 0) // alice's data, shown from her cache
+    useTrackersStore().toggle('exercise', 'pu', 0) // alice's data, shown from her cache
     api.stall('GET', '/state') // bob's data has not arrived yet
     await init
     expect(session.user).toBe('bob')
     // Nothing of alice's may stay in the stores, where Export could still reach it.
-    expect(usePlannerStore().grandTotal).toBe(0)
+    expect(useTrackersStore().grandTotal('exercise')).toBe(0)
   })
 
   it('logs in, remembers the user and starts syncing', async () => {
@@ -199,13 +199,13 @@ describe('session', () => {
     const session = useSessionStore()
     await session.init()
     await flushPromises()
-    usePlannerStore().toggle('pu', 0)
+    useTrackersStore().toggle('exercise', 'pu', 0)
     localStorage.removeItem(SESSION_KEY)
     api.signedIn = null
     await session.onStorage(SESSION_KEY)
     expect(session.status).toBe('signed-out')
     expect(session.expired).toBe(false)
-    expect(usePlannerStore().grandTotal).toBe(0)
+    expect(useTrackersStore().grandTotal('exercise')).toBe(0)
     expect(useSyncStore().user).toBeNull()
   })
 
@@ -225,13 +225,13 @@ describe('session', () => {
     const session = useSessionStore()
     await session.init()
     await flushPromises()
-    usePlannerStore().toggle('pu', 0)
+    useTrackersStore().toggle('exercise', 'pu', 0)
     localStorage.setItem(SESSION_KEY, JSON.stringify({ user: 'bob' }))
     api.signedIn = 'bob'
     await session.onStorage(SESSION_KEY)
     expect(session.user).toBe('bob')
     expect(useSyncStore().user).toBe('bob')
-    expect(usePlannerStore().grandTotal).toBe(0)
+    expect(useTrackersStore().grandTotal('exercise')).toBe(0)
     await session.onStorage('unrelated')
     expect(session.user).toBe('bob')
   })
@@ -241,12 +241,12 @@ describe('session', () => {
     const session = useSessionStore()
     await session.init()
     await flushPromises()
-    usePlannerStore().toggle('pu', 0)
+    useTrackersStore().toggle('exercise', 'pu', 0)
     expect(await session.logout()).toBeNull()
     expect(session.status).toBe('signed-out')
     expect(session.user).toBeNull()
     expect(api.signedIn).toBeNull()
-    expect(usePlannerStore().grandTotal).toBe(0)
+    expect(useTrackersStore().grandTotal('exercise')).toBe(0)
     expect(localStorage.getItem(SESSION_KEY)).toBeNull()
     expect(localStorage.getItem(CACHE_PREFIX + USER)).toBeNull()
     expect(localStorage.getItem(OUTBOX_PREFIX + USER)).toBeNull()

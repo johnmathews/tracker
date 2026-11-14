@@ -9,21 +9,22 @@
 ## 1. Overview
 
 A Vue 3 SPA with accounts. The API service in `api/` ([api.md](api.md)) holds each user's data, and
-the app syncs with it through the same origin (§7). Four Pinia stores hold what the app shows:
-`planner` (exercise plans, the log, the visible week, settings, the mode), `cardio` (cardio plans
-and their log, K90) and `diet` (food plans and their log), which take their week from `planner`,
-and `details` (each item's notes and fields, one
-copy for every week, §3). Two more run the account: `session` (who is signed in, and whether the API sends email and
-answers questions) and `sync` (the per-user cache, the outbox of unsent writes, and reads). A
-seventh, `ask`, holds the Ask page's conversation and history (§3), read through `request` and
-`stream` in `src/lib/api.ts`; `src/lib/ask.ts` holds the page's words. The three plan stores track
-the same thing, a mark per day against a weekly goal, through the pure helpers in
-`src/lib/tracker.ts`.
+the app syncs with it through the same origin (§7). Three Pinia stores hold what the app shows:
+`planner` (the visible week, the mode, the mark set and the settings), `trackers` (the account's
+trackers and, per tracker, its plans and log, which take their week from `planner`; K123) and
+`details` (each item's notes and fields, one copy for every week, by tracker, §3). Two more run the
+account: `session` (who is signed in, and whether the API sends email and answers questions) and
+`sync` (the per-user cache, the outbox of unsent writes, and reads). A sixth, `ask`, holds the Ask
+page's conversation and history (§3), read through `request` and `stream` in `src/lib/api.ts`;
+`src/lib/ask.ts` holds the page's words. Every tracker tracks the same thing, a mark per day
+against a weekly goal, through the pure helpers in `src/lib/tracker.ts`.
 
-**Tracker types.** `src/lib/trackerTypes.ts` is the registry of tracker types. A section
-(`exercise`, `cardio`, `diet`) is the stored name, in URLs, the database, the cache and the outbox.
-Its type (`exercise`, `cardio`, `food`) is an attribute of it, mapped in `SECTIONS`, whose order is
-the week's: Exercises, Cardio, Food (K90). Each type gives:
+**Tracker kinds.** `src/lib/trackerTypes.ts` is the registry of tracker kinds: `strength` (the
+old `exercise` type, K123), `cardio` and `food`. A kind is code; a tracker is data, each account's
+own (`src/lib/trackers.ts`, below). A tracker's id is the stored name, in URLs, the database, the
+cache and the outbox, where the API's paths still call it `section`. The first three trackers keep
+the old section names as their ids: `SECTIONS` maps `exercise`, `cardio` and `diet` to their kinds,
+and `FIRST_NAMES` names them Strength, Cardio and Food. Each kind gives:
 
 - the section's heading and the label of one item ("Exercises", "Exercise");
 - the marks a press steps through in each mark set (§6.2);
@@ -31,23 +32,35 @@ the week's: Exercises, Cardio, Food (K90). Each type gives:
   `cardioDetails` gives a cardio item's time, then its distance: "30 min", "5 km");
 - the item page's fields, by key and label (exercise: Equipment, Works, Link; cardio: Route, Link;
   food: A serving, Examples);
-- the setting that holds its daily target (`dailyPick`, `foodPick`), or `null` for a type with none
-  (cardio), and a new item's goal.
+- the daily target a new tracker of the kind starts with (`dailyTarget`: 3, none for cardio, 2),
+  the setting the first tracker of the kind keeps it in step with (`pickKey`), and a new item's
+  goal;
+- the normaliser its plan items go through (`normalise`).
 
 `api/src/tracker_api/types.py` holds the same registry, and `fixtures/types/registry.json` keeps
-the two in step: `trackerTypes.spec.ts` and `test_types.py` both read it. A second tracker of a type
-would be a new section in `SECTIONS`, with no rename. There is no screen for adding one: a new
-tracker is code (a store, a section component, the API's normaliser), as Cardio was (K90).
+the two in step: `trackerTypes.spec.ts` and `test_types.py` both read it. `defaultItems` gives the
+items a tracker with no plan shows: today's default exercises and foods, on the `exercise` and
+`diet` trackers only; every other tracker starts empty.
+
+**Trackers** (K123, the spec `docs/specs/2026-11-14-account-trackers.md`). `src/lib/trackers.ts`
+holds a tracker's shape, `{id, name, kind, position, dailyTarget, startWeek, endWeek}` (`Tracker`
+adds the `rev`), and its rules, as the API's: `normaliseTracker` and `normaliseTrackers` (a URL-safe
+id, a kind the registry has, the first three ids their own kind, a name of 1 to 60 characters, a
+position from 0 to 10,000, a daily target of 1 to 8 or none), `showsIn` (a tracker shows in week W
+when `startWeek <= W` or it has none, and `endWeek > W` or it has none), `inOrder` (by position,
+then id), `nextPosition` and `firstTrackers`, the three as the API's migration made them.
 
 **The item page.** `src/lib/routes.ts` reads and writes the item page's address,
-`#/item/<section>/<id>`, and does its Back (`backToWeek`) and the Link field's site (`webHost`).
+`#/item/<tracker>/<id>`, and the new item page's, `#/new/<tracker>`; it checks their shape only, and
+App checks the tracker against the loaded trackers once sync has loaded. `NEW_TRACKER_HREF`
+(`#/new-tracker`, K124) is the new tracker page's address. It does the page's Back (`backToWeek`) and the Link field's site (`webHost`).
 It also holds the Settings tabs' addresses (K119): `SETTINGS_TABS`, `settingsHref` and
 `parseSettingsHash`, which reads `#/settings` as the first tab and returns null for a tab Settings
 doesn't have.
 `src/lib/history.ts` gives an item's recent weeks (`itemHistory`) and its latest plan
-(`latestPlanWith`), from the log and the plans. `src/composables/itemSource.ts` reads each
-section's plans, log and goal action from its store, for the page and for the route that checks
-the item exists.
+(`latestPlanWith`), from the log and the plans. `src/composables/itemSource.ts` reads a
+tracker's plans, log and goal action from the trackers store, for the page and for the route that
+checks the item exists.
 
 **The item page's sections** (K66, P29). `src/lib/itemSections.ts` holds which of the page's
 sections (`notes`, `details`, `plan`, `history`) each type's pages show, and in what order:
@@ -212,43 +225,71 @@ cardio (with a time, a distance and a goal) and the foods (with goals). Ticks li
 
 ## 3. Stores
 
-`usePlannerStore` is a setup store.
+`usePlannerStore` is a setup store. It keeps what is app-wide: the week, the mode, the mark set and
+the settings.
 
-| State                             | Kept by                                   | Notes                                                                       |
-| --------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------- |
-| `plans`                           | the sync store: server and per-user cache | week → `{ id, name, sets?, reps, duration?, perSide?, weight?, target }[]`  |
-| `log`                             | the sync store: server and per-user cache | week Monday `YYYY-MM-DD` → exercise id → seven marks (`Days`, below)        |
-| `accent`, `dailyPick`, `foodPick` | the sync store: server and per-user cache | defaults `#30d158`, `3` and `2`. The accent is kept but draws nothing (K13) |
-| `goals`, `goalsKnown`             | the sync store: server and per-user cache | My goals, `''` by default; Ask and the MCP read them. `goalsKnown` is below |
-| `limits`, `limitsKnown`           | the sync store: server and per-user cache | Your limits (K107), `''` by default; read and sent like `goals`             |
-| `dailyGoal`, `dailyGoalKnown`     | the sync store: server and per-user cache | Daily goal (K85), `true` by default; sent only once known, like `goals`     |
-| `itemSections`                    | the sync store: server and per-user cache | each type's item-page arrangement (K66); `{}` is every page as it comes     |
-| `theme`                           | `tracker-settings-v1` (the device)        | `system` (default), `light` or `dark`                                       |
-| `markSet`                         | `tracker-settings-v1` (the device)        | `squiggles` (default), `ticks`, `stamped-ticks`, `faces`, `stamped-faces`   |
-| `configMode`                      | no                                        | `false` (normal mode) on every load                                         |
-| `weekOffset`                      | no                                        | `0` is the current week                                                     |
-| `now`                             | no                                        | a ref so "today" can move; see §5                                           |
+| State                         | Kept by                                   | Notes                                                                       |
+| ----------------------------- | ----------------------------------------- | --------------------------------------------------------------------------- |
+| `accent`                      | the sync store: server and per-user cache | default `#30d158`. The accent is kept but draws nothing (K13)               |
+| `goals`, `goalsKnown`         | the sync store: server and per-user cache | My goals, `''` by default; Ask and the MCP read them. `goalsKnown` is below |
+| `limits`, `limitsKnown`       | the sync store: server and per-user cache | Your limits (K107), `''` by default; read and sent like `goals`             |
+| `dailyGoal`, `dailyGoalKnown` | the sync store: server and per-user cache | Daily goal (K85), `true` by default; sent only once known, like `goals`     |
+| `itemSections`                | the sync store: server and per-user cache | each kind's item-page arrangement (K66); `{}` is every page as it comes     |
+| `theme`                       | `tracker-settings-v1` (the device)        | `system` (default), `light` or `dark`                                       |
+| `markSet`                     | `tracker-settings-v1` (the device)        | `squiggles` (default), `ticks`, `stamped-ticks`, `faces`, `stamped-faces`   |
+| `configMode`                  | no                                        | `false` (normal mode) on every load                                         |
+| `weekOffset`                  | no                                        | `0` is the current week                                                     |
+| `now`                         | no                                        | a ref so "today" can move; see §5                                           |
 
 The stores start empty (showing the defaults) and never write the user's data themselves. The sync
 store fills them with `adopt` and saves their changes (§7).
 
-**Derived:** `monday`, `weekKey`, `currentWeekKey`, `label`, `days` (`name` "Thu",
-`date` "22", `full` "Thursday 22 October" for the DayMarks' names, `key`, `isToday`, and
-`isFuture` for days still to come), `exercises` (the visible week's plan, see §2), `dayCounts`,
-`grandTotal`, and the helpers `isDone(id, day)` and `totalFor(id)`. Totals count only the week's
-exercises, so a removed exercise's history stays in `log` without inflating the numbers.
+**Derived:** `monday`, `weekKey`, `currentWeekKey`, `label` and `days` (`name` "Thu", `date` "22",
+`full` "Thursday 22 October" for the DayMarks' names, `key`, `isToday`, and `isFuture` for days
+still to come).
 
-**Actions** (plan edits apply to the visible week only): `toggle`, `changeTarget` (clamps 0–7),
-`addExercise` (returns the new id, or `null` for an empty name; new exercises get goal 3 unless
-the input names one), `updateExercise` (replaces name, sets, reps or duration, per-side, weight and, when
-given, the goal, keeping the id and history; `false` for an empty name or an id not in the week).
-An exercise counts reps or time, never both: a duration stores reps as 0. Then `removeExercise`, `setConfigMode`,
-`prevWeek`, `nextWeek`, `thisWeek`, `refreshNow`, `changeDailyPick` and `changeFoodPick` (each
-clamps 1–8), `setGoals` and `setLimits` (normalised as the API stores them; the same text again
-changes nothing), `setTheme`, `portableSettings` (the accent, both daily picks and, once known,
-the goals and the limits), `savedSettings` (the same, or null while the user has none of their own), `adopt`
-(replace the data and settings wholesale), `adoptWeek` (replace one week's plan) and `clear` (forget
-the user on sign-out, the details store included, keeping the theme).
+**Actions:** `setConfigMode`, `prevWeek`, `nextWeek`, `thisWeek`, `refreshNow`, `setGoals` and
+`setLimits` (normalised as the API stores them; the same text again changes nothing),
+`setDailyGoal`, `setTheme`, `arrangementFor` and `setArrangement` (by kind), `portableSettings`
+(the accent and, once known, Daily goal, the goals and the limits, and the arrangement),
+`savedSettings` (the same, or null while the user has none of their own), `adopt` (replace the
+settings wholesale) and `clear` (forget the user on sign-out, the details store included, keeping
+the theme). The daily picks are not the planner's: they are the trackers' daily targets (K123), and
+the sync store adds them to the settings it sends and caches.
+
+`useTrackersStore` (`src/stores/trackers.ts`, K123) holds `list`, the account's trackers, ended
+ones included, and `data`, each tracker's `{ plans, log }` by tracker id. It reads the planner's
+week, so week navigation moves every tracker, and each tracker's plans carry forward as §2 says.
+A plan item is a strength item (`{ id, name, sets?, reps, duration?, perSide?, weight?, target }`),
+a cardio item (`{ id, name, duration?, distance?, target }`: seconds in all and km) or a food
+(`{ id, name, target }`), by the tracker's kind.
+
+- **The trackers:** `ordered` (by position, then id), `shown` (the ones the visible week shows,
+  `showsIn`, in that order), `get`, `has`, `kindOf` and `typeOf` (a tracker's kind and its registry
+  entry; an id not loaded yet reads as its fixed kind for the first three) and `dailyTarget`
+  (the tracker's, null for cardio; the kind's default until the trackers load).
+- **A tracker's week:** `plansOf`, `logOf`, `itemsOf` (its own plan, the one it carries forward,
+  or `defaultItems`), `markOf`, `isDone`, `totalFor`, `dayCounts`, `grandTotal` and `goalsMet`.
+  Totals count only the week's items, so a removed item's history stays in the log without
+  inflating the numbers.
+- **Changing a week** (the visible week only): `toggle` (the kind's cycle in the device's mark set:
+  great, partial and missed in each drawing for strength and cardio, eaten in each drawing for
+  food), `changeTarget` (0–7), `addItem` (a name and the fields the kind records, `NewItem`; goal 3
+  unless the input names one; the new id, or `null` for an empty name), `updateItem` (keeps the id,
+  the history and, when the input names none, the goal; `false` for an empty name or an item not
+  in the week) and `removeItem`. An exercise counts reps or time, never both: a duration stores reps
+  as 0; sets are whole and at most 20, a weight positive and at most 500 kg; a cardio item's time is
+  whole seconds up to 86,400 and its distance km to 2 places up to 1,000, each left out at zero.
+- **Changing a tracker:** `createTracker({ name, kind })` (after every other, empty, with its kind's
+  daily target, from the week on screen; the id is made here with `newId`; `null` for a blank name
+  or past 100 trackers), `renameTracker` (1 to 60 characters), `setDailyTarget` and
+  `changeDailyTarget` (1–8; `false` for cardio) and `endTracker` (Delete tracker, K122: it ends
+  from the week on screen, and an earlier end stays). Nothing removes a tracker.
+- **From the sync store:** `adopt` (the trackers and their data wholesale), `adoptWeek`,
+  `adoptTracker` and `clear`.
+
+Food and cardio goals work like exercise goals (met once the count reaches a non-zero goal). A day
+turns green once its marks reach the tracker's daily target (K30, K57); cardio has none (K90).
 
 **My goals** are the person's own words about what they are aiming for, and **Your limits**
 (K107) what they have to work around: injuries, equipment, time, food. Both are set on the Profile
@@ -266,30 +307,11 @@ reps), "3 × 45 s" or "1 min 30 s each side" for a timed exercise (`durationText
 `src/lib/words.ts`), then "16 kg" when weighted, and no chip at all for none of these (the Chip
 card's words).
 
-`useDietStore` holds `plans` of foods (`{ id, name, target }`) and its own `log`, kept by the sync
-store like the planner's. It reads `planner.weekKey`, so week navigation moves every
-section. It derives `foods`, `dayCounts`, `grandTotal` and `goalsMet`, and
-offers `isEaten`, `totalFor`, `toggle`, `changeTarget` (0–7), `addFood` (a name, or a name with
-its goal from the new item page; goal 3 when none is given; the new id, or `null` for an empty
-name), `updateFood` (name and goal, which the item's page renames through, `false` for an empty name or a food
-not in the week), `removeFood`, `adopt`, `adoptWeek` and `clear`. Food goals work
-like exercise goals (met once the count reaches a non-zero goal). The daily target, foods a day,
-is the planner store's `foodPick`, with the other settings (K57).
-
-`useCardioStore` (`src/stores/cardio.ts`, K90) holds `plans` of cardio items (`{ id, name,
-duration?, distance?, target }`: seconds in all and km) and its own `log`, kept by the sync store
-like the others, on the planner's week. With no plans at all it shows none (`defaultCardio()` is
-empty), so an account from before Cardio has an empty section. It derives `items`, `dayCounts`
-and `goalsMet`, and offers `markOf`, `totalFor`, `toggle` (the exercise's cycle: great, partial,
-missed), `changeTarget` (0–7), `addCardio` and `updateCardio` (a name, a time, a distance and a
-goal; seconds rounded and capped at 86,400, km to 2 places and capped at 1,000, zero leaving either
-out; `updateCardio` keeps the goal when none is given), `removeCardio`, `adopt`, `adoptWeek` and
-`clear`. It has no daily target: no setting, and no day turns green.
-
-`Tracked` (`src/lib/tracker.ts`), the item shape the plan stores share, is `{ id, name, target }`.
+`Tracked` (`src/lib/tracker.ts`), the item shape every kind's items share, is `{ id, name, target }`.
 It has no `notes`: they are the item's details.
 
-`useDetailsStore` (`src/stores/details.ts`) holds `docs`, each section's details by item id. An
+`useDetailsStore` (`src/stores/details.ts`) holds `docs`, each tracker's details by item id, keyed
+by tracker id (a tracker with none may have no entry). An
 item's details are `{ notes?, fields? }` (`ItemDetails` in `src/lib/storage.ts`): its notes in
 markdown, and its text fields by key. A blank key is left out, so `{}` is an item with none, and
 the store drops an empty document. The sync store fills it through `adopt` and saves its changes
@@ -301,7 +323,7 @@ like the plans (§7). It offers:
 - `setNotes` and `setField`, which store the document as the API would and return `false`, changing
   nothing, over a limit (§4), over 32 KB, for a bad field key, a 33rd field or an id the API can't
   name;
-- `adopt` (every section), `adoptItem(section, id, doc)` (one item, from a conflict) and `clear`.
+- `adopt` (every tracker), `adoptItem(section, id, doc)` (one item, from a conflict) and `clear`.
 
 A page that saves as you type keeps its own draft of the text and calls a setter on each change,
 so a trailing space stays in the field while the stored copy is trimmed.
@@ -354,10 +376,11 @@ with storage blocked or full the app keeps working in memory.
 | Key                                            | Holds                                                                           | Written |
 | ---------------------------------------------- | ------------------------------------------------------------------------------- | ------- |
 | `tracker-session-v1`                           | `{ user }`: the last signed-in user                                             | yes     |
-| `tracker-cache-v5:<user>`                      | the user's state as `GET /api/state` returns it, with `revs` and `detailRevs`   | yes     |
-| `tracker-outbox-v5:<user>`                     | writes not yet sent (§7)                                                        | yes     |
+| `tracker-cache-v6:<user>`                      | the user's trackers with their `rev`, each one's data by id, and the settings    | yes     |
+| `tracker-outbox-v6:<user>`                     | writes not yet sent (§7)                                                        | yes     |
 | `tracker-import-v1:<user>`                     | the first-login prompt's answer, `imported` or `dismissed` (§7)                 | yes     |
 | `tracker-settings-v1`                          | `theme`, read before first paint by `public/theme-init.js`, and `markSet`       | both    |
+| `tracker-cache-v5:<user>`, `-outbox-v5:<user>` | the cache and outbox from before trackers; moved at sign-in onto the first three | never   |
 | `tracker-cache-v4:<user>`, `-outbox-v4:<user>` | the cache and outbox from before Cardio; moved at sign-in as they are           | never   |
 | `tracker-cache-v3:<user>`, `-outbox-v3:<user>` | the cache and outbox from before item details; moved at sign-in, notes lifted   | never   |
 | `tracker-cache-v2:<user>`, `-outbox-v2:<user>` | the cache and outbox from before the solid and hatch drawings; moved at sign-in | never   |
@@ -416,7 +439,20 @@ The names went to `-v5` on 2026-11-09 with Cardio (K90). A `-v5` cache holds a t
 write the cache back without it, and drop queued cardio writes from the shared outbox, since it
 doesn't know the section. A `-v4` cache and outbox already hold item details, so they move as they
 are: nothing is lifted and no details write is queued (`WITH_DETAILS` in `src/stores/sync.ts`).
-`normaliseState` reads a state with no `cardio` (the server mid-deploy) as no cardio.
+A cache from before Cardio reads as no cardio.
+
+The names went to `-v6` on 2026-11-14, when trackers became the account's own (K123). A `-v6`
+cache is `{ trackers, sections, settings }`: the trackers as `GET /api/state` lists them, each with
+its `rev`, and under `sections` each tracker's `{ plans, log, details, revs, detailRevs }` by
+tracker id (`normaliseState`, which drops data for an id with no tracker and reads each tracker's
+plans by its kind). The API's state carries each tracker's details and their revisions under keys
+of their own; `stateFromApi` moves them into its section, and reads none of the version 5 keys
+the API still sends for older tabs. Every older cache holds the first three trackers under fixed
+keys: `legacyState` maps it onto them, named, with the daily targets its settings hold, their
+revisions not known yet (0). One it can't read is dropped, and the app loads afresh. Every older
+outbox names those trackers' ids already, so its writes move as they are and go out as they were
+queued: marks and plans made offline on older code still reach the server. A tracker write at
+revision 0 that conflicts goes again at the server's revision, since this device never saw one.
 
 **Migration.** Before weekly plans, one list served every week: `{ exercises, log }` under
 `tracker-v1` (the design prototype's shape, under its key renamed) and `{ foods, log }` under
@@ -474,22 +510,35 @@ to 1,000 code points, `''` when blank or not a string), accepts only `system`, `
 as the mark set, falling back to the defaults otherwise. Settings saved before the theme option existed
 load as `system`, and before the mark set existed as `squiggles`.
 
-**Export and import.** Settings → Export downloads `tracker-YYYY-MM-DD.json`:
+**Export and import.** Settings → Export downloads `tracker-YYYY-MM-DD.json` (`sync.exportFile`):
 
 ```json
 {
   "format": "tracker-export",
-  "version": 5,
+  "version": 6,
   "exportedAt": "2026-10-24T09:30:00.000Z",
-  "exercise": { "plans": {}, "log": {}, "details": {} },
-  "cardio": { "plans": {}, "log": {}, "details": {} },
-  "diet": { "plans": {}, "log": {}, "details": {} },
+  "trackers": [
+    {
+      "id": "exercise",
+      "name": "Strength",
+      "kind": "strength",
+      "position": 0,
+      "dailyTarget": 3,
+      "startWeek": null,
+      "endWeek": null
+    }
+  ],
+  "sections": { "exercise": { "plans": {}, "log": {} } },
+  "details": { "exercise": {} },
   "settings": { "accent": "#30d158", "dailyPick": 3, "foodPick": 2, "goals": "" },
   "conversations": [{ "id": "Kq3x…", "title": "…", "createdAt": 0, "updatedAt": 0, "turns": [] }]
 }
 ```
 
-`details` maps each item id to its `{ notes?, fields? }`, without revisions. `settings` also
+`trackers` lists every tracker, ended ones too, in the week's order and without revisions;
+`sections` and `details` hold each one's data by id. `details` maps each item id to its
+`{ notes?, fields? }`, without revisions. `dailyPick` and `foodPick` are the `exercise` and `diet`
+trackers' targets, kept for a reader from before trackers. `settings` also
 carries `itemSections` when a type's item page is arranged (K66); a file's arrangement is
 normalised like the cache's, and applies with the other settings only to an account that has none.
 The plans, marks and settings are the device's, unsynced changes included. Ask's conversations
@@ -498,8 +547,13 @@ list; an account with none writes no `conversations` key, and offline the file d
 them and says so. The theme is not
 exported, because it belongs to the device rather than the person. Import… reads a file through
 `parseExport` (`src/lib/transfer.ts`), which rejects anything that is not JSON, has another
-`format`, or has a `version` other than 1 to 5 (a version 1 file's `true` days read as `"great"`,
-K12; version 4 added notes on plan items, K43; version 5 moved them into `details`). My goals
+`format`, or has a `version` other than 1 to 6 (a version 1 file's `true` days read as `"great"`,
+K12; version 4 added notes on plan items, K43; version 5 moved them into `details`; version 6
+carries the trackers, K123). Every version reads as `{ trackers, sections, settings,
+conversations? }`: a file of version 5 or older has no trackers of its own, and its fixed keys
+(`exercise`, `cardio`, `diet`) become the first three trackers' sections. A version 6 file's data
+is read for the first three ids and each of its trackers, by that tracker's kind; data under any
+other id drops (`parseExport`, the API's `parse_export`; the parse fixtures hold the two to it). My goals
 came without a new version, as `foodPick` did: an older reader drops the key, and a file without
 it reads as no goals. Your limits (`limits`) came the same way. The `cardio` section came the same way (K90): a file without it reads as no
 cardio. A cardio item keeps `duration` in whole seconds (capped at 86,400) and `distance` in km to 2
@@ -619,8 +673,8 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
   print follows too; with none shown it says "Every section is hidden. Arrange sections to show
   one."
 
-  The plan section edits the week the planner shows through the stores' own actions (`updateExercise`,
-  `changeTarget`), so a change shows in that week's row and in the weeks after it with no plan of
+  The plan section edits the week the planner shows through the trackers store's own actions
+  (`updateItem`, `changeTarget`), so a change shows in that week's row and in the weeks after it with no plan of
   their own, and the page says so. Its heading is "This week's plan", or "Plan for the week of 19
   October" for another week. An item not in that week (an old address, or an item since removed)
   shows "Latest plan", read-only, from the latest week whose own plan holds it.
@@ -631,7 +685,7 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
   "item-rename"`), then the chips. The pen swaps the title for an input in the title's own type
   with "Done" beside it, the `<h1>` staying visually hidden and the chips hiding; focus goes to the
   input with its text selected. Enter or Done saves the trimmed name into the week's plan
-  (`updateExercise`, `updateCardio`, `updateFood`) on commit, not per keystroke; Escape puts the old
+  (`updateItem`) on commit, not per keystroke; Escape puts the old
   name back (and stops there, so arranging stays on); either way focus returns to the pen. An empty
   name shows "Enter a name." and saves nothing. Outside renaming the title is the store's name; a
   rename from elsewhere replaces the draft only while it is untouched. A Remove row ends the page,
@@ -1074,8 +1128,17 @@ in the outbox:
   `{ details, rev }`, the revision last seen (`detailRevs`). Clearing them sends `{}`. An item
   whose id holds `/`, or is `.` or `..`, can't be named in that path, so it has no details
   (`isDetailsId`, below);
-- `settings`: the accent, both daily picks, My goals, Your limits and the item pages'
-  arrangement, `PUT /api/settings`. The goals go only when `goalsKnown` and the limits only when
+- `tracker-create`: a tracker made here, `POST /api/trackers` with its own `id` (from `newId`),
+  `name`, `kind` and the `week` it starts in, so sending it again returns the stored one. The
+  server places it last: its position is taken here, and a name or daily target changed since is
+  queued as a patch;
+- `tracker-patch`: a tracker's `name`, `position` and `dailyTarget`, `PATCH /api/trackers/<id>`
+  with the revision last seen; a 409 brings the server's copy in, with a notice, as for a plan;
+- `tracker-end`: Delete tracker (K122), `POST /api/trackers/<id>/end` with the `week` that was on
+  screen. The server keeps an earlier end, and so does the device;
+- `settings`: the accent, both daily picks (the `exercise` and `diet` trackers' targets, which the
+  API keeps in step with them: a missing `dailyPick` would reset one), My goals, Your limits and
+  the item pages' arrangement, `PUT /api/settings`. The goals go only when `goalsKnown` and the limits only when
   `limitsKnown`; a body without either keeps the saved one on the server.
   `itemSections` always goes, `{}` for the default: the API keeps the saved arrangement when the
   key is missing (a tab on older code), so leaving it out could never reset one.
@@ -1083,7 +1146,10 @@ in the outbox:
 `send()` is a switch with a branch per kind, and a kind without one fails to type-check
 (`unhandled(op: never)`). Before 2026-11-01 anything that was not a plan or a tick went out as
 settings, which a fourth kind would have done silently. `isQueued` checks each kind's own fields,
-so an outbox entry of another kind, or with a section outside the registry, is dropped on load.
+so an outbox entry of another kind, or whose tracker id isn't a tracker id, is dropped on load.
+Tracker operations come first in each batch the diff makes, so a new tracker exists on the server
+before its plans, marks and details reach it; a daily target change is a `tracker-patch`, not a
+settings write.
 
 A newer operation for the same plan, cell, item's details or settings replaces a queued one. Each
 carries an id, so the reply to one already in flight removes only that one. Plan, details and

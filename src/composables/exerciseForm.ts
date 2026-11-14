@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue'
 import { NEW_EXERCISE_TARGET, type Exercise } from '@/lib/storage'
-import type { NewExercise } from '@/stores/planner'
+import type { NewExercise } from '@/stores/trackers'
 
 /** Keeps the DOM in step even when the cleaned value didn't change (e.g. typing a letter). */
 function clean(ev: Event, fn: (text: string) => string): string {

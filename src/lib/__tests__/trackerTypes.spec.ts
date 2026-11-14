@@ -17,20 +17,31 @@ import {
   cycleFor,
 } from '@/lib/tracker'
 import {
+  FIRST_NAMES,
   SECTIONS,
   SECTION_NAMES,
+  TRACKER_KINDS,
   TRACKER_TYPES,
   cardioDetails,
+  defaultItems,
   exerciseDetails,
   isSection,
+  isTrackerKind,
 } from '@/lib/trackerTypes'
+import { defaultExercises, defaultFoods } from '@/lib/storage'
 
 /** The registry both sides must match: api/tests/test_types.py reads the same file. */
 type Expected = {
   sections: Record<string, string>
+  names: Record<string, string>
   types: Record<
     string,
-    { pickKey: string | null; newTarget: number; fields: { key: string; label: string }[] }
+    {
+      pickKey: string | null
+      newTarget: number
+      dailyTarget: number | null
+      fields: { key: string; label: string }[]
+    }
   >
 }
 const EXPECTED = JSON.parse(
@@ -42,15 +53,24 @@ describe('the tracker-type registry', () => {
     expect(Object.fromEntries(SECTION_NAMES.map((s) => [s, SECTIONS[s].id]))).toEqual(
       EXPECTED.sections,
     )
-    // The order the week shows them: Exercises, Cardio, Food (K90).
+    // The order the week first showed them: Strength, Cardio, Food (K90).
     expect(SECTION_NAMES).toEqual(['exercise', 'cardio', 'diet'])
+  })
+
+  it('names the first three trackers as the API does (K123)', () => {
+    expect(FIRST_NAMES).toEqual(EXPECTED.names)
   })
 
   it('gives each type the fields, daily pick and new goal the API has', () => {
     const types = Object.fromEntries(
       Object.values(TRACKER_TYPES).map((t) => [
         t.id,
-        { pickKey: t.pickKey, newTarget: t.newTarget, fields: t.fields },
+        {
+          pickKey: t.pickKey,
+          newTarget: t.newTarget,
+          dailyTarget: t.dailyTarget,
+          fields: t.fields,
+        },
       ]),
     )
     expect(types).toEqual(EXPECTED.types)
@@ -84,12 +104,12 @@ describe('the tracker-type registry', () => {
   })
 
   it('steps each type through its own cycle, which cycleFor reads', () => {
-    expect(TRACKER_TYPES.exercise.cycle('squiggles')).toBe(EXERCISE_CYCLE)
+    expect(TRACKER_TYPES.strength.cycle('squiggles')).toBe(EXERCISE_CYCLE)
     expect(TRACKER_TYPES.food.cycle('squiggles')).toBe(FOOD_CYCLE)
     // Cardio is marked like an exercise (K90).
     expect(TRACKER_TYPES.cardio.cycle('squiggles')).toBe(EXERCISE_CYCLE)
     for (const set of MARK_SETS.filter((s) => s !== 'squiggles')) {
-      expect(TRACKER_TYPES.exercise.cycle(set)).toBe(EXERCISE_KIND_CYCLE)
+      expect(TRACKER_TYPES.strength.cycle(set)).toBe(EXERCISE_KIND_CYCLE)
       expect(TRACKER_TYPES.cardio.cycle(set)).toBe(EXERCISE_KIND_CYCLE)
       expect(TRACKER_TYPES.food.cycle(set)).toBe(FOOD_KIND_CYCLE)
     }
@@ -118,12 +138,58 @@ describe('the tracker-type registry', () => {
     expect(SECTIONS.cardio.details(c)).toEqual(cardioDetails(c))
   })
 
+  it('lists the kinds in the registry’s order, and knows one from anything else', () => {
+    expect(TRACKER_KINDS).toEqual(Object.keys(EXPECTED.types))
+    expect(TRACKER_KINDS.every(isTrackerKind)).toBe(true)
+    for (const v of ['exercise', 'mobility', 'toString', '__proto__', '', 1, null]) {
+      expect(isTrackerKind(v)).toBe(false)
+    }
+  })
+
+  it('cleans each kind’s items with its own rules', () => {
+    const raw = { id: 'a', name: 'A', reps: 5, duration: 60, distance: 3, target: 9 }
+    expect(TRACKER_TYPES.strength.normalise(raw)).toEqual({
+      id: 'a',
+      name: 'A',
+      reps: 5,
+      duration: 60,
+      target: 7,
+    })
+    expect(TRACKER_TYPES.cardio.normalise(raw)).toEqual({
+      id: 'a',
+      name: 'A',
+      duration: 60,
+      distance: 3,
+      target: 7,
+    })
+    expect(TRACKER_TYPES.food.normalise(raw)).toEqual({ id: 'a', name: 'A', target: 7 })
+    expect(TRACKER_TYPES.food.normalise({ id: 1 })).toBeNull()
+  })
+
+  it('gives the default items to the exercise and diet trackers only (spec §4)', () => {
+    expect(defaultItems('exercise')).toEqual(defaultExercises())
+    expect(defaultItems('diet')).toEqual(defaultFoods())
+    expect(defaultItems('cardio')).toEqual([])
+    expect(defaultItems('xk3j9a2b1c')).toEqual([])
+  })
+
   it('knows a section name from anything else', () => {
     expect(isSection('exercise')).toBe(true)
     expect(isSection('diet')).toBe(true)
     expect(isSection('cardio')).toBe(true)
-    // A type id is not a section, and neither is what every object inherits.
-    for (const v of ['food', 'toString', '__proto__', '', 'Exercise', 1, null, undefined, {}]) {
+    // A kind is not a section, and neither is what every object inherits.
+    for (const v of [
+      'food',
+      'strength',
+      'toString',
+      '__proto__',
+      '',
+      'Exercise',
+      1,
+      null,
+      undefined,
+      {},
+    ]) {
       expect(isSection(v)).toBe(false)
     }
   })

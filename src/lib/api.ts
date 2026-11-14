@@ -9,9 +9,10 @@ import { isRecord } from '@/lib/storage'
 /**
  * A 409 `conflict`'s body: the server's revision, and its copy. A plan write's carries `items`
  * (null when the server has no plan for the week); a details write's carries `details` (`{}` once
- * cleared, null when the item never had any). Neither copy is validated here.
+ * cleared, null when the item never had any); a tracker write's carries `tracker`. No copy is
+ * validated here.
  */
-export type ConflictBody = { rev: number; items?: unknown; details?: unknown }
+export type ConflictBody = { rev: number; items?: unknown; details?: unknown; tracker?: unknown }
 
 export type ApiError =
   /** No network, or the proxy could not reach the API (502, 503 or 504 without an API body). */
@@ -20,7 +21,7 @@ export type ApiError =
   | { kind: 'auth' }
   /** The server failed (a 5xx with no API error code): worth retrying later. */
   | { kind: 'server'; status: number }
-  /** A stale plan or details write; the body carries the server's copy and `rev`. */
+  /** A stale plan, details or tracker write; the body carries the server's copy and `rev`. */
   | { kind: 'conflict'; body: ConflictBody }
   /** Any other refusal, with the API's error code (`error` when the reply was not the API's). */
   | { kind: 'refused'; status: number; code: string; retryAfter?: number }
@@ -48,8 +49,8 @@ function errorFor(status: number, json: Record<string, unknown> | null): ApiErro
   // A 401 means the session has ended, unless the API says otherwise (a wrong password is
   // 401 `invalid`, which the login form has to tell apart).
   if (status === 401 && (code === null || code === 'auth')) return { kind: 'auth' }
-  // Only a plan or details write conflicts; any other 409 (a sign-up's `exists`) is a refusal
-  // like the rest.
+  // Only a plan, details or tracker write conflicts; any other 409 (a sign-up's `exists`) is a
+  // refusal like the rest.
   if (status === 409 && json !== null && code === 'conflict') {
     return { kind: 'conflict', body: json as ConflictBody }
   }
@@ -59,7 +60,7 @@ function errorFor(status: number, json: Record<string, unknown> | null): ApiErro
   return error
 }
 
-type Method = 'GET' | 'POST' | 'PUT' | 'DELETE'
+type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
 /**
  * The fetch options for a call. A write sends `Content-Type: application/json` even with no body

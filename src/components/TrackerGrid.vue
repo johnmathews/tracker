@@ -6,11 +6,10 @@ import { useGridNav } from '@/composables/gridNav'
 import { ref } from 'vue'
 import TrackerRow from '@/components/TrackerRow.vue'
 import { itemHref } from '@/lib/routes'
-import type { Section } from '@/lib/trackerTypes'
 
 defineProps<{
-  /** The section the rows belong to: each name links to its item's page in it. */
-  section: Section
+  /** The tracker id the rows belong to: each name links to its item's page in it. */
+  section: string
   /** The rows' kind, for the name column's hidden header: "Exercise" or "Food". */
   label: string
   /** The table's name, repeating the section and week: "Exercises, week of 19 October". */
