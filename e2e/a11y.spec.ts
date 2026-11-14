@@ -49,6 +49,13 @@ test.describe('the style guide passes axe', () => {
   for (const theme of THEMES) {
     test(theme, async ({ page }) => {
       await openStyleGuide(page, { theme })
+      // Its trackers' sections are on the page axe reads (K123, K124): SectionHeader in Edit plan,
+      // with its pen, Add and Delete tracker, and the new tracker page with its four kinds.
+      const header = page.locator('#sg-section-header')
+      await expect(header.getByRole('button', { name: /^Rename / }).first()).toBeVisible()
+      await expect(header.getByRole('button', { name: 'Delete tracker' }).first()).toBeVisible()
+      const newTracker = page.locator('#sg-new-tracker-page')
+      await expect(newTracker.getByRole('button', { name: 'Mobility' }).first()).toBeVisible()
       await expectNoAxeViolations(page)
     })
   }
@@ -171,6 +178,52 @@ test.describe('the app passes axe', () => {
       await callUpBar(page)
       await page.getByTestId('add-exercise').click()
       await page.getByRole('textbox', { name: 'Name' }).waitFor()
+      await settle(page)
+      await expectNoAxeViolations(page)
+    })
+
+    for (const [width, height, where] of [
+      [1280, 900, 'desktop'],
+      [390, 844, 'folded, 390px'],
+    ] as const) {
+      test(`the new tracker page (K124), its name asked for, ${where}, ${theme}`, async ({
+        page,
+      }) => {
+        await page.setViewportSize({ width, height })
+        await openApp(page, { theme })
+        await callUpBar(page)
+        await page.getByTestId('add-tracker-button').click()
+        await page.getByRole('heading', { level: 1, name: 'New tracker' }).waitFor()
+        await page
+          .getByRole('group', { name: 'Kind' })
+          .getByRole('button', { name: 'Mobility' })
+          .click()
+        await settle(page)
+        await expectNoAxeViolations(page)
+        // Add tracker with no name: the field's error.
+        await page.getByTestId('new-tracker-add').click()
+        await page.getByText('Enter a name.').waitFor()
+        await settle(page)
+        await expectNoAxeViolations(page)
+      })
+    }
+
+    test(`the Delete tracker dialog (K122), desktop, ${theme}`, async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 900 })
+      await openApp(page, { theme })
+      await callUpBar(page)
+      await page.getByTestId('delete-cardio').click()
+      await page.getByRole('alertdialog', { name: 'Delete Cardio?' }).waitFor()
+      await settle(page)
+      await expectNoAxeViolations(page)
+    })
+
+    test(`a tracker being renamed in Edit plan (K124), desktop, ${theme}`, async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 900 })
+      await openApp(page, { theme })
+      await callUpBar(page)
+      await page.getByTestId('rename-exercise').click()
+      await page.getByTestId('name-field-exercise').waitFor()
       await settle(page)
       await expectNoAxeViolations(page)
     })

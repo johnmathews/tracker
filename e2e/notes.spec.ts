@@ -46,15 +46,29 @@ test('a long note opens in a panel that fits the window and scrolls', async ({ p
   const long = Array.from({ length: 120 }, (_, i) => `Line ${i + 1} of the notes.`).join('\n\n')
   await page.route('**/api/state', (route) =>
     route.fulfill({
+      // A version 6 state (docs/api.md §3): the Strength tracker alone, its one item's long note.
       json: {
-        exercise: {
-          plans: { '2026-10-19': [{ id: 'pu', name: 'Push-ups', sets: 3, reps: 12, target: 4 }] },
-          log: {},
-          details: { pu: { notes: long } },
-          revs: {},
-          detailRevs: { pu: 1 },
+        trackers: [
+          {
+            id: 'exercise',
+            name: 'Strength',
+            kind: 'strength',
+            position: 0,
+            dailyTarget: 3,
+            startWeek: null,
+            endWeek: null,
+            rev: 1,
+          },
+        ],
+        sections: {
+          exercise: {
+            plans: { '2026-10-19': [{ id: 'pu', name: 'Push-ups', sets: 3, reps: 12, target: 4 }] },
+            log: {},
+            revs: {},
+          },
         },
-        diet: { plans: {}, log: {}, details: {}, revs: {}, detailRevs: {} },
+        details: { exercise: { pu: { notes: long } } },
+        detailRevs: { exercise: { pu: 1 } },
         settings: null,
       },
     }),

@@ -158,7 +158,7 @@ test.describe('arranging the sections (K66)', () => {
     await expect
       .poll(() => server.settings?.itemSections)
       .toEqual({
-        exercise: { order: ['history', 'plan', 'notes', 'details'], hidden: ['details'] },
+        strength: { order: ['history', 'plan', 'notes', 'details'], hidden: ['details'] },
       })
 
     // Every exercise's page takes it; a food's page doesn't.

@@ -70,7 +70,7 @@ function tops(page: Page) {
       Math.round(
         document.querySelector(`[aria-labelledby="${id}"]`)!.getBoundingClientRect().top - band,
       )
-    return { exercises: at('exercises-heading'), cardio: at('cardio-heading') }
+    return { exercises: at('tracker-exercise-heading'), cardio: at('tracker-cardio-heading') }
   })
 }
 

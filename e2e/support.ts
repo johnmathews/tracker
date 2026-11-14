@@ -29,9 +29,49 @@ const P = 'partial'
 const M = 'missed'
 const _ = null
 
-/** A week with a plan and every kind of mark, as GET /api/state returns it. */
+/** A tracker as the API sends it (docs/api.md §3.1). */
+type Tracker = {
+  id: string
+  name: string
+  kind: string
+  position: number
+  dailyTarget: number | null
+  startWeek: string | null
+  endWeek: string | null
+  rev: number
+}
+
+/** One tracker's data as the mock keeps it. */
+type Section = {
+  plans: Record<string, Record<string, unknown>[]>
+  log: Record<string, Record<string, (string | null)[]>>
+  details: Record<string, unknown>
+  revs: Record<string, number>
+  detailRevs: Record<string, number>
+}
+
+/** The first three trackers, as every account starts (K123). */
+function firstTrackers(): Tracker[] {
+  return [
+    ['exercise', 'Strength', 'strength', 3],
+    ['cardio', 'Cardio', 'cardio', null],
+    ['diet', 'Food', 'food', 2],
+  ].map(([id, name, kind, dailyTarget], position) => ({
+    id: id as string,
+    name: name as string,
+    kind: kind as string,
+    position,
+    dailyTarget: dailyTarget as number | null,
+    startWeek: null,
+    endWeek: null,
+    rev: 1,
+  }))
+}
+
+/** A week with a plan and every kind of mark, kept by tracker id as the API keeps it. */
 function state() {
   return {
+    trackers: firstTrackers(),
     exercise: {
       plans: {
         [MONDAY]: [
@@ -83,6 +123,106 @@ function state() {
     },
     settings: null as Settings | null,
   }
+}
+
+type MockState = ReturnType<typeof state>
+
+/** The Monday of a date key's week, as the API reads a tracker's `week`. */
+function mondayOf(key: string): string {
+  const d = new Date(`${key}T12:00:00Z`)
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7))
+  return d.toISOString().slice(0, 10)
+}
+
+/** The tracker's data, made empty the first time a write names it. */
+function sectionOf(s: MockState, id: string): Section {
+  const sections = s as unknown as Record<string, Section>
+  sections[id] ??= { plans: {}, log: {}, details: {}, revs: {}, detailRevs: {} }
+  return sections[id]
+}
+
+/**
+ * GET /api/state as the API sends it (docs/api.md §3): the trackers, then each one's plans, log
+ * and revisions under `sections`, its details and their revisions under `details` and
+ * `detailRevs`, by tracker id.
+ */
+function stateReply(s: MockState) {
+  const by = <T>(pick: (d: Section) => T) =>
+    Object.fromEntries(s.trackers.map((t) => [t.id, pick(sectionOf(s, t.id))]))
+  return {
+    trackers: s.trackers,
+    sections: by((d) => ({ plans: d.plans, log: d.log, revs: d.revs })),
+    details: by((d) => d.details),
+    detailRevs: by((d) => d.detailRevs),
+    settings: s.settings,
+  }
+}
+
+/**
+ * The tracker and plan writes, kept as the API keeps them, so a later read of the state returns
+ * what the app wrote: `POST /trackers` adds one last, `PATCH /trackers/<id>` renames it or sets
+ * its daily target, `POST /trackers/<id>/end` ends it, `PUT /plans/<id>/<week>` stores a plan and
+ * `PUT /ticks/<id>/<week>/<item>/<day>` a mark and `PUT /details/<id>/<item>` an item's details.
+ * Null for any other route.
+ */
+function trackerReply(s: MockState, method: string, path: string, body: unknown): unknown {
+  const b = (body ?? {}) as Record<string, unknown>
+  if (method === 'POST' && path === '/trackers') {
+    const found = s.trackers.find((t) => t.id === b.id)
+    if (found) return found
+    const kind = String(b.kind)
+    const tracker: Tracker = {
+      id: String(b.id),
+      name: String(b.name).trim(),
+      kind,
+      position: Math.max(...s.trackers.map((t) => t.position)) + 1,
+      dailyTarget: kind === 'cardio' ? null : kind === 'food' ? 2 : 3,
+      startWeek: mondayOf(String(b.week ?? MONDAY)),
+      endWeek: null,
+      rev: 1,
+    }
+    s.trackers.push(tracker)
+    return tracker
+  }
+  const patch = /^\/trackers\/([^/]+)$/.exec(path)
+  const end = /^\/trackers\/([^/]+)\/end$/.exec(path)
+  const tracker = s.trackers.find((t) => t.id === decodeURIComponent((patch ?? end)?.[1] ?? ''))
+  if (method === 'PATCH' && patch && tracker) {
+    if (typeof b.name === 'string') tracker.name = b.name.trim()
+    if (b.dailyTarget !== undefined) tracker.dailyTarget = b.dailyTarget as number | null
+    tracker.rev += 1
+    return tracker
+  }
+  if (method === 'POST' && end && tracker) {
+    const week = mondayOf(String(b.week ?? MONDAY))
+    if (!tracker.endWeek || week < tracker.endWeek) tracker.endWeek = week
+    tracker.rev += 1
+    return tracker
+  }
+  const plan = /^\/plans\/([^/]+)\/([0-9-]+)$/.exec(path)
+  if (method === 'PUT' && plan) {
+    const d = sectionOf(s, decodeURIComponent(plan[1]!))
+    d.plans[plan[2]!] = b.items as Record<string, unknown>[]
+    d.revs[plan[2]!] = (d.revs[plan[2]!] ?? 0) + 1
+    return { rev: d.revs[plan[2]!] }
+  }
+  const doc = /^\/details\/([^/]+)\/([^/]+)$/.exec(path)
+  if (method === 'PUT' && doc) {
+    const d = sectionOf(s, decodeURIComponent(doc[1]!))
+    const item = decodeURIComponent(doc[2]!)
+    d.details[item] = b.details
+    d.detailRevs[item] = (d.detailRevs[item] ?? 0) + 1
+    return { rev: d.detailRevs[item] }
+  }
+  const tick = /^\/ticks\/([^/]+)\/([0-9-]+)\/([^/]+)\/([0-6])$/.exec(path)
+  if (method === 'PUT' && tick) {
+    const d = sectionOf(s, decodeURIComponent(tick[1]!))
+    const week = (d.log[tick[2]!] ??= {})
+    const days = (week[decodeURIComponent(tick[3]!)] ??= Array<string | null>(7).fill(null))
+    days[Number(tick[4])] = (b.mark as string | null | undefined) ?? null
+    return {}
+  }
+  return null
 }
 
 const NOON = Math.floor(TODAY.getTime() / 1000)
@@ -149,7 +289,8 @@ function askReply(method: string, path: string): { json?: unknown; body?: string
 
 /**
  * Opens the app signed in as alice, with the API mocked: /auth/me knows her, /state returns the
- * week above, and every write succeeds. With `ask`, the planner answers questions: the bar has
+ * week above as a version 6 state, tracker, plan and mark writes are kept (`trackerReply`), and
+ * every other write succeeds. With `ask`, the planner answers questions: the bar has
  * Ask, and /api/ask answers from the history and the answer above.
  */
 export async function openApp(
@@ -206,7 +347,7 @@ export async function openApp(
       return route.fulfill({
         json: unconfirmed ? { username: 'alice', confirmed: false } : { username: 'alice' },
       })
-    if (req.method() === 'GET' && path === '/state') return route.fulfill({ json: s })
+    if (req.method() === 'GET' && path === '/state') return route.fulfill({ json: stateReply(s) })
     // Settings are kept, as the API keeps them, so a reload reads them back.
     if (req.method() === 'PUT' && path === '/settings') {
       s.settings = req.postDataJSON() as Settings
@@ -218,6 +359,14 @@ export async function openApp(
     if (req.method() === 'GET' && path === '/tokens') return route.fulfill({ json: { tokens: [] } })
     if (req.method() === 'GET' && path === '/connections')
       return route.fulfill({ json: { connections: [] } })
+    let body: unknown = null
+    try {
+      body = req.postDataJSON()
+    } catch {
+      // Not JSON (an upload): no tracker write.
+    }
+    const kept = trackerReply(s, req.method(), path, body)
+    if (kept) return route.fulfill({ json: kept })
     const reply = ask ? askReply(req.method(), path) : null
     if (reply?.body) {
       return route.fulfill({ body: reply.body, contentType: 'text/event-stream' })
@@ -232,15 +381,24 @@ export async function openApp(
       if (sessionStorage.getItem('e2e-seeded')) return
       sessionStorage.setItem('e2e-seeded', '1')
       localStorage.setItem('tracker-session-v1', JSON.stringify({ user: 'alice' }))
-      localStorage.setItem('tracker-cache-v3:alice', JSON.stringify(st))
+      localStorage.setItem('tracker-cache-v6:alice', JSON.stringify(st))
       localStorage.setItem('tracker-settings-v1', JSON.stringify({ theme }))
     },
-    [s, theme] as const,
+    [cacheOf(s), theme] as const,
   )
   await page.goto('/')
   await page.waitForSelector('[data-testid="exercise-grid"]')
   await settle(page)
   return s
+}
+
+/** The app's cache as it writes it (`tracker-cache-v6`): the state with each tracker's data whole. */
+function cacheOf(s: MockState) {
+  return {
+    trackers: s.trackers,
+    sections: Object.fromEntries(s.trackers.map((t) => [t.id, sectionOf(s, t.id)])),
+    settings: s.settings,
+  }
 }
 
 /**
