@@ -3,6 +3,7 @@
     "Button",
     "IconButton",
     "TextLink",
+    "Tabs",
     "Header",
     "BarAction",
     "Panel",

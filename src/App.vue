@@ -36,6 +36,7 @@ import {
   markFromWeek,
   parseItemHash,
   parseNewHash,
+  parseSettingsHash,
   type ItemRoute,
 } from '@/lib/routes'
 import { itemExists, useItemSource } from '@/composables/itemSource'
@@ -85,13 +86,13 @@ function connectRequest(): string | null {
 const connectId = ref(connectRequest())
 
 /**
- * The page the hash asks for: Settings at `#/settings`, Profile at `#/profile` (K106), Ask at
- * `#/ask`, an item's page at `#/item/<section>/<id>` (ItemPage card, D5), the new item page at
- * `#/new/<section>` (K104), otherwise the planner.
+ * The page the hash asks for: Settings at `#/settings` and its tabs' `#/settings/<tab>` (K119),
+ * Profile at `#/profile` (K106), Ask at `#/ask`, an item's page at `#/item/<section>/<id>`
+ * (ItemPage card, D5), the new item page at `#/new/<section>` (K104), otherwise the planner.
  */
 type Page = 'planner' | 'settings' | 'profile' | 'ask' | 'item' | 'new'
 function pageFor(): Page {
-  if (location.hash === '#/settings') return 'settings'
+  if (parseSettingsHash(location.hash)) return 'settings'
   if (location.hash === '#/profile') return 'profile'
   if (location.hash === '#/ask') return 'ask'
   if (parseNewHash(location.hash)) return 'new'
@@ -107,6 +108,11 @@ const page = ref<Page>(pageFor())
 const item = ref<ItemRoute | null>(parseItemHash(location.hash))
 /** The section the new item page adds to. */
 const newSection = ref(parseNewHash(location.hash))
+/**
+ * The open Settings tab (K119): the one the address names, then the one chosen on the page, which
+ * writes its address there too.
+ */
+const settingsTab = ref(parseSettingsHash(location.hash) ?? 'appearance')
 /** The item whose page was open last, so Back can put focus on its name. */
 let leftItem: ItemRoute | null = null
 /**
@@ -127,6 +133,7 @@ function onHash(): void {
   leftItem = item.value ?? leftItem
   item.value = parseItemHash(location.hash)
   newSection.value = parseNewHash(location.hash)
+  settingsTab.value = parseSettingsHash(location.hash) ?? settingsTab.value
   page.value = pageFor()
   // Opened from the week in this tab: its Back goes back through history (lib/routes).
   if ((page.value === 'item' || page.value === 'new') && before === 'planner') markFromWeek()
@@ -402,7 +409,7 @@ onBeforeUnmount(() => {
       <template v-else-if="shown === 'settings'">
         <SyncStatus />
         <EmailStatus />
-        <SettingsPage />
+        <SettingsPage v-model:tab="settingsTab" />
       </template>
       <template v-else-if="shown === 'new' && sync.loaded">
         <SyncStatus />

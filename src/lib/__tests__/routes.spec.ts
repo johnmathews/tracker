@@ -9,6 +9,9 @@ import {
   newItemHref,
   parseItemHash,
   parseNewHash,
+  parseSettingsHash,
+  SETTINGS_TABS,
+  settingsHref,
   webHost,
 } from '@/lib/routes'
 
@@ -69,6 +72,36 @@ describe('the new item page’s address (#/new/<section>, K104)', () => {
       '#/item/exercise/pu',
     ])
       expect(parseNewHash(hash)).toBeNull()
+  })
+})
+
+describe('the Settings tabs’ addresses (#/settings/<tab>, K119)', () => {
+  it('has a tab per section, in the page’s order', () => {
+    expect(SETTINGS_TABS).toEqual(['appearance', 'daily-goal', 'data', 'connections'])
+  })
+
+  it('names each tab, and reads it back', () => {
+    expect(settingsHref()).toBe('#/settings')
+    expect(settingsHref('connections')).toBe('#/settings/connections')
+    for (const tab of SETTINGS_TABS) expect(parseSettingsHash(settingsHref(tab))).toBe(tab)
+  })
+
+  it('opens the first tab at the page’s own address', () => {
+    expect(parseSettingsHash('#/settings')).toBe('appearance')
+  })
+
+  it('reads nothing from any other address, or a tab Settings doesn’t have', () => {
+    for (const hash of [
+      '',
+      '#/',
+      '#/settings/',
+      '#/settings/goals',
+      '#/settings/connections/more',
+      '#/settings/__proto__',
+      '#/settingsx',
+      '#/profile',
+    ])
+      expect(parseSettingsHash(hash)).toBeNull()
   })
 })
 

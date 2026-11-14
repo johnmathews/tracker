@@ -48,12 +48,15 @@ let wrapper: VueWrapper
 let api: FakeApi
 let clipboard: { writeText: Mock<(text: string) => Promise<void>> }
 
-/** Settings, signed in as alice, whose account holds these connections and tokens. */
+/**
+ * Settings' Connections tab, at its own address (K119), signed in as alice, whose account holds
+ * these connections and tokens.
+ */
 async function openSettings({
   connections = [CLAUDE, CODE],
   tokens = [LAPTOP, SCRIPT],
 }: { connections?: FakeConnection[]; tokens?: FakeToken[] } = {}): Promise<void> {
-  history.replaceState(null, '', '/#/settings')
+  history.replaceState(null, '', '/#/settings/connections')
   api = signedIn()
   const account = api.accounts.get(USER)!
   account.connections = connections.map((c) => ({ ...c }))
@@ -124,14 +127,18 @@ afterEach(() => {
 })
 
 describe('Settings › Connections', () => {
-  it('is the last row, after Your data (K106)', async () => {
+  it('is the last tab, after Your data, and its address opens it (K106, K119)', async () => {
     await openSettings()
-    expect(
-      wrapper
-        .get('[data-testid="settings-page"]')
-        .findAll('h2')
-        .map((h) => h.text()),
-    ).toEqual(['Appearance', 'Daily goal', 'Your data', 'Connections'])
+    const page = wrapper.get('[data-testid="settings-page"]')
+    expect(page.findAll('[role="tab"]').map((t) => t.text())).toEqual([
+      'Appearance',
+      'Daily goal',
+      'Your data',
+      'Connections',
+    ])
+    expect(page.get('[role="tab"][aria-selected="true"]').text()).toBe('Connections')
+    expect(page.findAll('h2').map((h) => h.text())).toEqual(['Connections'])
+    expect(location.hash).toBe('#/settings/connections')
     expect(
       section()
         .findAll('h3')
@@ -385,7 +392,7 @@ describe('Settings › Connections', () => {
   })
 
   it('says when the lists can’t be read, and tries again', async () => {
-    history.replaceState(null, '', '/#/settings')
+    history.replaceState(null, '', '/#/settings/connections')
     api = signedIn()
     api.failNext('GET', '/tokens', 502)
     await mountApp()

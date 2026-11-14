@@ -11,6 +11,7 @@ import { DRAWINGS, MARKS, markDrawing, markKind, type PortableSettings } from '@
 import { readFixture } from '@/lib/__tests__/fixtures'
 import type { FakeApi } from '@/lib/__tests__/fakeApi'
 import { USER, cached, emptyState, signedIn } from '@/lib/__tests__/signedIn'
+import type { SettingsTab } from '@/lib/routes'
 
 /** A row's week as the stores hold it, "N of M": the grid shows no total since K33. */
 function exTotal(i: number): string {
@@ -93,10 +94,16 @@ async function backToWeek(): Promise<void> {
   await settle()
 }
 
-/** Opens the Settings page from the bar, coming back to the week first if it is already open. */
-async function openSettings(): Promise<void> {
-  if (location.hash === '#/settings') await backToWeek()
+/**
+ * Opens the Settings page from the bar, coming back to the week first if it is already open, then
+ * presses the tab named, if any (K119): the page opens on Appearance.
+ */
+async function openSettings(tab?: SettingsTab): Promise<void> {
+  if (location.hash.startsWith('#/settings')) await backToWeek()
   await settingsButton().trigger('click')
+  await settle()
+  if (!tab) return
+  await wrapper.get(`[data-testid="settings-tab-${tab}"]`).trigger('mousedown')
   await settle()
 }
 
@@ -557,12 +564,22 @@ describe('the Settings page', () => {
     const heading = wrapper.get(PANEL).get('h1')
     expect(heading.text()).toBe('Settings')
     expect(document.activeElement).toBe(heading.element)
+    // A tab per section (K119), Appearance open: only its section shows.
+    expect(
+      wrapper
+        .get(PANEL)
+        .findAll('[role="tab"]')
+        .map((t) => t.text()),
+    ).toEqual(['Appearance', 'Daily goal', 'Your data', 'Connections'])
+    expect(wrapper.get(PANEL).get('[role="tablist"]').attributes('aria-labelledby')).toBe(
+      heading.attributes('id'),
+    )
     expect(
       wrapper
         .get(PANEL)
         .findAll('h2')
         .map((h) => h.text()),
-    ).toEqual(['Appearance', 'Daily goal', 'Your data', 'Connections'])
+    ).toEqual(['Appearance'])
     // Marks, then Theme (K59); the daily targets are set in Edit plan (K56).
     expect(
       wrapper
@@ -590,6 +607,90 @@ describe('the Settings page', () => {
     mountApp()
     await settle()
     expect(wrapper.get(PANEL).get('h1').text()).toBe('Settings')
+    expect(wrapper.get(PANEL).get('[role="tab"][aria-selected="true"]').text()).toBe('Appearance')
+  })
+
+  /** The open tab's name, and the headings of the sections on screen. */
+  function shownTab(): [string, string[]] {
+    const page = wrapper.get(PANEL)
+    return [
+      page.get('[role="tab"][aria-selected="true"]').text(),
+      page.findAll('h2').map((h) => h.text()),
+    ]
+  }
+
+  it.each([
+    ['appearance', 'Appearance'],
+    ['daily-goal', 'Daily goal'],
+    ['data', 'Your data'],
+    ['connections', 'Connections'],
+  ])('opens the %s tab straight from its address (K119)', async (tab, name) => {
+    history.replaceState(null, '', `/#/settings/${tab}`)
+    mountApp()
+    await settle()
+    expect(shownTab()).toEqual([name, [name]])
+    expect(location.hash).toBe(`#/settings/${tab}`)
+  })
+
+  it('writes the chosen tab’s address in place, so a reload keeps it (K119)', async () => {
+    mountApp()
+    await openSettings()
+    const entries = history.length
+    const page = wrapper.get(PANEL)
+    for (const [tab, name] of [
+      ['daily-goal', 'Daily goal'],
+      ['data', 'Your data'],
+      ['connections', 'Connections'],
+      ['appearance', 'Appearance'],
+    ] as const) {
+      await page.get(`[data-testid="settings-tab-${tab}"]`).trigger('mousedown')
+      await settle()
+      expect(shownTab()).toEqual([name, [name]])
+      expect(location.hash).toBe(`#/settings/${tab}`)
+    }
+    // Replaced, never pushed: the browser's Back still leaves the page.
+    expect(history.length).toBe(entries)
+    // Focus stays where it was: the page isn't opened again.
+    expect(document.activeElement).toBe(page.get('h1').element)
+
+    await page.get('[data-testid="settings-tab-connections"]').trigger('mousedown')
+    await settle()
+    wrapper.unmount()
+    mountApp()
+    await settle()
+    expect(shownTab()).toEqual(['Connections', ['Connections']])
+  })
+
+  it('follows the address from one tab to another, and back to the first', async () => {
+    mountApp()
+    await openSettings()
+    location.hash = '#/settings/data'
+    await settle()
+    expect(shownTab()).toEqual(['Your data', ['Your data']])
+    location.hash = '#/settings'
+    await settle()
+    expect(shownTab()).toEqual(['Appearance', ['Appearance']])
+  })
+
+  it('returns focus to the bar’s Settings button from any tab', async () => {
+    mountApp()
+    await openSettings('connections')
+    expect(location.hash).toBe('#/settings/connections')
+    await backToWeek()
+    expect(wrapper.find(PANEL).exists()).toBe(false)
+    expect(document.activeElement).toBe(settingsButton().element)
+    // The bar opens Settings on its first tab again.
+    await openSettings()
+    expect(location.hash).toBe('#/settings')
+    expect(shownTab()).toEqual(['Appearance', ['Appearance']])
+  })
+
+  it('opens the week for a tab Settings doesn’t have', async () => {
+    history.replaceState(null, '', '/#/settings/goals')
+    mountApp()
+    await settle()
+    expect(wrapper.find(PANEL).exists()).toBe(false)
+    expect(wrapper.find('[data-testid="exercise-grid"]').exists()).toBe(true)
   })
 
   /** Mount with these settings saved on the server as well as cached, so loading keeps them. */
@@ -717,7 +818,7 @@ describe('export and import', () => {
     await rowCells('Squats')[2]!.trigger('click')
     await rowCells('Squats')[3]!.trigger('click')
     await rowCells('Squats')[3]!.trigger('click')
-    await openSettings()
+    await openSettings('data')
     await button('Export').trigger('click')
     // Export reads Ask's conversations from the server first.
     await flushPromises()
@@ -756,7 +857,7 @@ describe('export and import', () => {
       order: ['history', 'notes', 'details', 'plan'],
       hidden: ['details'],
     })
-    await openSettings()
+    await openSettings('data')
     await button('Export').trigger('click')
     // Export reads the server's export for Ask's history first.
     await flushPromises()
@@ -773,7 +874,7 @@ describe('export and import', () => {
 
   it('opens the file picker from Import…', async () => {
     mountApp()
-    await openSettings()
+    await openSettings('data')
     const picker = vi.spyOn(
       wrapper.get('[data-testid="import-file"]').element as HTMLInputElement,
       'click',
@@ -785,7 +886,7 @@ describe('export and import', () => {
   it('summarises what a file adds, then merges it on Import', async () => {
     mountApp()
     await rowCells('Push-ups')[4]!.trigger('click')
-    await openSettings()
+    await openSettings('data')
     await saveSettings()
     await choose(jsonFile(EXPORT))
     // The tick gave this week its own plan, so only last week's exercise plan and this week's food
@@ -808,7 +909,7 @@ describe('export and import', () => {
 
   it('applies the file’s settings when this browser has none saved', async () => {
     mountApp()
-    await openSettings()
+    await openSettings('data')
     await choose(jsonFile(EXPORT))
     expect(wrapper.get('[data-testid="import-summary"]').text()).toBe(
       'Adds three weekly plans and three marked days, plus the exercises and foods a day. Existing plans and marks stay as they are.',
@@ -824,7 +925,7 @@ describe('export and import', () => {
 
   it('uses the singular for one plan and one tick', async () => {
     mountApp()
-    await openSettings()
+    await openSettings('data')
     await saveSettings()
     await choose(
       jsonFile({
@@ -844,7 +945,7 @@ describe('export and import', () => {
 
   it('keeps the summary true when settings change while it is open', async () => {
     mountApp()
-    await openSettings()
+    await openSettings('data')
     await choose(jsonFile(EXPORT))
     expect(wrapper.get('[data-testid="import-summary"]').text()).toContain('plus the exercises')
     await saveSettings()
@@ -856,7 +957,7 @@ describe('export and import', () => {
 
   it('says so, and keeps the file, when the server cannot be reached', async () => {
     mountApp()
-    await openSettings()
+    await openSettings('data')
     await choose(jsonFile(EXPORT))
     api.offline = true
     await button('Import').trigger('click')
@@ -878,7 +979,7 @@ describe('export and import', () => {
 
   it('says when the account is full', async () => {
     mountApp()
-    await openSettings()
+    await openSettings('data')
     await choose(jsonFile(EXPORT))
     api.failNext('POST', '/import', 413, { error: 'quota' })
     await button('Import').trigger('click')
@@ -890,7 +991,7 @@ describe('export and import', () => {
 
   it('discards the file on Cancel', async () => {
     mountApp()
-    await openSettings()
+    await openSettings('data')
     await choose(jsonFile(EXPORT))
     await button('Cancel').trigger('click')
     expect(wrapper.find('[data-testid="import-summary"]').exists()).toBe(false)
@@ -901,7 +1002,7 @@ describe('export and import', () => {
 
   it('says so when the file adds nothing', async () => {
     mountApp()
-    await openSettings()
+    await openSettings('data')
     await choose(jsonFile({ format: 'fitness-planner-export', version: 1 }))
     expect(wrapper.get('[role="status"]').text()).toBe(
       'Nothing new: everything in that file is already here.',
@@ -921,7 +1022,7 @@ describe('export and import', () => {
     mountApp()
     await flushPromises()
     const before = { ...localStorage }
-    await openSettings()
+    await openSettings('data')
     await choose(file)
     const alert = wrapper.get('[role="alert"]')
     expect(alert.text()).toBe(message)
@@ -931,7 +1032,7 @@ describe('export and import', () => {
 
   it('reports a file that cannot be read', async () => {
     mountApp()
-    await openSettings()
+    await openSettings('data')
     const file = jsonFile(EXPORT)
     vi.spyOn(file, 'text').mockRejectedValue(new Error('gone'))
     await choose(file)
@@ -940,14 +1041,14 @@ describe('export and import', () => {
 
   it('ignores a change with no file, and clears the outcome when reopened', async () => {
     mountApp()
-    await openSettings()
+    await openSettings('data')
     await wrapper.get('[data-testid="import-file"]').trigger('change')
     await flushPromises()
     expect(wrapper.find('[role="alert"], [role="status"]').exists()).toBe(false)
     await choose(new File(['{oops'], 'x.json'))
     expect(wrapper.find('[role="alert"]').exists()).toBe(true)
-    await openSettings()
-    await openSettings()
+    await openSettings('data')
+    await openSettings('data')
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
   })
 })
@@ -1013,7 +1114,7 @@ describe('export and import with the sample data', () => {
         .findAll('[data-testid="item-name"]')
         .map((n) => n.text()),
     ).toEqual(['Push-ups', 'Pull-ups', 'Squats', 'Kettlebell halos', 'Plank'])
-    await openSettings()
+    await openSettings('data')
     await button('Export').trigger('click')
     // The account has no Ask conversations, so the file is the sample as it was.
     await flushPromises()
@@ -1023,7 +1124,7 @@ describe('export and import with the sample data', () => {
   it('imports the sample export into an empty account and syncs all of it', async () => {
     mountApp()
     await flushPromises()
-    await openSettings()
+    await openSettings('data')
     const input = wrapper.get('[data-testid="import-file"]')
     const file = new File([JSON.stringify(sample)], 'sample.json', { type: 'application/json' })
     Object.defineProperty(input.element, 'files', { value: [file], configurable: true })

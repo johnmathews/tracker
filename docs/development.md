@@ -132,18 +132,20 @@ hand.
 clock is fixed to Wednesday 21 October 2026, so every run sees the same week.
 
 - `a11y.spec.ts`: axe (WCAG 2.0–2.2 A and AA plus best practice) on the style guide in both themes,
-  and on the app's (its mocked week holds every kind of mark) week view, the bar called up, Edit plan, open Settings, an item's page (desktop with its notes being edited, folded at 390px, and while arranging at both sizes, with nothing scrolling sideways), a cardio item's page in Edit plan with its Name field and Remove, the new item page (K104), the Ask page (an answer with the history beside it, its Delete all question open, and at 375px with the history drawer open), the folded week at 375px,
+  and on the app's (its mocked week holds every kind of mark) week view, the bar called up, Edit plan, Settings on each of its tabs (K119), an item's page (desktop with its notes being edited, folded at 390px, and while arranging at both sizes, with nothing scrolling sideways), a cardio item's page in Edit plan with its Name field and Remove, the new item page (K104), the Ask page (an answer with the history beside it, its Delete all question open, and at 375px with the history drawer open), the folded week at 375px,
   sign-in, and create an account (empty and with errors showing), in light and dark; and the focus ring's shape, a solid 2px outline at 2px offset. Two
   "dark really is dark" tests guard the audit: on the style guide and on the app, the `.dark` class
   must be set and `--canvas` must differ from light, so a dark audit can never quietly re-run
   light.
 - `phone.spec.ts`: no sideways scroll at 375px on the style guide, sign-in, create an account,
   the folded week and Edit plan, the Ask page (empty with no goals yet, and with an answer and its
-  history drawer open) and the Settings page, and every cell of the folded week stays on screen as the keyboard
+  history drawer open) and the Settings page (its four tabs wrapped onto two lines, and each tab), and every cell of the folded week stays on screen as the keyboard
   walks it. `callUpBar` in `support.ts` brings the navbar into view before a test presses its
   controls, since on the planner's screens it is out of sight.
-- `connections.spec.ts`: Settings › Connections (creating a token, shown once with Copy, then
-  removed; axe with the banner in both themes; no sideways scroll at 375px) and the consent
+- `connections.spec.ts`: Settings › Connections (its tab pressed, at `#/settings/connections`;
+  creating a token, shown once with Copy, then removed; axe with the banner in both themes; no
+  sideways scroll at 375px; the address opening the tab, the arrow keys moving to Your data and
+  writing its address, and a reload keeping it, K119) and the consent
   screen (a wrong password shown on both fields, then Connect returning to the app; axe signed out
   and with a refusal in both themes; a phone).
 - `notes.spec.ts`: an item's note on one line under the name and chips, and a press opening it
@@ -247,7 +249,8 @@ listed in [api.md](api.md) §10):
   when nothing is planned), the latest plan holding an item, a week's count and whether it met its
   goal, and the line over the weeks in words.
 - `src/lib/__tests__/routes.spec.ts`: the item page's address written and read back, addresses that
-  name no section or no good id, the new item page's `#/new/<section>` (K104), the history mark for
+  name no section or no good id, the new item page's `#/new/<section>` (K104), the Settings tabs'
+  `#/settings/<tab>` (K119: `#/settings` as the first, a tab Settings doesn't have read as none), the history mark for
   a page opened from the week, Back and `leaveForWeek` going back through history or replacing the
   entry, a modified press left to the browser, and `webHost`.
 - `src/lib/__tests__/tracker.spec.ts`: the shared tick-per-day helpers (totals, day counts, goals
@@ -312,7 +315,7 @@ listed in [api.md](api.md) §10):
 - `src/components/ui/__tests__/`: one spec per primitive (AnswerProgress, BarAction, Banner,
   BrandMark, Button, Chip, ConfirmDialog, DayMark, Dialog, HistoryList, IconButton, InlineMessage,
   Menu, Popover, QuotaChip, RadioCard, SectionHeader, SegmentedControl, SidePanel, Stepper, Switch,
-  TextArea, TextField, TextLink, Transcript), each checking its
+  Tabs, TextArea, TextField, TextLink, Transcript), each checking its
   roles, accessible names, sizes, states and the role colours its card names. Examples: an
   IconButton renders nothing without a label, the Popover closes when focus leaves it (F14), the
   Stepper's limits stay focusable with `aria-disabled`.
@@ -399,8 +402,9 @@ listed in [api.md](api.md) §10):
   changes, a full account, and the history panel: grouped by Today, Last week and Earlier,
   deleting one or all after asking with focus kept in place, a failed delete, the strip the
   device remembers, and the drawer on a phone.
-- `src/components/__tests__/SettingsAsk.spec.ts`: Settings' sections (Appearance, Daily goal, Your
-  data, Connections; no goals and no Sign out, K107); Daily goal, on by default, unknown until read
+- `src/components/__tests__/SettingsAsk.spec.ts`: Settings' tabs (Appearance, Daily goal, Your
+  data, Connections; no goals and no Sign out on any, K107, K119), each test opening its tab by
+  address; Daily goal, on by default, unknown until read
   (K85); turned off it saves with the account, hides both steppers and every met day (exercises and
   foods), and back on the numbers return; an off read from the account goes with the next settings
   write. Then Export and Import with Ask's history (the server's conversations in the file, none
@@ -415,7 +419,8 @@ listed in [api.md](api.md) §10):
   asking first with unsent changes (focus back on the Profile button), and a refusal offline shown
   in the question.
 - `src/components/__tests__/Connections.spec.ts`, `Connect.spec.ts` and
-  `src/lib/__tests__/connections.spec.ts`: Settings › Connections (the address and Copy, the Apps
+  `src/lib/__tests__/connections.spec.ts`: Settings › Connections, opened at
+  `#/settings/connections`, the last tab (the address and Copy, the Apps
   and Tokens lists, the New banner, creating a token and showing it once, Remove after a
   confirm, the caps and the refusals), the consent screen at `#/connect/<id>` (signed in and
   out, Read only chosen, a wrong password, the lockout, an expired link, Deny) and the calls and
@@ -423,7 +428,7 @@ listed in [api.md](api.md) §10):
 - `src/components/__tests__/App.spec.ts`: the mounted app in jsdom. Covers rendering, the today
   column, stepping a cell through its marks with `aria-pressed` (a food only on and off), the goal stepper and its bounds,
   navigation, confirm-before-remove, print, the visibility and one-minute clock refresh, another
-  tab's writes to the cache, Add opening the new item page with no bar and coming back with focus on that Add button (K104), the Settings page (the hash, focus on arrival and on the way back; no Ink setting, and a saved accent kept as it is), and the
+  tab's writes to the cache, Add opening the new item page with no bar and coming back with focus on that Add button (K104), the Settings page (the hash, focus on arrival and on the way back; no Ink setting, and a saved accent kept as it is; its tabs, K119: the order, only the open tab's section, each tab's address opening it, choosing a tab replacing the address so a reload keeps it, the address followed from tab to tab, focus back on the Settings button from any tab, and a tab Settings doesn't have opening the week), and the
   theme: the `dark` class following the OS (with a stubbed `matchMedia`), the theme control and
   its persistence. Also adding an exercise with sets from the new item page, Edit plan's rows with
   no Stepper and no Edit button (K104), normal mode hiding every editing control, export (with

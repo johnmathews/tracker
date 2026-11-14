@@ -17,7 +17,10 @@ const PLAIN = 'trk_Hn3vY8sE4dKqLw0ZpRt6Uj1Xb5MfNaGc2VyOiTe7Ws'
 
 type Token = { name: string; prefix: string; scope: string; createdAt: number; lastUsedAt: null }
 
-/** Alice's Settings page, with one app connected an hour ago and the tokens the test makes. */
+/**
+ * Alice's Settings page on its Connections tab (K119), with one app connected an hour ago and the
+ * tokens the test makes.
+ */
 async function openConnections(page: Page, theme: Theme = 'light'): Promise<Token[]> {
   const tokens: Token[] = []
   await openApp(page, { theme })
@@ -58,6 +61,8 @@ async function openConnections(page: Page, theme: Theme = 'light'): Promise<Toke
   await callUpBar(page)
   await page.getByRole('button', { name: /Settings/ }).click()
   await page.getByRole('heading', { level: 1, name: 'Settings' }).waitFor()
+  await page.getByRole('tab', { name: 'Connections' }).click()
+  await expect(page).toHaveURL(/#\/settings\/connections$/)
   await page.getByTestId('apps-list').waitFor()
   await settle(page)
   return tokens
@@ -164,6 +169,32 @@ test.describe('Settings › Connections', () => {
     await page.setViewportSize({ width: 375, height: 812 })
     await openConnections(page)
     await expectNoSidewaysScroll(page)
+  })
+
+  test('its address opens the tab, and a reload keeps it (K119)', async ({ page }) => {
+    await openApp(page)
+    await page.evaluate(() => (location.hash = '#/settings/connections'))
+    await page.getByRole('heading', { level: 1, name: 'Settings' }).waitFor()
+    const tab = page.getByRole('tab', { name: 'Connections' })
+    await expect(tab).toHaveAttribute('aria-selected', 'true')
+    await expect(page.getByRole('heading', { level: 2 })).toHaveText(['Connections'])
+    await page.getByTestId('connections-section').waitFor()
+    // The arrow keys move along the tabs, each writing its address in place.
+    await tab.focus()
+    await page.keyboard.press('ArrowLeft')
+    await expect(page.getByRole('tab', { name: 'Your data' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    await expect(page).toHaveURL(/#\/settings\/data$/)
+    await page.reload()
+    await expect(page.getByRole('tab', { name: 'Your data' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    // Back from a tab leaves Settings for the week.
+    await page.getByRole('link', { name: 'Back to the week' }).click()
+    await page.getByTestId('exercise-grid').waitFor()
   })
 })
 

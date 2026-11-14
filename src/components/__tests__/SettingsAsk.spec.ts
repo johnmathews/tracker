@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import App from '@/App.vue'
 import { usePlannerStore } from '@/stores/planner'
 import type { PortableSettings } from '@/lib/storage'
+import type { SettingsTab } from '@/lib/routes'
 import type { FakeApi } from '@/lib/__tests__/fakeApi'
 import { USER, emptyState, signedIn } from '@/lib/__tests__/signedIn'
 
@@ -22,15 +23,17 @@ async function settle(): Promise<void> {
 }
 
 /**
- * The Settings page, signed in as alice. `saved` is what the server holds (null: never saved),
- * and the cache holds it too unless `cache` says otherwise.
+ * The Settings page on a tab, by its address (K119; Your data unless `tab` says otherwise), signed
+ * in as alice. `saved` is what the server holds (null: never saved), and the cache holds it too
+ * unless `cache` says otherwise.
  */
 async function openSettings({
   saved = { ...PICKS, goals: 'Ten pull-ups by March.' } as PortableSettings | null,
   cache = saved as unknown,
   offline = false,
+  tab = 'data' as SettingsTab,
 } = {}): Promise<void> {
-  history.replaceState(null, '', '/#/settings')
+  history.replaceState(null, '', `/#/settings/${tab}`)
   api = signedIn({ ...emptyState(), settings: cache as PortableSettings | null })
   api.accounts.get(USER)!.settings = saved
   api.offline = offline
@@ -66,15 +69,19 @@ describe('Settings without goals and account (K107)', () => {
   it('has Appearance, Daily goal, Your data and Connections; goals and Sign out are on Profile', async () => {
     await openSettings()
     const page = wrapper.get('[data-testid="settings-page"]')
-    expect(page.findAll('h2').map((h) => h.text())).toEqual([
+    expect(page.findAll('[role="tab"]').map((t) => t.text())).toEqual([
       'Appearance',
       'Daily goal',
       'Your data',
       'Connections',
     ])
-    expect(page.find('[data-testid="goals"]').exists()).toBe(false)
-    expect(page.find('[data-testid="signed-in-as"]').exists()).toBe(false)
-    expect(page.findAll('button').some((b) => b.text() === 'Sign out')).toBe(false)
+    for (const tab of ['appearance', 'daily-goal', 'data', 'connections'] as const) {
+      await page.get(`[data-testid="settings-tab-${tab}"]`).trigger('mousedown')
+      await settle()
+      expect(page.find('[data-testid="goals"]').exists()).toBe(false)
+      expect(page.find('[data-testid="signed-in-as"]').exists()).toBe(false)
+      expect(page.findAll('button').some((b) => b.text() === 'Sign out')).toBe(false)
+    }
   })
 })
 
@@ -212,7 +219,7 @@ describe('Daily goal in Settings (K85)', () => {
     wrapper.get('[data-testid="exercise-grid"]').findAll('[data-testid="day-head"]')[0]!
 
   it('is a section of its own, on by default, with what it does (K107)', async () => {
-    await openSettings()
+    await openSettings({ tab: 'daily-goal' })
     const section = wrapper
       .findAll('[data-testid="settings-page"] section')
       .find((s) => s.get('h2').text() === 'Daily goal')!
@@ -226,7 +233,7 @@ describe('Daily goal in Settings (K85)', () => {
   })
 
   it('turned off, saves with the account, hides the steppers and every met day, keeping the numbers', async () => {
-    await openSettings()
+    await openSettings({ tab: 'daily-goal' })
     await dailyGoal().trigger('click')
     await settle()
     expect(dailyGoal().attributes('aria-checked')).toBe('false')
@@ -264,7 +271,10 @@ describe('Daily goal in Settings (K85)', () => {
   })
 
   it('reads an off from the account, and sends it with its next settings write', async () => {
-    await openSettings({ saved: { ...PICKS, dailyGoal: false, goals: '', limits: '' } })
+    await openSettings({
+      saved: { ...PICKS, dailyGoal: false, goals: '', limits: '' },
+      tab: 'daily-goal',
+    })
     expect(dailyGoal().attributes('aria-checked')).toBe('false')
     await toWeek()
     await markMonday(3)

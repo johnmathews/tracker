@@ -78,7 +78,9 @@
 - **Settings** is a page of its own. It sets how marks are drawn (Squiggles, Ticks, Stamped ticks,
   Faces or Stamped faces) and the theme (System, Light or Dark). It has the **Daily goal** switch,
   which turns the daily targets and green days on or off on every device. It also holds export and
-  import, and the Claude connections.
+  import, and the Claude connections. Each has a tab of its own, with its own address:
+  `#/settings/appearance`, `#/settings/daily-goal`, `#/settings/data` and
+  `#/settings/connections`.
 - **Profile** is the last button in the bar. It opens a menu: who is signed in, **Profile** and
   **Sign out**. The Profile page shows the account with Sign out, and two notes in your own words:
   **Your goals** (what you are working towards) and **Your limits** (what you have to work around:

@@ -16,6 +16,7 @@ import {
 import { usePlannerStore } from '@/stores/planner'
 import { useSessionStore } from '@/stores/session'
 import { weekRange } from '@/lib/dates'
+import { settingsHref } from '@/lib/routes'
 import { BarAction } from '@/components/ui/bar-action'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Menu, MenuItem } from '@/components/ui/menu'
@@ -75,9 +76,9 @@ function toggleEditPlan(): void {
   store.setConfigMode(!store.configMode)
 }
 
-/** Settings is a page of its own (#/settings); App shows it on the hash change. */
+/** Settings is a page of its own (#/settings, its first tab); App shows it on the hash change. */
 function openSettings(): void {
-  location.hash = '#/settings'
+  location.hash = settingsHref()
 }
 
 /** The profile menu (K106): Profile is a page of its own (#/profile), like Settings. */
