@@ -82,12 +82,23 @@ test.describe('no sideways scroll at 375px', () => {
     await expectNoSidewaysScroll(page)
   })
 
-  test('the Settings page', async ({ page }) => {
+  test('the Settings page, every tab', async ({ page }) => {
     await openApp(page)
     await callUpBar(page)
     await page.getByRole('button', { name: 'Settings' }).click()
     await page.getByRole('heading', { level: 1, name: 'Settings' }).waitFor()
-    await expectNoSidewaysScroll(page)
+    // The four tabs wrap onto two lines rather than scroll sideways (K119).
+    const tabs = page.getByRole('tab')
+    await expect(tabs).toHaveText(['Appearance', 'Daily goal', 'Your data', 'Connections'])
+    const first = (await tabs.first().boundingBox())!
+    const last = (await tabs.last().boundingBox())!
+    expect(last.y).toBeGreaterThan(first.y)
+    for (const name of ['Appearance', 'Daily goal', 'Your data', 'Connections']) {
+      await page.getByRole('tab', { name }).click()
+      await expect(page.getByRole('heading', { level: 2 })).toHaveText([name])
+      await settle(page)
+      await expectNoSidewaysScroll(page)
+    }
   })
 
   test('the profile menu and the Profile page', async ({ page }) => {

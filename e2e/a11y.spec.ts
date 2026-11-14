@@ -70,7 +70,7 @@ test.describe('the app passes axe', () => {
       await expectNoAxeViolations(page)
     })
 
-    test(`the Settings page, desktop, ${theme}`, async ({ page }) => {
+    test(`the Settings page, every tab, desktop, ${theme}`, async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 900 })
       await openApp(page, { theme })
       await callUpBar(page)
@@ -78,6 +78,13 @@ test.describe('the app passes axe', () => {
       await page.getByRole('heading', { level: 1, name: 'Settings' }).waitFor()
       await settle(page)
       await expectNoAxeViolations(page)
+      // A tab per section (K119); each tab's section passes too.
+      for (const name of ['Daily goal', 'Your data', 'Connections']) {
+        await page.getByRole('tab', { name }).click()
+        await page.getByRole('heading', { level: 2, name }).waitFor()
+        await settle(page)
+        await expectNoAxeViolations(page)
+      }
     })
 
     test(`the profile menu, open, desktop, ${theme}`, async ({ page }) => {

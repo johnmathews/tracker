@@ -274,6 +274,11 @@ test('the week’s keys: E in and out of Edit plan, Esc out, S to Settings (K91)
   await expect(bar).not.toHaveClass(/sticky/)
   await page.keyboard.press('s')
   await expect(page).toHaveURL(/#\/settings$/)
+  // Settings opens on its first tab (K119).
+  await expect(page.getByRole('tab', { name: 'Appearance' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
 })
 
 test('a wrap turns straight back too: the other way at an end wraps back at once (K89, K92)', async ({

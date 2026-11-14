@@ -41,6 +41,9 @@ tracker is code (a store, a section component, the API's normaliser), as Cardio 
 
 **The item page.** `src/lib/routes.ts` reads and writes the item page's address,
 `#/item/<section>/<id>`, and does its Back (`backToWeek`) and the Link field's site (`webHost`).
+It also holds the Settings tabs' addresses (K119): `SETTINGS_TABS`, `settingsHref` and
+`parseSettingsHash`, which reads `#/settings` as the first tab and returns null for a tab Settings
+doesn't have.
 `src/lib/history.ts` gives an item's recent weeks (`itemHistory`) and its latest plan
 (`latestPlanWith`), from the log and the plans. `src/composables/itemSource.ts` reads each
 section's plans, log and goal action from its store, for the page and for the route that checks
@@ -130,9 +133,10 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 ├── ConnectPage.vue     an OAuth consent link (#/connect/<id>, K73), signed in or out: who is
 │                       asking, email and password, Read only or Read and change, Cancel and
 │                       Connect; then leaves for Claude's callback
-├── SettingsPage.vue    the SettingsPage card, at #/settings: Back to the week, then Appearance
-│   │                   (Marks, then Theme, K59), Daily goal (K85), Your data (Export and
-│   │                   Import…, see §4) and Connections
+├── SettingsPage.vue    the SettingsPage card, at #/settings: Back to the week, then a tab per
+│   │                   section (K119, the Tabs primitive), each at #/settings/<tab>:
+│   │                   Appearance (Marks, then Theme, K59), Daily goal (K85), Your data
+│   │                   (Export and Import…, see §4) and Connections
 │   └── ConnectionsSection.vue   the Connections row (K74): the MCP address with Copy and how to
 │                       connect Claude, the Apps connected by OAuth, and the personal Tokens
 ├── ProfilePage.vue     the ProfilePage card, at #/profile (K106): Back to the week, then Account
@@ -572,6 +576,13 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
   `#/settings`) so it has room to grow. App reads the hash (as it does for invite and reset links)
   and shows the page in place of the week, without the Header (K52). Arriving moves
   focus to the page's heading, and coming back to the week puts it on the Settings button. The
+  page is in tabs (K119), one per section: Appearance, Daily goal, Your data and Connections, on
+  Reka UI's Tabs with automatic activation, and only the open tab's section renders. Each tab has
+  an address: `#/settings` and `#/settings/appearance` open Appearance, and
+  `#/settings/daily-goal`, `#/settings/data` and `#/settings/connections` open theirs. App keeps
+  the open tab (`v-model:tab`), from the address on a hash change; choosing a tab writes its
+  address with `history.replaceState`, so a reload keeps it and Back still leaves the page. A tab
+  Settings doesn't have opens the week. The bar's Settings button and **S** open `#/settings`. The
   **Profile page** (`ProfilePage.vue`, at `#/profile`, K106) works the same way, opened from the
   profile Menu at the end of the bar, and focus comes back to the Profile button. Signing out (on
   the Profile page or from the Menu) drops any page's hash, so the next sign-in opens on the week. The marks' pens are fixed, so
@@ -779,7 +790,7 @@ component's own.
 
 | Group    | Primitives                                                                                                                                                                    |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Basics   | Button (primary, secondary and quiet, 44px tall, `sm` 36px from 640px up), IconButton (44px, a required `label`), TextLink, BrandMark, BarAction (the Header's actions, K47)  |
+| Basics   | Button (primary, secondary and quiet, 44px tall, `sm` 36px from 640px up), IconButton (44px, a required `label`), TextLink, Tabs with TabsList, TabsTrigger and TabsContent (K119), BrandMark, BarAction (the Header's actions, K47) |
 | Forms    | TextField, TextArea, SegmentedControl, Switch, Stepper, RadioCard                                                                                                             |
 | Overlays | Dialog, ConfirmDialog with ConfirmHost, Popover, Menu with MenuItem (K106)                                                                                                    |
 | Planner  | DayMark, Chip, SectionHeader                                                                                                                                                  |
@@ -934,7 +945,7 @@ wide) and `short:` (landscape, 540px tall or less).
   the fixed week. Exercises has "Go to Cardio"; Cardio has "Back to Exercises" and "Go to Food";
   Food has "Back to Cardio". Each sprints to its screen's top with `sprintToScreen`, by the
   heading's id. A short screen leaves them out.
-- **Settings, Profile and Ask** are pages of their own (`#/settings`, `#/profile`, `#/ask`), outside the screens and with
+- **Settings, Profile and Ask** are pages of their own (`#/settings` with its tabs' `#/settings/<tab>`, `#/profile`, `#/ask`), outside the screens and with
   no bar (K52): each starts with "Back to the week", and leaving one returns focus to the bar button
   that opened it. Ask fills the window (K67, K70): the SidePanel (`h-dvh`) and the page beside it
   scroll on their own, the page in Settings' rows at about 70% of its sizes (K83:

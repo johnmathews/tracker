@@ -13,6 +13,7 @@ import { useImportSummary } from '@/composables/importSummary'
 import { MARK_KINDS, MARK_SETS, isMarkSet, type MarkSet } from '@/lib/storage'
 import { THEMES, type Theme } from '@/lib/theme'
 import { APP_NAME } from '@/lib/app'
+import { SETTINGS_TABS, settingsHref, type SettingsTab } from '@/lib/routes'
 import {
   buildExport,
   downloadExport,
@@ -26,8 +27,17 @@ import { InlineMessage } from '@/components/ui/inline-message'
 import { RadioCard } from '@/components/ui/radio-card'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { Switch } from '@/components/ui/switch'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { TextLink } from '@/components/ui/text-link'
 import ConnectionsSection from '@/components/ConnectionsSection.vue'
+
+/** The tabs' names (K119): the same words as their sections' headings. */
+const TAB_NAMES: Record<SettingsTab, string> = {
+  appearance: 'Appearance',
+  'daily-goal': 'Daily goal',
+  data: 'Your data',
+  connections: 'Connections',
+}
 
 const THEME_NAMES: Record<Theme, string> = { system: 'System', light: 'Light', dark: 'Dark' }
 const THEME_OPTIONS = THEMES.map((t) => ({ value: t, label: THEME_NAMES[t] }))
@@ -66,6 +76,7 @@ const details = useDetailsStore()
 const session = useSessionStore()
 const sync = useSyncStore()
 const heading = useTemplateRef<HTMLHeadingElement>('heading')
+const headingId = useId()
 const ids = {
   look: useId(),
   dailyGoal: useId(),
@@ -75,6 +86,21 @@ const ids = {
 
 // Arriving here moves focus to the page's heading, so a screen reader starts at the top.
 onMounted(() => heading.value!.focus())
+
+/**
+ * The open tab (K119), which the address names. Choosing one writes its address in place of the
+ * current one, so a reload keeps the tab and the browser's Back still leaves the page.
+ */
+const tab = defineModel<SettingsTab>('tab', { required: true })
+const openTab = computed({
+  get: () => tab.value,
+  set: (value: string) => {
+    const next = SETTINGS_TABS.find((t) => t === value)
+    if (!next || next === tab.value) return
+    tab.value = next
+    history.replaceState(history.state, '', settingsHref(next))
+  },
+})
 
 /** Daily goal (K85): the switch reads and sets the store's, which syncs with the account. */
 const dailyGoal = computed({
@@ -181,12 +207,13 @@ async function confirmImport(data: ExportData): Promise<void> {
 
 <!--
   The Settings page (brand/design-system/project/components/SettingsPage), at #/settings, with no
-  Header (K52): a link back to the week, the heading, then Appearance (Marks, then Theme, K59),
-  Daily goal (K85), Your data and Connections (ConnectionsSection). My goals, Your limits and the
-  account are on the Profile page (K106, K107). The daily targets are set in Edit plan (K56). Full
-  width in rows like the week (K51): each section's heading in the week's name column, its
-  settings beside it, a line rule above each row, controls beside their words (K53). Settings take
-  effect at once; there is no Save.
+  Header (K52): a link back to the week, the heading, then a tab per section (K119, the Tabs card):
+  Appearance (Marks, then Theme, K59), Daily goal (K85), Your data and Connections
+  (ConnectionsSection), each at #/settings/<tab>. My goals, Your limits and the account are on the
+  Profile page (K106, K107). The daily targets are set in Edit plan (K56). Full width in rows like
+  the week (K51): the open section's heading in the week's name column, its settings beside it,
+  controls beside their words (K53). The tab bar's rule stands in for the row's top rule. Settings
+  take effect at once; there is no Save.
 -->
 <template>
   <div
@@ -201,119 +228,149 @@ async function confirmImport(data: ExportData): Promise<void> {
       ><ChevronLeft :stroke-width="1.5" aria-hidden="true" />Back to the week</TextLink
     >
     <h1
+      :id="headingId"
       ref="heading"
       tabindex="-1"
-      class="title-1 mt-[calc(var(--u)*12)] mb-[calc(var(--u)*28)] text-(length:--fs-title) leading-tight text-ink focus:outline-none"
+      class="title-1 mt-[calc(var(--u)*12)] mb-[calc(var(--u)*20)] text-(length:--fs-title) leading-tight text-ink focus:outline-none"
     >
       Settings
     </h1>
 
-    <section
-      :aria-labelledby="ids.look"
-      class="grid grid-cols-[var(--grid-name-w)_minmax(0,1fr)] items-start border-t border-line py-(--set-sec-y) folded:flex folded:flex-col folded:items-stretch folded:gap-4"
-    >
-      <h2 :id="ids.look" class="title-2 text-(length:--set-h2) leading-tight text-ink">
-        Appearance
-      </h2>
-      <div class="flex min-w-0 flex-col gap-(--set-gap)">
-        <RadioCard v-model="markSet" label="Marks" :options="MARK_SET_OPTIONS">
-          <template #picture="{ option }">
-            <span
-              v-for="kind in MARK_KINDS"
-              :key="kind"
-              class="grid size-(--set-mark) shrink-0 place-items-center [&_svg]:size-[94%]"
-              data-testid="mark-set-sample"
-            >
-              <DayMarkDrawing :mark="kind" :set="option.value as MarkSet" />
-            </span>
-          </template>
-        </RadioCard>
-        <SegmentedControl v-model="theme" label="Theme" :options="THEME_OPTIONS" />
-      </div>
-    </section>
-
-    <section
-      :aria-labelledby="ids.dailyGoal"
-      class="grid grid-cols-[var(--grid-name-w)_minmax(0,1fr)] items-start border-t border-line py-(--set-sec-y) folded:flex folded:flex-col folded:items-stretch folded:gap-4"
-    >
-      <h2 :id="ids.dailyGoal" class="title-2 text-(length:--set-h2) leading-tight text-ink">
-        Daily goal
-      </h2>
-      <!-- Daily goal (K85): the Switch with its hint under it. -->
-      <div class="flex min-w-0 flex-col items-start gap-[calc(var(--u)*6)]">
-        <Switch
-          v-model="dailyGoal"
-          label="Daily goal"
-          class="-ml-2"
-          :aria-describedby="dailyGoalHint"
-          data-testid="daily-goal"
-        />
-        <p
-          :id="dailyGoalHint"
-          class="caption max-w-[60ch] text-(length:--set-caption) leading-[1.35] text-ink-secondary"
+    <Tabs v-model="openTab">
+      <TabsList :aria-labelledby="headingId" class="gap-x-[calc(var(--u)*32)]">
+        <TabsTrigger
+          v-for="t in SETTINGS_TABS"
+          :key="t"
+          :value="t"
+          class="text-(length:--set-text) leading-[1.35]"
+          :data-testid="`settings-tab-${t}`"
         >
-          A number of exercises and of foods to reach each day, set in Edit plan. A day that reaches
-          it turns green.
-        </p>
-      </div>
-    </section>
+          {{ TAB_NAMES[t] }}
+        </TabsTrigger>
+      </TabsList>
 
-    <section
-      :aria-labelledby="ids.data"
-      class="grid grid-cols-[var(--grid-name-w)_minmax(0,1fr)] items-start border-t border-line py-(--set-sec-y) folded:flex folded:flex-col folded:items-stretch folded:gap-4"
-    >
-      <h2 :id="ids.data" class="title-2 text-(length:--set-h2) leading-tight text-ink">
-        Your data
-      </h2>
-      <div class="flex min-w-0 flex-col gap-(--set-gap)">
-        <!-- The text, then its buttons beside it (K53). -->
-        <div class="flex flex-wrap items-center gap-x-(--set-gap) gap-y-3">
-          <p class="body max-w-[34ch] text-(length:--set-text) leading-normal text-ink-secondary">
-            Export saves everything to a file. Import adds a file’s plans and marks to yours and
-            never deletes anything.
-          </p>
-          <div role="group" :aria-labelledby="ids.data" class="flex flex-wrap gap-3">
-            <Button @click="exportData"><Download :stroke-width="1.5" />Export</Button>
-            <Button @click="fileInput?.click()"><Upload :stroke-width="1.5" />Import…</Button>
-            <input
-              ref="fileInput"
-              type="file"
-              accept=".json,application/json"
-              class="hidden"
-              aria-label="Export file to import"
-              data-testid="import-file"
-              @change="onFile"
+      <TabsContent value="appearance">
+        <section
+          :aria-labelledby="ids.look"
+          class="grid grid-cols-[var(--grid-name-w)_minmax(0,1fr)] items-start py-(--set-sec-y) folded:flex folded:flex-col folded:items-stretch folded:gap-4"
+        >
+          <h2 :id="ids.look" class="title-2 text-(length:--set-h2) leading-tight text-ink">
+            Appearance
+          </h2>
+          <div class="flex min-w-0 flex-col gap-(--set-gap)">
+            <RadioCard v-model="markSet" label="Marks" :options="MARK_SET_OPTIONS">
+              <template #picture="{ option }">
+                <span
+                  v-for="kind in MARK_KINDS"
+                  :key="kind"
+                  class="grid size-(--set-mark) shrink-0 place-items-center [&_svg]:size-[94%]"
+                  data-testid="mark-set-sample"
+                >
+                  <DayMarkDrawing :mark="kind" :set="option.value as MarkSet" />
+                </span>
+              </template>
+            </RadioCard>
+            <SegmentedControl v-model="theme" label="Theme" :options="THEME_OPTIONS" />
+          </div>
+        </section>
+      </TabsContent>
+
+      <TabsContent value="daily-goal">
+        <section
+          :aria-labelledby="ids.dailyGoal"
+          class="grid grid-cols-[var(--grid-name-w)_minmax(0,1fr)] items-start py-(--set-sec-y) folded:flex folded:flex-col folded:items-stretch folded:gap-4"
+        >
+          <h2 :id="ids.dailyGoal" class="title-2 text-(length:--set-h2) leading-tight text-ink">
+            Daily goal
+          </h2>
+          <!-- Daily goal (K85): the Switch with its hint under it. -->
+          <div class="flex min-w-0 flex-col items-start gap-[calc(var(--u)*6)]">
+            <Switch
+              v-model="dailyGoal"
+              label="Daily goal"
+              class="-ml-2"
+              :aria-describedby="dailyGoalHint"
+              data-testid="daily-goal"
             />
+            <p
+              :id="dailyGoalHint"
+              class="caption max-w-[60ch] text-(length:--set-caption) leading-[1.35] text-ink-secondary"
+            >
+              A number of exercises and of foods to reach each day, set in Edit plan. A day that
+              reaches it turns green.
+            </p>
           </div>
-        </div>
-        <div v-if="pending" class="flex flex-col gap-2" role="group" aria-label="Confirm import">
-          <p
-            class="body text-(length:--set-text) leading-normal text-ink"
-            data-testid="import-summary"
-          >
-            {{ summary.describe(pending) }}
-          </p>
-          <div class="flex gap-3">
-            <Button @click="pending = null">Cancel</Button>
-            <Button variant="primary" :busy="importing" @click="confirmImport(pending)">
-              Import
-            </Button>
-          </div>
-        </div>
-        <InlineMessage v-if="notice" :tone="notice.tone" data-testid="import-notice">
-          {{ notice.text }}
-        </InlineMessage>
-      </div>
-    </section>
+        </section>
+      </TabsContent>
 
-    <section
-      :aria-labelledby="ids.connections"
-      class="grid grid-cols-[var(--grid-name-w)_minmax(0,1fr)] items-start border-t border-line py-(--set-sec-y) folded:flex folded:flex-col folded:items-stretch folded:gap-4"
-    >
-      <h2 :id="ids.connections" class="title-2 text-(length:--set-h2) leading-tight text-ink">
-        Connections
-      </h2>
-      <ConnectionsSection />
-    </section>
+      <TabsContent value="data">
+        <section
+          :aria-labelledby="ids.data"
+          class="grid grid-cols-[var(--grid-name-w)_minmax(0,1fr)] items-start py-(--set-sec-y) folded:flex folded:flex-col folded:items-stretch folded:gap-4"
+        >
+          <h2 :id="ids.data" class="title-2 text-(length:--set-h2) leading-tight text-ink">
+            Your data
+          </h2>
+          <div class="flex min-w-0 flex-col gap-(--set-gap)">
+            <!-- The text, then its buttons beside it (K53). -->
+            <div class="flex flex-wrap items-center gap-x-(--set-gap) gap-y-3">
+              <p
+                class="body max-w-[34ch] text-(length:--set-text) leading-normal text-ink-secondary"
+              >
+                Export saves everything to a file. Import adds a file’s plans and marks to yours and
+                never deletes anything.
+              </p>
+              <div role="group" :aria-labelledby="ids.data" class="flex flex-wrap gap-3">
+                <Button @click="exportData"><Download :stroke-width="1.5" />Export</Button>
+                <Button @click="fileInput?.click()"><Upload :stroke-width="1.5" />Import…</Button>
+                <input
+                  ref="fileInput"
+                  type="file"
+                  accept=".json,application/json"
+                  class="hidden"
+                  aria-label="Export file to import"
+                  data-testid="import-file"
+                  @change="onFile"
+                />
+              </div>
+            </div>
+            <div
+              v-if="pending"
+              class="flex flex-col gap-2"
+              role="group"
+              aria-label="Confirm import"
+            >
+              <p
+                class="body text-(length:--set-text) leading-normal text-ink"
+                data-testid="import-summary"
+              >
+                {{ summary.describe(pending) }}
+              </p>
+              <div class="flex gap-3">
+                <Button @click="pending = null">Cancel</Button>
+                <Button variant="primary" :busy="importing" @click="confirmImport(pending)">
+                  Import
+                </Button>
+              </div>
+            </div>
+            <InlineMessage v-if="notice" :tone="notice.tone" data-testid="import-notice">
+              {{ notice.text }}
+            </InlineMessage>
+          </div>
+        </section>
+      </TabsContent>
+
+      <TabsContent value="connections">
+        <section
+          :aria-labelledby="ids.connections"
+          class="grid grid-cols-[var(--grid-name-w)_minmax(0,1fr)] items-start py-(--set-sec-y) folded:flex folded:flex-col folded:items-stretch folded:gap-4"
+        >
+          <h2 :id="ids.connections" class="title-2 text-(length:--set-h2) leading-tight text-ink">
+            Connections
+          </h2>
+          <ConnectionsSection />
+        </section>
+      </TabsContent>
+    </Tabs>
   </div>
 </template>

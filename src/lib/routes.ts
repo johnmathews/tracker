@@ -50,6 +50,31 @@ export function parseNewHash(hash: string): Section | null {
   return isSection(section) ? section : null
 }
 
+/**
+ * The Settings page's tabs, in order (K119), each with its own address: `#/settings/<tab>`.
+ * `#/settings` alone opens the first.
+ */
+export const SETTINGS_TABS = ['appearance', 'daily-goal', 'data', 'connections'] as const
+export type SettingsTab = (typeof SETTINGS_TABS)[number]
+
+const SETTINGS = /^#\/settings(?:\/([^/]+))?$/
+
+/** The address of the Settings page, on a tab. With no tab, the page's own address. */
+export function settingsHref(tab?: SettingsTab): string {
+  return tab ? `#/settings/${tab}` : '#/settings'
+}
+
+/**
+ * The Settings tab an address opens: the first for `#/settings`, the named one for
+ * `#/settings/<tab>`, and null for any other address, a tab Settings doesn't have included.
+ */
+export function parseSettingsHash(hash: string): SettingsTab | null {
+  const match = SETTINGS.exec(hash)
+  if (!match) return null
+  const tab = match[1] ?? SETTINGS_TABS[0]
+  return (SETTINGS_TABS as readonly string[]).includes(tab) ? (tab as SettingsTab) : null
+}
+
 /** On an item page's history entry: the entry before it is the week, in this tab. */
 const FROM_WEEK = 'trackerFromWeek'
 
