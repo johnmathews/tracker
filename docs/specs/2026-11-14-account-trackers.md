@@ -7,8 +7,7 @@
 > tools. It is the authority for units W4 to W8 of the 2026-11-14 run. The map of what assumes
 > today's fixed three is in that run's evaluation report.
 
-**Status:** draft for John's review (2026-11-14). The screens wait on the mockup
-`261114-add-tracker`.
+**Status:** approved by John on 2026-11-14 ("the spec is fine"), with Add tracker in the bar (K124).
 
 ## 1. What a tracker is
 
