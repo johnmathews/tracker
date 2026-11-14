@@ -17,7 +17,9 @@ The log holds your trackers. Each has an id, a name and a kind:
 - **strength**: exercises, with sets, reps or seconds, each side, and weight;
 - **cardio**: sessions such as cycling or running, with a time in seconds and a distance in km,
   either, both or neither, and no daily target;
-- **food**: foods eaten, marked only as eaten.
+- **food**: foods eaten, marked only as eaten;
+- **mobility**: stretches and holds, with sets, then reps or seconds (a hold), each side, and
+  no weight. `weight_kg` is refused for one.
 
 Every account starts with three trackers: `exercise` (named Strength), `cardio` and `diet` (named
 Food). Trackers you add in the app get random ids. `list_trackers` gives every tracker's id.
@@ -57,7 +59,7 @@ Ask does in the app.
 | `update_item`       | Changes the fields given on one item, or its note.                          |
 | `remove_item`       | Takes one item out of a week's plan.                                        |
 | `mark_day`          | Marks one item on one date, or clears the day.                              |
-| `set_daily_targets` | Sets how many items a day make a day count, for a strength or food tracker. |
+| `set_daily_targets` | Sets how many items a day make a day count, for a strength, food or mobility tracker. |
 
 `set_daily_targets` takes `tracker` and `daily_target`, 1 to 8. Its older form still works:
 `exercises_a_day` sets the `exercise` tracker's target and `foods_a_day` the `diet` tracker's.

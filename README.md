@@ -2,14 +2,21 @@
 
 > Purpose
 >
-> A weekly workout and diet log: exercises and foods down the side, Monday–Sunday across the top,
-> one click to tick a day. A Vue 3 + Vite single-page app (Tailwind CSS 4, shadcn-vue on Reka UI,
+> A weekly workout and diet log: your own trackers, their items down the side, Monday–Sunday
+> across the top, one click to tick a day. A Vue 3 + Vite single-page app (Tailwind CSS 4, shadcn-vue on Reka UI,
 > built to the Notebook design system) with light and dark themes, and a Python API that keeps each
 > person's data in sync across devices.
 
 ## 1. What it does
 
-- **Exercises.** Each day, pick a few exercises (default three) and mark their cells. A press steps
+- **Trackers.** The week holds your trackers, one screen each. A new account has three:
+  Strength, Cardio and Food. Each tracker has a name and a kind, set when it is made: Strength,
+  Cardio, Food or Mobility. The kind decides what an item records and how a day is marked. In
+  Edit plan, **Add tracker** in the bar makes another, which starts empty in the week on screen
+  and shows last. A tracker's pen renames it, and **Delete tracker** takes it off this week and
+  every week after, after a confirmation; earlier weeks keep it, with its marks and notes. An
+  account holds up to 100 trackers.
+- **Strength.** Each day, pick a few exercises (default three) and mark their cells. A press steps
   a day through green (done well), yellow (partly done) and red (tried and couldn't), first in a
   zigzag, then a solid fill, then a hatch, and back to empty: the colour says how it went, and the
   marker drawing is yours to choose. **Marks** in Settings swaps the squiggles for ticks (a tick, a
@@ -17,50 +24,59 @@
   press then steps green, yellow, red and back to empty. Each exercise has a weekly goal of 0–7 days, set
   on its page. A day whose marked exercises reach **Exercises a day** turns green: its
   name in the header goes green and is underlined. **Daily goal** in Settings turns this off,
-  and the per-day counters with it, for Exercises and Food; the numbers are kept.
-- **Cardio.** The screen after the exercises holds cycling, running and the like. Each item has a
+  and the per-day counters with it, for every tracker; the numbers are kept.
+- **Mobility.** A Mobility tracker holds stretches and holds: sets, then reps or a hold time in
+  seconds, each side if you like, and no weight. Its days are marked as an exercise's, and it has
+  a daily target of its own (default three). A new Mobility tracker starts empty.
+- **Cardio.** The Cardio screen holds cycling, running and the like. Each item has a
   time, a distance in km, both or neither, shown as chips ("30 min", "5 km"), and a weekly goal.
   A press steps a day through green, yellow and red, as an exercise's does. Cardio has no daily
   target, so no day turns green. A new account starts with none.
-- **Food.** The screen after cardio works the same way, with one kind of mark: mark each day you ate
+- **Food.** The Food screen works the same way, with one kind of mark: mark each day you ate
   one. Each food has a weekly goal, set on its page. Defaults are Vegetables (7), Fruit (5),
   Fish (2) and Nuts (3). A day whose marked foods reach **Foods a day** (default two) turns green,
   as an exercise day does.
 - **Normal mode and config mode.** The app opens in normal mode, where you only mark cells. The
-  week stays fixed at the top centre as the page's title, and "Exercises", "Cardio" and "Food" move under it,
+  week stays fixed at the top centre as the page's title, and the trackers move under it,
   one screen at a time, each a step smaller under the week.
   A long press anywhere (or the handle at the top centre) turns on config mode, **Edit plan**, for
   changing the plan, with the bar in view; another long press, **E** or **Esc** goes back:
-  - while **Daily goal** is on, a counter centred on each section's title line, reading
-    "− 3 per day +", sets its daily target (1–8): exercises a day and foods a day. They are one
-    setting for every week. The week isn't shown over the sections in config mode, since the bar
-    shows it;
-  - **Add exercise**, **Add cardio** and **Add food**, at the end of each section's title line,
-    open a new item page: a
+  - while **Daily goal** is on, a counter centred on the title line of each tracker with a daily
+    target, reading "− 3 per day +", sets it (1–8): exercises a day, foods a day. Each tracker
+    has its own, the same for every week. The week isn't shown over the trackers in config mode,
+    since the bar shows it;
+  - each tracker's title has a pen: it turns the name into a field, where Enter or **Done** saves
+    and Escape puts the old name back;
+  - **Add exercise**, **Add cardio**, **Add food** and **Add mobility**, at the end of each
+    tracker's title line before **Delete tracker**, open a new item page: a
     name, then this week's plan, notes and details. An exercise starts at one set of one rep, and
     takes sets, reps or a time in seconds (a plank), "Per set" or "Each side" and an optional
-    weight in kg (e.g. squats with a 12 kg kettlebell); cardio takes minutes and a distance in km.
+    weight in kg (e.g. squats with a 12 kg kettlebell); a mobility item takes the same without the
+    weight; cardio takes minutes and a distance in km.
     Nothing is added until the page's **Add** button, and **Cancel** adds nothing;
-  - pressing a name opens that item's page, where everything about it changes. In Edit plan the
-    page's title becomes a **Name** field, and **Remove from this week** ends the page. A note is
-    markdown and is the same on every week; it shows under the item's name, and pressing it opens
-    the whole note with its links; the bin at the end of a row, like Remove on the page, removes
-    the item after a confirmation (its marks stay stored). New items start with a goal of 3.
+  - **Add tracker** in the bar opens the new tracker page: a name, a kind with a line saying what
+    it records, and when it starts ("This week, empty.");
+  - pressing a name opens that item's page, where everything about it changes, in either mode:
+    its pen renames it, and **Remove** at the foot takes it off the week after a confirmation (its
+    marks stay stored). A note is markdown and is the same on every week; it shows under the
+    item's name, and pressing it opens the whole note with its links. New items start with a goal
+    of 3.
 - **An item's own page.** Pressing an item's name, in either mode, opens its page.
   It reads in rows like Settings, each heading on the left and its content beside it. First comes
   the week's plan for the item. Then the notes, up to 20,000 characters of markdown, which save as
-  you type. Then the details: equipment, what it works and a link for an exercise, a route and a
+  you type. Then the details: equipment, what it works and a link for an exercise or a mobility
+  item, a route and a
   link for cardio, and a serving and examples for a food. Last come its last eight weeks, with how many days were marked
   against the goal; every mark counts, missed included. Notes and details are one copy for every
   week. **Arrange sections** chooses which of these every exercise page shows, and in what order,
-  and the same for every cardio page and every food page; the choice is saved with your account. **Back to the
+  and the same for every cardio, food and mobility page; the choice is saved with your account. **Back to the
   week** returns to the name you pressed.
 - **Weekly plans.** Each week has its own plan, so reps, sets, weights and goals can change from week
   to week. A week you haven't changed carries over the latest earlier week's plan; it gets its own
   copy the first time you change it or mark a cell. So a change to this week also reaches the weeks
   after it that you haven't changed yet.
 - The bar starts with the week, as the page's title, and `‹` / `›` beside it move between weeks
-  for every section; past weeks persist. From the keyboard, the second Tab stop is a hidden **Edit
+  for every tracker; past weeks persist. From the keyboard, the second Tab stop is a hidden **Edit
   plan** (**Done** in Edit plan). **Print…** (or **P**) produces a page for each tracker, with the week at the top of each, in
   the light theme's colours on white paper.
 - **Keys** on the week: **E** goes into Edit plan and out again, **Esc** leaves full screen or Edit
@@ -68,9 +84,9 @@
   in Edit plan it adds to the tracker on screen. On every page, **H** or **B** goes
   back and **L** forward, as the browser's buttons do. They do nothing while you type in a field or
   a dialog is open.
-- **One screen per section.** The week fills the screen, and the bar stays out of sight. A long press
-  anywhere (or the handle at the top centre) opens Edit plan, with the bar above the page. Scrolling brings Cardio,
-  then Food, each taking the screen in turn: a flick jumps straight to the next. An arrow at the
+- **One screen per tracker.** The week fills the screen, and the bar stays out of sight. A long press
+  anywhere (or the handle at the top centre) opens Edit plan, with the bar above the page. Scrolling brings
+  each tracker in turn, each taking the screen: a flick jumps straight to the next. An arrow at the
   foot of a screen leads to the next one, and an arrow at the top back to the one before. The
   screens wrap round: scrolling on past the last brings the first up from below, and scrolling up
   past the first brings the last down from above. Held upright, a phone or an iPad folds the week: each row's name

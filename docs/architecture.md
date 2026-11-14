@@ -20,22 +20,29 @@ page's conversation and history (§3), read through `request` and `stream` in `s
 against a weekly goal, through the pure helpers in `src/lib/tracker.ts`.
 
 **Tracker kinds.** `src/lib/trackerTypes.ts` is the registry of tracker kinds: `strength` (the
-old `exercise` type, K123), `cardio` and `food`. A kind is code; a tracker is data, each account's
+old `exercise` type, K123), `cardio`, `food` and `mobility` (K126). A kind is code; a tracker is data, each account's
 own (`src/lib/trackers.ts`, below). A tracker's id is the stored name, in URLs, the database, the
 cache and the outbox, where the API's paths still call it `section`. The first three trackers keep
 the old section names as their ids: `SECTIONS` maps `exercise`, `cardio` and `diet` to their kinds,
 and `FIRST_NAMES` names them Strength, Cardio and Food. Each kind gives:
 
-- the section's heading and the label of one item ("Exercises", "Exercise");
+- its name on the new tracker page's Kind control and the line saying what an item records
+  (`label`, `records`: "Strength", "sets, then reps or time, and weight. Marked great, partial or
+  missed."), the label of one item and of several (`itemLabel`, `itemsLabel`: "Exercise",
+  "Exercises", as in "Exercises a day"), and the Add button's words (`addLabel`: "Add exercise",
+  "Add cardio", "Add food", "Add mobility");
+- the plan fields an item has (`plan`: an exercise's for strength and mobility, cardio's or a
+  food's) and whether an exercise's plan has a weight (`weighted`: strength only);
 - the marks a press steps through in each mark set (§6.2);
 - the chips under a name (`exerciseDetails` lives here, and `planner.ts` re-exports it;
   `cardioDetails` gives a cardio item's time, then its distance: "30 min", "5 km");
-- the item page's fields, by key and label (exercise: Equipment, Works, Link; cardio: Route, Link;
-  food: A serving, Examples);
-- the daily target a new tracker of the kind starts with (`dailyTarget`: 3, none for cardio, 2),
-  the setting the first tracker of the kind keeps it in step with (`pickKey`), and a new item's
-  goal;
-- the normaliser its plan items go through (`normalise`).
+- the item page's fields, by key and label (strength and mobility: Equipment, Works, Link; cardio:
+  Route, Link; food: A serving, Examples);
+- the daily target a new tracker of the kind starts with (`dailyTarget`: 3 for strength and
+  mobility, none for cardio, 2 for food), the setting the first tracker of the kind keeps it in
+  step with (`pickKey`: none for cardio and mobility), and a new item's goal;
+- the normaliser its plan items go through (`normalise`; `normaliseMobility` is an exercise's
+  without the weight).
 
 `api/src/tracker_api/types.py` holds the same registry, and `fixtures/types/registry.json` keeps
 the two in step: `trackerTypes.spec.ts` and `test_types.py` both read it. `defaultItems` gives the
@@ -109,9 +116,11 @@ system's cards ([brand.md](brand.md)). `TrackerGrid` and `TrackerRow` (on the `D
 and `Popover` primitives) take props, emit `toggle`, and serve every section. They are the same in
 Edit plan: no Remove column (K120).
 `TrackerGrid` runs the grid's keyboard model (`useGridNav`, §6.5) and links each name to its item's
-page, the one place an item is renamed or removed. `ExerciseGrid`, `CardioSection` and `DietSection` wire them to their store,
-and their Add buttons open the new item page (K104). The item page and the new item page share the
-plan's controls, `PlanFields.vue`. It takes an exercise's field state and input cleaning through
+page, the one place an item is renamed or removed. `TrackerSection` wires them to the trackers
+store, one per tracker the week shows (K123), and its Add button opens the new item page (K104).
+The item page and the new item page share the plan's controls, `PlanFields.vue`, which shows the
+fields of the kind's `plan`, and an exercise's Weight only for a `weighted` kind. It takes an
+exercise's field state and input cleaning through
 `useExerciseForm` (`src/composables/exerciseForm.ts`) and the `PerSideToggle` segmented control,
 and a cardio item's Minutes and Distance in km through `useCardioForm`
 (`src/composables/cardioForm.ts`), which stores the minutes as seconds. `planErrors.ts` (in
@@ -122,7 +131,7 @@ for Settings → Import… and the first-login prompt.
 
 ```
 App.vue                 picks the screen (a link, planner, Settings, an item's page, the new
-│                       item page, Ask, sign-up, reset or sign-in), the .dark class, clock
+│                       item page, the new tracker page, Ask, sign-up, reset or sign-in), the .dark class, clock
 │                       refresh, sync triggers (focus, visibility, online, minute tick,
 │                       storage), the planner-screens class (§6.6), the one ConfirmHost, and
 │                       H or B for back and L for forward on every page (K105)
@@ -136,7 +145,8 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 ├── AppNavbar.vue       the Header card: Skip to today and a hidden Edit plan ("Done" in Edit
 │                       plan) for the keyboard; ‹ the week › first, as the page's title (K81);
 │                       then the BarActions This week, Ask (only while the API answers
-│                       questions), Settings, Print…, Full screen (useFullscreen, where the
+│                       questions), Add tracker (in Edit plan only, K124), Settings, Print…,
+│                       Full screen (useFullscreen, where the
 │                       browser has one) and Profile, which opens the profile Menu: Signed in
 │                       as, Profile and Sign out (useSignOut, K106); the week's keys E, Esc,
 │                       F, P, S and A (useShortcuts, K91, K109); full width, sized by main.css's --bar-* (K47, K49); on the
@@ -159,20 +169,25 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 │                       beside it Back to the week, the title with the View switch (Document or
 │                       Conversation, kept per device), the Transcript and the question box with
 │                       the QuotaChip; deleting asks in a ConfirmDialog of its own
-├── ItemPage.vue        the ItemPage card, at #/item/<section>/<id> (K64, K65): Back to the week
+├── ItemPage.vue        the ItemPage card, at #/item/<tracker>/<id> (K64, K65): Back to the week
 │   │                   and Arrange sections, the type, the name with its pen (renaming in
 │   │                   a field in the title's type, K121) and its chips; then rows like
 │   │                   Settings: the week's plan (or the latest, read-only), Notes, Details
 │   │                   and Recent weeks, as the type's arrangement shows them (K66, K104);
 │   │                   Remove last, in both modes (K120)
-│   ├── PlanFields.vue  the plan's controls: an exercise's, a cardio item's or a food's, with
-│   │                   Times a week
+│   ├── PlanFields.vue  the plan's controls: an exercise's (a mobility item's without Weight), a
+│   │                   cardio item's or a food's, with Times a week
 │   └── RecentWeeks.vue the RecentWeeks card: up to eight weeks, newest first, a met week's count
 │                       in pen
-├── NewItemPage.vue     the new item page, at #/new/<section> (K104): Back to the week, Cancel and
-│                       Add exercise; "New exercise" and the Name field; then the plan
+├── NewItemPage.vue     the new item page, at #/new/<tracker> (K104): Back to the week, Cancel and
+│                       the kind's Add ("Add exercise"); "New exercise" and the Name field; then the plan
 │                       (PlanFields), Notes and Details as the type's arrangement shows them;
 │                       nothing saved until Add
+├── NewTrackerPage.vue  the NewTrackerPage card, at #/new-tracker (K124): Back to the week, Cancel
+│                       and Add tracker; "New tracker" and the Name field; Kind, a
+│                       SegmentedControl of the registry's kinds with the chosen kind's line;
+│                       Starts, "This week, empty."; Add tracker adds it last, from the week on
+│                       screen (K125), and goes back with focus on its Add
 ├── SyncStatus.vue      loading, offline and conflict Banners above the planner
 ├── EmailStatus.vue     "Confirm your email." Banner, with Send it again, until it is confirmed
 ├── ImportPrompt.vue    this browser's log from before accounts, offered once (§7)
@@ -180,25 +195,20 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 │                       fixed at the top, with a hairline once a screen is under it (K88); visually
 │                       hidden in Edit plan, on a short screen and on paper, where each
 │                       SectionHeader prints the week over its own page (K97)
-├── ExerciseGrid.vue    the Exercises section: SectionHeader (the section's heading; in config
-│   │                   mode with the Exercises a day Stepper centred on its line while Daily
-│   │                   goal is on, K62, K85)
-│   └── TrackerGrid.vue a <table> (WeekGrid card): day names, one TrackerRow per item, and
-│       │               the days that met the daily pick
-│       └── TrackerRow.vue  name (a link to the item's page) and chips on one line, the
-│                           item's notes under them, from the details store (a button
-│                           opening a Popover, K43); 7 × DayMark, the same in
-│                           Edit plan (K120)
-├── CardioSection.vue   the Cardio section (K90): SectionHeader with no Stepper (no daily
-│   │                   target), kept with its grid; on the screens "Back to Exercises" on its
-│   │                   title line and "Go to Food" at its foot (K42)
-│   └── TrackerGrid.vue wired to cardio: a time and a distance as chips; no day turns green
-└── DietSection.vue     the Food section: SectionHeader (the week centred as the title, then the
-                        heading; in config mode the heading alone, with the Foods a day Stepper
-                        centred on its line while Daily goal is on, K62, K85), kept
-                        with its grid, whose days that met foods a day turn green (K57); on the
-                        screens, the "Back to Cardio" arrow (K42)
-    └── TrackerGrid.vue wired to diet: no chips
+└── TrackerSection.vue  one per tracker the week shows, in position order (K123): its
+    │                   SectionHeader with the tracker's name; in Edit plan the pen (renaming
+    │                   in a field in the title's type, Enter or Done saves, Escape restores),
+    │                   the daily target's Stepper ("Exercises a day", from the kind's
+    │                   itemsLabel) centred while Daily goal is on and the kind has a target
+    │                   (K62, K85), then the kind's Add and Delete tracker (K113, K122); on the
+    │                   screens "Back to <previous>" on its title line and "Go to <next>" at
+    │                   its foot (K42)
+    └── TrackerGrid.vue a <table> (WeekGrid card): day names, one TrackerRow per item, the
+        │               kind's chips, and the days that met the tracker's daily target
+        └── TrackerRow.vue  name (a link to the item's page) and chips on one line, the
+                            item's notes under them, from the details store (a button
+                            opening a Popover, K43); 7 × DayMark, the same in
+                            Edit plan (K120)
 ```
 
 ## 2. Weekly plans
@@ -614,12 +624,12 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
   grid is a `<table role="grid">` with `row`, `columnheader`, `rowheader` and `gridcell` roles, and
   one tab stop (§6.5).
 - **One screen per section, not a window.** The handoff drew the app as a macOS window (traffic
-  lights, a framed window on a backdrop). The app fills the browser instead: Exercises, Cardio and
-  Food are a screen each, the page sprints between them, and the navbar keeps out of sight until it is
+  lights, a framed window on a backdrop). The app fills the browser instead: each tracker the
+  week shows is a screen (K123), the page sprints between them, and the navbar keeps out of sight until it is
   wanted (K24, K25; §6.6). Edit plan has a sticky navbar (K27) and is one tracker per screen under
   it too (K99), full width at the week's sizes with rows a fixed 100u (K54). Settings has no navbar (K52) and is full
   width in rows like the week (K51), and an item's page follows it, rows and all (K64, K65). The navbar keeps the week controls, This week, Ask,
-  Settings, Print…, Full screen and Profile (K106).
+  Add tracker (Edit plan only, K124), Settings, Print…, Full screen and Profile (K106).
 - **Light and dark themes.** The handoff is dark-only. Settings offers System (the default, which
   follows `prefers-color-scheme` live), Light and Dark. `App.vue` toggles a `dark` class on
   `<html>`; `public/theme-init.js` applies the saved choice before first paint so a dark preference
@@ -753,14 +763,15 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
   state instead of overwriting it, and their writes share one outbox (§7). The plan had proposed a
   `BroadcastChannel`; the cache already lives in `localStorage`, whose events carry the same news
   with no second channel to keep in step.
-- **Food is the screen after the exercises**, sharing the week navigation and the print sheet.
+- **Every tracker is a screen of the same week**, in position order, sharing the week navigation
+  and the print sheet (K123).
 - **No Picked row, no dates in the header** (K28, K29): the grids show each day by its name alone,
   and nothing counts a day against the daily pick. A day that reaches it turns green instead
-  (K30): `ExerciseGrid` passes `metDays` to the grid, which draws the day's name in `pen`,
-  underlined (K60). The rule is `metDays` in `src/lib/tracker.ts`: a day is met when the items
-  marked on it reach the day's target. The day names are max(20px, 27u), the rows' name size. `DietSection` does
-  the same against foods a day (K57). Both picks are stored, synced and exported (`dailyPick`,
-  `foodPick`). **Daily goal** (K85), `dailyGoal` beside them, turns all of it off: while it is
+  (K30): `TrackerSection` passes `metDays` to the grid for a tracker with a daily target, which
+  draws the day's name in `pen`, underlined (K60). The rule is `metDays` in `src/lib/tracker.ts`:
+  a day is met when the items marked on it reach the tracker's daily target. The day names are
+  max(20px, 27u), the rows' name size. Each tracker keeps its own target (K123); the `exercise` and
+  `diet` trackers' also stay in the settings `dailyPick` and `foodPick` for older tabs (K57). **Daily goal** (K85), `dailyGoal` beside them, turns all of it off: while it is
   false both grids get no met days and Edit plan shows no Stepper, and the picks are kept. Like
   `goals`, a tab sends it only once it knows it (from the server, its cache or the person):
   `PortableSettings.dailyGoal` is optional, absent reads as on, and the API keeps the saved value
@@ -859,7 +870,8 @@ component's own.
 
 The other cards are composed in the screens: Header in `AppNavbar.vue`, Panel in `AuthCard.vue`
 and `ImportPrompt.vue`, WeekGrid in `TrackerGrid.vue` and `TrackerRow.vue`, PlannerScreen in
-`ExerciseGrid.vue` and `DietSection.vue` (the class lists in `src/lib/screens.ts`), SettingsPage in
+`TrackerSection.vue` (the class lists in `src/lib/screens.ts`), NewTrackerPage in
+`NewTrackerPage.vue`, SettingsPage in
 `SettingsPage.vue`, ConnectionsSection in `ConnectionsSection.vue`, ConnectPage in `ConnectPage.vue`. Icons are `@lucide/vue` at a 1.5px stroke, `aria-hidden` beside words. A
 primitive's colour transitions last 120ms at most, stop under `prefers-reduced-motion`, and name
 the properties they animate, so the focus ring never fades in.
@@ -1003,9 +1015,15 @@ wide) and `short:` (landscape, 540px tall or less).
   transform, never hidden, so its controls stay reachable by Tab.
 - **The arrows between the screens** (K42, K90). A chevron IconButton at the foot of each screen
   but the last, and one pointing up on each screen but the first, on its title's line just under
-  the fixed week. Exercises has "Go to Cardio"; Cardio has "Back to Exercises" and "Go to Food";
-  Food has "Back to Cardio". Each sprints to its screen's top with `sprintToScreen`, by the
-  heading's id. A short screen leaves them out.
+  the fixed week. Each names the tracker it goes to: on a new account Strength has "Go to
+  Cardio"; Cardio has "Back to Strength" and "Go to Food"; Food has "Back to Cardio". Each sprints
+  to its screen's top with `sprintToScreen`, by the heading's id. A short screen leaves them out.
+- **Test ids and heading ids** follow the tracker's id: the heading is `tracker-<id>-heading`
+  (the skip link goes to the first one), the grid `<id>-grid`, the arrows `to-<id>` and
+  `back-to-<id>` (named for the tracker they go to), and in Edit plan the pen `rename-<id>`, its
+  field `name-field-<id>`, the daily target `<id>-a-day`, Add `add-<id>` and Delete tracker
+  `delete-<id>`. The bar's Add tracker is `add-tracker-button`, and the new tracker page
+  `new-tracker-page`, with `new-tracker-name`, `new-tracker-add` and `new-tracker-cancel`.
 - **Settings, Profile and Ask** are pages of their own (`#/settings` with its tabs' `#/settings/<tab>`, `#/profile`, `#/ask`), outside the screens and with
   no bar (K52): each starts with "Back to the week", and leaving one returns focus to the bar button
   that opened it. Ask fills the window (K67, K70): the SidePanel (`h-dvh`) and the page beside it
@@ -1030,14 +1048,15 @@ literal colours the system allows (`src/styles/__tests__/print.spec.ts` holds th
 - Anything marked `data-noprint` is hidden: the navbar and its handle, the arrows between the screens, the sync status,
   the import prompt, Edit plan's controls and Add buttons, and a section's hint line if it has one. Dialogs, the
   popover and Banners carry `print:hidden`.
-- Each section prints on a page of its own (`print:break-before-page` on Cardio and Food, K97),
+- Each tracker prints on a page of its own (`print:break-before-page` on every screen after the
+  first, K97),
   under the week in display: SectionHeader's `week`, shown only on paper. The page's `<h1>`
   (WeekHeader) stays for a screen reader but doesn't print.
 - A met day's name keeps its `pen` and its underline (K60). A table split across pages repeats its
   header.
-- The Cardio and Food sections' headings stay with their grids (`print:break-inside-avoid`), and a
-  section header never ends a page (`print:break-after-avoid`). Cardio prints after Exercises and
-  before Food, set apart by a rule, as Food is.
+- After the first, each tracker's heading stays with its grid (`print:break-inside-avoid`), and a
+  section header never ends a page (`print:break-after-avoid`). The trackers print in the week's
+  order, each after the first set apart by a rule.
 - An item's page prints its head (the type, the name and its chips), its notes and its filled
   details, each detail as its label over its value with no box. Back to the week, the plan, Recent
   weeks, the notes' field and its button are `data-noprint`, and each row prints its heading over

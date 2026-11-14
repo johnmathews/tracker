@@ -7,7 +7,8 @@
 > tools. It is the authority for units W4 to W8 of the 2026-11-14 run. The map of what assumes
 > today's fixed three is in that run's evaluation report.
 
-**Status:** approved by John on 2026-11-14 ("the spec is fine"), with Add tracker in the bar (K124).
+**Status:** implemented on 2026-11-14 (units W4 to W9), as approved by John that day ("the spec is
+fine"), with Add tracker in the bar (K124). K125 and K126 record what the build settled beyond it.
 
 ## 1. What a tracker is
 

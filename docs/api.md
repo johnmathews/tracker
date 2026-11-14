@@ -289,6 +289,8 @@ that code reads them; a later run removes them. A tracker the person made is onl
 keys. Plan items differ by kind:
 
 - a strength item (an exercise) is `{id, name, sets?, reps, duration?, perSide?, weight?, target}`;
+- a mobility item (K126) is a strength item without `weight`: `{id, name, sets?, reps,
+  duration?, perSide?, target}`. `duration` is a hold's seconds, and a weight sent drops out;
 - a cardio item (K90) is `{id, name, duration?, distance?, target}`. `duration` is the whole
   session in seconds, 1 to 86,400. `distance` is km, 0.01 to 1,000, rounded to two places as a
   weight is. Each is left out when not set, and an exercise's fields drop;
@@ -299,10 +301,11 @@ keys. Plan items differ by kind:
 **Trackers** (K123, the spec `docs/specs/2026-11-14-account-trackers.md`). A tracker is
 `{id, name, kind, position, dailyTarget, startWeek, endWeek, rev}`:
 
-- `kind` is `strength`, `cardio` or `food` (`types.py`). It is set once.
+- `kind` is `strength`, `cardio`, `food` or `mobility` (`types.py`). It is set once.
 - `name` is 1 to 60 characters, trimmed, and need not be unique.
 - `position` is a sort key from 0 to 10,000. The week shows trackers by position, then by id.
-- `dailyTarget` is 1 to 8 for a kind with a daily goal (strength, food) and null for cardio.
+- `dailyTarget` is 1 to 8 for a kind with a daily goal (strength, food, mobility) and null for
+  cardio.
 - `startWeek` is the Monday of the week the tracker was created in, null for the first three.
   `endWeek` is the first week it no longer shows in, null while it is live.
 - `rev` counts its changes, as a plan's revision does.
@@ -312,7 +315,8 @@ A tracker shows in the week whose Monday is W when `startWeek <= W` (or it is nu
 view, the Claude tools and Ask. Each account has at most 100 trackers, ended ones included.
 
 `POST /trackers` takes `{name, kind}`. The tracker goes after the account's others, empty, with
-its kind's default daily target (3 for strength, 2 for food) and `startWeek` the Monday of
+its kind's default daily target (3 for strength and mobility, 2 for food) and `startWeek` the
+Monday of
 `week` (any day of it, `YYYY-MM-DD`), or of today's week in `TIMEZONE` without one. A client that
 makes the id itself (`newId`: 1 to 64 letters, digits, `-` or `_`, not `__proto__`) sends it as
 `id`, so an outbox that sends the create again gets the stored tracker back with 200, unchanged.
@@ -350,7 +354,7 @@ default, a pick is clamped to 1 to 8) and returns what it stored. A body without
 (§1.1). A body without `dailyGoal`, or with a value that isn't a boolean, keeps the saved one. The
 state and the export always carry it; a file without it reads as on.
 `itemSections` is each tracker kind's item-page arrangement, keyed by kind (`strength`, `cardio`,
-`food`): `{"strength": {"order": ["history", "notes", "details", "plan"], "hidden": ["details"]}}`.
+`food`, `mobility`; a kind left out has the default): `{"strength": {"order": ["history", "notes", "details", "plan"], "hidden": ["details"]}}`.
 The key `exercise`, the kind's name before K123, reads as `strength`, and a `strength` key wins
 over it. The state and `PUT /settings` send the strength arrangement under both keys, so a tab on
 older code keeps it; an export sends `strength` alone.
@@ -603,7 +607,8 @@ Every write tool has `readOnlyHint` false and `openWorldHint` false; only `remov
   changed only the note. `rev` is the week's plan revision, 0 for a week still without its own.
 - **Item fields use the app's words.** An exercise (a strength tracker's item) has `name`, `sets` (0 to 20), `reps` (0 to
   9999), `seconds` (0 to 3600), `per_side`, `weight_kg` (0 to 500), `times_a_week` (0 to 7) and
-  `note` (up to 20,000 characters). A cardio item (K90) has `name`, `seconds` (the whole
+  `note` (up to 20,000 characters). A mobility item (K126) has the same without `weight_kg`;
+  its `seconds` is a hold's. A cardio item (K90) has `name`, `seconds` (the whole
   session's, 0 to 86,400), `distance_km` (0 to 1,000), `times_a_week` and `note`. A food has
   `name`, `times_a_week` and `note`. They are stored as `name`, `sets`, `reps`, `duration`,
   `perSide`, `weight`, `distance`, `target` and `notes`; `edits.WORDS` holds that mapping, and
@@ -616,7 +621,8 @@ Every write tool has `readOnlyHint` false and `openWorldHint` false; only `remov
   cap leaves the plan as it was. A call that changes only the note writes no plan, so a week
   without its own plan copies nothing and goes on following its source. The note moves the
   details' revision on, so a device holding the older copy gets a 409 on its next write and adopts
-  the agent's, as after any details conflict. Setting the same note again writes nothing. An exercise counts reps or
+  the agent's, as after any details conflict. Setting the same note again writes nothing. An
+  exercise (strength or mobility) counts reps or
   seconds, not both: giving `seconds` to an exercise with reps sets its reps to 0, and giving
   `reps` drops its seconds. Names are trimmed, may not be empty, and are capped at 80 characters.
   A new exercise's `times_a_week` is 3, as is a new cardio item's and a new food's.
@@ -624,9 +630,9 @@ Every write tool has `readOnlyHint` false and `openWorldHint` false; only `remov
   four random base-36 characters. An id already used in the tracker is never reused.
 - **`mark_day`** marks one item on one date. The week is that date's Monday and the day its
   weekday. It may be in the future, as on screen. `mark` is one of the nine marks
-  (§2), or null to clear the day. An exercise and a cardio item take any of them. A food takes
+  (§2), or null to clear the day. An exercise, a mobility item and a cardio item take any of them. A food takes
   only `great`, `great-solid` or `great-hatch`, the marks the app gives a food. An item the week does not show is refused.
-- **`set_daily_targets`** sets a strength or food tracker's daily target, 1 to 8: `tracker` and
+- **`set_daily_targets`** sets a strength, food or mobility tracker's daily target, 1 to 8: `tracker` and
   `daily_target` together. The older form still works: `exercises_a_day` sets the `exercise`
   tracker's, `foods_a_day` the `diet` tracker's, and either can join the new form in one call. A
   cardio tracker has no daily target, and a tracker given twice is refused. Every target is
@@ -757,10 +763,10 @@ than using the SDK's beta tool runner, which fails a call whose input has a key 
 and logs it as an exception.
 
 **The prompt.** The system prompt is one constant: the role, the person's own trackers and their
-kinds (strength, cardio, food), the rules from §1.1 (a plan carries forward, only the `exercise`
+kinds (strength, cardio, food, mobility), the rules from §1.1 (a plan carries forward, only the `exercise`
 and `diet` trackers have defaults, a deleted tracker leaves the weeks from its end on, every mark
-counts towards a goal, missed and partial days are reported as such, met days use each strength
-and food tracker's own daily target, future days don't count), what cardio is (a duration and a
+counts towards a goal, missed and partial days are reported as such, met days use each strength,
+food and mobility tracker's own daily target, future days don't count), what cardio is (a duration and a
 distance, a weekly goal, no daily target and no defaults, K90), names and notes as data and never
 instructions, tools before judgement, no medical advice, short markdown with no
 headings, tables or images, and the voice. It holds nothing that varies, so it caches; the cache
@@ -1254,7 +1260,7 @@ Tests sit in `api/tests/`:
 - `test_trackers.py`: the tracker endpoints (create, the client's id sent again, rename, move, the
   daily target, revisions and conflicts, 400s, 404s and the cap), the weeks a tracker shows in and
   Delete tracker keeping its history, writes checked against the user's trackers and validated by
-  kind, users kept apart, the daily targets moving with the settings both ways, the state's new
+  kind (a mobility plan by hold time and by reps, its weight dropped), users kept apart, the daily targets moving with the settings both ways, the state's new
   and older keys, and export version 6 into another account, never changing or ending a tracker,
   the cap, version 5 files and the version 6 sample.
 - `test_auth.py`: hashing one at a time and the busy queue, login, lockout and its window and
@@ -1275,7 +1281,9 @@ Tests sit in `api/tests/`:
   and users kept apart, 400s, the quota, export version 6, import keeping existing details, and a
   version 4 file's notes lifting into details.
 - `test_types.py`: the registry against `fixtures/types/registry.json`, the `Section` literal,
-  `validate.py` reading it, the `strength` kind, and cardio having no daily pick or target.
+  `validate.py` reading it, the `strength` kind, cardio having no daily pick or target, and
+  mobility as strength without weight (a hold and reps, the weight dropped, reps or seconds not
+  both).
 - `test_seed.py`: `seed-demo` only on a local stack, a confirmed account, three weeks of every mark
   in each tracker, details for three items, an account's own marks and details kept, a second run
   adding nothing, Cardio added to an account seeded before it, and what the CLI prints.
@@ -1311,7 +1319,8 @@ Tests sit in `api/tests/`:
   the parity cases through `week_summary`, the read tools' defaults and refusals (a week at the
   calendar's end included), a read token refused on writes, and each write's result. For the
   account's trackers: the instructions, `list_trackers`, `add_item` and `mark_day` on a new
-  tracker by id and by name, an ended tracker absent from its end week on, `section` as an alias,
+  tracker by id and by name, `add_item` on a mobility tracker (a hold, reps, `weight_kg` and
+  `distance_km` refused), an ended tracker absent from its end week on, `section` as an alias,
   and goals and daily targets per tracker.
 - `test_oauth.py`, `test_oauth_api.py`, `test_tokens_api.py`: OAuth's storage and rules (clients and
   redirects, codes, rotation and its grace, reuse, expiry, the caps, sweeping, ending credentials

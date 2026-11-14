@@ -129,11 +129,15 @@ hand.
 
 `npm run test:e2e` runs the Playwright suite in `e2e/` against its own dev server (port 5179, with
 `PLAYWRIGHT=1`, which turns the Vue DevTools overlay off). `/api` is mocked with `page.route` and the
-clock is fixed to Wednesday 21 October 2026, so every run sees the same week.
+clock is fixed to Wednesday 21 October 2026, so every run sees the same week. The mock
+(`e2e/support.ts`) answers `GET /api/state` as a version 6 state and keeps the tracker, plan,
+mark and details writes, so a later read returns what the app wrote.
 
 - `a11y.spec.ts`: axe (WCAG 2.0–2.2 A and AA plus best practice) on the style guide in both themes,
-  and on the app's (its mocked week holds every kind of mark) week view, the bar called up, Edit plan, Settings on each of its tabs (K119), an item's page (desktop with its notes being edited, folded at 390px, and while arranging at both sizes, with nothing scrolling sideways), a cardio item's page with its pen and Remove, and renaming one in Edit plan (K120, K121), the new item page (K104), the Ask page (an answer with the history beside it, its Delete all question open, and at 375px with the history drawer open), the folded week at 375px,
-  sign-in, and create an account (empty and with errors showing), in light and dark; and the focus ring's shape, a solid 2px outline at 2px offset. Two
+  and on the app's (its mocked week holds every kind of mark) week view, the bar called up, Edit plan, Settings on each of its tabs (K119), an item's page (desktop with its notes being edited, folded at 390px, and while arranging at both sizes, with nothing scrolling sideways), a cardio item's page with its pen and Remove, and renaming one in Edit plan (K120, K121), the new item page (K104), the new tracker page with Mobility chosen and its name asked for (desktop and folded at 390px, K124), the Delete tracker dialog (K122), a tracker being renamed in Edit plan, the Ask page (an answer with the history beside it, its Delete all question open, and at 375px with the history drawer open), the folded week at 375px,
+  sign-in, and create an account (empty and with errors showing), in light and dark. The style
+  guide's run first finds its tracker sections on the page: SectionHeader in Edit plan with its
+  pen and Delete tracker, and the new tracker page's four kinds; and the focus ring's shape, a solid 2px outline at 2px offset. Two
   "dark really is dark" tests guard the audit: on the style guide and on the app, the `.dark` class
   must be set and `--canvas` must differ from light, so a dark audit can never quietly re-run
   light.
@@ -164,8 +168,8 @@ clock is fixed to Wednesday 21 October 2026, so every run sees the same week.
   the arrangement reaches the mocked server's settings, every exercise's page follows, a food's
   page doesn't, and a reload reads it back. Folded, each section's controls sit on its heading's
   line. The mock keeps `PUT /api/settings` and returns it from `GET /api/state`, as the API does.
-- `screens.spec.ts`: a tall Exercises screen and a tall Food screen (`openApp`'s `moreExercises`
-  and `moreFoods`), wheel-scrolled down and back up a notch at a time at 1280×800: the page never
+- `screens.spec.ts`: a tall Strength screen, a tall Cardio screen and a tall Food screen
+  (`openApp`'s `moreExercises`, `moreCardio` and `moreFoods`), wheel-scrolled down and back up a notch at a time at 1280×800: the page never
   rests showing part of both, and it reaches Food (K38); a rotation (and back, and a phone on
   its side) never leaves it resting across two screens (K40); a short trackpad fling reaches
   Food before the fling has ended (K45); each resting place is measured from the fixed week's foot
@@ -173,14 +177,23 @@ clock is fixed to Wednesday 21 October 2026, so every run sees the same week.
   In Edit plan each screen is at least the window less the bar, a mouse wheel's notches never rest
   across two, and Cardio and then Food (by the arrow) rest just under the sticky bar (K99).
   Cardio's two rows stop at 82u, from the top of their screen, the arrow at its foot (K110, K114);
-  each Add sits at the end of its title line (K113); Edit plan's frame is 8px of `edit` round the
-  window and a press on it lands on the page (K112); after Add the page rests on Exercises, not
+  each tracker's Add, then Delete tracker, ends its title line (K113, K122); print gives each
+  tracker the week shows a page of its own (K97); Edit plan's frame is 8px of `edit` round the
+  window and a press on it lands on the page (K112); after Add the page rests on Strength, not
   Cardio (K111); and Edit plan on and off keeps Cardio, then Food, just under the band (K115).
 - `touch.spec.ts`: a phone held upright (390×844, `isMobile`, `hasTouch`), the browser snapping. Real
   flings through `Input.dispatchTouchEvent` (a touch start, ten moves a frame apart, and the lift
   while still moving; `Input.synthesizeScrollGesture` scrolls nothing in headless Linux): a fling up
-  from Cardio onto a tall Exercises ends at its top, in one movement, never turning back or setting
+  from Cardio onto a tall Strength ends at its top, in one movement, never turning back or setting
   off again after slowing (K116, K118); and Edit plan's frame is 4px there (K117).
+- `trackers.spec.ts`: the account's own trackers (K122–K126). Add tracker in Edit plan's bar
+  opens the new tracker page; a new tracker shows last with its name, focus on its Add, and the
+  tracker before it gains an arrow to it. Its pen renames it: Enter saves, Escape restores, and
+  Edit plan stays on. Cancel adds nothing, and an empty name is asked for. A Mobility tracker
+  made in the week before takes an item by hold time with no Weight field, is marked, carries
+  into this week, and Delete tracker takes it off this week and the next while the week before
+  keeps it with its mark. At 375px Add tracker sits on the folded bar's second line beside
+  Settings, and the new tracker page, its four kinds in view, scrolls nothing sideways.
 
 CI (`.github/workflows/ci.yml`) runs three jobs on every pull request and every push to `main`.
 `check` runs lint, format, types, unit tests with coverage, the build, the design gate and
@@ -246,7 +259,8 @@ listed in [api.md](api.md) §10):
   run every case, and the web spec also covers showing, hiding and moving a section.
 - `src/lib/__tests__/trackerTypes.spec.ts`: also each type's cycle, which `cycleFor` reads, its
   labels, an exercise's chips, cardio's time and distance and a food's none, cardio's missing daily
-  target, the week's order (Exercises, Cardio, Food) and `isSection`.
+  target, mobility (its words, an exercise's plan without weight, its marks and daily target), the
+  first three trackers' order (Strength, Cardio, Food) and `isSection`.
 - `src/lib/__tests__/history.spec.ts`: an item's recent weeks (eight ending with the opened week,
   newest first, none before its first plan, goals from the plan each week shows, the default plan
   when nothing is planned), the latest plan holding an item, a week's count and whether it met its
@@ -475,7 +489,7 @@ listed in [api.md](api.md) §10):
   arriving while editing), details (the type's fields, the 500 limit, the Link's "Open … in a new
   tab", printing filled fields), this week's plan (each change applied at once, a number that isn't
   valid, another week, a food's goal, a cardio item's Minutes and Distance in km with their limits,
-  K90), an item not in the week (its latest plan, read-only), the name's pen and Remove
+  K90, a mobility item's fields without Weight, K126), an item not in the week (its latest plan, read-only), the name's pen and Remove
   (K120, K121: the same title, pen and chips with Edit plan on and off; the pen turning the title
   into a field in its type with the name selected, saving on Enter and on Done for every type,
   Escape putting the old name back, "Enter a name." for an empty name, a rename from elsewhere, and
@@ -485,7 +499,8 @@ listed in [api.md](api.md) §10):
   Move down, focus kept on the moved section's button, the ends, Escape, every section hidden).
 - `src/components/__tests__/NewItemPage.spec.ts`: the new item page (K104): an empty Name, one set
   of one rep three times a week, the type's arrangement with the plan always shown, another week's
-  heading and line, adding an exercise (timed and each side too), a cardio item and a food with
+  heading and line, adding an exercise (timed and each side too), a mobility item by hold time
+  with no Weight field (K126), a cardio item and a food with
   their notes and details, nothing added without a name, over a number's limit or with notes or a
   detail too long (focus on the field), and Cancel going back through history.
 - `src/components/__tests__/RecentWeeks.spec.ts`: the list labelled by its heading, newest first,
@@ -512,15 +527,16 @@ listed in [api.md](api.md) §10):
   context menu kept back, the handle's press and pull opening Edit plan, Escape taking focus out
   of the floating bar, and the four arrows between the three screens, named for where they go
   and each sprinting to its screen (K42, K90).
-- `src/components/__tests__/DietSection.spec.ts`: the diet section in the mounted app: default
-  foods, ticking (totals checked in the store), shared week navigation, Add food opening the new
-  item page and adding there (K104), no Remove on the row and removing from the food's page (after
-  a confirmation, K120), cross-tab sync.
-- `src/components/__tests__/CardioSection.spec.ts`: the Cardio section in the mounted app (K90):
-  between Exercises and Food and empty for an account with none, the time and distance chips, no
-  day turning green and no daily target in Edit plan, the exercise's marks, Add cardio opening
-  the new item page (K104: cleaned Minutes and Distance in km, notes), and removing from the
-  item's page after a confirmation (K120).
+- `src/components/__tests__/TrackerSection.spec.ts`: one TrackerSection per tracker in the
+  mounted app (K123): the first three in order with their heading ids (`tracker-<id>-heading`),
+  grids (`<id>-grid`), arrows (`to-<id>`, `back-to-<id>`) and kinds; four trackers, a new one
+  last; adding items by kind (each kind's Add words, the new item page); renaming with the pen
+  (K121, K124: Enter and Done save, Escape restores, an empty name refused, Edit plan kept);
+  Delete tracker (K122: asking first, gone from this week and the weeks after, the week before
+  keeping it with its marks, focus on the next tracker's Add or the bar's Add tracker); the skip
+  link going to the first tracker; and Add tracker and the new tracker page (K124, K125: the
+  registry's kinds with their lines, Mobility included, a name asked for, the cap, adding last
+  from the week on screen with focus on its Add, Cancel and Back adding nothing).
 
 `vitest.config.ts` sets coverage thresholds (100% lines and functions, 99% statements, 98%
 branches), so `npm run test:coverage` and CI fail when coverage drops below them. Coverage covers
