@@ -145,13 +145,12 @@ def require_local(config: Config) -> None:
 
 
 def demo_file(today: date) -> str:
-    """The demo weeks as an export file, ending this week; days after `today` stay empty."""
+    """The demo weeks as an export file of the current version, ending this week; days after
+    `today` stay empty. It fills the first three trackers, which every account has."""
     monday = today - timedelta(days=today.weekday())
     weeks = [monday - timedelta(weeks=2), monday - timedelta(weeks=1), monday]
 
-    def section(
-        items: list[dict[str, object]], marks: list[Week], details: dict[str, dict[str, object]]
-    ) -> dict[str, object]:
+    def section(items: list[dict[str, object]], marks: list[Week]) -> dict[str, object]:
         log: dict[str, Week] = {}
         for start, days_by_item in zip(weeks, marks, strict=True):
             week = start.isoformat()
@@ -161,15 +160,22 @@ def demo_file(today: date) -> str:
                 ]
                 for item, days in days_by_item.items()
             }
-        return {"plans": {w.isoformat(): items for w in weeks}, "log": log, "details": details}
+        return {"plans": {w.isoformat(): items for w in weeks}, "log": log}
 
     return json.dumps(
         {
             "format": EXPORT_FORMAT,
             "version": EXPORT_VERSION,
-            "exercise": section(EXERCISES, EXERCISE_WEEKS, EXERCISE_DETAILS),
-            "cardio": section(CARDIO, CARDIO_WEEKS, CARDIO_DETAILS),
-            "diet": section(FOODS, FOOD_WEEKS, FOOD_DETAILS),
+            "sections": {
+                "exercise": section(EXERCISES, EXERCISE_WEEKS),
+                "cardio": section(CARDIO, CARDIO_WEEKS),
+                "diet": section(FOODS, FOOD_WEEKS),
+            },
+            "details": {
+                "exercise": EXERCISE_DETAILS,
+                "cardio": CARDIO_DETAILS,
+                "diet": FOOD_DETAILS,
+            },
             "settings": {"accent": "#30d158", "dailyPick": 3, "foodPick": 2, "dailyGoal": True},
         }
     )

@@ -2,6 +2,7 @@ import json
 import sqlite3
 from dataclasses import replace
 from datetime import date, datetime
+from typing import Any
 
 import pytest
 
@@ -28,6 +29,12 @@ def today(config: Config) -> date:
 
 def user_id(conn: sqlite3.Connection, email: str) -> int:
     return int(conn.execute("SELECT id FROM users WHERE username = ?", (email,)).fetchone()["id"])
+
+
+def tracked(conn: sqlite3.Connection, local: Config, uid: int, tracker_id: str) -> dict[str, Any]:
+    """One tracker's plans, log and details from the account's export."""
+    exported = export_file(conn, uid, local.clock())
+    return {**exported["sections"][tracker_id], "details": exported["details"][tracker_id]}
 
 
 @pytest.mark.parametrize(
@@ -74,13 +81,13 @@ def test_fills_three_weeks_ending_today_with_every_kind_and_drawing(
     assert result["weeks"] == 9
     exported = export_file(conn, user_id(conn, seed.DEMO_EMAIL), local.clock())
     data = parse_export(json.dumps(exported))
-    weeks = sorted(data["exercise"]["plans"])
+    weeks = sorted(data["sections"]["exercise"]["plans"])
     assert len(weeks) == 3
     assert date.fromisoformat(weeks[-1]).weekday() == 0
     marks = {
         m
         for section in ("exercise", "cardio", "diet")
-        for week in data[section]["log"].values()
+        for week in data["sections"][section]["log"].values()
         for days in week.values()
         for m in days
         if m is not None
@@ -101,10 +108,10 @@ def test_gives_demo_items_details_for_the_item_page(
     local: Config, conn: sqlite3.Connection
 ) -> None:
     seed.seed(conn, local, seed.DEMO_EMAIL, None)
-    exported = export_file(conn, user_id(conn, seed.DEMO_EMAIL), local.clock())
+    uid = user_id(conn, seed.DEMO_EMAIL)
     demo: tuple[tuple[Section, str], ...] = (("exercise", "pu"), ("cardio", "ru"), ("diet", "fish"))
     for section, item_id in demo:
-        details = exported[section]["details"][item_id]
+        details = tracked(conn, local, uid, section)["details"][item_id]
         assert details["fields"]
         # Every demo field is one the type lists, so the page shows it.
         keys = {f.key for f in SECTION_TYPES[section].fields}
@@ -116,16 +123,16 @@ def test_keeps_an_accounts_own_details(local: Config, conn: sqlite3.Connection) 
     mine = {"notes": "My own push-up note."}
     put_details(conn, uid, "exercise", "pu", mine, 0, quota=local.user_quota_bytes)
     seed.seed(conn, local, "alice@example.com", None)
-    details = export_file(conn, uid, local.clock())["exercise"]["details"]
+    details = tracked(conn, local, uid, "exercise")["details"]
     assert details["pu"] == mine
 
 
 def test_leaves_the_days_after_today_empty(local: Config, conn: sqlite3.Connection) -> None:
     seed.seed(conn, local, seed.DEMO_EMAIL, None)
-    data = export_file(conn, user_id(conn, seed.DEMO_EMAIL), local.clock())
+    log = tracked(conn, local, user_id(conn, seed.DEMO_EMAIL), "exercise")["log"]
     day = today(local)
-    this_week = max(data["exercise"]["log"])
-    for days in data["exercise"]["log"][this_week].values():
+    this_week = max(log)
+    for days in log[this_week].values():
         assert all(m is None for m in days[day.weekday() + 1 :])
 
 
@@ -148,7 +155,7 @@ def test_an_existing_account_keeps_its_password_and_its_own_marks(
     result = seed.seed(conn, local, "alice@example.com", "ignored password")
     assert not result["created"]
     assert auth.login(conn, local, "alice@example.com", "her own password") == uid
-    log = export_file(conn, uid, local.clock())["exercise"]["log"]
+    log = tracked(conn, local, uid, "exercise")["log"]
     assert log[week]["pu"][0] == "missed"
 
 
@@ -195,11 +202,11 @@ def test_adds_cardio_to_an_account_from_before_it(local: Config, conn: sqlite3.C
     uid = user_id(conn, seed.DEMO_EMAIL)
     for table in ("plans", "ticks", "item_details"):
         conn.execute(f"DELETE FROM {table} WHERE section = 'cardio'")  # noqa: S608
-    before = export_file(conn, uid, local.clock())
+    before = {s: tracked(conn, local, uid, s) for s in ("exercise", "cardio", "diet")}
     assert before["cardio"] == {"plans": {}, "log": {}, "details": {}}
     again = seed.seed(conn, local, seed.DEMO_EMAIL, None)
     assert (again["weeks"], again["details"]) == (3, 1)
-    after = export_file(conn, uid, local.clock())
+    after = {s: tracked(conn, local, uid, s) for s in ("exercise", "cardio", "diet")}
     assert {k: after[k] for k in ("exercise", "diet")} == {
         k: before[k] for k in ("exercise", "diet")
     }
