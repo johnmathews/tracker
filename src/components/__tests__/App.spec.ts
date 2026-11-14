@@ -124,7 +124,7 @@ async function saveSettings(): Promise<void> {
 }
 
 /** A daily target as Edit plan's Stepper on its section's title line shows it (K56). */
-function target(testid: 'exercises-a-day' | 'foods-a-day'): string | undefined {
+function target(testid: 'exercise-a-day' | 'diet-a-day'): string | undefined {
   return wrapper.get(`[data-testid="${testid}"] [role="spinbutton"]`).attributes('aria-valuenow')
 }
 
@@ -139,9 +139,9 @@ async function askRemove(section: string, id: string): Promise<void> {
   await settle()
 }
 
-/** Opens the new item page from the Add button under a grid (K104). */
-async function openAdd(kind: 'exercise' | 'food' = 'exercise') {
-  await wrapper.get(`[data-testid="add-${kind}"]`).trigger('click')
+/** Opens the new item page from a tracker's Add button, on its title line (K104, K113). */
+async function openAdd(tracker = 'exercise') {
+  await wrapper.get(`[data-testid="add-${tracker}"]`).trigger('click')
   await settle()
   return wrapper.get('[data-testid="new-item-page"]')
 }
@@ -428,7 +428,7 @@ describe('the addresses that name a tracker (K123, K124)', () => {
     expect(page.get('h1').text()).toBe('New exercise')
     await page.get('[data-testid="new-name-field"]').setValue('Rows')
     await submit(page)
-    // Back on the week: no Add button of its own to take focus yet (W7 draws one per tracker).
+    // Back on the week, outside Edit plan: there is no Add button to take focus.
     expect(location.hash).toBe('#/')
     expect(wrapper.find('[data-testid="new-item-page"]').exists()).toBe(false)
     expect(
@@ -438,12 +438,14 @@ describe('the addresses that name a tracker (K123, K124)', () => {
     ).toEqual(['Dips', 'Rows'])
   })
 
-  it('keeps the new tracker page’s address, showing the week until the page exists', async () => {
+  it('opens the new tracker page at its address, with no bar (K124)', async () => {
     history.replaceState(null, '', '/#/new-tracker')
     mountApp()
     await settle()
     expect(location.hash).toBe('#/new-tracker')
-    expect(wrapper.find('[data-testid="exercise-grid"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="new-tracker-page"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="exercise-grid"]').exists()).toBe(false)
+    expect(wrapper.find('[data-slot="bar"]').exists()).toBe(false)
   })
 })
 
@@ -1017,8 +1019,8 @@ describe('export and import', () => {
     expect(usePlannerStore().accent).toBe(EXPORT.settings.accent)
     await backToWeek()
     await wrapper.get('[data-testid="edit-plan-button"]').trigger('click')
-    expect(target('exercises-a-day')).toBe('2')
-    expect(target('foods-a-day')).toBe('4')
+    expect(target('exercise-a-day')).toBe('2')
+    expect(target('diet-a-day')).toBe('4')
   })
 
   it('uses the singular for one plan and one tick', async () => {
@@ -1377,10 +1379,10 @@ describe('config mode and weekly plans', () => {
     expect(wrapper.find('button[aria-label^="Remove"]').exists()).toBe(false)
     expect(wrapper.find('button[aria-label^="Raise"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="add-exercise"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="add-food"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="add-diet"]').exists()).toBe(false)
     expect(button('Copy plan to next week')).toBeUndefined()
-    expect(wrapper.find('[data-testid="exercises-a-day"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="foods-a-day"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="exercise-a-day"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="diet-a-day"]').exists()).toBe(false)
 
     await rowCells('Squats')[0]!.trigger('click')
     expect(rowCells('Squats')[0]!.attributes('aria-pressed')).toBe('true')
@@ -1394,7 +1396,7 @@ describe('config mode and weekly plans', () => {
     expect(wrapper.find('button[aria-label="Edit Squats"]').exists()).toBe(false)
     // No Remove on the rows either: an item comes off the week on its page (K120).
     expect(wrapper.find('button[aria-label^="Remove"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="add-food"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="add-diet"]').exists()).toBe(true)
   })
 
   it('fixes the week above the screens once, as the page’s h1, with a hairline under it once scrolled (K88)', async () => {
@@ -1404,7 +1406,7 @@ describe('config mode and weekly plans', () => {
     expect(band.get('h1').text()).toBe('19–25 October')
     // Before the screens, so it is not bound inside the first one.
     expect(band.element.nextElementSibling?.getAttribute('aria-labelledby')).toBe(
-      'exercises-heading',
+      'tracker-exercise-heading',
     )
     expect(band.classes()).toEqual(
       expect.arrayContaining([
@@ -1434,20 +1436,22 @@ describe('config mode and weekly plans', () => {
     expect(button('Copy plan to next week')).toBeUndefined()
     const header = (id: string) => wrapper.get(`#${id}`).element.closest('header')!
     expect(
-      header('exercises-heading').querySelector('[data-testid="exercises-a-day"]'),
+      header('tracker-exercise-heading').querySelector('[data-testid="exercise-a-day"]'),
     ).not.toBeNull()
-    expect(header('diet-heading').querySelector('[data-testid="foods-a-day"]')).not.toBeNull()
-    expect([target('exercises-a-day'), target('foods-a-day')]).toEqual(['3', '2'])
+    expect(
+      header('tracker-diet-heading').querySelector('[data-testid="diet-a-day"]'),
+    ).not.toBeNull()
+    expect([target('exercise-a-day'), target('diet-a-day')]).toEqual(['3', '2'])
     // Centred on the title line (K62): the Stepper alone, reading "2 per day" (K63), its label
     // kept for a screen reader. On screen the line is three columns like the Header's.
-    const foods = wrapper.get('[data-testid="foods-a-day"]')
+    const foods = wrapper.get('[data-testid="diet-a-day"]')
     expect(foods.get('label').text()).toBe('Foods a day')
     expect(foods.get('label').classes()).toContain('sr-only')
     expect(foods.get('[data-slot="stepper-suffix"]').text()).toBe('per day')
-    expect(header('diet-heading').className).toContain(
+    expect(header('tracker-diet-heading').className).toContain(
       'screen:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]',
     )
-    expect(header('diet-heading').className).toContain('folded:flex')
+    expect(header('tracker-diet-heading').className).toContain('folded:flex')
   })
 
   it('keeps each daily target to 1–8 and saves it', async () => {
@@ -1455,11 +1459,11 @@ describe('config mode and weekly plans', () => {
     const fewer = wrapper.get('button[aria-label="Fewer exercises a day"]')
     for (let i = 0; i < 3; i++) await fewer.trigger('click')
     expect(fewer.attributes('aria-disabled')).toBe('true')
-    expect(target('exercises-a-day')).toBe('1')
+    expect(target('exercise-a-day')).toBe('1')
     const more = wrapper.get('button[aria-label="More foods a day"]')
     for (let i = 0; i < 8; i++) await more.trigger('click')
     expect(more.attributes('aria-disabled')).toBe('true')
-    expect(target('foods-a-day')).toBe('8')
+    expect(target('diet-a-day')).toBe('8')
     await settle()
     // The targets are the trackers' (K123); no settings are saved for them.
     expect(api.tracker(USER, 'exercise')!.dailyTarget).toBe(1)
@@ -1516,14 +1520,14 @@ describe('config mode and weekly plans', () => {
 
   it('opens Add as a page with no bar, and comes back with focus on that Add button (K104)', async () => {
     await mountConfig()
-    const add = await openAdd('food')
+    const add = await openAdd('diet')
     expect(location.hash).toBe('#/new/diet')
     expect(wrapper.find('[data-slot="bar"]').exists()).toBe(false)
     expect(add.get('h1').text()).toBe('New food')
     await add.get('[data-testid="new-name-field"]').setValue('Beans')
     await submit(add)
     expect(location.hash).toBe('')
-    expect(document.activeElement).toBe(wrapper.get('[data-testid="add-food"]').element)
+    expect(document.activeElement).toBe(wrapper.get('[data-testid="add-diet"]').element)
     // Signing out from the page lands on the sign-in screen, and the address forgets it.
     await openAdd()
     await useSessionStore().logout()

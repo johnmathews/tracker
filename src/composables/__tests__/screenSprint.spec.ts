@@ -1338,8 +1338,8 @@ describe('useScreenSprint', () => {
     band()
     document
       .querySelectorAll('[data-planner-screen]')[1]!
-      .setAttribute('aria-labelledby', 'diet-heading')
-    sprintToScreen('diet-heading')
+      .setAttribute('aria-labelledby', 'tracker-diet-heading')
+    sprintToScreen('tracker-diet-heading')
     expect(landed()).toBe(1220)
   })
 

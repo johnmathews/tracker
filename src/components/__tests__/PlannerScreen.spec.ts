@@ -138,21 +138,25 @@ describe('the planner’s screens (K24–K27)', () => {
     // The bar's height is there for main.css: each screen is the window less the bar.
     expect(document.documentElement.style.getPropertyValue('--bar-height')).toMatch(/^\d+px$/)
     // Each tracker is a screen, at least the window less the bar, from the top (option B).
-    for (const id of ['exercises-heading', 'cardio-heading', 'diet-heading']) {
+    for (const id of [
+      'tracker-exercise-heading',
+      'tracker-cardio-heading',
+      'tracker-diet-heading',
+    ]) {
       const section = wrapper.get(`section[aria-labelledby="${id}"]`)
       expect(section.attributes('data-planner-screen')).toBeDefined()
       expect(section.classes()).toContain('edit:min-h-[calc(100dvh-var(--bar-height,0px))]')
       expect(section.classes()).not.toContain('edit:justify-center')
     }
     // The arrows show in Edit plan; the way on keeps to the screen's foot (K114).
-    for (const id of ['to-cardio', 'to-food', 'to-exercises', 'back-to-cardio']) {
+    for (const id of ['to-cardio', 'to-diet', 'back-to-exercise', 'back-to-cardio']) {
       expect(wrapper.get(`[data-testid="${id}"]`).classes()).toContain('edit:inline-flex')
     }
     const wayOn = wrapper.get('[data-testid="to-cardio"]').element.parentElement!
     expect(wayOn.className).toContain('edit:mt-auto')
     // Each Add is at the end of its title line (K113), not beside the way on.
     expect(wayOn.querySelector('[data-add]')).toBeNull()
-    for (const add of ['add-exercise', 'add-cardio', 'add-food']) {
+    for (const add of ['add-exercise', 'add-cardio', 'add-diet']) {
       const slot = wrapper
         .get(`[data-testid="${add}"]`)
         .element.closest('[data-slot="section-end"]')
@@ -655,16 +659,18 @@ describe('the planner’s screens (K24–K27)', () => {
     const scrollTo = vi.fn<(options: ScrollToOptions) => void>()
     window.scrollTo = scrollTo as unknown as typeof window.scrollTo
     // Three screens a screen apart (K90): Exercises, Cardio, Food.
-    const tops: Record<string, number> = { exercises: 0, cardio: 800, diet: 1600 }
+    const tops: Record<string, number> = { exercise: 0, cardio: 800, diet: 1600 }
     for (const [id, top] of Object.entries(tops)) {
-      const screen = document.querySelector<HTMLElement>(`[aria-labelledby="${id}-heading"]`)!
+      const screen = document.querySelector<HTMLElement>(
+        `[aria-labelledby="tracker-${id}-heading"]`,
+      )!
       screen.getBoundingClientRect = () => ({ top: top - window.scrollY }) as DOMRect
     }
     const arrows: [testid: string, label: string, to: number][] = [
       ['to-cardio', 'Go to Cardio', 800],
-      ['to-food', 'Go to Food', 1600],
+      ['to-diet', 'Go to Food', 1600],
       ['back-to-cardio', 'Back to Cardio', 800],
-      ['to-exercises', 'Back to Exercises', 0],
+      ['back-to-exercise', 'Back to Strength', 0],
     ]
     for (const [testid, label, to] of arrows) {
       const arrow = wrapper.get(`[data-testid="${testid}"]`)

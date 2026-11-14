@@ -269,7 +269,7 @@ describe('the planner grids (W10)', () => {
         // The PlannerScreen's arrows between the screens (K42); the handle is for a finger only.
         // Cardio's grid, empty until something is planned (K90), has no stop of its own.
         'Go to Cardio',
-        'Back to Exercises',
+        'Back to Strength',
         'Go to Food',
         'Back to Cardio',
         'Vegetables, Friday 23 October, today',
@@ -367,13 +367,15 @@ describe('the planner grids (W10)', () => {
     it('gives each section an h2 and no hint line', () => {
       mountApp()
       const sections = wrapper.findAll('section[aria-labelledby]')
-      expect(sections.map((s) => s.get('h2').text())).toEqual(['Exercises', 'Cardio', 'Food'])
+      expect(sections.map((s) => s.get('h2').text())).toEqual(['Strength', 'Cardio', 'Food'])
       expect(wrapper.find('[data-slot="section-hint"]').exists()).toBe(false)
     })
 
     it('keeps the Cardio heading with its grid on paper, apart from Exercises (K90)', () => {
       mountApp()
-      const header = wrapper.get('#cardio-heading').element.closest('[data-slot="section-header"]')!
+      const header = wrapper
+        .get('#tracker-cardio-heading')
+        .element.closest('[data-slot="section-header"]')!
       expect(header.classList).toContain('print:break-after-avoid')
       const grid = wrapper.get('[data-testid="cardio-grid"]').element
       const block = grid.closest('[data-print-keep]')!
@@ -387,9 +389,9 @@ describe('the planner grids (W10)', () => {
       mountApp()
       const sections = wrapper.findAll('section[data-planner-screen]')
       expect(sections.map((s) => s.attributes('aria-labelledby'))).toEqual([
-        'exercises-heading',
-        'cardio-heading',
-        'diet-heading',
+        'tracker-exercise-heading',
+        'tracker-cardio-heading',
+        'tracker-diet-heading',
       ])
       for (const [i, section] of sections.entries()) {
         const week = section.get('[data-slot="section-week"]')
@@ -404,7 +406,9 @@ describe('the planner grids (W10)', () => {
 
     it('keeps the Food heading with its grid on paper', () => {
       mountApp()
-      const header = wrapper.get('#diet-heading').element.closest('[data-slot="section-header"]')!
+      const header = wrapper
+        .get('#tracker-diet-heading')
+        .element.closest('[data-slot="section-header"]')!
       expect(header.classList).toContain('print:break-after-avoid')
       const block = diet().element.closest('[data-print-keep]')!
       expect(block.contains(header)).toBe(true)

@@ -40,8 +40,6 @@ const ids = { form: useId(), name: useId(), plan: useId(), notes: useId(), detai
 const type = computed(() => trackers.typeOf(props.section))
 /** The plan's fields to show: a strength item's are an exercise's. */
 const kind = computed(() => (type.value.id === 'strength' ? 'exercise' : type.value.id))
-/** "Add exercise", "Add cardio", "Add food": the Add button's words, as Edit plan's. */
-const addLabel = computed(() => `Add ${type.value.itemLabel.toLowerCase()}`)
 
 /**
  * The sections the new item can fill: the plan always, first unless the type's arrangement moves
@@ -199,7 +197,7 @@ async function add(): Promise<void> {
         >
         <div class="flex items-center gap-[calc(var(--u)*12)]">
           <Button variant="quiet" data-testid="new-cancel" @click="leaveForWeek">Cancel</Button>
-          <Button type="submit" variant="primary" data-testid="new-add">{{ addLabel }}</Button>
+          <Button type="submit" variant="primary" data-testid="new-add">{{ type.addLabel }}</Button>
         </div>
       </div>
       <h1

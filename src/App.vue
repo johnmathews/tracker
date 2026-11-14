@@ -6,9 +6,8 @@ import WeekHeader from '@/components/WeekHeader.vue'
 import SettingsPage from '@/components/SettingsPage.vue'
 import ProfilePage from '@/components/ProfilePage.vue'
 import AskPage from '@/components/AskPage.vue'
-import ExerciseGrid from '@/components/ExerciseGrid.vue'
-import CardioSection from '@/components/CardioSection.vue'
-import DietSection from '@/components/DietSection.vue'
+import TrackerSection from '@/components/TrackerSection.vue'
+import NewTrackerPage from '@/components/NewTrackerPage.vue'
 import LoginForm from '@/components/LoginForm.vue'
 import PasswordForm from '@/components/PasswordForm.vue'
 import SignupForm from '@/components/SignupForm.vue'
@@ -121,13 +120,10 @@ const settingsTab = ref(parseSettingsHash(location.hash) ?? 'appearance')
 let leftItem: ItemRoute | null = null
 /**
  * The page on screen: Ask only while the API answers questions (F10). Until the flag has loaded
- * the week shows and `#/ask` stays, so a remembered Ask page opens once the flag says yes. The new
- * tracker page has its address but no page yet: the week shows.
+ * the week shows and `#/ask` stays, so a remembered Ask page opens once the flag says yes.
  */
-const shown = computed<Exclude<Page, 'new-tracker'>>(() =>
-  (page.value === 'ask' && session.ask !== true) || page.value === 'new-tracker'
-    ? 'planner'
-    : page.value,
+const shown = computed<Page>(() =>
+  page.value === 'ask' && session.ask !== true ? 'planner' : page.value,
 )
 function onHash(): void {
   link.value = linkToken()
@@ -143,7 +139,7 @@ function onHash(): void {
   settingsTab.value = parseSettingsHash(location.hash) ?? settingsTab.value
   page.value = pageFor()
   // Opened from the week in this tab: its Back goes back through history (lib/routes).
-  if ((page.value === 'item' || page.value === 'new') && before === 'planner') markFromWeek()
+  if (['item', 'new', 'new-tracker'].includes(page.value) && before === 'planner') markFromWeek()
 }
 /** Drop the page from the address bar, so a reload opens the week. */
 function forgetPage(): void {
@@ -154,22 +150,29 @@ function forgetPage(): void {
 }
 // Back from Settings, Profile or Ask, focus returns to the bar button that opened it (Profile's is
 // the menu's trigger, K106); back from an item's page, to that item's name in its row (WeekGrid
-// card); back from the new item page, to its section's Add button, ready for the next (K104).
-const OPENERS: Record<'settings' | 'profile' | 'ask', string> = {
+// card); back from the new item page, to its tracker's Add button, ready for the next (K104); back
+// from the new tracker page, to the new tracker's Add button, or to Add tracker when none was added
+// (K124).
+const OPENERS: Record<'settings' | 'profile' | 'ask' | 'new-tracker', string> = {
   settings: 'settings-button',
   profile: 'profile-button',
   ask: 'ask-button',
+  'new-tracker': 'add-tracker-button',
 }
-const ADDS: Readonly<Record<string, string>> = {
-  exercise: 'add-exercise',
-  cardio: 'add-cardio',
-  diet: 'add-food',
+/** A tracker's Add button on the week, found by its section's heading (TrackerSection). */
+function addButton(id: string): HTMLElement | null {
+  return document.querySelector<HTMLElement>(`[aria-labelledby="tracker-${id}-heading"] [data-add]`)
 }
 /** The tracker the new item page last added to, so Back can put focus on its Add button. */
 let leftNew: string | null = null
 watch(newSection, (now, before) => {
   if (before) leftNew = before
 })
+/** The tracker the new tracker page just added, so the week can put focus on its Add button. */
+let addedTracker: string | null = null
+function onTrackerAdded(id: string): void {
+  addedTracker = id
+}
 // The page rests on the screen of what takes focus (K111): the browser's own scroll into view could
 // leave it across two screens, and the sprint would move on to the next tracker.
 watch(shown, async (now, before) => {
@@ -177,8 +180,10 @@ watch(shown, async (now, before) => {
   await nextTick()
   let target: HTMLElement | null | undefined
   if (before === 'new') {
-    const add = leftNew !== null && Object.hasOwn(ADDS, leftNew) ? ADDS[leftNew] : null
-    if (add) target = document.querySelector<HTMLElement>(`[data-testid="${add}"]`)
+    if (leftNew !== null) target = addButton(leftNew)
+  } else if (before === 'new-tracker' && addedTracker !== null) {
+    target = addButton(addedTracker)
+    addedTracker = null
   } else if (before !== 'item')
     target = document.querySelector<HTMLElement>(`[data-testid="${OPENERS[before]}"]`)
   else if (leftItem) {
@@ -427,6 +432,11 @@ onBeforeUnmount(() => {
         <EmailStatus />
         <SettingsPage v-model:tab="settingsTab" />
       </template>
+      <template v-else-if="shown === 'new-tracker' && sync.loaded">
+        <SyncStatus />
+        <EmailStatus />
+        <NewTrackerPage @added="onTrackerAdded" />
+      </template>
       <template v-else-if="shown === 'new' && sync.loaded">
         <SyncStatus />
         <EmailStatus />
@@ -451,13 +461,27 @@ onBeforeUnmount(() => {
       <template v-else-if="sync.loaded">
         <!-- The week, the page's title: fixed above the screens as they move under it (K88). -->
         <WeekHeader />
-        <ExerciseGrid>
+        <!-- One screen per tracker shown in the week, in position order (K123): a deleted
+             tracker still shows in the weeks before its end (K122). -->
+        <TrackerSection
+          v-for="(t, i) in trackers.shown"
+          :key="t.id"
+          :tracker="t"
+          :prev="trackers.shown[i - 1] ?? null"
+          :next="trackers.shown[i + 1] ?? null"
+        >
+          <template v-if="i === 0">
+            <SyncStatus />
+            <EmailStatus />
+            <ImportPrompt v-if="session.user" :key="session.user" :user="session.user" />
+          </template>
+        </TrackerSection>
+        <!-- A week with no tracker shows the messages alone. -->
+        <template v-if="trackers.shown.length === 0">
           <SyncStatus />
           <EmailStatus />
           <ImportPrompt v-if="session.user" :key="session.user" :user="session.user" />
-        </ExerciseGrid>
-        <CardioSection />
-        <DietSection />
+        </template>
       </template>
       <template v-else>
         <SyncStatus />

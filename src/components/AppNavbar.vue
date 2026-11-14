@@ -9,14 +9,16 @@ import {
   Maximize,
   MessageCircle,
   Minimize,
+  Plus,
   Printer,
   Settings,
   UserRound,
 } from '@lucide/vue'
 import { usePlannerStore } from '@/stores/planner'
 import { useSessionStore } from '@/stores/session'
+import { useTrackersStore } from '@/stores/trackers'
 import { weekRange } from '@/lib/dates'
-import { settingsHref } from '@/lib/routes'
+import { NEW_TRACKER_HREF, settingsHref } from '@/lib/routes'
 import { BarAction } from '@/components/ui/bar-action'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Menu, MenuItem } from '@/components/ui/menu'
@@ -66,6 +68,7 @@ onBeforeUnmount(() => {
 })
 
 const session = useSessionStore()
+const trackers = useTrackersStore()
 const otherWeek = computed(() => store.weekKey !== store.currentWeekKey)
 
 function print(): void {
@@ -80,6 +83,17 @@ function toggleEditPlan(): void {
 function openSettings(): void {
   location.hash = settingsHref()
 }
+
+/** Add tracker (K124): the new tracker page is a page of its own (#/new-tracker). */
+function openNewTracker(): void {
+  location.hash = NEW_TRACKER_HREF
+}
+
+/** The skip link's address: the first tracker the week shows (K123). */
+const firstHeading = computed(() => {
+  const first = trackers.shown[0]
+  return first ? `#tracker-${first.id}-heading` : '#'
+})
 
 /** The profile menu (K106): Profile is a page of its own (#/profile), like Settings. */
 function openProfile(): void {
@@ -136,8 +150,8 @@ function openAsk(): void {
 }
 
 /**
- * Today's cell in the first grid that shows today (Exercises, or Food when there are no
- * exercises); in another week, the first day; with no rows anywhere, the first grid's tab stop.
+ * Today's cell in the first grid that shows today (the first tracker's, or the next one's when it
+ * has no rows); in another week, the first day; with no rows anywhere, the first grid's tab stop.
  */
 function skipToToday(): void {
   const grids = [...document.querySelectorAll<HTMLElement>('[role="grid"]')]
@@ -155,7 +169,8 @@ function skipToToday(): void {
   The Header card (brand/design-system/project/components/Header), full width and as big as the
   week below it (K47). The week navigation comes first, at the start, its label set as the page's
   title (K81), and the BarActions follow at the end: "This week" while another week is on screen,
-  Ask (only while the API answers questions), Settings, Print and Full screen (K49). There is no
+  Ask (only while the API answers questions), Add tracker in Edit plan only (K124), Settings, Print
+  and Full screen (K49). There is no
   wordmark and no Edit plan or Done button: the bar showing and Edit plan are one thing (K80),
   and a long press, E or Esc leave it (K91). The Settings and Ask pages have no bar (K52). Every size is a `--bar-*`
   size from main.css, so the bar follows the screen. Folded, the week takes the first row and the
@@ -210,7 +225,7 @@ function skipToToday(): void {
     <div class="absolute top-1.5 left-2 z-30">
       <!-- not-sr-only zeroes the link's padding, so the span carries it. -->
       <a
-        href="#exercises-heading"
+        :href="firstHeading"
         class="sr-only rounded-md bg-panel text-base font-semibold text-ink underline underline-offset-4 shadow-overlay focus:not-sr-only focus:block"
         data-testid="skip-to-today"
         @click.prevent="skipToToday"
@@ -253,9 +268,10 @@ function skipToToday(): void {
         /></IconButton>
       </nav>
       <!-- The actions: "This week" first while another week is on screen (K81), then Ask (only
-           once the API has said it answers questions, so it never flashes in or out), Settings,
-           Print and Full screen, each naming its key (K91), and last Profile, which opens the
-           profile menu (K106). Folded, they share the second row equally. -->
+           once the API has said it answers questions, so it never flashes in or out), Add tracker
+           in Edit plan only (K124), Settings, Print and Full screen, each naming its key (K91),
+           and last Profile, which opens the profile menu (K106). Folded, they share the second row
+           equally. -->
       <div class="flex items-stretch gap-(--bar-gap) folded:contents">
         <BarAction
           v-if="otherWeek"
@@ -272,6 +288,14 @@ function skipToToday(): void {
           data-testid="ask-button"
           @click="openAsk"
           ><MessageCircle
+        /></BarAction>
+        <BarAction
+          v-if="store.configMode"
+          label="Add tracker"
+          class="folded:flex-1 folded:basis-0"
+          data-testid="add-tracker-button"
+          @click="openNewTracker"
+          ><Plus
         /></BarAction>
         <BarAction
           label="Settings"

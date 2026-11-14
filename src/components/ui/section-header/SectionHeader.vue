@@ -11,6 +11,11 @@ defineProps<{
   hint?: string
   /** The h2's id, for the section's aria-labelledby. */
   headingId: string
+  /**
+   * The title for a screen reader only, while the `title` slot's field stands in its place
+   * (renaming a tracker in Edit plan, K124).
+   */
+  titleHidden?: boolean
 }>()
 </script>
 
@@ -41,12 +46,17 @@ defineProps<{
       {{ week }}
     </p>
     <div class="flex min-w-0 flex-col gap-1">
-      <h2
-        :id="headingId"
-        class="title-1 text-ink screen:text-(length:--fs-section) screen:leading-tight"
-      >
-        {{ title }}
-      </h2>
+      <!-- The title, and after it Edit plan's pen, or the field that renames the tracker (K124). -->
+      <div class="flex min-w-0 flex-wrap items-center gap-x-[calc(var(--u)*14)] gap-y-2">
+        <h2
+          :id="headingId"
+          class="title-1 min-w-0 break-words text-ink screen:text-(length:--fs-section) screen:leading-tight"
+          :class="titleHidden && 'sr-only'"
+        >
+          {{ title }}
+        </h2>
+        <slot name="title" />
+      </div>
       <p v-if="hint" data-slot="section-hint" class="caption text-ink-secondary" data-noprint>
         {{ hint }}
       </p>

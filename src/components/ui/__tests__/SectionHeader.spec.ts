@@ -52,4 +52,15 @@ describe('SectionHeader', () => {
     expect(week.attributes('aria-hidden')).toBe('true')
     expect(week.classes()).toEqual(expect.arrayContaining(['display', 'hidden', 'print:block']))
   })
+
+  it('keeps the title for a screen reader while the title slot renames it (K124)', () => {
+    const wrapper = mount(SectionHeader, {
+      props: { title: 'Strength', headingId: 'strength-heading', titleHidden: true },
+      slots: { title: '<input aria-label="Name" />' },
+    })
+    expect(wrapper.get('h2').classes()).toContain('sr-only')
+    expect(wrapper.get('h2').element.nextElementSibling!.tagName).toBe('INPUT')
+    const shown = mount(SectionHeader, { props: { title: 'Strength', headingId: 'h' } })
+    expect(shown.get('h2').classes()).not.toContain('sr-only')
+  })
 })

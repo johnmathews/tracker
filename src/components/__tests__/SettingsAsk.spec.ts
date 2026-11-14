@@ -258,8 +258,8 @@ describe('Daily goal in Settings (K85)', () => {
     await settle()
     usePlannerStore().setConfigMode(true)
     await settle()
-    expect(wrapper.find('[data-testid="exercises-a-day"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="foods-a-day"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="exercise-a-day"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="diet-a-day"]').exists()).toBe(false)
     // Back on: the same numbers, and Monday is met.
     usePlannerStore().setConfigMode(false)
     usePlannerStore().setDailyGoal(true)
@@ -267,7 +267,7 @@ describe('Daily goal in Settings (K85)', () => {
     expect(monday().attributes('data-met')).toBe('true')
     usePlannerStore().setConfigMode(true)
     await settle()
-    expect(wrapper.find('[data-testid="exercises-a-day"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="exercise-a-day"]').exists()).toBe(true)
     expect(useTrackersStore().dailyTarget('exercise')).toBe(3)
   })
 
