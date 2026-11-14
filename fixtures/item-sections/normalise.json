@@ -1,5 +1,5 @@
 {
-  "about": "The item page's arrangement per tracker type (K66, P29): src/lib/itemSections.ts and api/src/tracker_api/item_sections.py both normalise each input to its output. A type with the default arrangement is left out.",
+  "about": "The item page's arrangement per tracker kind (K66, P29): src/lib/itemSections.ts and api/src/tracker_api/item_sections.py both normalise each input to its output. A type with the default arrangement is left out. The kind `strength` was `exercise` (K123): an `exercise` key reads as `strength`, and a `strength` key wins over it.",
   "keys": ["plan", "notes", "details", "history"],
   "cases": [
     { "name": "not an object", "input": null, "output": {} },
@@ -9,40 +9,40 @@
     {
       "name": "the default arrangement is left out",
       "input": {
-        "exercise": { "order": ["plan", "notes", "details", "history"], "hidden": [] },
+        "strength": { "order": ["plan", "notes", "details", "history"], "hidden": [] },
         "food": { "order": ["plan", "notes", "details", "history"], "hidden": [] }
       },
       "output": {}
     },
     {
       "name": "the first default order, stored, is kept (K104 put the plan first)",
-      "input": { "exercise": { "order": ["notes", "details", "plan", "history"], "hidden": [] } },
-      "output": { "exercise": { "order": ["notes", "details", "plan", "history"], "hidden": [] } }
+      "input": { "strength": { "order": ["notes", "details", "plan", "history"], "hidden": [] } },
+      "output": { "strength": { "order": ["notes", "details", "plan", "history"], "hidden": [] } }
     },
     {
       "name": "a hidden section",
       "input": {
-        "exercise": { "order": ["notes", "details", "plan", "history"], "hidden": ["details"] }
+        "strength": { "order": ["notes", "details", "plan", "history"], "hidden": ["details"] }
       },
       "output": {
-        "exercise": { "order": ["notes", "details", "plan", "history"], "hidden": ["details"] }
+        "strength": { "order": ["notes", "details", "plan", "history"], "hidden": ["details"] }
       }
     },
     {
       "name": "a new order, each type its own",
       "input": {
         "food": { "order": ["history", "notes", "details", "plan"], "hidden": [] },
-        "exercise": { "order": ["notes", "plan", "details", "history"], "hidden": ["plan"] }
+        "strength": { "order": ["notes", "plan", "details", "history"], "hidden": ["plan"] }
       },
       "output": {
-        "exercise": { "order": ["notes", "plan", "details", "history"], "hidden": ["plan"] },
+        "strength": { "order": ["notes", "plan", "details", "history"], "hidden": ["plan"] },
         "food": { "order": ["history", "notes", "details", "plan"], "hidden": [] }
       }
     },
     {
       "name": "unknown and repeated keys drop out, missing ones follow in the default order",
-      "input": { "exercise": { "order": ["plan", "map", "plan", "history"], "hidden": [] } },
-      "output": { "exercise": { "order": ["plan", "history", "notes", "details"], "hidden": [] } }
+      "input": { "strength": { "order": ["plan", "map", "plan", "history"], "hidden": [] } },
+      "output": { "strength": { "order": ["plan", "history", "notes", "details"], "hidden": [] } }
     },
     {
       "name": "hidden keeps known keys once, in the default order",
@@ -62,27 +62,27 @@
     {
       "name": "every section hidden",
       "input": {
-        "exercise": {
+        "strength": {
           "order": ["history", "plan", "details", "notes"],
           "hidden": ["notes", "details", "plan", "history"]
         }
       },
       "output": {
-        "exercise": {
+        "strength": {
           "order": ["history", "plan", "details", "notes"],
           "hidden": ["plan", "notes", "details", "history"]
         }
       }
     },
     {
-      "name": "cardio has its own arrangement, in the registry's order between exercise and food",
+      "name": "cardio has its own arrangement, in the registry's order between strength and food",
       "input": {
         "food": { "order": ["history", "notes", "details", "plan"], "hidden": [] },
         "cardio": { "order": ["plan", "history", "notes", "details"], "hidden": ["details"] },
-        "exercise": { "order": ["notes", "plan", "details", "history"], "hidden": [] }
+        "strength": { "order": ["notes", "plan", "details", "history"], "hidden": [] }
       },
       "output": {
-        "exercise": { "order": ["notes", "plan", "details", "history"], "hidden": [] },
+        "strength": { "order": ["notes", "plan", "details", "history"], "hidden": [] },
         "cardio": { "order": ["plan", "history", "notes", "details"], "hidden": ["details"] },
         "food": { "order": ["history", "notes", "details", "plan"], "hidden": [] }
       }
@@ -93,52 +93,71 @@
         "swimming": { "order": ["history"], "hidden": ["notes"] },
         "__proto__": { "order": ["history"], "hidden": [] },
         "diet": { "order": ["history"], "hidden": [] },
-        "exercise": { "order": ["history"], "hidden": [] }
+        "strength": { "order": ["history"], "hidden": [] }
       },
-      "output": { "exercise": { "order": ["history", "plan", "notes", "details"], "hidden": [] } }
+      "output": { "strength": { "order": ["history", "plan", "notes", "details"], "hidden": [] } }
     },
     {
       "name": "entries that aren't strings are passed over",
       "input": {
-        "exercise": {
+        "strength": {
           "order": [1, "plan", null, ["notes"], true],
           "hidden": [{ "k": 1 }, "notes", 2]
         }
       },
       "output": {
-        "exercise": { "order": ["plan", "notes", "details", "history"], "hidden": ["notes"] }
+        "strength": { "order": ["plan", "notes", "details", "history"], "hidden": ["notes"] }
       }
     },
     {
       "name": "keys are matched exactly",
-      "input": { "exercise": { "order": ["History", " notes", "notes"], "hidden": ["NOTES"] } },
-      "output": { "exercise": { "order": ["notes", "plan", "details", "history"], "hidden": [] } }
+      "input": { "strength": { "order": ["History", " notes", "notes"], "hidden": ["NOTES"] } },
+      "output": { "strength": { "order": ["notes", "plan", "details", "history"], "hidden": [] } }
     },
     {
       "name": "an order or hidden that isn't a list reads as the default",
       "input": {
-        "exercise": { "order": "history", "hidden": ["details"] },
+        "strength": { "order": "history", "hidden": ["details"] },
         "food": { "order": ["history"], "hidden": "notes" }
       },
       "output": {
-        "exercise": { "order": ["plan", "notes", "details", "history"], "hidden": ["details"] },
+        "strength": { "order": ["plan", "notes", "details", "history"], "hidden": ["details"] },
         "food": { "order": ["history", "plan", "notes", "details"], "hidden": [] }
       }
     },
     {
       "name": "a type's arrangement that isn't an object reads as the default",
-      "input": { "exercise": ["history"], "food": null },
+      "input": { "strength": ["history"], "food": null },
       "output": {}
     },
     {
       "name": "missing order or hidden reads as the default, other keys drop",
       "input": {
-        "exercise": { "hidden": ["plan"], "pinned": ["notes"] },
+        "strength": { "hidden": ["plan"], "pinned": ["notes"] },
         "food": { "order": ["history"] }
       },
       "output": {
-        "exercise": { "order": ["plan", "notes", "details", "history"], "hidden": ["plan"] },
+        "strength": { "order": ["plan", "notes", "details", "history"], "hidden": ["plan"] },
         "food": { "order": ["history", "plan", "notes", "details"], "hidden": [] }
+      }
+    },
+    {
+      "name": "the old exercise key reads as strength (K123)",
+      "input": {
+        "exercise": { "order": ["notes", "plan", "details", "history"], "hidden": ["details"] }
+      },
+      "output": {
+        "strength": { "order": ["notes", "plan", "details", "history"], "hidden": ["details"] }
+      }
+    },
+    {
+      "name": "a strength key wins over the old exercise key",
+      "input": {
+        "strength": { "order": ["history", "plan", "notes", "details"], "hidden": [] },
+        "exercise": { "order": ["notes", "plan", "details", "history"], "hidden": ["details"] }
+      },
+      "output": {
+        "strength": { "order": ["history", "plan", "notes", "details"], "hidden": [] }
       }
     }
   ]

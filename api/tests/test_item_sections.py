@@ -11,6 +11,7 @@ from tracker_api.item_sections import (
     DEFAULT_ORDER,
     item_sections_valid,
     normalise_item_sections,
+    with_old_keys,
 )
 from tracker_api.types import TYPES
 
@@ -46,8 +47,10 @@ ARRANGED = {"order": ["history", "notes", "details", "plan"], "hidden": ["detail
     "value",
     [
         {},
+        {"strength": ARRANGED},
+        {"strength": ARRANGED, "food": {"order": [], "hidden": []}},
+        # The kind's old key, from a tab on older code (K123).
         {"exercise": ARRANGED},
-        {"exercise": ARRANGED, "food": {"order": [], "hidden": []}},
         # Cardio is a type (K90), so it has an arrangement of its own.
         {"cardio": ARRANGED},
         # Within the shape, unknown and repeated keys normalise rather than refuse.
@@ -67,15 +70,26 @@ def test_valid_shapes(value: object) -> None:
         {"swimming": ARRANGED},
         {"diet": ARRANGED},
         {"__proto__": ARRANGED},
+        {"strength": None},
         {"exercise": None},
-        {"exercise": ["notes"]},
-        {"exercise": {"hidden": []}},
-        {"exercise": {"order": ARRANGED["order"]}},
-        {"exercise": {"order": "notes", "hidden": []}},
-        {"exercise": {"order": ["notes", 1], "hidden": []}},
-        {"exercise": {"order": [], "hidden": [None]}},
-        {"exercise": {"order": [], "hidden": {"details": True}}},
+        {"strength": ["notes"]},
+        {"strength": {"hidden": []}},
+        {"strength": {"order": ARRANGED["order"]}},
+        {"strength": {"order": "notes", "hidden": []}},
+        {"strength": {"order": ["notes", 1], "hidden": []}},
+        {"strength": {"order": [], "hidden": [None]}},
+        {"strength": {"order": [], "hidden": {"details": True}}},
     ],
 )
 def test_malformed_shapes(value: object) -> None:
     assert not item_sections_valid(value)
+
+
+def test_with_old_keys_copies_strength_to_exercise() -> None:
+    """The state sends the strength kind's arrangement under its old key too (K123)."""
+    assert with_old_keys({"strength": ARRANGED, "food": ARRANGED}) == {  # type: ignore[dict-item]
+        "strength": ARRANGED,
+        "food": ARRANGED,
+        "exercise": ARRANGED,
+    }
+    assert with_old_keys({"food": ARRANGED}) == {"food": ARRANGED}  # type: ignore[dict-item]

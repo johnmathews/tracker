@@ -1,7 +1,9 @@
-"""Tracker types (docs/architecture.md §1): what kind of thing a section tracks.
+"""Tracker kinds (docs/architecture.md §1, the spec docs/specs/2026-11-14-account-trackers.md).
 
-The port of src/lib/trackerTypes.ts. A section is the stored name (`exercise`, `cardio`, `diet`:
-in URLs, the database and exports); its type is an attribute of it. `tests/test_types.py` and the
+The port of src/lib/trackerTypes.ts. A kind is code: what an item records, and whether a tracker
+of it has a daily target. A tracker is data: each account's own, with an id, a name and a kind
+(`data.py`). Each account's first three trackers keep today's section names as their ids
+(`exercise`, `cardio`, `diet`: in URLs, the database and exports). `tests/test_types.py` and the
 web app's `trackerTypes.spec.ts` both read `fixtures/types/registry.json`, which keeps the two in
 step.
 """
@@ -9,11 +11,12 @@ step.
 from dataclasses import dataclass
 from typing import Literal
 
-type TypeId = Literal["exercise", "cardio", "food"]
+#: A kind's id. `strength` was `exercise` before trackers were the account's own (K123).
+type TypeId = Literal["strength", "cardio", "food"]
 #: The settings key that holds how many items a day count as a met day (K30, K57).
 type PickKey = Literal["dailyPick", "foodPick"]
-#: A section's stored name, in the order the week shows them. `tests/test_types.py` checks it
-#: lists SECTION_TYPES' keys.
+#: The ids of each account's first three trackers, in the order the week first showed them.
+#: `tests/test_types.py` checks it lists SECTION_TYPES' keys.
 Section = Literal["exercise", "cardio", "diet"]
 
 
@@ -30,14 +33,17 @@ class TrackerType:
     id: TypeId
     #: The item page's fields, in order.
     fields: tuple[ItemField, ...]
-    #: The daily target's setting; None for a type with no daily target (cardio, K90).
+    #: The settings key the first tracker of this kind keeps its daily target in, beside the
+    #: tracker; None for a kind with no daily target (cardio, K90).
     pick_key: PickKey | None
     #: The weekly goal an added item starts with.
     new_target: int
+    #: The daily target a new tracker of this kind starts with; None for a kind with none.
+    daily_target: int | None
 
 
-EXERCISE = TrackerType(
-    id="exercise",
+STRENGTH = TrackerType(
+    id="strength",
     fields=(
         ItemField("equipment", "Equipment"),
         ItemField("works", "Works"),
@@ -45,7 +51,10 @@ EXERCISE = TrackerType(
     ),
     pick_key="dailyPick",
     new_target=3,
+    daily_target=3,
 )
+#: The kind under its old name: insights.py and edits.py still read it.
+EXERCISE = STRENGTH
 #: Cycling, running and the like (K90): a duration and a distance, every kind of mark like an
 #: exercise, a weekly goal and no daily target.
 CARDIO = TrackerType(
@@ -53,16 +62,19 @@ CARDIO = TrackerType(
     fields=(ItemField("route", "Route"), ItemField("link", "Link")),
     pick_key=None,
     new_target=3,
+    daily_target=None,
 )
 FOOD = TrackerType(
     id="food",
     fields=(ItemField("serving", "A serving"), ItemField("examples", "Examples")),
     pick_key="foodPick",
     new_target=3,
+    daily_target=2,
 )
 
-TYPES: dict[TypeId, TrackerType] = {t.id: t for t in (EXERCISE, CARDIO, FOOD)}
-#: Each section's type, in the order the week shows them. A second tracker of a type would be a
-#: new section here.
-SECTION_TYPES: dict[Section, TrackerType] = {"exercise": EXERCISE, "cardio": CARDIO, "diet": FOOD}
+TYPES: dict[TypeId, TrackerType] = {t.id: t for t in (STRENGTH, CARDIO, FOOD)}
+#: The kind of each of the first three trackers, in the order the week first showed them.
+SECTION_TYPES: dict[Section, TrackerType] = {"exercise": STRENGTH, "cardio": CARDIO, "diet": FOOD}
 SECTIONS: tuple[Section, ...] = tuple(SECTION_TYPES)
+#: The names the first three trackers start with (K123: the Exercises tracker reads "Strength").
+SECTION_NAMES: dict[Section, str] = {"exercise": "Strength", "cardio": "Cardio", "diet": "Food"}

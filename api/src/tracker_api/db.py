@@ -336,8 +336,81 @@ MIGRATIONS = [
     """
     ALTER TABLE settings ADD COLUMN limits TEXT NOT NULL DEFAULT '';
     """,
+    # Trackers are the account's own (K123). Each user gets the first three, keyed by today's
+    # section names, with the daily targets from their settings (3 and 2 without any, as
+    # DEFAULT_DAILY_PICK and DEFAULT_FOOD_PICK). A trigger gives every later user the same three.
+    # The kind `exercise` is `strength` now, so each stored item-page arrangement moves its key.
+    # The CASEs keep every json_* call on valid JSON, as in step 7. REVERT_TRACKERS undoes it.
+    """
+    CREATE TABLE trackers (
+        user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        name TEXT NOT NULL,
+        position INTEGER NOT NULL CHECK (position >= 0),
+        daily_target INTEGER,
+        start_week TEXT,
+        end_week TEXT,
+        rev INTEGER NOT NULL CHECK (rev > 0),
+        PRIMARY KEY (user_id, id)
+    ) STRICT, WITHOUT ROWID;
+
+    INSERT INTO trackers (user_id, id, kind, name, position, daily_target, rev)
+    WITH firsts (id, kind, name, position) AS (
+        VALUES ('exercise', 'strength', 'Strength', 0), ('cardio', 'cardio', 'Cardio', 1),
+            ('diet', 'food', 'Food', 2)
+    )
+    SELECT u.id, f.id, f.kind, f.name, f.position,
+        CASE f.id
+            WHEN 'exercise' THEN max(1, min(8, coalesce(s.daily_pick, 3)))
+            WHEN 'diet' THEN max(1, min(8, coalesce(s.food_pick, 2)))
+        END,
+        1
+    FROM users AS u CROSS JOIN firsts AS f LEFT JOIN settings AS s ON s.user_id = u.id;
+
+    CREATE TRIGGER users_get_trackers AFTER INSERT ON users BEGIN
+        INSERT INTO trackers (user_id, id, kind, name, position, daily_target, rev)
+        VALUES (NEW.id, 'exercise', 'strength', 'Strength', 0, 3, 1),
+            (NEW.id, 'cardio', 'cardio', 'Cardio', 1, NULL, 1),
+            (NEW.id, 'diet', 'food', 'Food', 2, 2, 1);
+    END;
+
+    UPDATE settings
+    SET item_sections = json_set(
+        json_remove(item_sections, '$.exercise'),
+        '$.strength',
+        json(json_extract(item_sections, '$.exercise'))
+    )
+    WHERE CASE WHEN json_valid(item_sections) THEN
+        CASE WHEN json_type(item_sections) = 'object' THEN
+            json_type(item_sections, '$.exercise') IN ('object', 'array')
+        END
+    END;
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
+
+#: Undoes step 16, the trackers, for a rollback to the code before it: run it in one
+#: transaction, then start the older API. The daily targets need nothing, since the settings
+#: kept them in step. Rows of trackers made since stay in plans, ticks and item_details, where
+#: older code never reads them. `tests/test_db.py` checks it gives back the schema and rows of
+#: version 15.
+REVERT_TRACKERS = """
+UPDATE settings
+SET item_sections = json_set(
+    json_remove(item_sections, '$.strength'),
+    '$.exercise',
+    json(json_extract(item_sections, '$.strength'))
+)
+WHERE CASE WHEN json_valid(item_sections) THEN
+    CASE WHEN json_type(item_sections) = 'object' THEN
+        json_type(item_sections, '$.strength') IN ('object', 'array')
+    END
+END;
+DROP TRIGGER users_get_trackers;
+DROP TABLE trackers;
+PRAGMA user_version = 15;
+"""
 
 
 def connect(path: Path) -> sqlite3.Connection:

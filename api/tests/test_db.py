@@ -36,13 +36,15 @@ OAUTH_STEP = "CREATE TABLE oauth_grants"
 DAILY_GOAL_STEP = "ADD COLUMN daily_goal"
 SECTION_CHECK_STEP = "CREATE TABLE plans_new"
 LIMITS_STEP = "ADD COLUMN limits"
+TRACKERS_STEP = "CREATE TABLE trackers"
 
 
 def test_steps_are_numbered_as_the_docs_say() -> None:
     """Schema 6 adds API tokens, 7 item details, 8 the item pages' arrangement, 9 My goals,
     10 Ask's caps, 11 Ask's history, 12 OAuth connections, 13 Daily goal, 14 plans and ticks
-    without a CHECK on the section, for Cardio, and 15 the limits note (docs/api.md §2)."""
-    assert SCHEMA_VERSION == 15
+    without a CHECK on the section, for Cardio, 15 the limits note, and 16 the trackers
+    (docs/api.md §2)."""
+    assert SCHEMA_VERSION == 16
     steps = (
         TOKENS_STEP,
         DETAILS_STEP,
@@ -54,8 +56,9 @@ def test_steps_are_numbered_as_the_docs_say() -> None:
         DAILY_GOAL_STEP,
         SECTION_CHECK_STEP,
         LIMITS_STEP,
+        TRACKERS_STEP,
     )
-    assert [_step_of(m) + 1 for m in steps] == [6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    assert [_step_of(m) + 1 for m in steps] == [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
 
 
 def test_section_check_step_keeps_plans_and_ticks_and_takes_cardio(
@@ -831,3 +834,175 @@ def test_wal_switch_retries_while_locked(monkeypatch: pytest.MonkeyPatch) -> Non
         db._use_wal(FakeConn(failures=1, error="disk I/O error"))  # type: ignore[arg-type]
     with pytest.raises(sqlite3.OperationalError, match="could not switch"):
         db._use_wal(FakeConn(failures=0, mode="memory"), attempts=2)  # type: ignore[arg-type]
+
+
+def before_trackers(path: Path, monkeypatch: pytest.MonkeyPatch) -> sqlite3.Connection:
+    """A database at schema 15, the last one before trackers, holding three users: one with
+    settings and an arranged exercise page, one with settings and no arrangement, one with no
+    settings at all; and plans, ticks and details in each section."""
+    from tracker_api import db
+
+    c = connect(path)
+    monkeypatch.setattr(db, "MIGRATIONS", db.MIGRATIONS[: _step_of(TRACKERS_STEP)])
+    db.migrate(c)
+    monkeypatch.undo()
+    assert c.execute("PRAGMA user_version").fetchone()[0] == 15
+    arranged = {
+        "exercise": {"order": ["history", "plan", "notes", "details"], "hidden": ["details"]},
+        "food": {"order": ["notes", "plan", "details", "history"], "hidden": []},
+    }
+    c.executescript(
+        """
+        INSERT INTO users (id, username, password_hash, created_at)
+            VALUES (1, 'a', 'h', 0), (2, 'b', 'h', 0), (3, 'c', 'h', 0);
+        INSERT INTO settings (user_id, accent, daily_pick, food_pick, item_sections)
+            VALUES (2, '#0a84ff', 1, 8, NULL);
+        INSERT INTO plans VALUES (1, 'exercise', '2026-10-19', '[{"id":"pu"}]', 3),
+            (1, 'cardio', '2026-10-19', '[]', 1), (1, 'diet', '2026-10-19', '[]', 2),
+            (3, 'diet', '2026-10-26', '[]', 1);
+        INSERT INTO ticks (user_id, section, week, item_id, days)
+            VALUES (1, 'exercise', '2026-10-19', 'pu', 7), (3, 'diet', '2026-10-26', 'veg', 1);
+        INSERT INTO item_details VALUES (1, 'exercise', 'pu', '{"notes":"slow"}', 2);
+        """
+    )
+    c.execute(
+        "INSERT INTO settings (user_id, accent, daily_pick, food_pick, item_sections)"
+        " VALUES (1, '#30d158', 5, 4, ?)",
+        (json.dumps(arranged),),
+    )
+    return c
+
+
+def table_rows(c: sqlite3.Connection, *tables: str) -> dict[str, list[tuple[object, ...]]]:
+    return {
+        t: sorted(tuple(r) for r in c.execute(f"SELECT * FROM {t}"))  # noqa: S608
+        for t in tables
+    }
+
+
+def tracker_rows(c: sqlite3.Connection) -> list[tuple[object, ...]]:
+    return [
+        tuple(r)
+        for r in c.execute(
+            "SELECT user_id, id, kind, name, position, daily_target, start_week, end_week, rev"
+            " FROM trackers ORDER BY user_id, position"
+        )
+    ]
+
+
+def test_trackers_migration_gives_each_user_the_first_three(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Step 16 backfills three trackers per user, named and kinded as the spec says, with the
+    daily targets from their settings (the defaults without any). Plans, ticks and details stay
+    as they were, and an arranged exercise page moves to the `strength` key."""
+    c = before_trackers(tmp_path / "f.db", monkeypatch)
+    data_tables = ("plans", "ticks", "item_details")
+    before = table_rows(c, *data_tables)
+    migrate(c)
+    assert c.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
+    assert tracker_rows(c) == [
+        (1, "exercise", "strength", "Strength", 0, 5, None, None, 1),
+        (1, "cardio", "cardio", "Cardio", 1, None, None, None, 1),
+        (1, "diet", "food", "Food", 2, 4, None, None, 1),
+        (2, "exercise", "strength", "Strength", 0, 1, None, None, 1),
+        (2, "cardio", "cardio", "Cardio", 1, None, None, None, 1),
+        (2, "diet", "food", "Food", 2, 8, None, None, 1),
+        (3, "exercise", "strength", "Strength", 0, 3, None, None, 1),
+        (3, "cardio", "cardio", "Cardio", 1, None, None, None, 1),
+        (3, "diet", "food", "Food", 2, 2, None, None, 1),
+    ]
+    assert table_rows(c, *data_tables) == before
+    stored = {
+        r[0]: None if r[1] is None else json.loads(r[1])
+        for r in c.execute("SELECT user_id, item_sections FROM settings")
+    }
+    assert stored == {
+        1: {
+            "food": {"order": ["notes", "plan", "details", "history"], "hidden": []},
+            "strength": {"order": ["history", "plan", "notes", "details"], "hidden": ["details"]},
+        },
+        2: None,
+    }
+    c.close()
+
+
+def test_trackers_migration_passes_over_arrangements_it_cannot_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An `item_sections` that isn't JSON, isn't an object or has no object under `exercise` is
+    left as it was, and the step still finishes."""
+    c = before_trackers(tmp_path / "f.db", monkeypatch)
+    odd = ["not json {", "[1, 2]", '"text"', '{"exercise": "x"}', '{"food": {}}']
+    for i, text in enumerate(odd, start=10):
+        c.execute(
+            "INSERT INTO users (id, username, password_hash, created_at) VALUES (?, ?, 'h', 0)",
+            (i, f"u{i}"),
+        )
+        c.execute(
+            "INSERT INTO settings (user_id, accent, daily_pick, item_sections)"
+            " VALUES (?, '#30d158', 3, ?)",
+            (i, text),
+        )
+    migrate(c)
+    stored = [
+        r[0] for r in c.execute("SELECT item_sections FROM settings WHERE user_id >= 10 ORDER BY 1")
+    ]
+    assert sorted(stored) == sorted(odd)
+    assert c.execute("SELECT count(*) FROM trackers").fetchone()[0] == 3 * 8
+    c.close()
+
+
+def test_every_new_user_gets_the_first_three_trackers(conn: sqlite3.Connection) -> None:
+    """The trigger: a user added after step 16 has the same three, with the default targets,
+    and they go with the user."""
+    conn.execute(
+        "INSERT INTO users (id, username, password_hash, created_at) VALUES (7, 'n', 'h', 0)"
+    )
+    assert tracker_rows(conn) == [
+        (7, "exercise", "strength", "Strength", 0, 3, None, None, 1),
+        (7, "cardio", "cardio", "Cardio", 1, None, None, None, 1),
+        (7, "diet", "food", "Food", 2, 2, None, None, 1),
+    ]
+    for bad in (
+        "INSERT INTO trackers VALUES (7, 'exercise', 'strength', 'Again', 3, 3, NULL, NULL, 1)",
+        "INSERT INTO trackers VALUES (7, 'x1', 'strength', 'S', -1, 3, NULL, NULL, 1)",
+        "INSERT INTO trackers VALUES (7, 'x2', 'strength', 'S', 3, 3, NULL, NULL, 0)",
+        "INSERT INTO trackers VALUES (8, 'x3', 'strength', 'S', 3, 3, NULL, NULL, 1)",
+    ):
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(bad)
+    conn.execute("DELETE FROM users WHERE id = 7")
+    assert tracker_rows(conn) == []
+
+
+def test_revert_trackers_gives_back_version_15(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """REVERT_TRACKERS, run after step 16, gives back the schema and every row of version 15,
+    the arranged exercise page under its old key included."""
+    from tracker_api.db import REVERT_TRACKERS
+
+    c = before_trackers(tmp_path / "f.db", monkeypatch)
+    tables = [r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type = 'table'")]
+    schema = sorted(tuple(r) for r in c.execute("SELECT type, name, sql FROM sqlite_master"))
+    before = table_rows(c, *tables)
+    migrate(c)
+    with transaction(c):
+        c.executescript(REVERT_TRACKERS)
+    assert c.execute("PRAGMA user_version").fetchone()[0] == 15
+    assert sorted(tuple(r) for r in c.execute("SELECT type, name, sql FROM sqlite_master")) == (
+        schema
+    )
+    after = table_rows(c, *tables)
+    # json_set writes compact JSON, so the arrangement compares as data.
+    for rows in (before, after):
+        rows["settings"] = [
+            tuple(json.loads(v) if isinstance(v, str) and v.startswith("{") else v for v in row)
+            for row in rows["settings"]
+        ]
+    assert after == before
+    # And the step runs again from there.
+    migrate(c)
+    assert c.execute("SELECT count(*) FROM trackers").fetchone()[0] == 9
+    c.close()

@@ -1,9 +1,11 @@
 {
-  "sections": { "exercise": "exercise", "cardio": "cardio", "diet": "food" },
+  "sections": { "exercise": "strength", "cardio": "cardio", "diet": "food" },
+  "names": { "exercise": "Strength", "cardio": "Cardio", "diet": "Food" },
   "types": {
-    "exercise": {
+    "strength": {
       "pickKey": "dailyPick",
       "newTarget": 3,
+      "dailyTarget": 3,
       "fields": [
         { "key": "equipment", "label": "Equipment" },
         { "key": "works", "label": "Works" },
@@ -13,6 +15,7 @@
     "cardio": {
       "pickKey": null,
       "newTarget": 3,
+      "dailyTarget": null,
       "fields": [
         { "key": "route", "label": "Route" },
         { "key": "link", "label": "Link" }
@@ -21,6 +24,7 @@
     "food": {
       "pickKey": "foodPick",
       "newTarget": 3,
+      "dailyTarget": 2,
       "fields": [
         { "key": "serving", "label": "A serving" },
         { "key": "examples", "label": "Examples" }
