@@ -135,10 +135,10 @@ describe('tracker helpers', () => {
   })
 
   it('picks the cycle for the item and the mark set', () => {
-    expect(cycleFor('exercise', 'squiggles')).toBe(EXERCISE_CYCLE)
+    expect(cycleFor('strength', 'squiggles')).toBe(EXERCISE_CYCLE)
     expect(cycleFor('food', 'squiggles')).toBe(FOOD_CYCLE)
     for (const set of ['ticks', 'stamped-ticks', 'faces', 'stamped-faces'] as const) {
-      expect(cycleFor('exercise', set)).toBe(EXERCISE_KIND_CYCLE)
+      expect(cycleFor('strength', set)).toBe(EXERCISE_KIND_CYCLE)
       expect(cycleFor('food', set)).toBe(FOOD_KIND_CYCLE)
     }
   })

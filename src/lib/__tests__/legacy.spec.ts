@@ -34,9 +34,12 @@ describe('readLegacyData', () => {
     // No details: these keys predate accounts (P9), and notes came after them (K43). No cardio
     // either, which came after accounts (K90).
     expect(readLegacyData(WEEK)).toEqual({
-      exercise: { ...exercise, details: {} },
-      cardio: { plans: {}, log: {}, details: {} },
-      diet: { ...diet, details: {} },
+      trackers: [],
+      sections: {
+        exercise: { ...exercise, details: {} },
+        cardio: { plans: {}, log: {}, details: {} },
+        diet: { ...diet, details: {} },
+      },
       settings: { accent: '#0a84ff', dailyPick: 5, foodPick: 2, goals: '', limits: '' },
     })
   })
@@ -53,9 +56,9 @@ describe('readLegacyData', () => {
     const data = readLegacyData(WEEK)!
     // The list goes only on weeks it was ticked in: copying it onto this week, as the old app did
     // locally, would replace the account's carried-forward plan for this week and later ones.
-    expect(Object.keys(data.exercise.plans)).toEqual(['2026-10-12'])
+    expect(Object.keys(data.sections.exercise!.plans)).toEqual(['2026-10-12'])
     // An empty list is no plan at all, so it cannot empty a week in the account.
-    expect(data.diet).toEqual({ plans: {}, log: {}, details: {} })
+    expect(data.sections.diet).toEqual({ plans: {}, log: {}, details: {} })
     expect(data.settings).toBeNull()
   })
 
@@ -64,7 +67,7 @@ describe('readLegacyData', () => {
       LEGACY_DATA_KEY,
       JSON.stringify({ exercises: [{ id: 'a', name: 'A', reps: 1, target: 2 }], log: {} }),
     )
-    expect(readLegacyData(WEEK)!.exercise.plans).toEqual({
+    expect(readLegacyData(WEEK)!.sections.exercise!.plans).toEqual({
       [WEEK]: [{ id: 'a', name: 'A', reps: 1, target: 2 }],
     })
   })
@@ -77,9 +80,12 @@ describe('readLegacyData', () => {
   it('counts settings alone as data worth offering', () => {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify({ accent: '#bf5af2', dailyPick: 2 }))
     expect(readLegacyData(WEEK)).toEqual({
-      exercise: { plans: {}, log: {}, details: {} },
-      cardio: { plans: {}, log: {}, details: {} },
-      diet: { plans: {}, log: {}, details: {} },
+      trackers: [],
+      sections: {
+        exercise: { plans: {}, log: {}, details: {} },
+        cardio: { plans: {}, log: {}, details: {} },
+        diet: { plans: {}, log: {}, details: {} },
+      },
       settings: { accent: '#bf5af2', dailyPick: 2, foodPick: 2, goals: '', limits: '' },
     })
   })

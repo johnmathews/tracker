@@ -1,9 +1,9 @@
 import type { TrackerTypeId } from '@/lib/trackerTypes'
 
 /**
- * The item page's sections, shown or hidden and in order, per tracker type (K66, P29). A setting
- * that syncs with the account (`itemSections`), keyed by type id, not section, so every page of a
- * type shares one. `api/src/tracker_api/item_sections.py` normalises the same way, and
+ * The item page's sections, shown or hidden and in order, per tracker kind (K66, P29). A setting
+ * that syncs with the account (`itemSections`), keyed by kind, not tracker, so every page of a
+ * kind shares one. `api/src/tracker_api/item_sections.py` normalises the same way, and
  * `fixtures/item-sections/normalise.json` keeps the two in step.
  */
 
@@ -27,8 +27,11 @@ export type ItemSections = Partial<Record<TrackerTypeId, Arrangement>>
  * imports storage.ts, which imports this module: the Record makes TypeScript check every id is
  * here and no other, and itemSections.spec.ts that the order is the registry's.
  */
-const TYPE_IDS: Readonly<Record<TrackerTypeId, true>> = { exercise: true, cardio: true, food: true }
+const TYPE_IDS: Readonly<Record<TrackerTypeId, true>> = { strength: true, cardio: true, food: true }
 export const ITEM_SECTION_TYPES = Object.keys(TYPE_IDS) as readonly TrackerTypeId[]
+
+/** Keys an older tab or file uses for a kind since renamed: `exercise` is `strength` (K123). */
+const OLD_KEYS: Readonly<Record<string, TrackerTypeId>> = { exercise: 'strength' }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -62,17 +65,26 @@ function isDefault(a: Arrangement): boolean {
   return a.hidden.length === 0 && a.order.every((k, i) => k === DEFAULT_ORDER[i])
 }
 
+/** The arrangement stored for `type`: under its own key, else under its old one. */
+function rawFor(v: Record<string, unknown>, type: TrackerTypeId): unknown {
+  if (Object.hasOwn(v, type)) return v[type]
+  const old = Object.keys(OLD_KEYS).find((k) => OLD_KEYS[k] === type && Object.hasOwn(v, k))
+  return old === undefined ? undefined : v[old]
+}
+
 /**
- * Each type's arrangement, in the registry's order, leaving out a type with the default one. A
- * type the registry doesn't have is dropped, so a value from a newer version still reads;
- * anything that isn't an object reads as `{}`.
+ * Each type's arrangement, in the registry's order, leaving out a type with the default one. An
+ * old key reads as its kind's id, and the kind's own key wins over it. A type the registry doesn't
+ * have is dropped, so a value from a newer version still reads; anything that isn't an object
+ * reads as `{}`.
  */
 export function normaliseItemSections(v: unknown): ItemSections {
   const out: ItemSections = {}
   if (!isRecord(v)) return out
   for (const type of ITEM_SECTION_TYPES) {
-    if (!Object.hasOwn(v, type)) continue
-    const a = normaliseArrangement(v[type])
+    const raw = rawFor(v, type)
+    if (raw === undefined) continue
+    const a = normaliseArrangement(raw)
     if (!isDefault(a)) out[type] = a
   }
   return out

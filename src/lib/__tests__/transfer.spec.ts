@@ -3,6 +3,7 @@ import {
   EXPORT_FORMAT,
   buildExport,
   downloadExport,
+  emptySection,
   exportFilename,
   mergeConversations,
   mergeSettings,
@@ -14,6 +15,7 @@ import {
 import type { Conversation, DetailsMap, Exercise, Log } from '@/lib/storage'
 import type { ItemSections } from '@/lib/itemSections'
 import type { Plans } from '@/lib/plans'
+import type { TrackerInfo } from '@/lib/trackers'
 import { fixtureCases, readFixture } from './fixtures'
 
 type Tracked = { plans: Plans<Exercise>; log: Log; details: DetailsMap }
@@ -132,6 +134,41 @@ describe('mergeTracked', () => {
   })
 })
 
+const STRENGTH: TrackerInfo = {
+  id: 'exercise',
+  name: 'Strength',
+  kind: 'strength',
+  position: 0,
+  dailyTarget: 4,
+  startWeek: null,
+  endWeek: null,
+}
+const CARDIO: TrackerInfo = {
+  ...STRENGTH,
+  id: 'cardio',
+  name: 'Cardio',
+  kind: 'cardio',
+  position: 1,
+  dailyTarget: null,
+}
+const FOOD: TrackerInfo = {
+  ...STRENGTH,
+  id: 'diet',
+  name: 'Food',
+  kind: 'food',
+  position: 2,
+  dailyTarget: 3,
+}
+const SWIM: TrackerInfo = {
+  ...CARDIO,
+  id: 'xswim',
+  name: 'Swimming',
+  position: 3,
+  startWeek: '2026-10-12',
+  endWeek: '2026-10-26',
+}
+const SETTINGS = { accent: '#0a84ff', dailyPick: 4, foodPick: 3, goals: 'Run 5 km.', limits: '' }
+
 describe('buildExport', () => {
   it('stamps the format, version and time, and leaves the theme out', () => {
     const exercise: Tracked = {
@@ -140,45 +177,65 @@ describe('buildExport', () => {
       details: { pu: { notes: 'Slow.' } },
     }
     const file = buildExport({
-      exercise,
-      cardio: { plans: {}, log: {}, details: {} },
-      diet: { plans: {}, log: {}, details: {} },
-      settings: { accent: '#0a84ff', dailyPick: 4, foodPick: 3, goals: 'Run 5 km.', limits: '' },
+      trackers: [STRENGTH, CARDIO, FOOD],
+      sections: { exercise, cardio: emptySection(), diet: emptySection() },
+      settings: SETTINGS,
       now: new Date('2026-10-24T09:30:00.000Z'),
     })
     expect(file).toEqual({
       format: EXPORT_FORMAT,
-      version: 5,
+      version: 6,
       exportedAt: '2026-10-24T09:30:00.000Z',
-      exercise,
-      cardio: { plans: {}, log: {}, details: {} },
-      diet: { plans: {}, log: {}, details: {} },
-      settings: { accent: '#0a84ff', dailyPick: 4, foodPick: 3, goals: 'Run 5 km.', limits: '' },
+      trackers: [STRENGTH, CARDIO, FOOD],
+      sections: {
+        exercise: { plans: exercise.plans, log: {} },
+        cardio: { plans: {}, log: {} },
+        diet: { plans: {}, log: {} },
+      },
+      details: { exercise: exercise.details, cardio: {}, diet: {} },
+      settings: SETTINGS,
     })
   })
 
-  it('carries only plans, log and details from each section, never the revisions', () => {
+  it('lists the trackers in the week’s order, ended ones too, each with its data (K123)', () => {
+    const swim: Tracked = {
+      plans: {},
+      log: { '2026-10-12': { sw: ['great', null, null, null, null, null, null] } },
+      details: { sw: { fields: { route: 'Lake' } } },
+    }
+    const file = buildExport({
+      trackers: [SWIM, FOOD, { ...CARDIO, position: 3, id: 'cardio' }, STRENGTH],
+      // A tracker with no data in the stores exports empty; data for no tracker stays out.
+      sections: { xswim: swim, stray: swim },
+      settings: SETTINGS,
+    })
+    expect(file.trackers.map((t) => t.id)).toEqual(['exercise', 'diet', 'cardio', 'xswim'])
+    expect(file.sections).toEqual({
+      exercise: { plans: {}, log: {} },
+      cardio: { plans: {}, log: {} },
+      diet: { plans: {}, log: {} },
+      xswim: { plans: {}, log: swim.log },
+    })
+    expect(file.details.xswim).toEqual(swim.details)
+  })
+
+  it('carries only plans, log and details from each tracker, never the revisions', () => {
     const cache = { plans: {}, log: {}, details: {}, revs: { '2026-10-19': 3 }, detailRevs: {} }
     const file = buildExport({
-      exercise: cache,
-      cardio: cache,
-      diet: cache,
-      settings: { accent: '#0a84ff', dailyPick: 4, foodPick: 3, goals: '', limits: '' },
+      trackers: [{ ...STRENGTH, rev: 4 } as TrackerInfo],
+      sections: { exercise: cache },
+      settings: SETTINGS,
     })
-    expect(file.exercise).toEqual({ plans: {}, log: {}, details: {} })
-    expect(file.cardio).toEqual({ plans: {}, log: {}, details: {} })
-    expect(file.diet).toEqual({ plans: {}, log: {}, details: {} })
+    expect(file.sections).toEqual({ exercise: { plans: {}, log: {} } })
+    expect(file.details).toEqual({ exercise: {} })
+    expect(file.trackers).toEqual([STRENGTH])
   })
 
   it('carries the item pages’ arrangement when there is one (K66)', () => {
     const itemSections: ItemSections = {
-      exercise: { order: ['history', 'notes', 'details', 'plan'], hidden: ['details'] },
+      strength: { order: ['history', 'notes', 'details', 'plan'], hidden: ['details'] },
     }
-    const base = {
-      exercise: { plans: {}, log: {}, details: {} },
-      cardio: { plans: {}, log: {}, details: {} },
-      diet: { plans: {}, log: {}, details: {} },
-    }
+    const base = { trackers: [STRENGTH], sections: {} }
     const settings = { accent: '#0a84ff', dailyPick: 4, foodPick: 3, goals: '', limits: '' }
     expect(buildExport({ ...base, settings: { ...settings, itemSections } }).settings).toEqual({
       ...settings,
@@ -189,24 +246,34 @@ describe('buildExport', () => {
     )
   })
 
-  it('round-trips through parseExport, My goals included', () => {
+  it('round-trips through parseExport, My goals and every tracker included', () => {
     const data = {
-      exercise: {
-        plans: { '2026-10-19': [{ id: 'sq', name: 'Squats', sets: 3, reps: 15, target: 4 }] },
-        log: { '2026-10-19': { sq: ['great', null, null, null, null, null, 'partial'] } },
-        details: { sq: { notes: 'Knees out.', fields: { equipment: 'Kettlebell' } } },
-      },
-      cardio: {
-        plans: {
-          '2026-10-19': [{ id: 'cy', name: 'Cycling', duration: 1800, distance: 12.5, target: 2 }],
+      trackers: [STRENGTH, CARDIO, FOOD, SWIM],
+      sections: {
+        exercise: {
+          plans: { '2026-10-19': [{ id: 'sq', name: 'Squats', sets: 3, reps: 15, target: 4 }] },
+          log: { '2026-10-19': { sq: ['great', null, null, null, null, null, 'partial'] } },
+          details: { sq: { notes: 'Knees out.', fields: { equipment: 'Kettlebell' } } },
         },
-        log: { '2026-10-19': { cy: [null, 'missed-hatch', null, null, null, null, null] } },
-        details: { cy: { fields: { route: 'Along the river' } } },
-      },
-      diet: {
-        plans: { '2026-10-19': [{ id: 'veg', name: 'Vegetables', target: 7 }] },
-        log: {},
-        details: {},
+        cardio: {
+          plans: {
+            '2026-10-19': [
+              { id: 'cy', name: 'Cycling', duration: 1800, distance: 12.5, target: 2 },
+            ],
+          },
+          log: { '2026-10-19': { cy: [null, 'missed-hatch', null, null, null, null, null] } },
+          details: { cy: { fields: { route: 'Along the river' } } },
+        },
+        diet: {
+          plans: { '2026-10-19': [{ id: 'veg', name: 'Vegetables', target: 7 }] },
+          log: {},
+          details: {},
+        },
+        xswim: {
+          plans: { '2026-10-12': [{ id: 'sw', name: 'Lengths', distance: 1, target: 2 }] },
+          log: {},
+          details: {},
+        },
       },
       settings: {
         accent: '#bf5af2',
@@ -218,6 +285,21 @@ describe('buildExport', () => {
       },
     } satisfies ExportData
     expect(parseExport(JSON.stringify(buildExport(data)))).toEqual({ ok: true, data })
+  })
+
+  it('reads the sample file the API exports (fixtures/transfer/sample/export-v6.json)', () => {
+    const sample = readFixture('sample/export-v6.json') as Record<string, unknown>
+    const parsed = parseExport(JSON.stringify(sample))
+    expect(parsed.ok).toBe(true)
+    const data = (parsed as { data: ExportData }).data
+    expect(data.trackers).toEqual(sample.trackers)
+    const file = buildExport({
+      ...data,
+      settings: data.settings!,
+      now: new Date(sample.exportedAt as string),
+    })
+    const { conversations: _, ...rest } = sample
+    expect(file).toEqual(rest)
   })
 })
 
@@ -246,9 +328,8 @@ describe('downloadExport', () => {
       expect(this.isConnected).toBe(true)
     })
     const file = buildExport({
-      exercise: { plans: {}, log: {}, details: {} },
-      cardio: { plans: {}, log: {}, details: {} },
-      diet: { plans: {}, log: {}, details: {} },
+      trackers: [STRENGTH],
+      sections: {},
       settings: { accent: '#30d158', dailyPick: 3, foodPick: 2, goals: '', limits: '' },
     })
     downloadExport(file, new Date(2026, 9, 24))

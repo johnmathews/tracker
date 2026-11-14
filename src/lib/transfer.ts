@@ -4,28 +4,30 @@ import {
   cutText,
   isRecord,
   liftNotes,
-  normaliseCardio,
   normaliseDetailsMap,
-  normaliseExercise,
-  normaliseFood,
   normaliseLog,
   normalisePlans,
   normalisePortableSettings,
   parseJson,
   type AskStop,
   type AskTurn,
-  type Cardio,
   type Conversation,
   type Days,
   type DetailsMap,
-  type Exercise,
   type ItemDetails,
-  type Food,
   type Log,
   type Mark,
   type PortableSettings,
   type TrackedData,
 } from '@/lib/storage'
+import {
+  SECTIONS,
+  SECTION_NAMES,
+  TRACKER_TYPES,
+  type Item,
+  type TrackerTypeId,
+} from '@/lib/trackerTypes'
+import { inOrder, normaliseTrackers, type TrackerInfo } from '@/lib/trackers'
 
 /**
  * The export file: what Settings → Export downloads and Import… reads. It is also the contract for
@@ -41,23 +43,35 @@ export const OLD_EXPORT_FORMATS: readonly unknown[] = [
   'exercise-planner-export',
 ]
 /**
- * Version 5 files carry each item's details (notes and fields) once per section, beside its plans
- * and log. Version 4 files may carry a note on an exercise or a food in a week's plan (K43); it
- * lifts into the item's details on import, the latest week's winning. Version 3 files carry a mark
- * per day with its drawing (`great`, `partial-solid`, `missed-hatch` … or null). Version 2 files
- * carry the kinds alone, which read as the zigzag; version 1 files a `true` per done day, which
- * reads as `great`. All five import. Settings may carry My goals (`goals`) with no new version,
- * as `foodPick` came: a reader from before them drops the key, and a file without them reads as
- * none. Ask's conversations (`conversations`), which only the API's export writes, came the same
- * way, and so did the `cardio` section (K90): a file without one reads as no cardio.
+ * Version 6 files carry the account's trackers (K123), each tracker's plans and log under
+ * `sections` and its items' details under `details`, both keyed by tracker id. Version 5 files
+ * carry the first three trackers under fixed keys (`exercise`, `cardio`, `diet`), each with its
+ * items' details (notes and fields) beside its plans and log. Version 4 files may carry a note on
+ * an exercise or a food in a week's plan (K43); it lifts into the item's details on import, the
+ * latest week's winning. Version 3 files carry a mark per day with its drawing (`great`,
+ * `partial-solid`, `missed-hatch` … or null). Version 2 files carry the kinds alone, which read as
+ * the zigzag; version 1 files a `true` per done day, which reads as `great`. All six import.
+ * Settings may carry My goals (`goals`) with no new version, as `foodPick` came: a reader from
+ * before them drops the key, and a file without them reads as none. Ask's conversations
+ * (`conversations`), which only the API's export writes, came the same way, and so did the
+ * `cardio` section (K90): a file without one reads as no cardio.
  */
-export const EXPORT_VERSION = 5
+export const EXPORT_VERSION = 6
 /** The last version whose notes live in plan items. */
 const LAST_ITEM_NOTES_VERSION = 4
-const READ_VERSIONS: readonly unknown[] = [1, 2, 3, LAST_ITEM_NOTES_VERSION, EXPORT_VERSION]
+/** The last version whose sections are the first three trackers' fixed keys. */
+const LAST_FIXED_VERSION = 5
+const READ_VERSIONS: readonly unknown[] = [
+  1,
+  2,
+  3,
+  LAST_ITEM_NOTES_VERSION,
+  LAST_FIXED_VERSION,
+  EXPORT_VERSION,
+]
 
-/** One section of an export: its plans and log, and its items' details. */
-export type SectionData<T> = TrackedData<T> & { details: DetailsMap }
+/** One tracker's data in a file: its plans and log, and its items' details. */
+export type SectionData<T = Item> = TrackedData<T> & { details: DetailsMap }
 
 /** Ask's history, in characters (code points, as Python counts them). */
 export const MAX_TITLE = 80
@@ -72,10 +86,13 @@ const STOPS: readonly unknown[] = ['end_turn', 'max_tokens', 'refused', 'error',
 /** The stops that keep their answer; any other turn's answer is ''. */
 const ANSWERED: readonly AskStop[] = ['end_turn', 'max_tokens']
 
+/**
+ * A file as read, whatever its version: its trackers (none before version 6) and each tracker's
+ * data by id. The first three ids are always there, so a file from before version 6 maps onto them.
+ */
 export type ExportData = {
-  exercise: SectionData<Exercise>
-  cardio: SectionData<Cardio>
-  diet: SectionData<Food>
+  trackers: TrackerInfo[]
+  sections: Record<string, SectionData>
   /** Null when the file carries no settings. */
   settings: PortableSettings | null
   /** Present only when the file carries a list of them (the API's export does). */
@@ -86,9 +103,9 @@ export type ExportFile = {
   format: typeof EXPORT_FORMAT
   version: typeof EXPORT_VERSION
   exportedAt: string
-  exercise: SectionData<Exercise>
-  cardio: SectionData<Cardio>
-  diet: SectionData<Food>
+  trackers: TrackerInfo[]
+  sections: Record<string, TrackedData<Item>>
+  details: Record<string, DetailsMap>
   settings: PortableSettings
 }
 
@@ -96,38 +113,65 @@ export type ParseError = 'json' | 'format' | 'version'
 
 export type ParseResult = { ok: true; data: ExportData } | { ok: false; error: ParseError }
 
-/** The theme is left out on purpose: it belongs to the device, not the person. */
+/** No plans, no log and no details. */
+export function emptySection<T = Item>(): SectionData<T> {
+  return { plans: {}, log: {}, details: {} }
+}
+
+/**
+ * The file for the account's trackers, in the week's order, and each tracker's data. The theme is
+ * left out on purpose: it belongs to the device, not the person.
+ */
 export function buildExport(input: {
-  exercise: SectionData<Exercise>
-  cardio: SectionData<Cardio>
-  diet: SectionData<Food>
+  trackers: readonly TrackerInfo[]
+  sections: Readonly<Record<string, SectionData>>
   settings: PortableSettings
   now?: Date
 }): ExportFile {
-  const section = <T>({ plans, log, details }: SectionData<T>) => ({ plans, log, details })
+  const trackers = inOrder(input.trackers).map(
+    ({ id, name, kind, position, dailyTarget, startWeek, endWeek }): TrackerInfo => ({
+      id,
+      name,
+      kind,
+      position,
+      dailyTarget,
+      startWeek,
+      endWeek,
+    }),
+  )
+  const sections: Record<string, TrackedData<Item>> = {}
+  const details: Record<string, DetailsMap> = {}
+  for (const { id } of trackers) {
+    const data = Object.hasOwn(input.sections, id) ? input.sections[id]! : emptySection()
+    sections[id] = { plans: data.plans, log: data.log }
+    details[id] = data.details
+  }
   return {
     format: EXPORT_FORMAT,
     version: EXPORT_VERSION,
     exportedAt: (input.now ?? new Date()).toISOString(),
-    exercise: section(input.exercise),
-    cardio: section(input.cardio),
-    diet: section(input.diet),
+    trackers,
+    sections,
+    details,
     // Normalised as the API's export writes them: the item pages' arrangement only when a type
     // has one (K66).
     settings: normalisePortableSettings(input.settings),
   }
 }
 
+/** `v[key]` when `v` is an object that has it as its own; undefined otherwise. */
+function own(v: unknown, key: string): unknown {
+  return isRecord(v) && Object.hasOwn(v, key) ? v[key] : undefined
+}
+
 /**
- * One section of a file. With `itemNotes` (a file of version 4 or older) the details come from the
- * plans' notes, and any `details` key is not read.
+ * One of the first three trackers' sections in a file of version 5 or older. With `itemNotes` (a
+ * file of version 4 or older) the details come from the plans' notes, and any `details` key is
+ * not read.
  */
-function section<T extends object>(
-  v: unknown,
-  normalise: (item: unknown) => T | null,
-  itemNotes: boolean,
-): SectionData<T> {
-  if (!isRecord(v)) return { plans: {}, log: {}, details: {} }
+function fixedSection(v: unknown, kind: TrackerTypeId, itemNotes: boolean): SectionData {
+  if (!isRecord(v)) return emptySection()
+  const { normalise } = TRACKER_TYPES[kind]
   return {
     plans: normalisePlans(v.plans, normalise),
     log: normaliseLog(v.log),
@@ -135,9 +179,21 @@ function section<T extends object>(
   }
 }
 
+/** One tracker's data in a version 6 file: its section and its details, read apart. */
+function trackerSection(kind: TrackerTypeId, v: unknown, details: unknown): SectionData {
+  return {
+    plans: normalisePlans(own(v, 'plans'), TRACKER_TYPES[kind].normalise),
+    log: normaliseLog(own(v, 'log')),
+    details: normaliseDetailsMap(details),
+  }
+}
+
 /**
  * Read an export file. Anything that is not an object with the right `format` and `version` is
- * rejected whole; inside a valid file, fields are normalised the way stored data is.
+ * rejected whole; inside a valid file, fields are normalised the way stored data is. A file from
+ * before version 6 maps its fixed keys onto the first three trackers' ids. A version 6 file's data
+ * is read for the first three ids and for each of its trackers, by that tracker's kind; data under
+ * any other id is dropped. As the API's `parse_export`.
  */
 export function parseExport(text: string): ParseResult {
   // parseJson maps a syntax error to null, and so does the literal `null`; both are "not JSON".
@@ -152,13 +208,22 @@ export function parseExport(text: string): ParseResult {
   if (!READ_VERSIONS.includes(parsed.version)) {
     return { ok: false, error: 'version' }
   }
-  const itemNotes = (parsed.version as number) <= LAST_ITEM_NOTES_VERSION
-  const data: ExportData = {
-    exercise: section(parsed.exercise, normaliseExercise, itemNotes),
-    cardio: section(parsed.cardio, normaliseCardio, itemNotes),
-    diet: section(parsed.diet, normaliseFood, itemNotes),
-    settings: isRecord(parsed.settings) ? normalisePortableSettings(parsed.settings) : null,
+  const version = parsed.version as number
+  const data: ExportData = { trackers: [], sections: {}, settings: null }
+  if (version <= LAST_FIXED_VERSION) {
+    const itemNotes = version <= LAST_ITEM_NOTES_VERSION
+    for (const id of SECTION_NAMES) {
+      data.sections[id] = fixedSection(parsed[id], SECTIONS[id].id, itemNotes)
+    }
+  } else {
+    data.trackers = normaliseTrackers(parsed.trackers)
+    const kinds = new Map<string, TrackerTypeId>(SECTION_NAMES.map((id) => [id, SECTIONS[id].id]))
+    for (const t of data.trackers) kinds.set(t.id, t.kind)
+    for (const [id, kind] of kinds) {
+      data.sections[id] = trackerSection(kind, own(parsed.sections, id), own(parsed.details, id))
+    }
   }
+  data.settings = isRecord(parsed.settings) ? normalisePortableSettings(parsed.settings) : null
   // Conversations that aren't a list read as none, as in a file from before them.
   if (Array.isArray(parsed.conversations)) {
     data.conversations = normaliseConversations(parsed.conversations)

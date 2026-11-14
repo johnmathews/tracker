@@ -42,11 +42,15 @@ export function readLegacyData(currentWeek: string): ExportData | null {
     !Object.keys(t.plans).length && !Object.keys(t.log).length
   if (empty(exercise) && empty(diet) && !settings) return null
   // No details: these keys were last written before accounts (P9), and notes came after (K43).
-  // No cardio either: it came after accounts (K90).
+  // No cardio either: it came after accounts (K90). No trackers of its own: the data maps onto
+  // the first three, as a file from before trackers does (K123).
   return {
-    exercise: { ...exercise, details: {} },
-    cardio: { plans: {}, log: {}, details: {} },
-    diet: { ...diet, details: {} },
+    trackers: [],
+    sections: {
+      exercise: { ...exercise, details: {} },
+      cardio: { plans: {}, log: {}, details: {} },
+      diet: { ...diet, details: {} },
+    },
     settings,
   }
 }

@@ -7,6 +7,8 @@ import {
   leaveForWeek,
   markFromWeek,
   newItemHref,
+  NEW_TRACKER_HREF,
+  isNewTrackerHash,
   parseItemHash,
   parseNewHash,
   parseSettingsHash,
@@ -28,6 +30,8 @@ describe('an item’s address (#/item/<section>/<id>)', () => {
 
   it('reads back what it wrote', () => {
     expect(parseItemHash('#/item/exercise/pu')).toEqual({ section: 'exercise', id: 'pu' })
+    // Any tracker id reads: whether the account has it is the app's to check (K123).
+    expect(parseItemHash(itemHref('xk3j9a2b1c', 'pu'))).toEqual({ section: 'xk3j9a2b1c', id: 'pu' })
     expect(parseItemHash(itemHref('diet', 'a/b c'))).toEqual({ section: 'diet', id: 'a/b c' })
   })
 
@@ -38,7 +42,9 @@ describe('an item’s address (#/item/<section>/<id>)', () => {
       '#/settings',
       '#/item/exercise',
       '#/item/exercise/',
-      '#/item/food/pu',
+      '#/item/a.b/pu',
+      '#/item/a%20b/pu',
+      `#/item/${'t'.repeat(65)}/pu`,
       '#/item/__proto__/pu',
       '#/item/exercise/__proto__',
       '#/item/exercise/%E0%A4%A',
@@ -59,6 +65,7 @@ describe('the new item page’s address (#/new/<section>, K104)', () => {
     expect(newItemHref('cardio')).toBe('#/new/cardio')
     expect(parseNewHash('#/new/cardio')).toBe('cardio')
     expect(parseNewHash(newItemHref('diet'))).toBe('diet')
+    expect(parseNewHash(newItemHref('x-new_1'))).toBe('x-new_1')
   })
 
   it('reads nothing from any other address', () => {
@@ -67,11 +74,22 @@ describe('the new item page’s address (#/new/<section>, K104)', () => {
       '#/',
       '#/new',
       '#/new/',
-      '#/new/food',
+      '#/new/a.b',
+      '#/new/__proto__',
+      '#/new-tracker',
       '#/new/exercise/x',
       '#/item/exercise/pu',
     ])
       expect(parseNewHash(hash)).toBeNull()
+  })
+})
+
+describe('the new tracker page’s address (#/new-tracker, K124)', () => {
+  it('knows its own address and no other', () => {
+    expect(isNewTrackerHash(NEW_TRACKER_HREF)).toBe(true)
+    expect(NEW_TRACKER_HREF).toBe('#/new-tracker')
+    for (const hash of ['', '#/', '#/new-tracker/x', '#/new/tracker', '#/new-trackers'])
+      expect(isNewTrackerHash(hash)).toBe(false)
   })
 })
 
