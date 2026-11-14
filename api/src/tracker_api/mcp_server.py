@@ -300,27 +300,33 @@ UNDO_HELP = (
 )
 ItemIdArg = Annotated[str, Field(description="The item's `id`, from `week_summary` or `goals`.")]
 SetsArg = Annotated[
-    int | None, Field(description="Strength trackers only: sets, 0 to 20 (0 clears).")
+    int | None, Field(description="Strength and mobility only: sets, 0 to 20 (0 clears).")
 ]
 #: A cardio session runs up to a day (validate.MAX_CARDIO_DURATION).
 RepsArg = Annotated[
     int | None,
     Field(
-        description="Strength trackers only: reps a set, 0 to 9999. Giving reps clears `seconds`."
+        description="Strength and mobility only: reps a set, 0 to 9999. Giving reps clears "
+        "`seconds`."
     ),
 ]
 SecondsArg = Annotated[
     int | None,
     Field(
-        description="Strength: seconds a set for a timed exercise, 0 to 3600 (0 clears); giving "
-        "seconds sets `reps` to 0. Cardio: the whole session's seconds, 0 to 86400 (1800 is 30 "
-        "min; 0 clears)."
+        description="Strength and mobility: seconds a set for a timed exercise or a hold, 0 to "
+        "3600 (0 clears); giving seconds sets `reps` to 0. Cardio: the whole session's "
+        "seconds, 0 to 86400 (1800 is 30 min; 0 clears)."
     ),
 ]
-PerSideArg = Annotated[bool | None, Field(description="Strength trackers only: done on each side.")]
+PerSideArg = Annotated[
+    bool | None, Field(description="Strength and mobility only: done on each side.")
+]
 WeightArg = Annotated[
     float | None,
-    Field(description="Strength trackers only: weight in kg, 0 to 500 (0 is bodyweight)."),
+    Field(
+        description="Strength trackers only: weight in kg, 0 to 500 (0 is bodyweight). A "
+        "mobility item has no weight."
+    ),
 ]
 DistanceArg = Annotated[
     float | None, Field(description="Cardio trackers only: distance in km, 0 to 1000 (0 clears).")
@@ -353,7 +359,8 @@ NoteArg = Annotated[
 MARK_HELP = (
     "How the day went: `great` (done), `partial` (done in part) or `missed` (tried and "
     "couldn't), each alone (the zigzag) or with `-solid` or `-hatch`, the drawings the app "
-    "offers; null clears the day. Strength and cardio trackers take any of them. A food takes "
+    "offers; null clears the day. Strength, cardio and mobility trackers take any of them. A "
+    "food takes "
     "only `great`, `great-solid` or `great-hatch`."
 )
 DailyArg = Annotated[int | None, Field(description="1 to 8. Left as it is when not given.")]
@@ -361,7 +368,8 @@ DailyArg = Annotated[int | None, Field(description="1 to 8. Left as it is when n
 TRACKERS_HELP = (
     "The person keeps their own trackers, each with an id, a name and a kind: `strength` "
     "(exercises with sets, reps or seconds, and weight), `cardio` (sessions with a time and a "
-    "distance, and no daily target) or `food` (foods eaten). Call `list_trackers` to see them."
+    "distance, and no daily target), `food` (foods eaten) or `mobility` (stretches and holds "
+    "with sets, reps or seconds, and no weight). Call `list_trackers` to see them."
 )
 
 
@@ -574,8 +582,9 @@ def _add_tools(server: MCPServer, config: Config) -> None:
     @server.tool(
         title="Add item",
         description="Add an item to a week's plan in one tracker, with a new id: an exercise to "
-        "a strength tracker, a session to a cardio tracker, a food to a food tracker. An "
-        "exercise counts reps or seconds, not both. A cardio item has `seconds` (the whole "
+        "a strength or mobility tracker, a session to a cardio tracker, a food to a food "
+        "tracker. An exercise counts reps or seconds, not both, and a mobility item has no "
+        "weight. A cardio item has `seconds` (the whole "
         "session), `distance_km`, either, both or neither. A new item's goal is 3 times a week "
         f"unless `times_a_week` is given. {SHOWN_HELP} {CARRIED_HELP} {NOTE_HELP} {UNDO_HELP} "
         "Needs a write token.",
@@ -696,7 +705,8 @@ def _add_tools(server: MCPServer, config: Config) -> None:
 
     @server.tool(
         title="Set daily targets",
-        description="Set how many items a day make a day count as met, for one strength or food "
+        description="Set how many items a day make a day count as met, for one strength, food or "
+        "mobility "
         "tracker: give `tracker` and `daily_target`, 1 to 8. The older form still works: "
         "`exercises_a_day` sets the `exercise` tracker's and `foods_a_day` the `diet` "
         "tracker's. The result has each target `before` and `after`, and `daily_goal`. While "

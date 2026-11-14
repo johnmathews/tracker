@@ -60,7 +60,7 @@ from .insights import (
     plan_source,
     week_items,
 )
-from .types import CARDIO, FOOD, STRENGTH, TYPES, TypeId
+from .types import CARDIO, FOOD, MOBILITY, STRENGTH, TYPES, TypeId
 from .validate import (
     BLANK,
     MAX_CARDIO_DURATION,
@@ -108,11 +108,13 @@ TYPE_WORDS: dict[TypeId, tuple[str, ...]] = {
     STRENGTH.id: tuple(w for w in WORDS if w != "distance_km"),
     CARDIO.id: CARDIO_WORDS,
     FOOD.id: FOOD_WORDS,
+    MOBILITY.id: tuple(w for w in WORDS if w not in ("weight_kg", "distance_km")),
 }
 AN_ITEM: dict[TypeId, str] = {
     STRENGTH.id: "an exercise",
     CARDIO.id: "a cardio item",
     FOOD.id: "a food",
+    MOBILITY.id: "a mobility item",
 }
 #: The app's Reps field takes four digits.
 MAX_REPS = 9999
@@ -319,7 +321,7 @@ def _changes(kind: TypeId, fields: Mapping[str, object]) -> Item:
             raise EditError(word, f"{AN_ITEM[kind]} has no {word}; it has {has}")
         out[WORDS[word]] = _field(kind, word, value)
     # An exercise counts reps or seconds: giving one sets the other aside, as the app's form does.
-    if kind == STRENGTH.id:
+    if kind in (STRENGTH.id, MOBILITY.id):
         if out.get("duration", 0) > 0 and "reps" not in out:
             out["reps"] = 0
         if out.get("reps", 0) > 0 and "duration" not in out:

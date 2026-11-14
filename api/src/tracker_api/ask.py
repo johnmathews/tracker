@@ -108,8 +108,8 @@ with their tracking.
 
 How Tracker counts:
 - The person keeps their own trackers. Each has an id, a name and a kind: strength (exercises), \
-cardio, or food. The first message lists the trackers this week shows. The tools take a \
-tracker's id.
+cardio, food, or mobility (stretches and holds). The first message lists the trackers this \
+week shows. The tools take a tracker's id.
 - Each week has a plan in each tracker. Each item in a plan has a weekly goal: the number of \
 days to mark it that week.
 - Cardio is cycling, running and the like. A cardio item may have a duration (seconds, the whole \
@@ -123,11 +123,11 @@ week it was deleted in, but its earlier weeks keep it.
 missed day count too.
 - The tools give great, partial and missed days separately. Report missed and partial days as \
 what they are, never as days done well.
-- A day is met when the items marked that day reach the tracker's daily target. Each strength \
-and food tracker has its own. Cardio has none, so its tools give no met days.
-- When daily_goal is false or a strength or food daily target is null, the person has turned \
-Daily goal off. There is no daily target, and the tools give no met days. Don't mention met days \
-or a number a day.
+- A day is met when the items marked that day reach the tracker's daily target. Each strength, \
+food and mobility tracker has its own. Cardio has none, so its tools give no met days.
+- When daily_goal is false or a strength, food or mobility daily target is null, the person \
+has turned Daily goal off. There is no daily target, and the tools give no met days. Don't \
+mention met days or a number a day.
 - A day after today hasn't happened yet. It is not a gap, and a week that hasn't finished has \
 not fallen short.
 - A goal of 0 asks for nothing and is never met.

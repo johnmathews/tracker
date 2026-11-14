@@ -969,6 +969,36 @@ def test_add_item_and_mark_day_on_a_new_tracker(
     assert tool(agent, writer, "week_summary")["items"][0]["id"] == "pu"
 
 
+def test_add_item_on_a_mobility_tracker_takes_holds_and_reps_and_no_weight(
+    agent: TestClient, conn: sqlite3.Connection, uid: int, writer: str
+) -> None:
+    """W8: a mobility item has sets, then reps or seconds, each side, and no weight."""
+    create_tracker(conn, uid, "xmob1", "Mobility", "mobility", THIS_WEEK)
+    hold = {"tracker": "Mobility", "name": "Hip hold", "sets": 2, "seconds": 45, "per_side": True}
+    out = write(agent, writer, "add_item", hold)
+    assert out["tracker"] == "xmob1"
+    assert {k: v for k, v in out["item"].items() if k != "id"} == {
+        "name": "Hip hold",
+        "sets": 2,
+        "reps": 0,
+        "seconds": 45,
+        "per_side": True,
+        "times_a_week": 3,
+    }
+    reps = write(agent, writer, "add_item", {"tracker": "xmob1", "name": "Cat-cow", "reps": 10})
+    assert (reps["item"]["reps"], "seconds" in reps["item"]) == (10, False)
+    for field, value in (("weight_kg", 8), ("distance_km", 2)):
+        text = write_error(
+            agent, writer, "add_item", {"tracker": "xmob1", "name": "Dips", field: value}
+        )
+        assert f"{field}: a mobility item has no {field}" in text
+    both = {"tracker": "xmob1", "name": "Both", "reps": 5, "seconds": 30}
+    assert "give reps or seconds, not both" in write_error(agent, writer, "add_item", both)
+    summary = tool(agent, writer, "week_summary", tracker="xmob1")
+    assert [it["name"] for it in summary["items"]] == ["Hip hold", "Cat-cow"]
+    assert daily_targets(tool(agent, writer, "goals"))["xmob1"] == 3
+
+
 def test_an_ended_tracker_is_absent_from_its_end_week_on(
     agent: TestClient, conn: sqlite3.Connection, uid: int, writer: str
 ) -> None:
