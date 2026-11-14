@@ -1,4 +1,4 @@
-<!-- @dsCard group="Planner" height=380 subtitle="The section’s name as a title under the fixed week, and Edit plan’s daily target" -->
+<!-- @dsCard group="Planner" height=620 subtitle="The tracker’s name as a title under the fixed week; in Edit plan its pen, daily target, Add and Delete tracker, and renaming" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -36,15 +36,53 @@
     border-radius: var(--radius-md); background: transparent; color: var(--ink); font: 600 16px/1 var(--font-sans); cursor: pointer; }
   .add:hover { background: var(--tile); }
   .add svg { width: 20px; height: 20px; }
+  .ends { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; }
+  /* The title and, in Edit plan, its pen (K124), 14px after it, as an item's name (K121). */
+  .titleline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; min-width: 0; }
+  .pen { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 52px; height: 52px; padding: 0;
+    border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink-secondary); cursor: pointer; }
+  .pen svg { width: 28px; height: 28px; }
+  .pen:hover { background: var(--tile); color: var(--ink); }
+  /* Renaming: a field in the title's own type, up to 420px, with Done (a secondary Button). */
+  input.rename { width: min(100%, 420px); min-width: 0; padding: 6px 14px; border: 1px solid var(--control-border); border-radius: var(--radius-sm);
+    background: var(--panel); color: var(--ink); font: 600 32px/1.15 var(--font-serif); }
+  input.rename:hover { border-color: var(--ink); }
+  .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  @media (max-width: 639px) { input.rename { font-size: 24px; } }
 
   @media (max-width: 639px) { body { padding: var(--space-4); } }
 </style>
 </head>
 <body>
-<p class="variant caption">On a PlannerScreen: the section’s name, under the fixed week</p>
+<p class="variant caption">On a PlannerScreen: the tracker’s name, under the fixed week</p>
 <header class="section-header stack">
   <div class="titles">
-    <h2 class="heading" id="ex">Exercises</h2>
+    <h2 class="heading" id="ex">Strength</h2>
+  </div>
+</header>
+<p class="variant caption">In Edit plan: the pen after the name, then Add and Delete tracker at the line’s end (K122, K124)</p>
+<header class="section-header centred thirds">
+  <div class="titleline">
+    <h2 class="heading" id="st">Strength</h2>
+    <button type="button" class="pen" aria-label="Rename Strength"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></button>
+  </div>
+  <div></div>
+  <div class="end ends">
+    <button type="button" class="add" aria-keyshortcuts="A"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Add exercise</button>
+    <button type="button" class="add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Delete tracker</button>
+  </div>
+</header>
+<p class="variant caption">Renaming: the name in a field in its own type, with Done; Enter saves and Escape puts it back</p>
+<header class="section-header centred thirds">
+  <div class="titleline">
+    <h2 class="heading vh" id="rn">Strength</h2>
+    <input class="rename" aria-label="Name" value="Strength">
+    <button type="button" class="add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Done</button>
+  </div>
+  <div></div>
+  <div class="end ends">
+    <button type="button" class="add" aria-keyshortcuts="A"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Add exercise</button>
+    <button type="button" class="add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Delete tracker</button>
   </div>
 </header>
 <p class="variant caption">In Edit plan: the title, the daily target centred on the line, reading “2 per day”, and Add at the line’s end</p>

@@ -25,6 +25,7 @@
     "ConnectionsSection",
     "ConnectPage",
     "ItemPage",
+    "NewTrackerPage",
     "DayMark",
     "WeekGrid",
     "SectionHeader",
