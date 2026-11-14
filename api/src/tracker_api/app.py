@@ -628,7 +628,9 @@ def create_app(
         events = ask.converse(
             client,
             config.ask_model,
-            ask.messages(question, turns, goals, limits),
+            ask.messages(
+                question, turns, goals, limits, ask.shown_trackers(conn, user.id, question.today)
+            ),
             ask.tools_for(config.db_path, user.id, question.today),
             save,
             {"remaining": left, "conversation": cid},
