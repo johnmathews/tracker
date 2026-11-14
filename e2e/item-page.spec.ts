@@ -23,7 +23,13 @@ test.describe('desktop', () => {
     // Layout A (K65): rows like Settings, in the order This week's plan, Notes, Details, Recent
     // weeks (K104); each heading in the week's 320u name column, its content to the right of it.
     const heads = page.getByRole('heading', { level: 2 })
-    await expect(heads).toHaveText(['This week’s plan', 'Notes', 'Details', 'Recent weeks'])
+    await expect(heads).toHaveText([
+      'This week’s plan',
+      'Notes',
+      'Details',
+      'Recent weeks',
+      'Remove',
+    ])
     const boxes = await Promise.all((await heads.all()).map(async (h) => (await h.boundingBox())!))
     for (const [i, box] of boxes.entries()) {
       expect(Math.abs(box.x - boxes[0]!.x)).toBeLessThan(2)
@@ -145,7 +151,7 @@ test.describe('arranging the sections (K66)', () => {
     // Escape leaves arranging, with focus back on the button.
     await page.keyboard.press('Escape')
     await expect(arrange).toBeFocused()
-    await expect(heads(page)).toHaveText(['Recent weeks', 'This week’s plan', 'Notes'])
+    await expect(heads(page)).toHaveText(['Recent weeks', 'This week’s plan', 'Notes', 'Remove'])
     await expect(page.getByTestId('item-details')).toHaveCount(0)
 
     // It reached the server, as the account's settings.
@@ -158,17 +164,23 @@ test.describe('arranging the sections (K66)', () => {
     // Every exercise's page takes it; a food's page doesn't.
     await page.getByRole('link', { name: 'Back to the week' }).click()
     await nameOf(page, 'Squats').click()
-    await expect(heads(page)).toHaveText(['Recent weeks', 'This week’s plan', 'Notes'])
+    await expect(heads(page)).toHaveText(['Recent weeks', 'This week’s plan', 'Notes', 'Remove'])
     await page.goto('/#/item/diet/veg')
     await expect(page.getByRole('heading', { level: 1, name: 'Vegetables' })).toBeVisible()
-    await expect(heads(page)).toHaveText(['This week’s plan', 'Notes', 'Details', 'Recent weeks'])
+    await expect(heads(page)).toHaveText([
+      'This week’s plan',
+      'Notes',
+      'Details',
+      'Recent weeks',
+      'Remove',
+    ])
 
     // It survives a reload, read back from the server.
     await page.goto('/#/item/exercise/sq')
     await page.reload()
     await expect(page.getByRole('heading', { level: 1, name: 'Squats' })).toBeVisible()
     await settle(page)
-    await expect(heads(page)).toHaveText(['Recent weeks', 'This week’s plan', 'Notes'])
+    await expect(heads(page)).toHaveText(['Recent weeks', 'This week’s plan', 'Notes', 'Remove'])
   })
 })
 
@@ -181,7 +193,7 @@ test.describe('phone, 390px', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Kettlebell halos' })).toBeFocused()
     await settle(page)
     const heads = await page.getByRole('heading', { level: 2 }).allTextContents()
-    expect(heads).toEqual(['This week’s plan', 'Notes', 'Details', 'Recent weeks'])
+    expect(heads).toEqual(['This week’s plan', 'Notes', 'Details', 'Recent weeks', 'Remove'])
     // Each heading over its content: the plan's line starts under its heading, not beside it.
     const plan = (await page
       .getByRole('heading', { level: 2, name: 'This week’s plan' })
