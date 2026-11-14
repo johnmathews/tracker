@@ -3,7 +3,7 @@
 **Question:** where does Edit plan's "Add tracker" sit? The new tracker page (name, kind, starts
 this week empty) and the tracker title's pen (as K121) are shown for comment.
 
-**Status:** open
+**Status:** decided
 
 **Link:** https://claude.ai/artifact/JHaxeQECfjt7QzMnKYkZxX
 
@@ -15,7 +15,7 @@ this week empty) and the tracker title's pen (as K121) are shown for comment.
 
 ## Decision
 
-Pending.
+**A**, picked by John on 2026-11-14 ("lets do option A"), recorded as K124.
 
 ## Rounds
 

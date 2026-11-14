@@ -112,7 +112,7 @@
     trackers shown. Each tracker prints on its own page (K97).
   - The skip link goes to the first tracker.
   - In Edit plan the title line holds the tracker's pen (rename), its daily target, Add and
-    Delete tracker. Add tracker goes where the mockup's pick says.
+    Delete tracker. Add tracker is a bar action in Edit plan (K124).
 - **The Add button's words** come from the kind: "Add exercise" for strength, "Add cardio",
   "Add food" and "Add mobility". They are kind data, like the item label.
 
