@@ -18,14 +18,14 @@ scoped by `user_id`, and no endpoint reads another user's data.
 | ------------------ | --------------------------------------------------------------------------------------------------------------------- |
 | `config.py`        | `Config`, read from the environment (§6)                                                                              |
 | `db.py`            | connections, the schema and its migrations                                                                            |
-| `types.py`         | the tracker-type registry, the port of `src/lib/trackerTypes.ts`: sections, types, their fields                       |
+| `types.py`         | the tracker-kind registry, the port of `src/lib/trackerTypes.ts`: kinds, their fields, the first three trackers' ids  |
 | `item_sections.py` | the item pages' arrangement per type (K66), the port of `src/lib/itemSections.ts`                                     |
 | `validate.py`      | the port of `src/lib/storage.ts` and `src/lib/transfer.ts`, and the write checks REST and MCP share                   |
 | `auth.py`          | password hashing, lockout, sessions, sign-up and its caps, invite, reset and confirmation tokens, personal API tokens, and the one helper that ends tokens and connections together |
 | `outbox.py`        | which emails go out and when: the limits (§4.1), the links, the message                                               |
 | `emails.py`        | the two emails, built to the EmailLayout card, and that card's preview                                                |
 | `mail.py`          | the Resend client, and sending after the response                                                                     |
-| `data.py`          | reading and writing plans, ticks, item details, settings and Ask's history; import, export; the quota (`usage`)       |
+| `data.py`          | reading and writing trackers, plans, ticks, item details, settings and Ask's history; import, export; the quota       |
 | `insights.py`      | read-only views of a user's weeks, counted as the screen counts them (§1.1)                                           |
 | `ask.py`           | Ask (§3.2): the question's checks, the daily caps, the history sent, the prompt, the tools, the Claude loop, saving   |
 | `edits.py`         | the MCP write tools' rules: one item, one mark, one item's notes or the daily targets at a time, as the app does      |
@@ -111,10 +111,11 @@ Every reader keeps these rules:
 | `ask_conversations` | `(user_id, id)`                     | `title` (the first question, trimmed and cut to 80 characters), `created_at`, `updated_at`: Ask's history (§3.2). The id is the account's own                                                                      |
 | `ask_turns`         | `(user_id, conversation_id, seq)`   | `question`, `answer`, `stop` (`end_turn`, `max_tokens`, `refused`, `error` or `cancelled`), `asked_at`: one question and its answer, text only. Only `end_turn` and `max_tokens` keep an answer; any other is `''` |
 | `item_details`      | `(user_id, section, item_id)`       | `details_json` (one document per item for every week: `{notes?, fields?}`), `rev`                                                                                                                                  |
+| `trackers`          | `(user_id, id)`                     | `kind`, `name`, `position`, `daily_target` (NULL for a kind without one), `start_week` and `end_week` (a Monday, `YYYY-MM-DD`, or NULL), `rev`: the account's trackers (K123, §3)                                  |
 
-`section` is `exercise`, `cardio` or `diet`, the registry's sections (`types.py`). No table
-CHECKs it since version 14: the API checks the section against the registry, so a new tracker
-needs no table rebuild. Every row cascades from its user, and an Ask turn from its conversation. Tokens and session ids are
+`section` in `plans`, `ticks` and `item_details` holds a tracker id: `exercise`, `cardio` or
+`diet` for each account's first three trackers, or a random id for one the person made. No table
+CHECKs it since version 14: every write checks the id against the user's `trackers` rows. Every row cascades from its user, and an Ask turn from its conversation. Tokens and session ids are
 stored only as SHA-256 hashes. A database lookup with a stolen copy of the file cannot recover a
 working cookie or link. Times are Unix seconds. The theme is not stored: it belongs to the device.
 
@@ -168,6 +169,18 @@ code.
 Version 15 adds `limits` to `settings` (default `''`), the limits note (K107), so every saved row
 reads as having none. It only adds a column, so rolling the code back leaves it unused.
 
+Version 16 adds `trackers` (K123). Every user gets three rows: `exercise` (kind `strength`,
+"Strength", `daily_target` from `settings.daily_pick`), `cardio` (kind `cardio`, "Cardio", no
+target) and `diet` (kind `food`, "Food", `daily_target` from `settings.food_pick`), at positions
+0 to 2, with no start or end week and revision 1. A user with no settings row gets the defaults,
+3 and 2. A trigger, `users_get_trackers`, gives every user added later the same three. The kind
+`exercise` is `strength` now, so each `settings.item_sections` that holds an object under
+`exercise` moves it to `strength`; anything else in the column is left as it was. Plans, ticks and
+item details don't change. To roll back, run `db.REVERT_TRACKERS` in one transaction before
+starting the older API: it moves the key back, drops the trigger and the table, and sets the
+version to 15. The daily targets need nothing, since the settings kept them in step. Rows of
+trackers made since stay in `plans`, `ticks` and `item_details`, where older code never reads them.
+
 Version 12 adds OAuth's five tables: `oauth_requests`, `oauth_grants`, `oauth_retired`, `oauth_codes` and `oauth_access` (§3.3). It only adds, so it reshapes no data. Every code and token is stored as its SHA-256 only. `oauth_grants` cascades from its user, and the other three grant tables from the grant, so removing a grant removes its codes, access tokens and retired refresh tokens. Rolling the API back leaves the tables unused.
 
 Migrations are a list in `db.py`, and the version is its length. A step is appended, never
@@ -186,7 +199,7 @@ person can never touch the data of someone who signed in later in another tab.
 
 **Exceptions to `/api`.** The three OAuth discovery documents sit outside it (§3.3), and nginx and the Vite dev server forward just those paths to the API.
 
-**Writes** (`POST`, `PUT`, `DELETE`) must send `Content-Type: application/json` and an `Origin`
+**Writes** (`POST`, `PUT`, `PATCH`, `DELETE`) must send `Content-Type: application/json` and an `Origin`
 header equal to `PUBLIC_ORIGIN`; otherwise they get 403 `origin` or 415 `content-type`.
 `/api/mcp` follows its own rules (§3.1), and `/api/oauth/token` and `/api/oauth/revoke` theirs (§3.3). `SameSite=Lax` alone would not stop a request from
 another `*.itsa-pizza.com` host, because the browser counts it as same-site. Bodies over 1 MiB
@@ -209,12 +222,16 @@ but the same `Content-Type` header.
 | `POST /invites/lookup`                     | no      | `{token}` → `{kind, username}` for a live link; 410 `gone` otherwise                                                  |
 | `POST /invites/redeem`                     | no      | `{token, password}` sets the password, consumes the link, signs in                                                    |
 | `GET /state`                               | session | everything the client renders (below)                                                                                 |
-| `PUT /plans/{section}/{week}`              | session | `{items, rev}` → `{rev}`; 409 `conflict` with the server copy                                                         |
+| `GET /trackers`                            | session | `{trackers: [...]}`, the account's trackers, ended ones included (below)                                              |
+| `POST /trackers`                           | session | `{name, kind, id?, week?}` → 201 the new tracker; 200 and the stored one for an id it has (below)                     |
+| `PATCH /trackers/{id}`                     | session | `{rev, name?, position?, dailyTarget?}` → the tracker; 409 `conflict` with the server copy                           |
+| `POST /trackers/{id}/end`                  | session | `{week?}` → the tracker, ended from that week (Delete tracker, K122)                                                  |
+| `PUT /plans/{section}/{week}`              | session | `{items, rev}` → `{rev}`; 409 `conflict` with the server copy. `section` is a tracker id                              |
 | `PUT /ticks/{section}/{week}/{item}/{day}` | session | `{mark}` → `{days}`, the week's seven marks for that item                                                             |
 | `PUT /details/{section}/{item}`            | session | `{details, rev}` → `{rev}`; 409 `conflict` with the server copy (below)                                               |
 | `PUT /settings`                            | session | `{accent, dailyPick, foodPick, dailyGoal, goals, limits, itemSections}` → the stored settings; a missing key keeps the saved one (below) |
 | `GET /export`                              | session | the export file (`architecture.md` §4)                                                                                |
-| `POST /import`                             | session | an export file, merged in; → `{weeks, ticks, details, settings, conversations}` added                                 |
+| `POST /import`                             | session | an export file, merged in; → `{trackers, weeks, ticks, details, settings, conversations}` added                       |
 | `GET /ask`                                 | session | `{remaining, limit}`: questions left today, and the per-account cap (§3.2)                                            |
 | `POST /ask`                                | session | `{question, conversation?, today}` → Claude's answer as a stream of events (§3.2)                                     |
 | `GET /ask/conversations`                   | session | `{conversations: [{id, title, updatedAt, turns}]}`, the one updated last first (§3.2)                                 |
@@ -239,25 +256,75 @@ tabs and clients work unchanged). While mail is on it also carries `confirmed`, 
 address is confirmed. A legacy account still named by a username (below), and every account while
 mail is off, has no such key.
 
-`GET /state` returns `{exercise, cardio, diet, settings}`. Each section is
-`{plans, log, details, revs, detailRevs}`:
+`GET /state` returns `{trackers, sections, details, detailRevs, settings}`, plus the keys of
+the version 5 state, below:
 
-- `plans` and `log` have the same shape as in the app's cache (a log row is seven marks or nulls).
-  Plan items never carry `notes`.
-- `details` maps each item id to its `{notes?, fields?}`, leaving out items whose details were
-  cleared.
-- `revs` maps each planned week to its revision, and `detailRevs` each item id to its details'
-  revision, cleared ones included.
+- `trackers` is the account's trackers, ended ones included, in the week's order (§3, Trackers).
+- `sections` maps each tracker id to `{plans, log, revs}`. `plans` and `log` have the same shape
+  as in the app's cache (a log row is seven marks or nulls). Plan items never carry `notes`.
+  `revs` maps each planned week to its revision.
+- `details` maps each tracker id to its items' details: each item id to its `{notes?, fields?}`,
+  leaving out items whose details were cleared.
+- `detailRevs` maps each tracker id to its details' revisions by item id, cleared ones included.
 
-An account from before Cardio has an empty `cardio` section. Plan items differ by type:
+The first three trackers' data also goes under `exercise`, `cardio` and `diet`, each
+`{plans, log, details, revs, detailRevs}`, as the version 5 state sent it. A tab still running
+that code reads them; a later run removes them. A tracker the person made is only under the new
+keys. Plan items differ by kind:
 
-- an exercise is `{id, name, sets?, reps, duration?, perSide?, weight?, target}`;
+- a strength item (an exercise) is `{id, name, sets?, reps, duration?, perSide?, weight?, target}`;
 - a cardio item (K90) is `{id, name, duration?, distance?, target}`. `duration` is the whole
   session in seconds, 1 to 86,400. `distance` is km, 0.01 to 1,000, rounded to two places as a
   weight is. Each is left out when not set, and an exercise's fields drop;
 - a food is `{id, name, target}`.
 
 `settings` is `{accent, dailyPick, foodPick, dailyGoal, goals, limits, itemSections?}`, or null before any are saved.
+
+**Trackers** (K123, the spec `docs/specs/2026-11-14-account-trackers.md`). A tracker is
+`{id, name, kind, position, dailyTarget, startWeek, endWeek, rev}`:
+
+- `kind` is `strength`, `cardio` or `food` (`types.py`). It is set once.
+- `name` is 1 to 60 characters, trimmed, and need not be unique.
+- `position` is a sort key from 0 to 10,000. The week shows trackers by position, then by id.
+- `dailyTarget` is 1 to 8 for a kind with a daily goal (strength, food) and null for cardio.
+- `startWeek` is the Monday of the week the tracker was created in, null for the first three.
+  `endWeek` is the first week it no longer shows in, null while it is live.
+- `rev` counts its changes, as a plan's revision does.
+
+A tracker shows in the week whose Monday is W when `startWeek <= W` (or it is null) and
+`endWeek > W` (or it is null). `data.shows_in` and `data.trackers_in` hold the rule for the week
+view, the Claude tools and Ask. Each account has at most 100 trackers, ended ones included.
+
+`POST /trackers` takes `{name, kind}`. The tracker goes after the account's others, empty, with
+its kind's default daily target (3 for strength, 2 for food) and `startWeek` the Monday of
+`week` (any day of it, `YYYY-MM-DD`), or of today's week in `TIMEZONE` without one. A client that
+makes the id itself (`newId`: 1 to 64 letters, digits, `-` or `_`, not `__proto__`) sends it as
+`id`, so an outbox that sends the create again gets the stored tracker back with 200, unchanged.
+An id the account has for another kind gets 409 `exists`, and a create past the cap 409
+`too-many`. Without `id`, the server makes one the same way (`edits.new_id`). A name or kind that
+breaks the rules, a bad `id` or a `week` that isn't a date gets 400 `invalid`.
+
+`PATCH /trackers/{id}` takes `rev` and any of `name`, `position` and `dailyTarget`, by the rules
+above. A matching `rev` stores the change and returns the tracker at `rev + 1`. A stale `rev`
+gets 409 `{"error": "conflict", "tracker": t, "rev": n}`, unless the tracker already reads as sent,
+which returns it unchanged. A body with none of the three, a `kind`, or a value outside its rule
+gets 400 `invalid`.
+
+`POST /trackers/{id}/end` is Delete tracker (K122). It sets `endWeek` to the Monday of `week`,
+the week on screen, or of today's week without one, and returns the tracker. Its plans, marks and
+details stay, and earlier weeks still show it. An earlier end stays: ending never brings a week
+back. Nothing brings an ended tracker back yet.
+
+An unknown tracker id gets 404 `not-found` on these routes. A plan, tick or details write whose
+`section` is not one of the account's trackers gets 400 `invalid`, as a section outside the fixed
+three did, and an ended tracker still takes writes, for its earlier weeks. Items are validated
+by the tracker's kind.
+
+**Daily targets** live on the trackers. The `exercise` tracker's is kept in step with
+`settings.dailyPick` and the `diet` tracker's with `foodPick`, both ways, so a tab on older code
+reads and writes them as before. `PUT /settings` moves each tracker's target (and its revision,
+when the number changes), and a `PATCH` of either tracker's `dailyTarget` writes the setting. With
+no settings saved, the tracker holds its target alone. A later run drops the two settings.
 
 **Settings.** `PUT /settings` normalises the accent and daily picks (a bad accent reads as the
 default, a pick is clamped to 1 to 8) and returns what it stored. A body without `foodPick` (K57),
@@ -266,8 +333,11 @@ default, a pick is clamped to 1 to 8) and returns what it stored. A body without
 `foodPick`) are kept but apply nowhere, so no day is met and the insights give no daily target
 (§1.1). A body without `dailyGoal`, or with a value that isn't a boolean, keeps the saved one. The
 state and the export always carry it; a file without it reads as on.
-`itemSections` is each tracker type's item-page arrangement, keyed by type id (`exercise`,
-`food`): `{"exercise": {"order": ["history", "notes", "details", "plan"], "hidden": ["details"]}}`.
+`itemSections` is each tracker kind's item-page arrangement, keyed by kind (`strength`, `cardio`,
+`food`): `{"strength": {"order": ["history", "notes", "details", "plan"], "hidden": ["details"]}}`.
+The key `exercise`, the kind's name before K123, reads as `strength`, and a `strength` key wins
+over it. The state and `PUT /settings` send the strength arrangement under both keys, so a tab on
+older code keeps it; an export sends `strength` alone.
 The keys are `notes`, `details`, `plan` and `history`. A shape the app never sends is refused
 with 400 `invalid` and nothing changes: `itemSections` not an object, a key that is not a
 registry type id, or a type whose `order` or `hidden` is not a list of strings. Within that shape
@@ -348,19 +418,28 @@ details. Settings do not count and are never refused. The quota measures what th
 indexes. The client drops a refused write with a notice that the account is full (`architecture.md`
 §7), and an import says the same.
 
-**Export** writes version 5 of the file. Each section carries `details`, each item id's
-`{notes?, fields?}` without revisions, and each log row is seven marks, drawings included, or
-nulls. Its settings carry `goals` and `limits`, which took no new version, as `foodPick` didn't: a
+**Export** writes version 6 of the file: `{format, version, exportedAt, trackers, sections,
+details, settings, conversations}`. `trackers` is the account's trackers, ended ones included,
+without revisions. `sections` maps each tracker id to its `{plans, log}`, and `details` each
+tracker id to its items' `{notes?, fields?}` without revisions. Each log row is seven marks,
+drawings included, or nulls. Its settings carry `goals` and `limits`, which took no new version, as `foodPick` didn't: a
 reader from before them drops the keys, and a file without them reads as no goals and no limits. The API's export
 also carries `conversations`, Ask's history, the one updated last first, in the shape
 `GET /ask/conversations/{id}` returns; it took no new version either. The browser keeps no
 conversations, so Settings → Export writes the device's plans, marks and settings and takes
 `conversations` from this export (`architecture.md` §4); with none, the file has no such key.
-The `cardio` section (K90) took no new version either: a file without it has no cardio, and a
-reader from before it drops the key.
+Version 5 kept the first three trackers under fixed keys (`exercise`, `cardio`, `diet`), each
+`{plans, log, details}`. Its `cardio` section (K90) took no new version: a file without it has
+no cardio.
 Import reads:
 
-- version 5;
+- version 6. Its trackers normalise: each needs an id by `POST /trackers`' rule, a kind the
+  registry has (the first three ids their own kind) and a name that isn't blank, cut to 60
+  characters. The first of each id is kept, at most 100. A bad position reads as the tracker's
+  place in the list, a daily target is clamped to 1 to 8 (null for cardio), and a week that isn't
+  a week key reads as null. Data is read for the first three ids and for each of the file's
+  trackers, by that tracker's kind; data under any other id is dropped;
+- version 5, whose fixed keys map onto the first three trackers' ids;
 - version 4, whose notes sit on plan items (K43). They lift into `details` by migration 7's rule
   (`lift_notes`: the latest week with a non-blank note, the first copy in it, cut to 500
   characters), and any `details` key in the file is ignored;
@@ -369,12 +448,16 @@ Import reads:
 
 Any other version gets `version`. A file's details document over 32 KB drops out.
 
-**Import** applies the merge rule from `architecture.md` §4: existing weeks keep their plan; per
+**Import** adds the file's trackers the account has no id for, after the account's own and in the
+file's order, each with its name, kind, daily target and weeks, up to the cap. It never changes a
+tracker the account has, and never ends one. Data for a tracker the account lacks, or has with
+another kind, is passed over. Each tracker's data then merges by id under the rule from
+`architecture.md` §4: existing weeks keep their plan; per
 week, item and day a marked day keeps its mark and an empty one takes the file's; an item with
 details keeps them, and one without takes the file's; and settings apply only when the account has
 none, except that the file's My goals fill the account's when those are empty and never replace
 goals already saved, and the limits note does the same. An item whose details were cleared counts as without, and takes the file's as a new
-revision, so a device holding the cleared copy conflicts. It returns what it added (`ticks`
+revision, so a device holding the cleared copy conflicts. It returns what it added (`trackers` counts the trackers added, `ticks`
 counts the empty days that gained a mark, `details` the items that gained details; `settings` is true when the file changed the account's
 settings, its goals or limits alone included; `conversations` counts the conversations added), in one
 transaction. A file's conversation is added only when the account has none with its id, and one
@@ -940,7 +1023,7 @@ fails with status 1 and revokes nothing.
 `PUBLIC_ORIGIN` is `http://localhost` or `http://127.0.0.1` (any port) and `COOKIE_SECURE=false`.
 It creates the account when it doesn't exist (`demo@example.com` with the password
 `demo-password` by default), confirms its email, and merges in three weeks of plans and marks
-ending today through the same merge as Settings → Import. That merge adds a week's plan only where
+ending today, on the first three trackers, through the same merge as Settings → Import. That merge adds a week's plan only where
 the account has none, fills only empty days and gives details only to items that have none, so a
 second run adds nothing, and an existing account keeps its password and every mark and note it
 has. The demo uses the default plan's ids, and shows every kind in every drawing, met and unmet
@@ -1082,7 +1165,10 @@ as whole numbers from 0 to 2^53 − 1, the five stops, no answer kept without `e
 `max_tokens`, the first of each id, and the limits of 500 conversations and 200 turns.
 `merge-conversations.json` holds the import's rule: only ids the account doesn't have are added.
 `tests/test_types.py` and the app's `trackerTypes.spec.ts` both read `fixtures/types/registry.json`,
-so the two registries keep the same sections, types, fields, daily-target keys and new-item goals.
+so the two registries keep the same first three trackers' ids and names, kinds, fields,
+daily-target keys, new trackers' daily targets and new-item goals. The `parse/v6-*.json` cases
+hold a version 6 file's trackers and data by id to one reader, and `sample/export-v6.json` is a
+version 6 export that imports and exports unchanged.
 
 `fixtures/insights/` holds the same contract for what a week shows (§1.1). Each case gives a
 section's plans and log, a week, today and the daily target, and expects the plan week, the
@@ -1122,7 +1208,14 @@ Tests sit in `api/tests/`:
 - `test_api.py`: the HTTP layer: the write guard, error shapes, body limits (chunked too), every
   data endpoint, user isolation, `X-Expected-User`, sign-up and its refusals (closed included),
   the quota on plans, ticks and imports, every mark and the old `done` body, import and export
-  (the sample round trip, version 1 files, existing marks winning).
+  (the sample round trip, version 1 files, existing marks winning), and the strength arrangement
+  under its old key for a tab on older code.
+- `test_trackers.py`: the tracker endpoints (create, the client's id sent again, rename, move, the
+  daily target, revisions and conflicts, 400s, 404s and the cap), the weeks a tracker shows in and
+  Delete tracker keeping its history, writes checked against the user's trackers and validated by
+  kind, users kept apart, the daily targets moving with the settings both ways, the state's new
+  and older keys, and export version 6 into another account, never changing or ending a tracker,
+  the cap, version 5 files and the version 6 sample.
 - `test_auth.py`: hashing one at a time and the busy queue, login, lockout and its window and
   races, sessions sliding and expiring, invite and reset links, races between redemptions;
   sign-up's email rule (254 characters, ASCII), password length, taken emails, `MAX_USERS`, the
@@ -1138,10 +1231,10 @@ Tests sit in `api/tests/`:
 - `test_details.py`: item details: one copy for every week, plans stored with notes read without
   them, validation (trimming, the 20,000 and 500 code-point cuts, field keys and their count, the
   32 KB cap as stored), revisions and conflicts, an empty document keeping its revision, sections
-  and users kept apart, 400s, the quota, export version 5, import keeping existing details, and a
+  and users kept apart, 400s, the quota, export version 6, import keeping existing details, and a
   version 4 file's notes lifting into details.
 - `test_types.py`: the registry against `fixtures/types/registry.json`, the `Section` literal,
-  `validate.py` reading it, and cardio having no daily pick.
+  `validate.py` reading it, the `strength` kind, and cardio having no daily pick or target.
 - `test_seed.py`: `seed-demo` only on a local stack, a confirmed account, three weeks of every mark
   in each tracker, details for three items, an account's own marks and details kept, a second run
   adding nothing, Cardio added to an account seeded before it, and what the CLI prints.
@@ -1164,7 +1257,9 @@ Tests sit in `api/tests/`:
   from a populated database, step 7 lifting each item's latest note, rerunning and on an empty
   database, step 8's empty column, step 9's goals and step 15's limits reading as none, and Ask's tables after steps 10
   and 11 holding text only and going with their user, step 14 keeping every plan and tick and
-  taking a cardio row), configuration from the environment (`TIMEZONE`, and the
+  taking a cardio row, step 16 giving each user the first three trackers with their targets,
+  moving the arrangement's key, passing over what it can't read, the trigger for new users, and
+  `REVERT_TRACKERS` giving back version 15), configuration from the environment (`TIMEZONE`, and the
   week turning over at local midnight), daily copies, `tracker-admin`.
 - `test_mcp.py`: the MCP endpoint through `TestClient`: `initialize`, `tools/list` and `whoami`
   with a token, on both protocol kinds, and each refusal (no, bad, revoked or disabled token; a
