@@ -1,7 +1,8 @@
 /**
  * An in-memory stand-in for the API (docs/api.md), installed as `fetch` in tests. It keeps the
- * rules the client depends on: plan and details revisions with 409s, identical writes on a stale
- * revision succeeding, single-day ticks, settings, sessions, invite links, with `mail` on email
+ * rules the client depends on: the account's trackers (K123) with their revisions, creates sent
+ * again and ends; plan and details revisions with 409s, identical writes on a stale revision
+ * succeeding, single-day ticks, settings, sessions, invite links, with `mail` on email
  * confirmation and reset requests, and with `ask` on Ask's questions, caps and conversation
  * history (§3.2). Controls let a test go offline, fail a request, hold replies back to provoke
  * races, and script or drive an answer's stream. It also keeps personal tokens, connected apps and
@@ -25,22 +26,40 @@ import {
   mergeSummary,
   parseExport,
 } from '@/lib/transfer'
-import type { Section } from '@/lib/trackerTypes'
+import { dateKey, mondayOf } from '@/lib/dates'
+import { TRACKER_TYPES, isTrackerKind, type Section } from '@/lib/trackerTypes'
+import {
+  MAX_TRACKERS,
+  firstTrackers,
+  inOrder,
+  isTrackerId,
+  nextPosition,
+  normaliseTrackerName,
+  type Tracker,
+  type TrackerInfo,
+} from '@/lib/trackers'
 
 type Plan = { items: unknown[]; rev: number }
+/** A map per tracker id: the first three are always there, any other once it has been used. */
+type ByTracker<T> = Record<Section, T> & Partial<Record<string, T>>
 /** An item's stored details: `{}` once cleared, which still holds its revision. */
 type Details = { doc: ItemDetails; rev: number }
 type Settings = PortableSettings
 
 export type Account = {
   password: string
-  plans: Record<Section, Record<string, Plan>>
-  details: Record<Section, Record<string, Details>>
+  /** The account's trackers, ended ones included; the first three as migration 16 makes them. */
+  trackers: Tracker[]
+  plans: ByTracker<Record<string, Plan>>
+  details: ByTracker<Record<string, Details>>
   /** Week → item → a 7-bit mask of its marked days, Monday in bit 0, as the API's `days`. */
-  ticks: Record<Section, Record<string, Record<string, number>>>
+  ticks: ByTracker<Record<string, Record<string, number>>>
   /** The marked days that are partial, and those missed, as the API's `partial` and `missed`. */
-  partial: Record<Section, Record<string, Record<string, number>>>
-  missed: Record<Section, Record<string, Record<string, number>>>
+  partial: ByTracker<Record<string, Record<string, number>>>
+  missed: ByTracker<Record<string, Record<string, number>>>
+  /** The marked days drawn solid, and those hatched, as the API's `solid` and `hatch`. */
+  solid: ByTracker<Record<string, Record<string, number>>>
+  hatch: ByTracker<Record<string, Record<string, number>>>
   settings: Settings | null
   /** Ask's history, the one updated last first, as `GET /api/ask/conversations` lists it. */
   conversations: Conversation[]
@@ -119,11 +138,14 @@ function chunks(texts: string[]): ReadableStream<Uint8Array> {
 function emptyAccount(password: string): Account {
   return {
     password,
+    trackers: firstTrackers(null).map((t) => ({ ...t, rev: 1 })),
     plans: { exercise: {}, cardio: {}, diet: {} },
     details: { exercise: {}, cardio: {}, diet: {} },
     ticks: { exercise: {}, cardio: {}, diet: {} },
     partial: { exercise: {}, cardio: {}, diet: {} },
     missed: { exercise: {}, cardio: {}, diet: {} },
+    solid: { exercise: {}, cardio: {}, diet: {} },
+    hatch: { exercise: {}, cardio: {}, diet: {} },
     settings: null,
     conversations: [],
     tokens: [],
@@ -133,13 +155,47 @@ function emptyAccount(password: string): Account {
 
 const bitOf = (mask: number | undefined, i: number) => (((mask ?? 0) >> i) & 1) === 1
 
+/** A tracker's map in one of the account's tables, created on first use. */
+function mapOf<T>(table: ByTracker<Record<string, T>>, s: string): Record<string, T> {
+  return (table[s] ??= {})
+}
+
 /** An item's seven marks from the three masks, as the API reads them back. */
-function marksOf(a: Account, s: Section, week: string, id: string): Days {
-  return Array.from({ length: 7 }, (_, i) => {
-    if (!bitOf(a.ticks[s][week]?.[id], i)) return null
-    if (bitOf(a.partial[s][week]?.[id], i)) return 'partial'
-    return bitOf(a.missed[s][week]?.[id], i) ? 'missed' : 'great'
+function marksOf(a: Account, s: string, week: string, id: string): Days {
+  return Array.from({ length: 7 }, (_, i): Days[number] => {
+    if (!bitOf(a.ticks[s]?.[week]?.[id], i)) return null
+    const kind = bitOf(a.partial[s]?.[week]?.[id], i)
+      ? 'partial'
+      : bitOf(a.missed[s]?.[week]?.[id], i)
+        ? 'missed'
+        : 'great'
+    if (bitOf(a.solid[s]?.[week]?.[id], i)) return `${kind}-solid`
+    return bitOf(a.hatch[s]?.[week]?.[id], i) ? `${kind}-hatch` : kind
   })
+}
+
+/** Set an item's day in every mask, as the API stores a mark (`days_to_masks`). */
+function setMark(a: Account, s: string, week: string, id: string, day: number, mark: unknown) {
+  const bit = 1 << day
+  const m = typeof mark === 'string' ? mark : ''
+  setBit(mapOf(a.ticks, s), week, id, bit, mark != null)
+  setBit(mapOf(a.partial, s), week, id, bit, m.startsWith('partial'))
+  setBit(mapOf(a.missed, s), week, id, bit, m.startsWith('missed'))
+  setBit(mapOf(a.solid, s), week, id, bit, m.endsWith('-solid'))
+  setBit(mapOf(a.hatch, s), week, id, bit, m.endsWith('-hatch'))
+}
+
+/** The Monday of the week a `YYYY-MM-DD` date falls in, or of today's week; null for a bad date. */
+function mondayKey(v: unknown): string | null {
+  if (v === undefined || v === null) return dateKey(mondayOf(new Date()))
+  const m = typeof v === 'string' ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(v) : null
+  return m ? dateKey(mondayOf(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])))) : null
+}
+
+/** A tracker without its revision, as an export carries it. */
+function infoOf(t: Tracker): TrackerInfo {
+  const { id, name, kind, position, dailyTarget, startWeek, endWeek } = t
+  return { id, name, kind, position, dailyTarget, startWeek, endWeek }
 }
 
 /** Set one mask's bit, creating the week on first use. */
@@ -288,31 +344,70 @@ export class FakeApi {
     return this.calls.map((c) => `${c.method} ${c.path}`).filter((p) => p.includes(prefix))
   }
 
-  state(name: string): unknown {
-    const a = this.accounts.get(name)!
-    const section = (s: Section) => ({
-      plans: Object.fromEntries(Object.entries(a.plans[s]).map(([w, p]) => [w, p.items])),
+  /** One tracker's data as the version 5 state words it: plans, log, details and revisions. */
+  private section(a: Account, s: string) {
+    return {
+      plans: Object.fromEntries(Object.entries(a.plans[s] ?? {}).map(([w, p]) => [w, p.items])),
       log: Object.fromEntries(
-        Object.entries(a.ticks[s]).map(([w, items]) => [
+        Object.entries(a.ticks[s] ?? {}).map(([w, items]) => [
           w,
           Object.fromEntries(Object.keys(items).map((id) => [id, marksOf(a, s, w, id)])),
         ]),
       ),
       // As the API: a cleared document is left out of `details` but keeps its revision.
       details: Object.fromEntries(
-        Object.entries(a.details[s])
+        Object.entries(a.details[s] ?? {})
           .filter(([, d]) => Object.keys(d.doc).length)
           .map(([id, d]) => [id, d.doc]),
       ),
-      revs: Object.fromEntries(Object.entries(a.plans[s]).map(([w, p]) => [w, p.rev])),
-      detailRevs: Object.fromEntries(Object.entries(a.details[s]).map(([id, d]) => [id, d.rev])),
-    })
+      revs: Object.fromEntries(Object.entries(a.plans[s] ?? {}).map(([w, p]) => [w, p.rev])),
+      detailRevs: Object.fromEntries(
+        Object.entries(a.details[s] ?? {}).map(([id, d]) => [id, d.rev]),
+      ),
+    }
+  }
+
+  /**
+   * `GET /api/state` (docs/api.md §3): the trackers, each one's data under `sections`, its items'
+   * details and their revisions under keys of their own, and the settings; plus the version 5
+   * state's `exercise`, `cardio` and `diet`, as the API still sends them.
+   */
+  state(name: string): unknown {
+    const a = this.accounts.get(name)!
+    this.inStep(a)
+    const trackers = inOrder(a.trackers)
+    const each = Object.fromEntries(trackers.map((t) => [t.id, this.section(a, t.id)]))
+    const by = <K extends keyof (typeof each)[string]>(key: K) =>
+      Object.fromEntries(Object.entries(each).map(([id, sec]) => [id, sec[key]]))
     return {
-      exercise: section('exercise'),
-      cardio: section('cardio'),
-      diet: section('diet'),
+      trackers,
+      sections: Object.fromEntries(
+        Object.entries(each).map(([id, { plans, log, revs }]) => [id, { plans, log, revs }]),
+      ),
+      details: by('details'),
+      detailRevs: by('detailRevs'),
+      exercise: this.section(a, 'exercise'),
+      cardio: this.section(a, 'cardio'),
+      diet: this.section(a, 'diet'),
       settings: a.settings,
     }
+  }
+
+  /**
+   * As the API: with settings saved, the `exercise` and `diet` trackers' targets are the daily
+   * picks (K123). A test that sets an account's settings directly gets its trackers in step here.
+   */
+  private inStep(a: Account): void {
+    if (!a.settings) return
+    for (const t of a.trackers) {
+      if (t.id === 'exercise') t.dailyTarget = a.settings.dailyPick
+      if (t.id === 'diet') t.dailyTarget = a.settings.foodPick
+    }
+  }
+
+  /** A tracker of `name`'s, by id. */
+  tracker(name: string, id: string): Tracker | undefined {
+    return this.accounts.get(name)!.trackers.find((t) => t.id === id)
   }
 
   fetch = async (input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> => {
@@ -455,11 +550,26 @@ export class FakeApi {
             : (a.settings?.limits ?? ''),
         itemSections: 'itemSections' in body ? body.itemSections : a.settings?.itemSections,
       })
+      // As the API: the `exercise` and `diet` trackers hold the daily targets in step (K123).
+      for (const [id, target] of [
+        ['exercise', a.settings.dailyPick],
+        ['diet', a.settings.foodPick],
+      ] as const) {
+        const t = a.trackers.find((x) => x.id === id)
+        if (t && t.dailyTarget !== target) Object.assign(t, { dailyTarget: target, rev: t.rev + 1 })
+      }
       return Response.json(a.settings)
     }
-    let m = path.match(/^\/plans\/(exercise|cardio|diet)\/(\d{4}-\d{2}-\d{2})$/)
+    const trackerRoute = this.routeTrackers(a, method, path, body)
+    if (trackerRoute) return trackerRoute
+    // As the API: a write to a tracker the account doesn't have is invalid.
+    const named = /^\/(?:plans|details|ticks)\/([^/]+)\//.exec(path)?.[1]
+    if (method === 'PUT' && named !== undefined && !a.trackers.some((t) => t.id === named)) {
+      return error(400, 'invalid')
+    }
+    let m = path.match(/^\/plans\/([^/]+)\/(\d{4}-\d{2}-\d{2})$/)
     if (method === 'PUT' && m) {
-      const plans = a.plans[m[1] as Section]
+      const plans = mapOf(a.plans, m[1]!)
       const current = plans[m[2]!]
       const rev = current?.rev ?? 0
       if (body.rev === rev) {
@@ -471,9 +581,9 @@ export class FakeApi {
       }
       return error(409, 'conflict', { items: current?.items ?? null, rev })
     }
-    m = path.match(/^\/details\/(exercise|cardio|diet)\/([^/]+)$/)
+    m = path.match(/^\/details\/([^/]+)\/([^/]+)$/)
     if (method === 'PUT' && m) {
-      const all = a.details[m[1] as Section]
+      const all = mapOf(a.details, m[1]!)
       const id = decodeURIComponent(m[2]!)
       const doc = normaliseDetails(body.details)
       if (!doc || typeof body.rev !== 'number') return error(400, 'invalid')
@@ -488,19 +598,103 @@ export class FakeApi {
       }
       return error(409, 'conflict', { details: current?.doc ?? null, rev })
     }
-    m = path.match(/^\/ticks\/(exercise|cardio|diet)\/(\d{4}-\d{2}-\d{2})\/([^/]+)\/([0-6])$/)
+    m = path.match(/^\/ticks\/([^/]+)\/(\d{4}-\d{2}-\d{2})\/([^/]+)\/([0-6])$/)
     if (method === 'PUT' && m) {
-      const [s, week] = [m[1] as Section, m[2]!]
+      const [s, week] = [m[1]!, m[2]!]
       const id = decodeURIComponent(m[3]!)
-      const bit = 1 << Number(m[4])
       // `done` is the body from before marks had kinds, which the API still takes.
       const mark = 'mark' in body ? body.mark : body.done ? 'great' : null
-      setBit(a.ticks[s], week, id, bit, mark != null)
-      setBit(a.partial[s], week, id, bit, mark === 'partial')
-      setBit(a.missed[s], week, id, bit, mark === 'missed')
+      setMark(a, s, week, id, Number(m[4]), mark)
       return Response.json({ days: marksOf(a, s, week, id) })
     }
     return error(404, 'not-found')
+  }
+
+  /**
+   * The tracker routes (docs/api.md §3, Trackers), or null for any other path. A create sent again
+   * with the same id and kind returns the stored tracker with 200; a stale revision conflicts
+   * unless the tracker already reads as sent; an end keeps an earlier one.
+   */
+  private routeTrackers(
+    a: Account,
+    method: string,
+    path: string,
+    body: Record<string, unknown>,
+  ): Response | null {
+    const error = (status: number, code: string, extra: object = {}) =>
+      Response.json({ error: code, ...extra }, { status })
+    this.inStep(a)
+    if (method === 'GET' && path === '/trackers') {
+      return Response.json({ trackers: inOrder(a.trackers) })
+    }
+    if (method === 'POST' && path === '/trackers') {
+      const name = normaliseTrackerName(body.name)
+      const week = mondayKey(body.week)
+      const id = body.id ?? `xs${(this.ids++).toString(36)}`
+      if (name === null || !isTrackerKind(body.kind) || !week || !isTrackerId(id)) {
+        return error(400, 'invalid')
+      }
+      const stored = a.trackers.find((t) => t.id === id)
+      if (stored) return stored.kind === body.kind ? Response.json(stored) : error(409, 'exists')
+      if (a.trackers.length >= MAX_TRACKERS) return error(409, 'too-many')
+      const tracker: Tracker = {
+        id,
+        name,
+        kind: body.kind,
+        position: nextPosition(a.trackers),
+        dailyTarget: TRACKER_TYPES[body.kind].dailyTarget,
+        startWeek: week,
+        endWeek: null,
+        rev: 1,
+      }
+      a.trackers.push(tracker)
+      return Response.json(tracker, { status: 201 })
+    }
+    let m = /^\/trackers\/([^/]+)\/end$/.exec(path)
+    if (method === 'POST' && m) {
+      const t = a.trackers.find((x) => x.id === m![1])
+      if (!t) return error(404, 'not-found')
+      const week = mondayKey(body.week)
+      if (!week) return error(400, 'invalid')
+      if (t.endWeek === null || week < t.endWeek) t.endWeek = week
+      t.rev += 1
+      return Response.json(t)
+    }
+    m = /^\/trackers\/([^/]+)$/.exec(path)
+    if (method === 'PATCH' && m) {
+      const t = a.trackers.find((x) => x.id === m![1])
+      if (!t) return error(404, 'not-found')
+      const changes: Partial<Tracker> = {}
+      if ('name' in body) {
+        const name = normaliseTrackerName(body.name)
+        if (name === null) return error(400, 'invalid')
+        changes.name = name
+      }
+      if ('position' in body) changes.position = Number(body.position)
+      if ('dailyTarget' in body) {
+        const target = body.dailyTarget as number | null
+        if ((TRACKER_TYPES[t.kind].dailyTarget === null) !== (target === null)) {
+          return error(400, 'invalid')
+        }
+        changes.dailyTarget = target
+      }
+      if (!Object.keys(changes).length || typeof body.rev !== 'number') {
+        return error(400, 'invalid')
+      }
+      const merged = { ...t, ...changes }
+      if (body.rev !== t.rev) {
+        if (JSON.stringify(merged) === JSON.stringify(t)) return Response.json(t)
+        return error(409, 'conflict', { tracker: t, rev: t.rev })
+      }
+      Object.assign(t, changes, { rev: t.rev + 1 })
+      // As the API: the first trackers' targets write the settings kept in step with them.
+      if (a.settings && changes.dailyTarget != null) {
+        if (t.id === 'exercise') a.settings.dailyPick = changes.dailyTarget
+        if (t.id === 'diet') a.settings.foodPick = changes.dailyTarget
+      }
+      return Response.json(t)
+    }
+    return null
   }
 
   /**
@@ -665,23 +859,21 @@ export class FakeApi {
     )
   }
 
-  /** `GET /api/export`: the account's data and its Ask history (docs/api.md §3). */
+  /** `GET /api/export`: the account's trackers, their data and its Ask history (docs/api.md §3). */
   private exportFile(a: Account): object {
-    const state = this.state(this.signedIn!) as Record<
-      Section,
-      { plans: object; log: object; details: object }
-    >
+    const trackers = inOrder(a.trackers)
     return {
       format: EXPORT_FORMAT,
       version: EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      exercise: {
-        plans: state.exercise.plans,
-        log: state.exercise.log,
-        details: state.exercise.details,
-      },
-      cardio: { plans: state.cardio.plans, log: state.cardio.log, details: state.cardio.details },
-      diet: { plans: state.diet.plans, log: state.diet.log, details: state.diet.details },
+      trackers: trackers.map(infoOf),
+      sections: Object.fromEntries(
+        trackers.map((t) => {
+          const { plans, log } = this.section(a, t.id)
+          return [t.id, { plans, log }]
+        }),
+      ),
+      details: Object.fromEntries(trackers.map((t) => [t.id, this.section(a, t.id).details])),
       settings: a.settings,
       conversations: a.conversations,
     }
@@ -694,36 +886,40 @@ export class FakeApi {
   private import(a: Account, body: unknown): Response {
     const parsed = parseExport(JSON.stringify(body))
     if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 })
+    // As the API: trackers the account lacks are added after its own, in the file's order.
+    let trackers = 0
+    for (const t of parsed.data.trackers) {
+      if (a.trackers.some((x) => x.id === t.id) || a.trackers.length >= MAX_TRACKERS) continue
+      a.trackers.push({ ...t, position: nextPosition(a.trackers), rev: 1 })
+      trackers++
+    }
+    const kinds = new Map(parsed.data.trackers.map((t) => [t.id, t.kind]))
     let weeks = 0
     let ticks = 0
     let details = 0
-    for (const section of ['exercise', 'cardio', 'diet'] as const) {
-      const incoming = parsed.data[section]
-      const existing = this.state(this.signedIn!) as Record<Section, never>
-      const added = mergeSummary(existing[section], incoming)
+    for (const [section, incoming] of Object.entries(parsed.data.sections)) {
+      // Data for a tracker the account doesn't have, or has as another kind, is skipped.
+      const mine = a.trackers.find((t) => t.id === section)
+      const kind = kinds.get(section) ?? mine?.kind
+      if (!mine || mine.kind !== kind) continue
+      const added = mergeSummary(this.section(a, section), incoming)
       weeks += added.weeks
       ticks += added.ticks
       details += added.details
       for (const [week, items] of Object.entries(incoming.plans)) {
-        a.plans[section][week] ??= { items, rev: 1 }
+        mapOf(a.plans, section)[week] ??= { items, rev: 1 }
       }
       for (const [id, doc] of Object.entries(incoming.details)) {
-        const current = a.details[section][id]
+        const current = mapOf(a.details, section)[id]
         if (!current?.doc || !Object.keys(current.doc).length) {
-          a.details[section][id] = { doc, rev: (current?.rev ?? 0) + 1 }
+          mapOf(a.details, section)[id] = { doc, rev: (current?.rev ?? 0) + 1 }
         }
       }
       for (const [week, entries] of Object.entries(incoming.log)) {
         for (const [id, days] of Object.entries(entries)) {
           // A marked day keeps its mark; an empty one takes the file's.
           const before = marksOf(a, section, week, id)
-          days.forEach((mark, i) => {
-            const kept = before[i] ?? mark
-            const bit = 1 << i
-            setBit(a.ticks[section], week, id, bit, kept !== null)
-            setBit(a.partial[section], week, id, bit, kept === 'partial')
-            setBit(a.missed[section], week, id, bit, kept === 'missed')
-          })
+          days.forEach((mark, i) => setMark(a, section, week, id, i, before[i] ?? mark))
         }
       }
     }
@@ -735,6 +931,7 @@ export class FakeApi {
     const before = a.conversations.length
     a.conversations = mergeConversations(a.conversations, parsed.data.conversations ?? [])
     return Response.json({
+      trackers,
       weeks,
       ticks,
       details,

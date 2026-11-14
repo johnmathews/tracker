@@ -1,12 +1,14 @@
 import { useAskStore } from '@/stores/ask'
 import { useDetailsStore } from '@/stores/details'
-import { useCardioStore } from '@/stores/cardio'
-import { useDietStore } from '@/stores/diet'
 import { usePlannerStore } from '@/stores/planner'
+import { useTrackersStore } from '@/stores/trackers'
+import { SECTIONS, isSection } from '@/lib/trackerTypes'
 import { mergeSummary, type ExportData } from '@/lib/transfer'
 import { countOf } from '@/lib/words'
 
 export type Additions = {
+  /** Trackers the account doesn't have yet (K123). */
+  trackers: number
   plans: number
   ticks: number
   /** Items gaining notes or details. */
@@ -36,30 +38,37 @@ function listed(parts: string[]): string {
  */
 export function useImportSummary() {
   const planner = usePlannerStore()
-  const cardio = useCardioStore()
-  const diet = useDietStore()
+  const trackers = useTrackersStore()
   const ask = useAskStore()
   const details = useDetailsStore()
 
   function additions(data: ExportData): Additions {
-    const ex = mergeSummary(
-      { plans: planner.plans, log: planner.log, details: details.docs.exercise },
-      data.exercise,
-    )
-    const ca = mergeSummary(
-      { plans: cardio.plans, log: cardio.log, details: details.docs.cardio },
-      data.cardio,
-    )
-    const di = mergeSummary(
-      { plans: diet.plans, log: diet.log, details: details.docs.diet },
-      data.diet,
-    )
+    const kinds = new Map(data.trackers.map((t) => [t.id, t.kind]))
+    let [plans, ticks, items] = [0, 0, 0]
+    // Each tracker's plans count separately: a week can gain any of them. Data for no tracker of
+    // the file's, or for one the account has as another kind, is skipped, as the API's import
+    // skips it.
+    for (const [id, incoming] of Object.entries(data.sections)) {
+      const kind = kinds.get(id) ?? (isSection(id) ? SECTIONS[id].id : null)
+      if (kind === null || (trackers.has(id) && trackers.kindOf(id) !== kind)) continue
+      const added = mergeSummary(
+        {
+          plans: trackers.plansOf(id),
+          log: trackers.logOf(id),
+          details: Object.hasOwn(details.docs, id) ? details.docs[id]! : {},
+        },
+        incoming,
+      )
+      plans += added.weeks
+      ticks += added.ticks
+      items += added.details
+    }
     const here = new Set(ask.conversations.map((c) => c.id))
-    // Each section's plans count separately: a week can gain any of them.
     return {
-      plans: ex.weeks + ca.weeks + di.weeks,
-      ticks: ex.ticks + ca.ticks + di.ticks,
-      details: ex.details + ca.details + di.details,
+      trackers: data.trackers.filter((t) => !trackers.has(t.id)).length,
+      plans,
+      ticks,
+      details: items,
       settings: data.settings !== null && planner.savedSettings() === null,
       // As mergeSettings: the file's goals fill empty ones, and never replace any.
       goals: !!data.settings?.goals && !planner.goals,
@@ -71,6 +80,7 @@ export function useImportSummary() {
   function addsAnything(data: ExportData): boolean {
     const a = additions(data)
     return (
+      a.trackers > 0 ||
       a.plans > 0 ||
       a.ticks > 0 ||
       a.details > 0 ||
@@ -82,11 +92,21 @@ export function useImportSummary() {
   }
 
   function describe(data: ExportData): string {
-    const { plans, ticks, details: items, settings, goals, limits, conversations } = additions(data)
+    const {
+      trackers: added,
+      plans,
+      ticks,
+      details: items,
+      settings,
+      goals,
+      limits,
+      conversations,
+    } = additions(data)
     // Notes and fields come once per item (D2), so they count by item. The settings as Edit plan
     // names them: Exercises a day and Foods a day (K56). The file's accent comes too, but nothing
     // shows it any more, so the summary leaves it out.
     const extras: string[] = []
+    if (added) extras.push(countOf(added, 'tracker'))
     if (items) extras.push(`the notes and details of ${countOf(items, 'item')}`)
     if (settings) extras.push('the exercises and foods a day')
     if (goals) extras.push('your goals')

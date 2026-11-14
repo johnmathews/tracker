@@ -8,10 +8,7 @@ import {
   isRecord,
   liftNotes,
   normaliseDetails,
-  normaliseCardio,
   normaliseDetailsMap,
-  normaliseExercise,
-  normaliseFood,
   normaliseLog,
   normalisePlans,
   normalisePortableSettings,
@@ -19,22 +16,33 @@ import {
   readKey,
   removeKey,
   writeKey,
-  type Cardio,
   type DetailsMap,
-  type Exercise,
-  type Food,
   type KnownSettings,
   type Log,
   type Mark,
   type PortableSettings,
 } from '@/lib/storage'
 import type { Plans } from '@/lib/plans'
-import { SECTION_NAMES, isSection, type Section } from '@/lib/trackerTypes'
-import { EXPORT_FORMAT, EXPORT_VERSION, type ExportData } from '@/lib/transfer'
-import { useCardioStore } from '@/stores/cardio'
+import { SECTIONS, SECTION_NAMES, TRACKER_TYPES, type Item } from '@/lib/trackerTypes'
+import {
+  MAX_TRACKERS,
+  firstTrackers,
+  isTrackerId,
+  normaliseTracker,
+  type Tracker,
+  type TrackerInfo,
+} from '@/lib/trackers'
+import {
+  EXPORT_FORMAT,
+  EXPORT_VERSION,
+  buildExport,
+  type ExportData,
+  type ExportFile,
+  type SectionData,
+} from '@/lib/transfer'
 import { useDetailsStore } from '@/stores/details'
-import { useDietStore } from '@/stores/diet'
 import { usePlannerStore } from '@/stores/planner'
+import { useTrackersStore } from '@/stores/trackers'
 
 /**
  * Keeps the stores and the API in step (docs/architecture.md §7).
@@ -45,74 +53,106 @@ import { usePlannerStore } from '@/stores/planner'
  * is waiting to go out, so a refresh can never undo an edit that hasn't reached the server yet.
  */
 
-export const CACHE_PREFIX = 'tracker-cache-v5:'
-export const OUTBOX_PREFIX = 'tracker-outbox-v5:'
+export const CACHE_PREFIX = 'tracker-cache-v6:'
+export const OUTBOX_PREFIX = 'tracker-outbox-v6:'
 /**
- * The names of earlier formats, newest first (K14): `-v4` from before Cardio (K90), which holds
- * item details already, `-v3` from before item details (its plan items
- * carry their notes), `-v2` from before the solid and hatch drawings, `-v1` from before marks had
- * kinds. A tab still open on older code reads a mark it doesn't know as an empty day and writes its
- * copy back, which empties the boxes in every newer tab; it could also drop their queued marks. A
- * new format takes new names, so the two never read each other.
+ * The names of earlier formats, newest first (K14): `-v5` from before trackers were the
+ * account's own (K123), whose sections are the first three trackers' ids; `-v4` from before Cardio
+ * (K90), which holds item details already; `-v3` from before item details (its plan items carry
+ * their notes); `-v2` from before the solid and hatch drawings; `-v1` from before marks had kinds.
+ * A tab still open on older code reads a mark it doesn't know as an empty day and writes its copy
+ * back, which empties the boxes in every newer tab; it could also drop their queued marks. A new
+ * format takes new names, so the two never read each other.
  * `src/lib/__tests__/format.spec.ts` fails a format change that keeps the old names. The app's
  * rename (K44) moved every `fitness-planner-…` key to `tracker-…` before the stores start
  * (`migrateKeyPrefix`), so the earlier versions are found under the new prefix.
  */
 export const OLD_CACHE_PREFIXES = [
+  'tracker-cache-v5:',
   'tracker-cache-v4:',
   'tracker-cache-v3:',
   'tracker-cache-v2:',
   'tracker-cache-v1:',
 ] as const
 export const OLD_OUTBOX_PREFIXES = [
+  'tracker-outbox-v5:',
   'tracker-outbox-v4:',
   'tracker-outbox-v3:',
   'tracker-outbox-v2:',
   'tracker-outbox-v1:',
 ] as const
 /** The earlier formats that hold item details already (D2): they move as they are, lifting nothing. */
-const WITH_DETAILS: readonly string[] = ['tracker-cache-v4:', 'tracker-outbox-v4:']
+const WITH_DETAILS: readonly string[] = [
+  'tracker-cache-v5:',
+  'tracker-outbox-v5:',
+  'tracker-cache-v4:',
+  'tracker-outbox-v4:',
+]
 
+/**
+ * A change for the server. `section` is a tracker id (K123): the first three trackers keep the old
+ * section names, so an outbox from before trackers were the account's own sends as it is.
+ */
 export type Op =
-  | { kind: 'plan'; section: Section; week: string }
-  | { kind: 'tick'; section: Section; week: string; item: string; day: number; mark: Mark | null }
+  | { kind: 'plan'; section: string; week: string }
+  | { kind: 'tick'; section: string; week: string; item: string; day: number; mark: Mark | null }
   /**
    * `lifted`: queued by `moveOldKeys` from a `-v3` cache whose plan writes were still queued. The
    * server's rev 1 is then migration 7's copy of the old note, which this one replaces.
    */
-  | { kind: 'details'; section: Section; item: string; lifted?: true }
+  | { kind: 'details'; section: string; item: string; lifted?: true }
   | { kind: 'settings' }
+  /** A tracker made here: sent with its id, so sending it again is safe. */
+  | { kind: 'tracker-create'; section: string }
+  /** A tracker's name, position or daily target, sent with the revision last seen. */
+  | { kind: 'tracker-patch'; section: string }
+  /** Delete tracker (K122): the tracker ends from `week`, the week that was on screen. */
+  | { kind: 'tracker-end'; section: string; week: string }
 
 /**
- * An operation in the outbox. Plan, details and settings operations read their values when sent,
- * so two versions of one look alike; the id tells a newer one from the one already in flight.
+ * An operation in the outbox. Plan, details, settings and tracker operations read their values
+ * when sent, so two versions of one look alike; the id tells a newer one from the one already in
+ * flight.
  */
 type Queued = Op & { id: string }
 
 type Tracked = { plans: Plans<unknown>; log: Log; details: DetailsMap }
-type Revs = Record<Section, Record<string, number>>
+type Revs = Record<string, Record<string, number>>
 /**
- * One section of `GET /api/state` and of the cache: its plans, log and items' details, the plans'
- * revisions by week, and the details' by item id (`detailRevs` also lists items whose details were
- * cleared, which `details` leaves out).
+ * One tracker's part of the cache: its plans, log and items' details, the plans' revisions by
+ * week, and the details' by item id (`detailRevs` also lists items whose details were cleared,
+ * which `details` leaves out).
  */
-type SectionState<T> = {
-  plans: Plans<T>
+type SectionState = {
+  plans: Plans<Item>
   log: Log
   details: DetailsMap
   revs: Record<string, number>
   detailRevs: Record<string, number>
 }
-/** The shape of `GET /api/state`, and of the cache. */
+/**
+ * The cache: the account's trackers with their revisions, each tracker's data by id, and the
+ * settings. `GET /api/state` sends the same, with each tracker's details and their revisions under
+ * keys of their own (`stateFromApi`).
+ */
 export type SyncState = {
-  exercise: SectionState<Exercise>
-  cardio: SectionState<Cardio>
-  diet: SectionState<Food>
+  trackers: Tracker[]
+  sections: Record<string, SectionState>
   settings: KnownSettings | null
 }
-type Snapshot = { exercise: Tracked; cardio: Tracked; diet: Tracked; settings: PortableSettings }
-/** What `POST /api/import` added; `conversations` counts Ask's (docs/api.md §3). */
+/** The settings the diff compares: the daily picks are the trackers' (K123). */
+type SettingsSnapshot = Omit<PortableSettings, 'dailyPick' | 'foodPick'>
+type Snapshot = {
+  trackers: Record<string, TrackerInfo>
+  sections: Record<string, Tracked>
+  settings: SettingsSnapshot
+}
+/**
+ * What `POST /api/import` added; `conversations` counts Ask's and `trackers` the trackers the
+ * account didn't have (docs/api.md §3).
+ */
 export type ImportAdded = {
+  trackers?: number
   weeks: number
   ticks: number
   details: number
@@ -127,6 +167,8 @@ export const CONFLICT_NOTICE =
   'A plan was changed on another device, so this device now shows that version.'
 export const DETAILS_CONFLICT_NOTICE =
   'An item’s notes or details were changed on another device, so this device now shows that version.'
+export const TRACKER_CONFLICT_NOTICE =
+  'A tracker was changed on another device, so this device now shows that version.'
 /** A write refused because the account is at its quota (413 `quota`, docs/api.md §3). */
 export const QUOTA_NOTICE = 'Your account is full, so a change was undone here.'
 export const REFUSED_NOTICE =
@@ -154,7 +196,7 @@ function unhandled(op: never): never {
   throw new Error(`sync: no handler for ${JSON.stringify(op)}`)
 }
 
-/** What a queued operation replaces: one per plan, cell, item's details, and settings. */
+/** What a queued operation replaces: one per plan, cell, item's details, settings and tracker change. */
 function opKey(op: Op): string {
   switch (op.kind) {
     case 'plan':
@@ -165,6 +207,10 @@ function opKey(op: Op): string {
       return `details/${op.section}/${op.item}`
     case 'settings':
       return 'settings'
+    case 'tracker-create':
+    case 'tracker-patch':
+    case 'tracker-end':
+      return `${op.kind}/${op.section}`
     /* v8 ignore next 2 */
     default:
       return unhandled(op)
@@ -187,13 +233,14 @@ function upgradeQueued(v: unknown): unknown {
 function isQueued(v: unknown): v is Queued {
   if (!isRecord(v) || typeof v.id !== 'string') return false
   if (v.kind === 'settings') return true
-  const sectionOk = isSection(v.section)
+  const sectionOk = isTrackerId(v.section)
+  if (v.kind === 'tracker-create' || v.kind === 'tracker-patch') return sectionOk
   if (v.kind === 'details') {
     const liftedOk = v.lifted === undefined || v.lifted === true
     return sectionOk && liftedOk && typeof v.item === 'string' && isItemId(v.item)
   }
   const weekOk = typeof v.week === 'string' && WEEK_KEY.test(v.week)
-  if (v.kind === 'plan') return sectionOk && weekOk
+  if (v.kind === 'plan' || v.kind === 'tracker-end') return sectionOk && weekOk
   return (
     v.kind === 'tick' &&
     sectionOk &&
@@ -206,55 +253,131 @@ function isQueued(v: unknown): v is Queued {
   )
 }
 
-/** No revisions yet, for every section. */
-function noRevs(): Revs {
-  return Object.fromEntries(SECTION_NAMES.map((s) => [s, {}])) as Revs
-}
-
 function newId(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
+}
+
+/** A revision: a whole number above 0; null for anything else. */
+function revOf(v: unknown): number | null {
+  return typeof v === 'number' && Number.isInteger(v) && v > 0 ? v : null
 }
 
 function revsOf(v: unknown): Record<string, number> {
   const out: Record<string, number> = {}
   if (!isRecord(v)) return out
-  for (const [key, rev] of Object.entries(v)) {
-    if (typeof rev === 'number' && Number.isInteger(rev) && rev > 0) out[key] = rev
+  for (const [key, raw] of Object.entries(v)) {
+    const rev = revOf(raw)
+    if (rev !== null) out[key] = rev
+  }
+  return out
+}
+
+/** `v[key]` when `v` is an object that has it as its own; undefined otherwise. */
+function own(v: unknown, key: string): unknown {
+  return isRecord(v) && Object.hasOwn(v, key) ? v[key] : undefined
+}
+
+/** A tracker without its revision: what the stores hold. */
+function infoOf(t: Tracker): TrackerInfo {
+  const { id, name, kind, position, dailyTarget, startWeek, endWeek } = t
+  return { id, name, kind, position, dailyTarget, startWeek, endWeek }
+}
+
+/** A tracker from the API, validated as a file's is, with its revision (0 when it has none). */
+function storedTracker(v: unknown, position: number): Tracker | null {
+  const info = normaliseTracker(v, position)
+  return info && { ...info, rev: revOf(own(v, 'rev')) ?? 0 }
+}
+
+/** A list of trackers from the cache or the API: the valid ones, the first of each id. */
+function storedTrackers(v: unknown[]): Tracker[] {
+  const out: Tracker[] = []
+  const seen = new Set<string>()
+  for (const [i, raw] of v.entries()) {
+    const t = storedTracker(raw, i)
+    if (!t || seen.has(t.id)) continue
+    seen.add(t.id)
+    out.push(t)
+    if (out.length === MAX_TRACKERS) break
   }
   return out
 }
 
 /**
- * One section of a state, validated with the stored data's rules. With `itemNotes` (a cache from
- * before item details) its details come from its plans' notes, as an old export's do (D3).
+ * One tracker's part of a state, validated with the stored data's rules for its kind. With
+ * `itemNotes` (a cache from before item details) its details come from its plans' notes, as an
+ * old export's do (D3).
  */
-function sectionState<T extends object>(
-  v: Record<string, unknown>,
-  normalise: (item: unknown) => T | null,
-  itemNotes: boolean,
-): SectionState<T> {
+function sectionState(
+  v: unknown,
+  normalise: (item: unknown) => Item | null,
+  itemNotes = false,
+): SectionState {
+  const plans = own(v, 'plans')
   return {
-    plans: normalisePlans(v.plans, normalise),
-    log: normaliseLog(v.log),
-    details: itemNotes ? liftNotes(v.plans, normalise) : normaliseDetailsMap(v.details),
-    revs: revsOf(v.revs),
-    detailRevs: revsOf(v.detailRevs),
+    plans: normalisePlans(plans, normalise),
+    log: normaliseLog(own(v, 'log')),
+    details: itemNotes ? liftNotes(plans, normalise) : normaliseDetailsMap(own(v, 'details')),
+    revs: revsOf(own(v, 'revs')),
+    detailRevs: revsOf(own(v, 'detailRevs')),
   }
 }
 
 /**
- * Validate a state from the cache or the API with the same rules as stored data. `itemNotes` reads
- * a cache from before item details (`-v3` and older), lifting its plan notes into details. Cardio
- * came later (K90) with no new format: a cache, or an API mid-deploy, without it reads as no cardio.
+ * Validate the cache with the same rules as stored data: its trackers, then each tracker's data by
+ * its kind. Data for an id with no tracker is dropped. Null for anything without a list of
+ * trackers, such as a cache in an older format.
  */
-export function normaliseState(v: unknown, itemNotes = false): SyncState | null {
-  if (!isRecord(v) || !isRecord(v.exercise) || !isRecord(v.diet)) return null
-  return {
-    exercise: sectionState(v.exercise, normaliseExercise, itemNotes),
-    cardio: sectionState(isRecord(v.cardio) ? v.cardio : {}, normaliseCardio, itemNotes),
-    diet: sectionState(v.diet, normaliseFood, itemNotes),
-    settings: isRecord(v.settings) ? knownSettings(v.settings) : null,
+export function normaliseState(v: unknown): SyncState | null {
+  if (!isRecord(v) || !Array.isArray(v.trackers)) return null
+  const trackers = storedTrackers(v.trackers)
+  const sections: Record<string, SectionState> = {}
+  for (const t of trackers) {
+    sections[t.id] = sectionState(own(v.sections, t.id), TRACKER_TYPES[t.kind].normalise)
   }
+  return { trackers, sections, settings: isRecord(v.settings) ? knownSettings(v.settings) : null }
+}
+
+/**
+ * `GET /api/state` as a state (docs/api.md §3): `{trackers, sections, details, detailRevs,
+ * settings}`, each tracker's details and their revisions moved into its section. The keys of the
+ * version 5 state that the API still sends (`exercise`, `cardio`, `diet`) are not read. Null when
+ * the reply has no list of trackers.
+ */
+export function stateFromApi(v: unknown): SyncState | null {
+  if (!isRecord(v)) return null
+  const sections: Record<string, unknown> = {}
+  if (Array.isArray(v.trackers)) {
+    for (const raw of v.trackers) {
+      const id = own(raw, 'id')
+      if (!isTrackerId(id)) continue
+      sections[id] = {
+        plans: own(own(v.sections, id), 'plans'),
+        log: own(own(v.sections, id), 'log'),
+        revs: own(own(v.sections, id), 'revs'),
+        details: own(v.details, id),
+        detailRevs: own(v.detailRevs, id),
+      }
+    }
+  }
+  return normaliseState({ trackers: v.trackers, sections, settings: v.settings })
+}
+
+/**
+ * A cache from before trackers were the account's own (`-v5` and older) as a state: its fixed
+ * sections become the first three trackers, named and with the daily targets its settings hold,
+ * their revisions not known yet (0). `itemNotes` reads a cache from before item details (`-v3` and
+ * older), lifting its plan notes into details. Cardio came later (K90) with no new format: a cache
+ * without it reads as no cardio.
+ */
+export function legacyState(v: unknown, itemNotes = false): SyncState | null {
+  if (!isRecord(v) || !isRecord(v.exercise) || !isRecord(v.diet)) return null
+  const settings = isRecord(v.settings) ? knownSettings(v.settings) : null
+  const sections: Record<string, SectionState> = {}
+  for (const id of SECTION_NAMES) {
+    sections[id] = sectionState(v[id], SECTIONS[id].normalise, itemNotes)
+  }
+  return { trackers: firstTrackers(settings).map((t) => ({ ...t, rev: 0 })), sections, settings }
 }
 
 /**
@@ -272,12 +395,31 @@ function knownSettings(v: Record<string, unknown>): KnownSettings {
   }
 }
 
-/** The operations that take the server from `base` to `local`. */
+const NO_TRACKED: Tracked = { plans: {}, log: {}, details: {} }
+
+/**
+ * The operations that take the server from `base` to `local`. Tracker operations come first, so a
+ * new tracker exists on the server before its plans, marks and details are sent. A tracker is never
+ * deleted: one gone from `local` sends nothing.
+ */
 export function diff(base: Snapshot, local: Snapshot): Op[] {
   const ops: Op[] = []
-  for (const section of SECTION_NAMES) {
-    const b = base[section]
-    const l = local[section]
+  for (const [section, l] of Object.entries(local.trackers)) {
+    const b = Object.hasOwn(base.trackers, section) ? base.trackers[section] : undefined
+    if (!b) {
+      ops.push({ kind: 'tracker-create', section })
+      continue
+    }
+    if (l.name !== b.name || l.position !== b.position || l.dailyTarget !== b.dailyTarget) {
+      ops.push({ kind: 'tracker-patch', section })
+    }
+    if (l.endWeek !== null && l.endWeek !== b.endWeek) {
+      ops.push({ kind: 'tracker-end', section, week: l.endWeek })
+    }
+  }
+  for (const section of new Set([...Object.keys(base.sections), ...Object.keys(local.sections)])) {
+    const b = base.sections[section] ?? NO_TRACKED
+    const l = local.sections[section] ?? NO_TRACKED
     for (const [week, items] of Object.entries(l.plans)) {
       if (JSON.stringify(items) !== JSON.stringify(b.plans[week])) {
         ops.push({ kind: 'plan', section, week })
@@ -306,8 +448,6 @@ export function diff(base: Snapshot, local: Snapshot): Op[] {
   const { settings: ls } = local
   if (
     bs.accent !== ls.accent ||
-    bs.dailyPick !== ls.dailyPick ||
-    bs.foodPick !== ls.foodPick ||
     bs.dailyGoal !== ls.dailyGoal ||
     bs.goals !== ls.goals ||
     bs.limits !== ls.limits ||
@@ -319,13 +459,19 @@ export function diff(base: Snapshot, local: Snapshot): Op[] {
   return ops
 }
 
+/** The earlier of two end weeks; null is no end. */
+function earlier(a: string | null, b: string | null): string | null {
+  if (a === null) return b
+  if (b === null) return a
+  return a < b ? a : b
+}
+
 /** A send's outcome: `done` drops the operation, `again` sends it again now, `stop` ends the flush. */
 type Outcome = 'done' | 'again' | 'stop'
 
 export const useSyncStore = defineStore('sync', () => {
   const planner = usePlannerStore()
-  const cardio = useCardioStore()
-  const diet = useDietStore()
+  const trackers = useTrackersStore()
   const details = useDetailsStore()
 
   const user = ref<string | null>(null)
@@ -345,8 +491,11 @@ export const useSyncStore = defineStore('sync', () => {
   const blank = ref(false)
 
   let base: Snapshot | null = null
-  let revs: Revs = noRevs()
-  let detailRevs: Revs = noRevs()
+  /** Each tracker's plans' revisions by week, and its items' details' by item id. */
+  let revs: Revs = {}
+  let detailRevs: Revs = {}
+  /** Each tracker's revision, by tracker id; one not seen yet is missing. */
+  let trackerRevs: Record<string, number> = {}
   let stopWatch: WatchStopHandle | null = null
   let retryTimer: ReturnType<typeof setTimeout> | undefined
   let retryDelay = FIRST_RETRY
@@ -366,50 +515,84 @@ export const useSyncStore = defineStore('sync', () => {
 
   const cacheKey = () => CACHE_PREFIX + user.value
   const outboxKey = () => OUTBOX_PREFIX + user.value
-  /** Each section's store, keyed by the registry's sections: a new section must add its own. */
-  const stores = { exercise: planner, cardio, diet } satisfies Record<
-    Section,
-    { plans: Plans<unknown> }
-  >
+
+  /** One tracker's revisions in `map`, created on first use. */
+  function revsFor(map: Revs, section: string): Record<string, number> {
+    if (!Object.hasOwn(map, section)) map[section] = {}
+    return map[section]!
+  }
+
+  /** The base's copy of one tracker's data, created on first use. */
+  function baseSection(section: string): Tracked {
+    if (!Object.hasOwn(base!.sections, section)) {
+      base!.sections[section] = { plans: {}, log: {}, details: {} }
+    }
+    return base!.sections[section]!
+  }
+
   /**
-   * Take the server's copy of a week's plan, from a conflict. The base first: adopting their copy
-   * is then no change to send back.
+   * Take the server's copy of a week's plan, from a conflict, read by the tracker's kind. The base
+   * first: adopting their copy is then no change to send back.
    */
-  const adoptTheirs: Record<Section, (week: string, items: unknown[]) => void> = {
-    exercise(week, items) {
-      const theirs = normalisePlans({ [week]: items }, normaliseExercise)[week]!
-      base!.exercise.plans[week] = clone(theirs)
-      planner.adoptWeek(week, theirs)
-    },
-    cardio(week, items) {
-      const theirs = normalisePlans({ [week]: items }, normaliseCardio)[week]!
-      base!.cardio.plans[week] = clone(theirs)
-      cardio.adoptWeek(week, theirs)
-    },
-    diet(week, items) {
-      const theirs = normalisePlans({ [week]: items }, normaliseFood)[week]!
-      base!.diet.plans[week] = clone(theirs)
-      diet.adoptWeek(week, theirs)
-    },
+  function adoptTheirs(section: string, week: string, items: unknown[]): void {
+    const { normalise } = trackers.typeOf(section)
+    const theirs = normalisePlans({ [week]: items }, normalise)[week]!
+    baseSection(section).plans[week] = clone(theirs)
+    trackers.adoptWeek(section, week, theirs)
   }
 
   /** Take the server's copy of an item's details, from a conflict; the base first, as above. */
-  function adoptTheirDetails(section: Section, item: string, raw: unknown): void {
+  function adoptTheirDetails(section: string, item: string, raw: unknown): void {
     const theirs = normaliseDetails(raw) ?? {}
-    if (Object.keys(theirs).length) base![section].details[item] = clone(theirs)
-    else delete base![section].details[item]
+    const doc = baseSection(section).details
+    if (Object.keys(theirs).length) doc[item] = clone(theirs)
+    else delete doc[item]
     details.adoptItem(section, item, theirs)
   }
 
+  /**
+   * Take the server's copy of a tracker, from a conflict; the base first, as above. An end this
+   * device made stays when it is earlier: the diff then sends it again.
+   */
+  function adoptTheirTracker(theirs: TrackerInfo): void {
+    base!.trackers[theirs.id] = clone(theirs)
+    const mine = trackers.get(theirs.id)
+    trackers.adoptTracker({ ...theirs, endWeek: earlier(mine?.endWeek ?? null, theirs.endWeek) })
+  }
+
+  /**
+   * The daily picks the settings carry, from the `exercise` and `diet` trackers (K123). Each has a
+   * target whatever is loaded: the kind's default stands in until the trackers are.
+   */
+  function picks(): Pick<KnownSettings, 'dailyPick' | 'foodPick'> {
+    return { dailyPick: trackers.dailyTarget('exercise')!, foodPick: trackers.dailyTarget('diet')! }
+  }
+
+  /** The settings to cache, or null while the user has none of their own. */
+  function savedSettings(): KnownSettings | null {
+    const settings = planner.savedSettings()
+    return settings && { ...settings, ...picks() }
+  }
+
   function local(): Snapshot {
+    const ids = new Set([
+      ...trackers.list.map((t) => t.id),
+      ...Object.keys(trackers.data),
+      ...Object.keys(details.docs),
+    ])
+    const sections: Record<string, Tracked> = {}
+    for (const id of ids) {
+      sections[id] = {
+        plans: trackers.plansOf(id),
+        log: trackers.logOf(id),
+        details: Object.hasOwn(details.docs, id) ? details.docs[id]! : {},
+      }
+    }
     return clone({
-      exercise: { plans: planner.plans, log: planner.log, details: details.docs.exercise },
-      cardio: { plans: cardio.plans, log: cardio.log, details: details.docs.cardio },
-      diet: { plans: diet.plans, log: diet.log, details: details.docs.diet },
+      trackers: Object.fromEntries(trackers.list.map((t) => [t.id, t])),
+      sections,
       settings: {
         accent: planner.accent,
-        dailyPick: planner.dailyPick,
-        foodPick: planner.foodPick,
         ...(planner.dailyGoalKnown ? { dailyGoal: planner.dailyGoal } : {}),
         goals: planner.goals,
         limits: planner.limits,
@@ -430,8 +613,9 @@ export const useSyncStore = defineStore('sync', () => {
   }
 
   /**
-   * Add operations, each replacing any queued one for the same plan, cell, details or settings. A
-   * details write that replaces a lifted one is lifted too: it still has the old note to replace.
+   * Add operations, each replacing any queued one for the same plan, cell, details, settings or
+   * tracker change. A details write that replaces a lifted one is lifted too: it still has the old
+   * note to replace.
    */
   function enqueue(ops: Op[]): void {
     const keys = new Set(ops.map(opKey))
@@ -454,13 +638,19 @@ export const useSyncStore = defineStore('sync', () => {
 
   function persistCache(): void {
     const snapshot = local()
-    // The snapshot's plans are the stores' own, so they hold each section's items.
-    const cache = {
-      exercise: { ...snapshot.exercise, revs: revs.exercise, detailRevs: detailRevs.exercise },
-      cardio: { ...snapshot.cardio, revs: revs.cardio, detailRevs: detailRevs.cardio },
-      diet: { ...snapshot.diet, revs: revs.diet, detailRevs: detailRevs.diet },
-      settings: planner.savedSettings(),
-    } as SyncState
+    const sections: Record<string, SectionState> = {}
+    for (const [id, section] of Object.entries(snapshot.sections)) {
+      sections[id] = {
+        ...(section as SectionState),
+        revs: revs[id] ?? {},
+        detailRevs: detailRevs[id] ?? {},
+      }
+    }
+    const cache: SyncState = {
+      trackers: trackers.list.map((t) => ({ ...clone(t), rev: trackerRevs[t.id] ?? 0 })),
+      sections,
+      settings: savedSettings(),
+    }
     writeKey(cacheKey(), cache)
   }
 
@@ -469,24 +659,23 @@ export const useSyncStore = defineStore('sync', () => {
    * leaves the cache alone: another tab's state is already there, in that tab's words.
    */
   function adopt(state: SyncState, persist = true): void {
-    revs = noRevs()
-    detailRevs = noRevs()
-    for (const section of SECTION_NAMES) {
-      revs[section] = { ...state[section].revs }
-      detailRevs[section] = { ...state[section].detailRevs }
+    revs = {}
+    detailRevs = {}
+    trackerRevs = {}
+    for (const t of state.trackers) if (t.rev > 0) trackerRevs[t.id] = t.rev
+    const data: Record<string, { plans: Plans<Item>; log: Log }> = {}
+    const docs: Record<string, DetailsMap> = {}
+    for (const [id, section] of Object.entries(state.sections)) {
+      revs[id] = { ...section.revs }
+      detailRevs[id] = { ...section.detailRevs }
+      data[id] = { plans: section.plans, log: section.log }
+      docs[id] = section.details
     }
     adopting = true
     try {
-      planner.adopt(clone({ plans: state.exercise.plans, log: state.exercise.log }), state.settings)
-      cardio.adopt(clone({ plans: state.cardio.plans, log: state.cardio.log }))
-      diet.adopt(clone({ plans: state.diet.plans, log: state.diet.log }))
-      details.adopt(
-        clone({
-          exercise: state.exercise.details,
-          cardio: state.cardio.details,
-          diet: state.diet.details,
-        }),
-      )
+      planner.adopt(clone(state.settings))
+      trackers.adopt(clone(state.trackers.map(infoOf)), clone(data))
+      details.adopt(clone(docs))
     } finally {
       adopting = false
     }
@@ -536,7 +725,7 @@ export const useSyncStore = defineStore('sync', () => {
   }
 
   /** A request on behalf of the signed-in user, which the API refuses for anyone else. */
-  function call<T>(method: 'GET' | 'POST' | 'PUT', path: string, body?: unknown) {
+  function call<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH', path: string, body?: unknown) {
     return request<T>(method, path, body, { 'X-Expected-User': user.value ?? '' })
   }
 
@@ -546,24 +735,24 @@ export const useSyncStore = defineStore('sync', () => {
     gen: number,
   ): Promise<Outcome | ApiError> {
     const { section, week } = op
-    const plans = stores[section].plans
+    const plans = trackers.plansOf(section)
     // Gone from the stores (another tab's state, a damaged cache): sending [] would wipe it.
-    if (!(week in plans)) return 'done'
+    if (!Object.hasOwn(plans, week)) return 'done'
     const res = await call<{ rev: number }>('PUT', `/plans/${section}/${week}`, {
       items: plans[week],
-      rev: revs[section][week] ?? 0,
+      rev: revsFor(revs, section)[week] ?? 0,
     })
     if (gen !== generation) return 'stop'
     if (res.ok) {
-      revs[section][week] = res.data.rev
+      revsFor(revs, section)[week] = res.data.rev
       return 'done'
     }
     if (res.error.kind !== 'conflict') return res.error
     const { body } = res.error
-    revs[section][week] = body.rev
+    revsFor(revs, section)[week] = body.rev
     // The server has no plan for the week: send ours again as a create.
     if (!Array.isArray(body.items)) return 'again'
-    adoptTheirs[section](week, body.items)
+    adoptTheirs(section, week, body.items)
     notice.value = CONFLICT_NOTICE
     return 'done'
   }
@@ -594,7 +783,7 @@ export const useSyncStore = defineStore('sync', () => {
   ): Promise<Outcome | ApiError> {
     const { section, item } = op
     if (!isDetailsId(item)) return { kind: 'refused', status: 400, code: 'invalid' }
-    const rev = detailRevs[section][item] ?? 0
+    const rev = revsFor(detailRevs, section)[item] ?? 0
     const res = await call<{ rev: number }>(
       'PUT',
       `/details/${section}/${encodeURIComponent(item)}`,
@@ -602,13 +791,13 @@ export const useSyncStore = defineStore('sync', () => {
     )
     if (gen !== generation) return 'stop'
     if (res.ok) {
-      detailRevs[section][item] = res.data.rev
+      revsFor(detailRevs, section)[item] = res.data.rev
       return 'done'
     }
     const { error } = res
     if (error.kind === 'refused' && error.status === 404) return { kind: 'server', status: 404 }
     if (error.kind !== 'conflict') return error
-    detailRevs[section][item] = error.body.rev
+    revsFor(detailRevs, section)[item] = error.body.rev
     // The item has never had details on the server: send ours again as a create.
     if (error.body.details === null || error.body.details === undefined) return 'again'
     // Rev 1 under a lifted write is migration 7's copy of the old note: ours is newer, as the
@@ -623,11 +812,12 @@ export const useSyncStore = defineStore('sync', () => {
     // The arrangement always goes, `{}` for the default: the API keeps the saved one when the
     // key is missing (an older tab), so leaving it out could never reset it. Goals go only once
     // this tab has read them or the person set them: an absent key keeps the saved ones (F1).
-    // Your limits (K107) and Daily goal (K85) the same way.
+    // Your limits (K107) and Daily goal (K85) the same way. The daily picks are the `exercise`
+    // and `diet` trackers' targets, which the API keeps in step with them (K123): a missing
+    // `dailyPick` would reset the target.
     const res = await call('PUT', '/settings', {
       accent: planner.accent,
-      dailyPick: planner.dailyPick,
-      foodPick: planner.foodPick,
+      ...picks(),
       itemSections: planner.itemSections,
       ...(planner.dailyGoalKnown ? { dailyGoal: planner.dailyGoal } : {}),
       ...(planner.goalsKnown ? { goals: planner.goals } : {}),
@@ -635,6 +825,98 @@ export const useSyncStore = defineStore('sync', () => {
     })
     if (gen !== generation) return 'stop'
     return res.ok ? 'done' : res.error
+  }
+
+  /**
+   * A tracker made here, sent with its own id and the week it starts in (`POST /api/trackers`).
+   * Sent again, the server returns the one it holds (200). The server places it last: its position
+   * is taken here, and anything changed since the create was queued (a name, a daily target, an
+   * end) is then queued as its own write.
+   */
+  async function sendCreate(
+    op: Extract<Queued, { kind: 'tracker-create' }>,
+    gen: number,
+  ): Promise<Outcome | ApiError> {
+    const mine = trackers.get(op.section)
+    // Gone from the stores (another tab's state): there is nothing to create.
+    if (!mine) return 'done'
+    const res = await call<unknown>('POST', '/trackers', {
+      id: mine.id,
+      name: mine.name,
+      kind: mine.kind,
+      week: mine.startWeek ?? planner.weekKey,
+    })
+    if (gen !== generation) return 'stop'
+    if (!res.ok) return res.error
+    const theirs = storedTracker(res.data, mine.position)
+    if (!theirs) return 'done'
+    trackerRevs[theirs.id] = theirs.rev
+    base!.trackers[theirs.id] = infoOf(theirs)
+    const now = trackers.get(op.section)
+    if (now && now.position !== theirs.position) {
+      trackers.adoptTracker({ ...now, position: theirs.position })
+    }
+    capture()
+    return 'done'
+  }
+
+  /**
+   * A tracker's name, position and daily target as they are now, with the revision last seen
+   * (`PATCH /api/trackers/{id}`). A 409 brings the server's copy in, as a plan's does, unless this
+   * device never saw a revision of the tracker (a cache from before trackers): its change then
+   * goes again at the server's revision.
+   */
+  async function sendPatch(
+    op: Extract<Queued, { kind: 'tracker-patch' }>,
+    gen: number,
+  ): Promise<Outcome | ApiError> {
+    const mine = trackers.get(op.section)
+    if (!mine) return 'done'
+    const rev = trackerRevs[mine.id] ?? 0
+    const res = await call<unknown>('PATCH', `/trackers/${encodeURIComponent(mine.id)}`, {
+      rev,
+      name: mine.name,
+      position: mine.position,
+      dailyTarget: mine.dailyTarget,
+    })
+    if (gen !== generation) return 'stop'
+    if (res.ok) {
+      const saved = revOf(own(res.data, 'rev'))
+      if (saved !== null) trackerRevs[mine.id] = saved
+      return 'done'
+    }
+    if (res.error.kind !== 'conflict') return res.error
+    const { body } = res.error
+    trackerRevs[mine.id] = body.rev
+    if (rev === 0) return 'again'
+    const theirs = normaliseTracker(body.tracker, mine.position)
+    if (theirs) adoptTheirTracker(theirs)
+    notice.value = TRACKER_CONFLICT_NOTICE
+    return 'done'
+  }
+
+  /**
+   * Delete tracker (K122): the tracker ends from the week that was on screen
+   * (`POST /api/trackers/{id}/end`). The server keeps an earlier end, and so does this device.
+   */
+  async function sendEnd(
+    op: Extract<Queued, { kind: 'tracker-end' }>,
+    gen: number,
+  ): Promise<Outcome | ApiError> {
+    const { section, week } = op
+    const res = await call<unknown>('POST', `/trackers/${encodeURIComponent(section)}/end`, {
+      week,
+    })
+    if (gen !== generation) return 'stop'
+    if (!res.ok) return res.error
+    const theirs = storedTracker(res.data, 0)
+    if (!theirs) return 'done'
+    trackerRevs[section] = theirs.rev
+    if (base!.trackers[section]) base!.trackers[section].endWeek = theirs.endWeek
+    const mine = trackers.get(section)
+    const end = earlier(mine?.endWeek ?? null, theirs.endWeek)
+    if (mine && mine.endWeek !== end) trackers.adoptTracker({ ...mine, endWeek: end })
+    return 'done'
   }
 
   /**
@@ -656,6 +938,15 @@ export const useSyncStore = defineStore('sync', () => {
         break
       case 'settings':
         result = await sendSettings(gen)
+        break
+      case 'tracker-create':
+        result = await sendCreate(op, gen)
+        break
+      case 'tracker-patch':
+        result = await sendPatch(op, gen)
+        break
+      case 'tracker-end':
+        result = await sendEnd(op, gen)
         break
       /* v8 ignore next 2 */
       default:
@@ -683,7 +974,8 @@ export const useSyncStore = defineStore('sync', () => {
   /**
    * Send queued operations in order until the outbox is empty or a send cannot finish. Details
    * wait while edits are still coming (DETAILS_DELAY), unless `now`; the rest go past them, since
-   * nothing else depends on an item's details being sent first (a tick does on its week's plan).
+   * nothing else depends on an item's details being sent first (a tick does on its week's plan,
+   * and every write on its tracker's create).
    */
   function flush(now = false): Promise<void> {
     if (flushing) return flushing
@@ -699,7 +991,7 @@ export const useSyncStore = defineStore('sync', () => {
         if (outcome === 'done') dequeue(op)
         retryDelay = FIRST_RETRY
         // A new revision, or the server's copy after a conflict, belongs in the cache.
-        if (op.kind === 'plan' || op.kind === 'details') persistCache()
+        if (op.kind !== 'tick' && op.kind !== 'settings') persistCache()
       }
       if (gen === generation) status.value = 'idle'
     })().finally(() => {
@@ -732,7 +1024,7 @@ export const useSyncStore = defineStore('sync', () => {
       status.value = 'idle'
       retryDelay = FIRST_RETRY
       fresh.value = true
-      const state = normaliseState(res.data)
+      const state = stateFromApi(res.data)
       blank.value = state !== null && state.settings === null
       // A change made while the read was in flight is newer than the reply: keep it.
       capture()
@@ -747,7 +1039,8 @@ export const useSyncStore = defineStore('sync', () => {
   /**
    * Merge `data` into the account on the server (`POST /api/import`), then show the result. Local
    * writes go first, so the server merges against everything this device has; the server's merge
-   * never deletes (docs/architecture.md §4). One request, however much the data holds.
+   * never deletes (docs/architecture.md §4). One request, however much the data holds: a file of
+   * any version goes as version 6, its data under the trackers' ids.
    */
   async function importFile(data: ExportData): Promise<ImportOutcome> {
     if (!user.value) return { ok: false, code: 'auth' }
@@ -761,13 +1054,19 @@ export const useSyncStore = defineStore('sync', () => {
     if (readOutbox().length) {
       return { ok: false, code: status.value === 'offline' ? 'offline' : 'server' }
     }
+    const sections: Record<string, { plans: Plans<Item>; log: Log }> = {}
+    const docs: Record<string, DetailsMap> = {}
+    for (const [id, section] of Object.entries(data.sections)) {
+      sections[id] = { plans: section.plans, log: section.log }
+      docs[id] = section.details
+    }
     const file = {
       format: EXPORT_FORMAT,
       version: EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
-      exercise: data.exercise,
-      cardio: data.cardio,
-      diet: data.diet,
+      trackers: data.trackers,
+      sections,
+      details: docs,
       ...(data.settings ? { settings: data.settings } : {}),
       // Ask's history: the server adds the ones it has no id for, and never changes the rest.
       ...(data.conversations ? { conversations: data.conversations } : {}),
@@ -797,14 +1096,17 @@ export const useSyncStore = defineStore('sync', () => {
    * cache under a newer name wins; queued writes from all of them are kept, the newer for the same
    * cell. The old keys go, so an old tab still open finds nothing of this tab's to overwrite.
    *
-   * A `-v4` cache and outbox hold item details already: they move as they are. Every older cache is
-   * from before item details, so its plan notes lift into details (D3). The
-   * server lifted the same notes from its own plans (migration 7), so they are not sent, except in
-   * a section whose plan writes were still queued: a note there may not have reached the server.
-   * Those go as lifted writes, which replace the migration's copy (rev 1) of the old note; an item
-   * in a queued week's plan with no note in the cache sends a cleared document, since its note may
-   * have been cleared offline. A note changed on the server since (rev 2 on) is a conflict, which
-   * brings the server's copy in. An id the details path can't name (`isDetailsId`) queues nothing.
+   * Every old cache holds the first three trackers under fixed keys: it moves as their sections
+   * (`legacyState`). Its outbox's operations name those trackers' ids already, so they move as
+   * they are and are sent as they were queued: offline changes made on older code still reach the
+   * server. A `-v5` or `-v4` cache and outbox hold item details already. Every older cache is from
+   * before item details, so its plan notes lift into details (D3). The server lifted the same notes
+   * from its own plans (migration 7), so they are not sent, except in a section whose plan writes
+   * were still queued: a note there may not have reached the server. Those go as lifted writes,
+   * which replace the migration's copy (rev 1) of the old note; an item in a queued week's plan with
+   * no note in the cache sends a cleared document, since its note may have been cleared offline. A
+   * note changed on the server since (rev 2 on) is a conflict, which brings the server's copy in.
+   * An id the details path can't name (`isDetailsId`) queues nothing.
    */
   function moveOldKeys(name: string): void {
     let old: SyncState | null = null
@@ -812,14 +1114,14 @@ export const useSyncStore = defineStore('sync', () => {
       const oldCache = readKey(prefix + name)
       if (oldCache === null) continue
       const lift = !WITH_DETAILS.includes(prefix)
-      const state = normaliseState(parseJson(oldCache), lift)
+      const state = legacyState(parseJson(oldCache), lift)
       if (state && readKey(cacheKey()) === null) {
         writeKey(cacheKey(), state)
         if (lift) old = state
       }
       removeKey(prefix + name)
     }
-    const unsent = new Map<Section, Set<string>>()
+    const unsent = new Map<string, Set<string>>()
     for (const prefix of OLD_OUTBOX_PREFIXES) {
       const oldOps = parseJson(readKey(prefix + name))
       if (Array.isArray(oldOps)) {
@@ -837,10 +1139,11 @@ export const useSyncStore = defineStore('sync', () => {
     if (!old) return
     const items = new Map<string, Op>()
     for (const [section, weeks] of unsent) {
-      const { details: lifted, plans } = old[section]
+      const kept = old.sections[section]
+      if (!kept) continue
       const ids = [
-        ...Object.keys(lifted),
-        ...[...weeks].flatMap((week) => (plans[week] ?? []).map((it) => it.id)),
+        ...Object.keys(kept.details),
+        ...[...weeks].flatMap((week) => (kept.plans[week] ?? []).map((it) => it.id)),
       ]
       for (const item of ids) {
         if (isDetailsId(item)) {
@@ -863,16 +1166,10 @@ export const useSyncStore = defineStore('sync', () => {
     pending.value = readOutbox().length
     stopWatch = watch(
       () => [
-        planner.plans,
-        planner.log,
-        cardio.plans,
-        cardio.log,
-        diet.plans,
-        diet.log,
+        trackers.list,
+        trackers.data,
         details.docs,
         planner.accent,
-        planner.dailyPick,
-        planner.foodPick,
         planner.dailyGoal,
         planner.goals,
         planner.limits,
@@ -898,8 +1195,9 @@ export const useSyncStore = defineStore('sync', () => {
     readPending = false
     retryDelay = FIRST_RETRY
     base = null
-    revs = noRevs()
-    detailRevs = noRevs()
+    revs = {}
+    detailRevs = {}
+    trackerRevs = {}
     user.value = null
     loaded.value = false
     fresh.value = false
@@ -944,6 +1242,20 @@ export const useSyncStore = defineStore('sync', () => {
     notice.value = null
   }
 
+  /**
+   * The export file of what this device holds, unsynced changes included: every tracker, ended ones
+   * too, with its data, and the settings with the daily picks (Settings › Export).
+   */
+  function exportFile(now = new Date()): ExportFile {
+    const { sections, settings } = local()
+    return buildExport({
+      trackers: trackers.list,
+      sections: sections as Record<string, SectionData>,
+      settings: { ...settings, ...picks() },
+      now,
+    })
+  }
+
   return {
     user,
     loaded,
@@ -958,6 +1270,7 @@ export const useSyncStore = defineStore('sync', () => {
     flush,
     refresh,
     importFile,
+    exportFile,
     onStorage,
     dismissNotice,
   }

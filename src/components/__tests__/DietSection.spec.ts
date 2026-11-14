@@ -2,8 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import App from '@/App.vue'
-import { useDietStore } from '@/stores/diet'
-import { usePlannerStore } from '@/stores/planner'
+import { trackerView } from '@/lib/__tests__/trackerView'
 import { CACHE_PREFIX } from '@/stores/sync'
 import type { FakeApi } from '@/lib/__tests__/fakeApi'
 import { USER, emptyState, signedIn } from '@/lib/__tests__/signedIn'
@@ -82,11 +81,10 @@ describe('DietSection', () => {
     await cells('Fish')[2]!.trigger('click')
     expect(cells('Fish')[2]!.attributes('aria-pressed')).toBe('true')
     // The grid shows no total since K33; the store keeps it.
-    const diet = useDietStore()
-    expect(diet.totalFor(diet.foods[2]!.id)).toBe(2)
+    const diet = trackerView('diet')
+    expect(diet.totalFor(diet.items[2]!.id)).toBe(2)
     // The exercise totals are untouched.
-    const planner = usePlannerStore()
-    expect(planner.totalFor(planner.exercises[0]!.id)).toBe(0)
+    expect(trackerView('exercise').totalFor(trackerView('exercise').items[0]!.id)).toBe(0)
   })
 
   it('moves with the shared week navigation', async () => {
@@ -107,7 +105,7 @@ describe('DietSection', () => {
     await settle()
     expect(wrapper.find('[data-testid="new-item-page"]').exists()).toBe(false)
     expect(diet().findAll('[data-testid="item-name"]').at(-1)!.text()).toBe('Beans')
-    expect(useDietStore().foods.at(-1)!.target).toBe(3)
+    expect(trackerView('diet').items.at(-1)!.target).toBe(3)
     await flushPromises()
     const plan = api.accounts.get(USER)!.plans.diet['2026-10-19']!.items as { name: string }[]
     expect(plan.at(-1)!.name).toBe('Beans')
@@ -132,7 +130,7 @@ describe('DietSection', () => {
   it('adopts another tab’s diet changes', async () => {
     mountApp()
     const other = emptyState()
-    other.diet.plans = { '2026-10-19': [{ id: 'q', name: 'Quinoa', target: 2 }] }
+    other.sections.diet.plans = { '2026-10-19': [{ id: 'q', name: 'Quinoa', target: 2 }] }
     const key = CACHE_PREFIX + USER
     localStorage.setItem(key, JSON.stringify(other))
     window.dispatchEvent(new StorageEvent('storage', { key, storageArea: localStorage }))

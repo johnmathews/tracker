@@ -32,6 +32,7 @@ import { isDark } from '@/lib/theme'
 import { useAskStore } from '@/stores/ask'
 import {
   isItemHash,
+  isNewTrackerHash,
   itemHref,
   markFromWeek,
   parseItemHash,
@@ -41,12 +42,13 @@ import {
 } from '@/lib/routes'
 import { itemExists, useItemSource } from '@/composables/itemSource'
 import ItemPage from '@/components/ItemPage.vue'
-import type { Section } from '@/lib/trackerTypes'
 import NewItemPage from '@/components/NewItemPage.vue'
 import { useSessionStore } from '@/stores/session'
 import { useSyncStore } from '@/stores/sync'
+import { useTrackersStore } from '@/stores/trackers'
 
 const store = usePlannerStore()
+const trackers = useTrackersStore()
 const session = useSessionStore()
 const sync = useSyncStore()
 // Made here, not on the Ask page, so it forgets its conversation on any sign-out or user change.
@@ -87,14 +89,16 @@ const connectId = ref(connectRequest())
 
 /**
  * The page the hash asks for: Settings at `#/settings` and its tabs' `#/settings/<tab>` (K119),
- * Profile at `#/profile` (K106), Ask at `#/ask`, an item's page at `#/item/<section>/<id>`
- * (ItemPage card, D5), the new item page at `#/new/<section>` (K104), otherwise the planner.
+ * Profile at `#/profile` (K106), Ask at `#/ask`, an item's page at `#/item/<tracker>/<id>`
+ * (ItemPage card, D5), the new item page at `#/new/<tracker>` (K104), the new tracker page at
+ * `#/new-tracker` (K124), otherwise the planner.
  */
-type Page = 'planner' | 'settings' | 'profile' | 'ask' | 'item' | 'new'
+type Page = 'planner' | 'settings' | 'profile' | 'ask' | 'item' | 'new' | 'new-tracker'
 function pageFor(): Page {
   if (parseSettingsHash(location.hash)) return 'settings'
   if (location.hash === '#/profile') return 'profile'
   if (location.hash === '#/ask') return 'ask'
+  if (isNewTrackerHash(location.hash)) return 'new-tracker'
   if (parseNewHash(location.hash)) return 'new'
   return parseItemHash(location.hash) ? 'item' : 'planner'
 }
@@ -117,10 +121,13 @@ const settingsTab = ref(parseSettingsHash(location.hash) ?? 'appearance')
 let leftItem: ItemRoute | null = null
 /**
  * The page on screen: Ask only while the API answers questions (F10). Until the flag has loaded
- * the week shows and `#/ask` stays, so a remembered Ask page opens once the flag says yes.
+ * the week shows and `#/ask` stays, so a remembered Ask page opens once the flag says yes. The new
+ * tracker page has its address but no page yet: the week shows.
  */
-const shown = computed<Page>(() =>
-  page.value === 'ask' && session.ask !== true ? 'planner' : page.value,
+const shown = computed<Exclude<Page, 'new-tracker'>>(() =>
+  (page.value === 'ask' && session.ask !== true) || page.value === 'new-tracker'
+    ? 'planner'
+    : page.value,
 )
 function onHash(): void {
   link.value = linkToken()
@@ -153,13 +160,13 @@ const OPENERS: Record<'settings' | 'profile' | 'ask', string> = {
   profile: 'profile-button',
   ask: 'ask-button',
 }
-const ADDS: Record<Section, string> = {
+const ADDS: Readonly<Record<string, string>> = {
   exercise: 'add-exercise',
   cardio: 'add-cardio',
   diet: 'add-food',
 }
-/** The section the new item page last added to, so Back can put focus on its Add button. */
-let leftNew: Section | null = null
+/** The tracker the new item page last added to, so Back can put focus on its Add button. */
+let leftNew: string | null = null
 watch(newSection, (now, before) => {
   if (before) leftNew = before
 })
@@ -169,9 +176,10 @@ watch(shown, async (now, before) => {
   if (now !== 'planner' || before === 'planner') return
   await nextTick()
   let target: HTMLElement | null | undefined
-  if (before === 'new')
-    target = document.querySelector<HTMLElement>(`[data-testid="${ADDS[leftNew!]}"]`)
-  else if (before !== 'item')
+  if (before === 'new') {
+    const add = leftNew !== null && Object.hasOwn(ADDS, leftNew) ? ADDS[leftNew] : null
+    if (add) target = document.querySelector<HTMLElement>(`[data-testid="${add}"]`)
+  } else if (before !== 'item')
     target = document.querySelector<HTMLElement>(`[data-testid="${OPENERS[before]}"]`)
   else if (leftItem) {
     const href = itemHref(leftItem.section, leftItem.id)
@@ -198,13 +206,21 @@ watch(
   },
 )
 // An address naming no item in any week's plan opens the week instead (ItemPage card), once the
-// data is here to say so; so does an item's page whose item another tab removed from every plan.
+// data is here to say so; so does an item's page whose item another tab removed from every plan,
+// and an item's or new item's address naming a tracker the account doesn't have (K123).
 const itemSource = useItemSource()
 watchEffect(() => {
   if (page.value !== 'item' || !sync.loaded) return
-  if (itemExists(itemSource(item.value!.section), item.value!.id)) return
+  const { section, id } = item.value!
+  if (trackers.has(section) && itemExists(itemSource(section), id)) return
   dropHash()
   item.value = null
+  page.value = 'planner'
+})
+watchEffect(() => {
+  if (page.value !== 'new' || !sync.loaded || trackers.has(newSection.value!)) return
+  dropHash()
+  newSection.value = null
   page.value = 'planner'
 })
 /** Drop the token from the address bar and history, where a used or dead one has no place. */

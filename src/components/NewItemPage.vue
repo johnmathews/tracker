@@ -2,8 +2,7 @@
 import { computed, nextTick, onMounted, reactive, ref, useId, useTemplateRef } from 'vue'
 import { ChevronLeft, Pencil } from '@lucide/vue'
 import { usePlannerStore } from '@/stores/planner'
-import { useCardioStore } from '@/stores/cardio'
-import { useDietStore } from '@/stores/diet'
+import { useTrackersStore } from '@/stores/trackers'
 import { useDetailsStore } from '@/stores/details'
 import { useExerciseForm } from '@/composables/exerciseForm'
 import { useCardioForm } from '@/composables/cardioForm'
@@ -12,16 +11,7 @@ import { dayMonth } from '@/lib/dates'
 import { BODY, FIELDS, H2, LEDE, ROW } from '@/lib/itemPage'
 import { shownSections } from '@/lib/itemSections'
 import { backToWeek, leaveForWeek } from '@/lib/routes'
-import {
-  MAX_DETAILS_NOTES,
-  MAX_FIELD,
-  NEW_CARDIO_TARGET,
-  NEW_EXERCISE_TARGET,
-  NEW_FOOD_TARGET,
-  NOTES_COUNT_FROM,
-  codePoints,
-} from '@/lib/storage'
-import { SECTIONS, type Section } from '@/lib/trackerTypes'
+import { MAX_DETAILS_NOTES, MAX_FIELD, NOTES_COUNT_FROM, codePoints } from '@/lib/storage'
 import PlanFields, { type PlanErrors } from '@/components/PlanFields.vue'
 import { Button } from '@/components/ui/button'
 import { TextArea } from '@/components/ui/text-area'
@@ -29,7 +19,8 @@ import { TextField } from '@/components/ui/text-field'
 import { TextLink } from '@/components/ui/text-link'
 
 const props = defineProps<{
-  section: Section
+  /** The tracker id the item goes into. */
+  section: string
   /** A style-guide example: it doesn't take focus as it arrives. */
   example?: boolean
 }>()
@@ -38,23 +29,17 @@ const props = defineProps<{
 const NOTES_HINT = 'Markdown works: **bold**, *italic*, lists, links.'
 /** Notes within 20,000 characters that the API still can't store (32 KB). */
 const NOTES_TOO_BIG = 'These notes are too long to save. Shorten them, then add again.'
-const TARGETS: Record<Section, number> = {
-  exercise: NEW_EXERCISE_TARGET,
-  cardio: NEW_CARDIO_TARGET,
-  diet: NEW_FOOD_TARGET,
-}
 
 const planner = usePlannerStore()
-const cardio = useCardioStore()
-const diet = useDietStore()
+const trackers = useTrackersStore()
 const details = useDetailsStore()
 const root = useTemplateRef<HTMLElement>('root')
 const ids = { form: useId(), name: useId(), plan: useId(), notes: useId(), details: useId() }
 
-const type = computed(() => SECTIONS[props.section])
-const kind = computed(() =>
-  props.section === 'exercise' ? 'exercise' : props.section === 'cardio' ? 'cardio' : 'food',
-)
+/** The tracker's kind: its names, its fields and its plan's fields (src/lib/trackerTypes.ts). */
+const type = computed(() => trackers.typeOf(props.section))
+/** The plan's fields to show: a strength item's are an exercise's. */
+const kind = computed(() => (type.value.id === 'strength' ? 'exercise' : type.value.id))
 /** "Add exercise", "Add cardio", "Add food": the Add button's words, as Edit plan's. */
 const addLabel = computed(() => `Add ${type.value.itemLabel.toLowerCase()}`)
 
@@ -84,7 +69,7 @@ const nameError = ref<string | undefined>()
 const form = useExerciseForm()
 form.load()
 const cardioForm = useCardioForm()
-const target = ref(TARGETS[props.section])
+const target = ref(type.value.newTarget)
 const planErrors = reactive<PlanErrors>({})
 
 const notesOpen = ref(false)
@@ -176,13 +161,9 @@ async function add(): Promise<void> {
   }
   // check() has made sure of a name, so the store adds it and gives its id.
   const title = name.value.trim()
-  const id = (
-    kind.value === 'exercise'
-      ? planner.addExercise({ ...form.value(), name: title, target: target.value })
-      : kind.value === 'cardio'
-        ? cardio.addCardio({ ...cardioForm.value(), name: title, target: target.value })
-        : diet.addFood({ name: title, target: target.value })
-  )!
+  const fields =
+    kind.value === 'exercise' ? form.value() : kind.value === 'cardio' ? cardioForm.value() : {}
+  const id = trackers.addItem(props.section, { ...fields, name: title, target: target.value })!
   if (notes.value.trim()) details.setNotes(props.section, id, notes.value)
   for (const f of type.value.fields) {
     if (fieldDrafts[f.key]!.trim()) details.setField(props.section, id, f.key, fieldDrafts[f.key]!)

@@ -1,12 +1,10 @@
-import { usePlannerStore } from '@/stores/planner'
-import { useCardioStore } from '@/stores/cardio'
-import { useDietStore } from '@/stores/diet'
-import { defaultCardio, defaultExercises, defaultFoods, type Log } from '@/lib/storage'
+import { useTrackersStore } from '@/stores/trackers'
+import type { Log } from '@/lib/storage'
 import type { Plans } from '@/lib/plans'
 import type { Tracked } from '@/lib/tracker'
-import type { Section } from '@/lib/trackerTypes'
+import { defaultItems } from '@/lib/trackerTypes'
 
-/** What the item page reads and changes of one section, from its store. */
+/** What the item page reads and changes of one tracker, from the trackers store. */
 export type ItemSource = {
   plans: Plans<Tracked>
   /** The visible week's items: its own plan, the one it carries forward, or the defaults. */
@@ -18,39 +16,16 @@ export type ItemSource = {
   changeTarget: (id: string, delta: number) => void
 }
 
-/**
- * Each section's data from its store (the planner's exercises, the cardio store's items, the diet
- * store's foods), by the
- * registry's section names, for the item page and the route that opens it.
- */
-export function useItemSource(): (section: Section) => ItemSource {
-  const planner = usePlannerStore()
-  const cardio = useCardioStore()
-  const diet = useDietStore()
-  const sources: Record<Section, () => ItemSource> = {
-    exercise: () => ({
-      plans: planner.plans,
-      items: planner.exercises,
-      log: planner.log,
-      fallback: defaultExercises(),
-      changeTarget: planner.changeTarget,
-    }),
-    cardio: () => ({
-      plans: cardio.plans,
-      items: cardio.items,
-      log: cardio.log,
-      fallback: defaultCardio(),
-      changeTarget: cardio.changeTarget,
-    }),
-    diet: () => ({
-      plans: diet.plans,
-      items: diet.foods,
-      log: diet.log,
-      fallback: defaultFoods(),
-      changeTarget: diet.changeTarget,
-    }),
-  }
-  return (section) => sources[section]()
+/** Each tracker's data from the trackers store, by tracker id, for the item page and its route. */
+export function useItemSource(): (section: string) => ItemSource {
+  const trackers = useTrackersStore()
+  return (section) => ({
+    plans: trackers.plansOf(section),
+    items: trackers.itemsOf(section),
+    log: trackers.logOf(section),
+    fallback: defaultItems(section),
+    changeTarget: (id, delta) => trackers.changeTarget(section, id, delta),
+  })
 }
 
 /** Whether an item has a page: it is in the visible week, or in some week's plan. */

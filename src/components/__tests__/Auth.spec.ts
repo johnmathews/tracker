@@ -3,7 +3,7 @@ import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-uti
 import { createPinia, setActivePinia } from 'pinia'
 import App from '@/App.vue'
 import { SESSION_KEY } from '@/stores/session'
-import { usePlannerStore } from '@/stores/planner'
+import { useTrackersStore } from '@/stores/trackers'
 import {
   CACHE_PREFIX,
   CONFLICT_NOTICE,
@@ -742,7 +742,7 @@ describe('sync status', () => {
     mountApp()
     await flushPromises()
     api.offline = true
-    usePlannerStore().changeDailyPick(1)
+    useTrackersStore().changeDailyTarget('exercise', 1)
     await flushPromises()
     expect(status().get('p').text()).toBe(
       'Not synced. One change is saved on this device and will sync when you’re back online.',

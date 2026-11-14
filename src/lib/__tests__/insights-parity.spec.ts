@@ -16,10 +16,9 @@ import {
 import { dayCounts, goalMet, goalsMet, metDays, totalFor, type Tracked } from '@/lib/tracker'
 import { SECTIONS, type Section } from '@/lib/trackerTypes'
 import { usePlannerStore } from '@/stores/planner'
-import { useCardioStore } from '@/stores/cardio'
-import { useDietStore } from '@/stores/diet'
+import { useTrackersStore } from '@/stores/trackers'
 import { noDetails, useDetailsStore } from '@/stores/details'
-import type { Cardio, Exercise, Food } from '@/lib/storage'
+import { firstTrackers } from '@/lib/trackers'
 
 // The shared contract with the API's insights module: what a week shows, as the screen shows it.
 // api/tests/test_insights.py runs the same files through tracker_api.insights.
@@ -145,20 +144,18 @@ describe('insights fixtures', () => {
       vi.useFakeTimers({ toFake: ['Date'] })
       vi.setSystemTime(localDate(c.today))
       const planner = usePlannerStore()
-      const cardio = useCardioStore()
-      const diet = useDietStore()
-      const empty = { plans: {}, log: {} }
+      const trackers = useTrackersStore()
       const data = { plans: c.plans, log: c.log }
-      // Cardio has no daily target (K90): the settings keep their own.
+      // Cardio has no daily target (K90): the trackers keep their own.
       const pick = SECTIONS[c.section].pickKey
-      planner.adopt(c.section === 'exercise' ? (data as never) : empty, {
+      const settings = {
         accent: '#30d158',
         dailyPick: 3,
         foodPick: 2,
         ...(pick ? { [pick]: c.dailyTarget } : {}),
-      })
-      if (c.section === 'cardio') cardio.adopt(data as never)
-      if (c.section === 'diet') diet.adopt(data as never)
+      }
+      planner.adopt(settings)
+      trackers.adopt(firstTrackers(settings), { [c.section]: data as never })
       const details = useDetailsStore()
       details.adopt({ ...noDetails(), [c.section]: c.details ?? {} })
       // Whole weeks between today's Monday and the case's, which a week offset steps through.
@@ -169,19 +166,15 @@ describe('insights fixtures', () => {
       planner.weekOffset = weeks
       expect(planner.weekKey).toBe(c.week)
 
-      const stores = {
-        exercise: [planner.exercises, planner.dayCounts],
-        cardio: [cardio.items, cardio.dayCounts],
-        diet: [diet.foods, diet.dayCounts],
-      } satisfies Record<Section, [(Exercise | Cardio | Food)[], number[]]>
-      const [items, counts] = stores[c.section]
+      const items = trackers.itemsOf(c.section)
+      const counts = trackers.dayCounts(c.section)
       expect(items.map((it) => it.id)).toEqual(c.expected.items.map((it) => it.id))
       // The note the row and the item page show is the one insights gives.
       expect(items.map((it) => details.notesOf(c.section, it.id))).toEqual(
         expectedItems(c).map((it) => it.notes),
       )
       expect(counts).toEqual(c.expected.dayCounts)
-      expect(metFor(counts, pick && planner[pick])).toEqual(c.expected.metDays)
+      expect(metFor(counts, pick && trackers.dailyTarget(c.section))).toEqual(c.expected.metDays)
       expect(planner.days.map((d) => d.isFuture)).toEqual(c.expected.future)
     })
   })

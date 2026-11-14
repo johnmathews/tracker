@@ -174,11 +174,11 @@ describe('Your goals on the Profile page', () => {
 
   it('shows goals saved elsewhere, but never over words still being typed', async () => {
     await openProfile()
-    usePlannerStore().adopt({ plans: {}, log: {} }, { ...PICKS, goals: 'From the phone.' })
+    usePlannerStore().adopt({ ...PICKS, goals: 'From the phone.' })
     await settle()
     expect(goalsBox().element.value).toBe('From the phone.')
     await goalsBox().setValue('Mine, half')
-    usePlannerStore().adopt({ plans: {}, log: {} }, { ...PICKS, goals: 'From the phone, again.' })
+    usePlannerStore().adopt({ ...PICKS, goals: 'From the phone, again.' })
     await settle()
     expect(goalsBox().element.value).toBe('Mine, half')
   })
@@ -234,11 +234,11 @@ describe('Your limits on the Profile page (K107)', () => {
 
   it('shows limits saved elsewhere, but never over words still being typed', async () => {
     await openProfile()
-    usePlannerStore().adopt({ plans: {}, log: {} }, { ...PICKS, limits: 'From the phone.' })
+    usePlannerStore().adopt({ ...PICKS, limits: 'From the phone.' })
     await settle()
     expect(limitsBox().element.value).toBe('From the phone.')
     await limitsBox().setValue('Mine, half')
-    usePlannerStore().adopt({ plans: {}, log: {} }, { ...PICKS, limits: 'Again.' })
+    usePlannerStore().adopt({ ...PICKS, limits: 'Again.' })
     await settle()
     expect(limitsBox().element.value).toBe('Mine, half')
   })
@@ -289,7 +289,7 @@ describe('both notes on a new account', () => {
 
   it('keeps the goals box open after another setting is changed first', async () => {
     await openProfile({ saved: null })
-    usePlannerStore().changeDailyPick(1)
+    usePlannerStore().setDailyGoal(false)
     await settle()
     expect(goalsBox().element.disabled).toBe(false)
     expect(limitsBox().element.disabled).toBe(false)

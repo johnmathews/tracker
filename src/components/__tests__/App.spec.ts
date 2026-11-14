@@ -4,7 +4,8 @@ import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-uti
 import { createPinia, setActivePinia } from 'pinia'
 import App from '@/App.vue'
 import { usePlannerStore } from '@/stores/planner'
-import { useDietStore } from '@/stores/diet'
+import { useTrackersStore } from '@/stores/trackers'
+import { trackerView } from '@/lib/__tests__/trackerView'
 import { SESSION_KEY, useSessionStore } from '@/stores/session'
 import { CACHE_PREFIX, type SyncState } from '@/stores/sync'
 import { DRAWINGS, MARKS, markDrawing, markKind, type PortableSettings } from '@/lib/storage'
@@ -15,13 +16,13 @@ import type { SettingsTab } from '@/lib/routes'
 
 /** A row's week as the stores hold it, "N of M": the grid shows no total since K33. */
 function exTotal(i: number): string {
-  const store = usePlannerStore()
-  const e = store.exercises.at(i)!
+  const store = trackerView('exercise')
+  const e = store.items.at(i)!
   return `${store.totalFor(e.id)} of ${e.target}`
 }
 function foodTotal(i: number): string {
-  const store = useDietStore()
-  const f = store.foods.at(i)!
+  const store = trackerView('diet')
+  const f = store.items.at(i)!
   return `${store.totalFor(f.id)} of ${f.target}`
 }
 
@@ -116,9 +117,9 @@ const PANEL = '[data-testid="settings-page"]'
  */
 async function saveSettings(): Promise<void> {
   // A tick apart, as two presses are: the sync store sees the change, not just its net result.
-  usePlannerStore().changeDailyPick(1)
+  usePlannerStore().setDailyGoal(false)
   await nextTick()
-  usePlannerStore().changeDailyPick(-1)
+  usePlannerStore().setDailyGoal(true)
   await nextTick()
 }
 
@@ -301,7 +302,7 @@ describe('App', () => {
     await answer('Cancel')
     expect(confirmation()).toBeNull()
     expect(wrapper.find('[data-testid="item-page"]').exists()).toBe(true)
-    expect(usePlannerStore().exercises.map((e) => e.name)).toContain('Squats')
+    expect(trackerView('exercise').items.map((e) => e.name)).toContain('Squats')
     await wrapper.get('[data-testid="item-remove-button"]').trigger('click')
     await settle()
     await answer('Remove')
@@ -343,10 +344,12 @@ describe('App', () => {
   it('adopts changes another tab writes to the cache', async () => {
     mountApp()
     const other = emptyState()
-    other.exercise.plans = {
+    other.sections.exercise.plans = {
       '2026-10-19': [{ id: 'a', name: 'From other tab', reps: 5, target: 2 }],
     }
-    other.exercise.log = { '2026-10-19': { a: ['great', null, null, null, null, null, null] } }
+    other.sections.exercise.log = {
+      '2026-10-19': { a: ['great', null, null, null, null, null, null] },
+    }
     otherTabWrites(other)
     await wrapper.vm.$nextTick()
     expect(
@@ -364,6 +367,85 @@ function otherTabWrites(state: SyncState): void {
   localStorage.setItem(key, JSON.stringify(state))
   window.dispatchEvent(new StorageEvent('storage', { key, storageArea: localStorage }))
 }
+
+describe('the addresses that name a tracker (K123, K124)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(NOW)
+    localStorage.clear()
+  })
+  afterEach(() => {
+    wrapper?.unmount()
+    vi.useRealTimers()
+    history.replaceState(null, '', '/')
+  })
+
+  /** A cache with one tracker of the account's own beside the first three. */
+  function withUpperBody(): SyncState {
+    const state = emptyState()
+    state.trackers.push({
+      id: 'xup',
+      name: 'Upper body',
+      kind: 'strength',
+      position: 3,
+      dailyTarget: 3,
+      startWeek: null,
+      endWeek: null,
+      rev: 1,
+    })
+    state.sections.xup = {
+      plans: { '2026-10-19': [{ id: 'dips', name: 'Dips', reps: 8, target: 3 }] },
+      log: {},
+      details: {},
+      revs: { '2026-10-19': 1 },
+      detailRevs: {},
+    }
+    return state
+  }
+
+  it('opens the week for a new item address naming no tracker the account has', async () => {
+    history.replaceState(null, '', '/#/new/xnope')
+    mountApp()
+    await settle()
+    expect(wrapper.find('[data-testid="new-item-page"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="exercise-grid"]').exists()).toBe(true)
+    expect(location.hash).toBe('')
+  })
+
+  it('opens an item’s page and the new item page of a tracker the account made', async () => {
+    history.replaceState(null, '', '/#/item/xup/dips')
+    const cache = withUpperBody()
+    mountApp(cache)
+    // The server has it too, as the cache says.
+    const a = api.accounts.get(USER)!
+    a.trackers.push(cache.trackers[3]!)
+    a.plans.xup = { '2026-10-19': { items: cache.sections.xup!.plans['2026-10-19']!, rev: 1 } }
+    await settle()
+    expect(wrapper.get('[data-testid="item-page"]').get('h1').text()).toBe('Dips')
+    location.hash = '#/new/xup'
+    await settle()
+    const page = wrapper.get('[data-testid="new-item-page"]')
+    expect(page.get('h1').text()).toBe('New exercise')
+    await page.get('[data-testid="new-name-field"]').setValue('Rows')
+    await submit(page)
+    // Back on the week: no Add button of its own to take focus yet (W7 draws one per tracker).
+    expect(location.hash).toBe('#/')
+    expect(wrapper.find('[data-testid="new-item-page"]').exists()).toBe(false)
+    expect(
+      useTrackersStore()
+        .itemsOf('xup')
+        .map((it) => it.name),
+    ).toEqual(['Dips', 'Rows'])
+  })
+
+  it('keeps the new tracker page’s address, showing the week until the page exists', async () => {
+    history.replaceState(null, '', '/#/new-tracker')
+    mountApp()
+    await settle()
+    expect(location.hash).toBe('#/new-tracker')
+    expect(wrapper.find('[data-testid="exercise-grid"]').exists()).toBe(true)
+  })
+})
 
 describe('an item’s page (#/item/<section>/<id>, F7)', () => {
   beforeEach(() => {
@@ -474,14 +556,14 @@ describe('an item’s page (#/item/<section>/<id>, F7)', () => {
 
   it('opens an old address for an item no longer in the week, with its latest plan', async () => {
     const state = emptyState()
-    state.exercise.plans = {
+    state.sections.exercise.plans = {
       '2026-10-12': [{ id: 'ks', name: 'Kettlebell swings', reps: 15, target: 3, perSide: false }],
       '2026-10-19': [],
     }
     history.replaceState(null, '', '/#/item/exercise/ks')
     mountApp(state)
     // The server holds the same plans, so its reply keeps them.
-    for (const [week, items] of Object.entries(state.exercise.plans))
+    for (const [week, items] of Object.entries(state.sections.exercise.plans))
       api.accounts.get(USER)!.plans.exercise[week] = { items, rev: 1 }
     await settle()
     expect(wrapper.get(PAGE).get('h1').text()).toBe('Kettlebell swings')
@@ -514,7 +596,7 @@ describe('an item’s page (#/item/<section>/<id>, F7)', () => {
   it('goes back to the week when another tab removes the item from every plan', async () => {
     mountApp()
     await openItem('Squats')
-    usePlannerStore().plans = { '2026-10-19': [] }
+    trackerView('exercise').plans = { '2026-10-19': [] }
     await settle()
     expect(location.hash).toBe('')
     expect(wrapper.find(PAGE).exists()).toBe(false)
@@ -841,11 +923,12 @@ describe('export and import', () => {
     const file = JSON.parse(await blob!.text())
     expect(file).toMatchObject({
       format: 'tracker-export',
-      version: 5,
+      version: 6,
+      trackers: [{ id: 'exercise' }, { id: 'cardio' }, { id: 'diet' }],
       settings: { accent: '#30d158', dailyPick: 3, foodPick: 2 },
     })
     expect(file.settings).not.toHaveProperty('theme')
-    expect(file.exercise.log['2026-10-19'].sq).toEqual([
+    expect(file.sections.exercise.log['2026-10-19'].sq).toEqual([
       null,
       null,
       'great',
@@ -854,7 +937,8 @@ describe('export and import', () => {
       null,
       null,
     ])
-    expect(file.diet).toEqual({ plans: {}, log: {}, details: {} })
+    expect(file.sections.diet).toEqual({ plans: {}, log: {} })
+    expect(file.details.diet).toEqual({})
   })
 
   it('exports the item pages’ arrangement with the settings (K66)', async () => {
@@ -867,7 +951,7 @@ describe('export and import', () => {
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
     mountApp()
     const arranged = { order: ['history', 'notes', 'details', 'plan'], hidden: ['details'] }
-    usePlannerStore().setArrangement('exercise', {
+    usePlannerStore().setArrangement('strength', {
       order: ['history', 'notes', 'details', 'plan'],
       hidden: ['details'],
     })
@@ -882,7 +966,7 @@ describe('export and import', () => {
       foodPick: 2,
       goals: '',
       limits: '',
-      itemSections: { exercise: arranged },
+      itemSections: { strength: arranged },
     })
   })
 
@@ -908,7 +992,7 @@ describe('export and import', () => {
     expect(wrapper.get('[data-testid="import-summary"]').text()).toBe(
       'Adds two weekly plans and three marked days. Existing plans and marks stay as they are.',
     )
-    expect(usePlannerStore().isDone('sq', 0)).toBe(false)
+    expect(trackerView('exercise').isDone('sq', 0)).toBe(false)
 
     await button('Import').trigger('click')
     await flushPromises()
@@ -918,7 +1002,7 @@ describe('export and import', () => {
     expect(rowCells('Squats')[0]!.attributes('aria-pressed')).toBe('true')
     expect(rowCells('Push-ups')[4]!.attributes('aria-pressed')).toBe('true')
     expect(rowCells('Eggs')[2]!.attributes('aria-pressed')).toBe('true')
-    expect(usePlannerStore().dailyPick).toBe(3)
+    expect(useTrackersStore().dailyTarget('exercise')).toBe(3)
   })
 
   it('applies the file’s settings when this browser has none saved', async () => {
@@ -966,7 +1050,7 @@ describe('export and import', () => {
     expect(wrapper.get('[data-testid="import-summary"]').text()).not.toContain('plus the exercises')
     await button('Import').trigger('click')
     await flushPromises()
-    expect(usePlannerStore().dailyPick).toBe(3)
+    expect(useTrackersStore().dailyTarget('exercise')).toBe(3)
   })
 
   it('says so, and keeps the file, when the server cannot be reached', async () => {
@@ -1029,7 +1113,7 @@ describe('export and import', () => {
     ['another format', jsonFile({ plans: {} }), 'That file isn’t a Tracker export.'],
     [
       'a newer version',
-      jsonFile({ format: 'fitness-planner-export', version: 6 }),
+      jsonFile({ format: 'fitness-planner-export', version: 7 }),
       'That export comes from a newer version of the app.',
     ],
   ])('rejects %s with an inline error and changes nothing', async (_, file, message) => {
@@ -1068,19 +1152,26 @@ describe('export and import', () => {
 })
 
 describe('export and import with the sample data', () => {
-  // Four weeks of edited plans, ticks and diet over a five-week span, two items' details, plus
-  // non-default settings (fixtures/transfer/sample/). The storage is alice's cache as the sync
-  // store keeps it, under the current key: a new cache format needs a new sample.
-  const storage = readFixture<Record<string, unknown>>('sample/storage.json')
-  const sample = readFixture<Record<string, unknown>>('sample/export.json')
+  // Four weeks of edited plans, ticks and diet over a five-week span, items' details, two trackers
+  // of the account's own (one ended), plus non-default settings (fixtures/transfer/sample/). The
+  // storage is alice's cache as the sync store keeps it, under the current key: a new cache
+  // format needs a new sample. `storage.json` and `export.json` are the version 5 pair: the file
+  // still imports, onto the first three trackers.
+  const storage = readFixture<Record<string, unknown>>('sample/storage-v6.json')
+  const sample = readFixture<Record<string, unknown>>('sample/export-v6.json')
+  const v5Storage = readFixture<Record<string, unknown>>('sample/storage.json')
+  const v5Sample = readFixture<Record<string, unknown>>('sample/export.json')
 
   const cache = storage[CACHE_PREFIX + USER] as SyncState
-  const { revs: _er, detailRevs: _ed, ...exercise } = cache.exercise
-  const { revs: _cr, detailRevs: _cd, ...cardio } = cache.cardio
-  const { revs: _dr, detailRevs: _dd, ...diet } = cache.diet
-  const { accent, dailyPick, foodPick } = cache.settings as PortableSettings
+  type Section = { plans: unknown; log: unknown; details: unknown }
+  const v5Cache = v5Storage['tracker-cache-v5:alice'] as Record<string, Section>
+  const strip = ({ plans, log, details }: Section) => ({ plans, log, details })
+  const [exercise, cardio, diet] = (['exercise', 'cardio', 'diet'] as const).map((id) =>
+    strip(v5Cache[id]!),
+  )
+  const { accent, dailyPick, foodPick } = v5Cache.settings as unknown as PortableSettings
   // The cache and the file carry the same goals.
-  const { goals, limits } = sample.settings as PortableSettings
+  const { goals, limits } = v5Sample.settings as PortableSettings
 
   /** The sample as alice's cache, a fresh copy each time. */
   function sampleCache(): SyncState {
@@ -1130,17 +1221,18 @@ describe('export and import with the sample data', () => {
     ).toEqual(['Push-ups', 'Pull-ups', 'Squats', 'Kettlebell halos', 'Plank'])
     await openSettings('data')
     await button('Export').trigger('click')
-    // The account has no Ask conversations, so the file is the sample as it was.
+    // The account has no Ask conversations, so the file is the sample as it was, without the list.
     await flushPromises()
-    expect(JSON.parse(await blob!.text())).toEqual({ ...sample, exportedAt: NOW.toISOString() })
+    const { conversations: _, ...file } = sample
+    expect(JSON.parse(await blob!.text())).toEqual({ ...file, exportedAt: NOW.toISOString() })
   })
 
-  it('imports the sample export into an empty account and syncs all of it', async () => {
+  it('imports the version 5 sample export into an empty account and syncs all of it', async () => {
     mountApp()
     await flushPromises()
     await openSettings('data')
     const input = wrapper.get('[data-testid="import-file"]')
-    const file = new File([JSON.stringify(sample)], 'sample.json', { type: 'application/json' })
+    const file = new File([JSON.stringify(v5Sample)], 'sample.json', { type: 'application/json' })
     Object.defineProperty(input.element, 'files', { value: [file], configurable: true })
     await input.trigger('change')
     await flushPromises()
@@ -1149,30 +1241,40 @@ describe('export and import with the sample data', () => {
     )
     await button('Import').trigger('click')
     await flushPromises()
-    const { revs: _e, detailRevs: _ed, ...cachedExercise } = cached().exercise
-    const { revs: _c, detailRevs: _cd, ...cachedCardio } = cached().cardio
-    const { revs: _d, detailRevs: _dd, ...cachedDiet } = cached().diet
-    expect(cachedExercise).toEqual(exercise)
-    expect(cachedCardio).toEqual(cardio)
-    expect(cachedDiet).toEqual(diet)
+    expect(strip(cached().sections.exercise)).toEqual(exercise)
+    expect(strip(cached().sections.cardio)).toEqual(cardio)
+    expect(strip(cached().sections.diet)).toEqual(diet)
     expect(cached().settings).toEqual({ accent, dailyPick, foodPick, goals, limits })
-    // Every plan, tick and item's details reached the server too.
-    const server = api.state(USER) as SyncState
-    const { plans, log, details } = server.exercise
-    expect({ plans, log, details }).toEqual(exercise)
-    expect({
-      plans: server.cardio.plans,
-      log: server.cardio.log,
-      details: server.cardio.details,
-    }).toEqual(cardio)
-    expect({
-      plans: server.diet.plans,
-      log: server.diet.log,
-      details: server.diet.details,
-    }).toEqual(diet)
+    // Every plan, tick and item's details reached the server too, under the first three ids.
+    const server = api.state(USER) as Record<'exercise' | 'cardio' | 'diet', Section> & {
+      settings: unknown
+    }
+    expect(strip(server.exercise)).toEqual(exercise)
+    expect(strip(server.cardio)).toEqual(cardio)
+    expect(strip(server.diet)).toEqual(diet)
     expect(server.settings).toEqual({ accent, dailyPick, foodPick, goals, limits })
     // The theme is per device, so it never left this browser.
     expect(localStorage.getItem('tracker-settings-v1')).toBeNull()
+  })
+
+  it('imports the version 6 sample into an empty account, its own trackers too (K123)', async () => {
+    mountApp()
+    await flushPromises()
+    await openSettings('data')
+    const input = wrapper.get('[data-testid="import-file"]')
+    const file = new File([JSON.stringify(sample)], 'sample.json', { type: 'application/json' })
+    Object.defineProperty(input.element, 'files', { value: [file], configurable: true })
+    await input.trigger('change')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="import-summary"]').text()).toMatch(/^Adds .*two trackers/)
+    await button('Import').trigger('click')
+    await flushPromises()
+    expect(cached().trackers.map((t) => t.id)).toEqual(
+      (sample.trackers as { id: string }[]).map((t) => t.id),
+    )
+    for (const t of cache.trackers) {
+      expect(strip(cached().sections[t.id]!)).toEqual(strip(cache.sections[t.id]!))
+    }
   })
 })
 
@@ -1359,13 +1461,10 @@ describe('config mode and weekly plans', () => {
     expect(more.attributes('aria-disabled')).toBe('true')
     expect(target('foods-a-day')).toBe('8')
     await settle()
-    expect(api.accounts.get(USER)!.settings).toEqual({
-      accent: '#30d158',
-      dailyPick: 1,
-      foodPick: 8,
-      goals: '',
-      limits: '',
-    })
+    // The targets are the trackers' (K123); no settings are saved for them.
+    expect(api.tracker(USER, 'exercise')!.dailyTarget).toBe(1)
+    expect(api.tracker(USER, 'diet')!.dailyTarget).toBe(8)
+    expect(api.accounts.get(USER)!.settings).toBeNull()
   })
 
   it('turns a food day green when its marks reach foods a day (K57)', async () => {
@@ -1398,7 +1497,7 @@ describe('config mode and weekly plans', () => {
     expect(confirmation()).toBeNull()
     // Bob's week (his default plan) shows, and nothing came off it.
     expect(api.signedIn).toBe('bob')
-    expect(usePlannerStore().exercises.map((e) => e.name)).toContain('Squats')
+    expect(trackerView('exercise').items.map((e) => e.name)).toContain('Squats')
   })
 
   it('does not remove an item if the week changed while it asked', async () => {
@@ -1410,9 +1509,9 @@ describe('config mode and weekly plans', () => {
     await answer('Remove')
     // Neither the week it asked about nor the new one loses Squats.
     expect(usePlannerStore().weekKey).toBe('2026-10-26')
-    expect(usePlannerStore().exercises.map((e) => e.name)).toContain('Squats')
+    expect(trackerView('exercise').items.map((e) => e.name)).toContain('Squats')
     usePlannerStore().weekOffset = -1
-    expect(usePlannerStore().exercises.map((e) => e.name)).toContain('Squats')
+    expect(trackerView('exercise').items.map((e) => e.name)).toContain('Squats')
   })
 
   it('opens Add as a page with no bar, and comes back with focus on that Add button (K104)', async () => {

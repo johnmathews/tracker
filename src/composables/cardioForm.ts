@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { NEW_CARDIO_TARGET, type Cardio } from '@/lib/storage'
-import type { NewCardio } from '@/stores/cardio'
+import type { NewCardio } from '@/stores/trackers'
 import { decimalOnly } from '@/composables/exerciseForm'
 
 /** Keeps the DOM in step even when the cleaned value didn't change (typing a letter). */

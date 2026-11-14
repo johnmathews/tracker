@@ -3,6 +3,7 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import App from '@/App.vue'
 import { usePlannerStore } from '@/stores/planner'
+import { useTrackersStore } from '@/stores/trackers'
 import type { PortableSettings } from '@/lib/storage'
 import type { SettingsTab } from '@/lib/routes'
 import type { FakeApi } from '@/lib/__tests__/fakeApi'
@@ -267,7 +268,7 @@ describe('Daily goal in Settings (K85)', () => {
     usePlannerStore().setConfigMode(true)
     await settle()
     expect(wrapper.find('[data-testid="exercises-a-day"]').exists()).toBe(true)
-    expect(usePlannerStore().dailyPick).toBe(3)
+    expect(useTrackersStore().dailyTarget('exercise')).toBe(3)
   })
 
   it('reads an off from the account, and sends it with its next settings write', async () => {
@@ -279,13 +280,12 @@ describe('Daily goal in Settings (K85)', () => {
     await toWeek()
     await markMonday(3)
     expect(monday().attributes('data-met')).toBeUndefined()
-    usePlannerStore().changeDailyPick(1)
+    usePlannerStore().setGoals('Run 5 km.')
     await settle()
     expect(puts().at(-1)).toEqual({
       ...SENT,
-      dailyPick: 4,
       dailyGoal: false,
-      goals: '',
+      goals: 'Run 5 km.',
       limits: '',
     })
   })

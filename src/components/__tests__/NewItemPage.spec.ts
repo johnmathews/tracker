@@ -9,8 +9,7 @@ import { mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import NewItemPage from '@/components/NewItemPage.vue'
 import { usePlannerStore } from '@/stores/planner'
-import { useCardioStore } from '@/stores/cardio'
-import { useDietStore } from '@/stores/diet'
+import { trackerView } from '@/lib/__tests__/trackerView'
 import { useDetailsStore } from '@/stores/details'
 import { markFromWeek } from '@/lib/routes'
 import { MAX_DETAILS_NOTES, MAX_FIELD, type Exercise } from '@/lib/storage'
@@ -28,9 +27,9 @@ beforeEach(() => {
   setActivePinia(createPinia())
   const planner = usePlannerStore()
   planner.now = NOW
-  planner.plans = { [WEEK]: [{ ...PU }] }
-  useDietStore().plans = { [WEEK]: [] }
-  useCardioStore().plans = { [WEEK]: [] }
+  trackerView('exercise').plans = { [WEEK]: [{ ...PU }] }
+  trackerView('diet').plans = { [WEEK]: [] }
+  trackerView('cardio').plans = { [WEEK]: [] }
   history.replaceState(null, '', '/#/new/exercise')
 })
 
@@ -53,7 +52,7 @@ async function add(): Promise<void> {
   await wrapper!.get('form').trigger('submit')
   await nextTick()
 }
-const added = () => usePlannerStore().exercises.at(-1)!
+const added = () => trackerView('exercise').items.at(-1)!
 
 describe('the new item page (K104)', () => {
   it('opens at the top on an empty Name, with one set of one rep three times a week', () => {
@@ -95,7 +94,7 @@ describe('the new item page (K104)', () => {
   })
 
   it('follows the type’s arrangement, always showing the plan', () => {
-    usePlannerStore().setArrangement('exercise', {
+    usePlannerStore().setArrangement('strength', {
       order: ['history', 'details', 'notes', 'plan'],
       hidden: ['notes', 'plan'],
     })
@@ -168,7 +167,7 @@ describe('the new item page (K104)', () => {
     mountPage()
     await nameField().setValue('   ')
     await add()
-    expect(usePlannerStore().exercises).toHaveLength(1)
+    expect(trackerView('exercise').items).toHaveLength(1)
     expect(wrapper!.text()).toContain('Enter a name.')
     expect(document.activeElement).toBe(nameField().element)
     expect(location.hash).toBe('#/new/exercise')
@@ -181,7 +180,7 @@ describe('the new item page (K104)', () => {
     await nameField().setValue('Squats')
     await field('sets').setValue('25')
     await add()
-    expect(usePlannerStore().exercises).toHaveLength(1)
+    expect(trackerView('exercise').items).toHaveLength(1)
     expect(wrapper!.text()).toContain('This is 25 sets. Enter 20 or fewer to change the plan.')
     expect(document.activeElement).toBe(field('sets').element)
     await field('sets').setValue('2')
@@ -197,7 +196,7 @@ describe('the new item page (K104)', () => {
     await wrapper!.get('textarea').setValue('x'.repeat(MAX_DETAILS_NOTES + 1))
     await field('works').setValue('y'.repeat(MAX_FIELD + 40))
     await add()
-    expect(usePlannerStore().exercises).toHaveLength(1)
+    expect(trackerView('exercise').items).toHaveLength(1)
     expect(wrapper!.text()).toContain(
       'These notes are 20,001 characters. Shorten them to 20,000 or fewer to add them.',
     )
@@ -224,7 +223,7 @@ describe('the new item page (K104)', () => {
     await field('minutes').setValue('45')
     await field('distance').setValue('1,5')
     await add()
-    const swim = useCardioStore().items.at(-1)!
+    const swim = trackerView('cardio').items.at(-1)!
     expect(swim).toEqual({
       id: swim.id,
       name: 'Swimming',
@@ -239,7 +238,7 @@ describe('the new item page (K104)', () => {
     await nameField().setValue('Swimming')
     await field('distance').setValue('2000')
     await add()
-    expect(useCardioStore().items).toEqual([])
+    expect(trackerView('cardio').items).toEqual([])
     expect(wrapper!.text()).toContain('Enter 1,000 or fewer to change the plan.')
   })
 
@@ -249,7 +248,7 @@ describe('the new item page (K104)', () => {
     await nameField().setValue('Beans')
     await wrapper!.get('button[aria-label="Fewer times a week"]').trigger('click')
     await add()
-    const beans = useDietStore().foods.at(-1)!
+    const beans = trackerView('diet').items.at(-1)!
     expect(beans).toEqual({ id: beans.id, name: 'Beans', target: 2 })
   })
 
@@ -265,7 +264,7 @@ describe('the new item page (K104)', () => {
       await nameField().setValue('Squats')
       await wrapper!.get('[data-testid="new-cancel"]').trigger('click')
       expect(went).toBe(true)
-      expect(usePlannerStore().exercises).toHaveLength(1)
+      expect(trackerView('exercise').items).toHaveLength(1)
     } finally {
       history.back = back
     }

@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import { noDetails, useDetailsStore } from '@/stores/details'
 import { usePlannerStore } from '@/stores/planner'
+import { useTrackersStore } from '@/stores/trackers'
 
 describe('details store', () => {
   beforeEach(() => {
@@ -13,16 +14,17 @@ describe('details store', () => {
 
   it('shows a note edited on one week on every other week, owned plans included (F1)', () => {
     const planner = usePlannerStore()
+    const trackers = useTrackersStore()
     const details = useDetailsStore()
-    planner.changeTarget('sq', 1) // 19 October owns its plan
+    trackers.changeTarget('exercise', 'sq', 1) // 19 October owns its plan
     planner.nextWeek()
-    planner.changeTarget('sq', 1) // and so does 26 October
+    trackers.changeTarget('exercise', 'sq', 1) // and so does 26 October
     planner.prevWeek()
     details.setNotes('exercise', 'sq', 'Knees out')
     planner.nextWeek()
     expect(details.notesOf('exercise', 'sq')).toBe('Knees out')
     // The plans never carry it.
-    expect(planner.exercises.find((e) => e.id === 'sq')).not.toHaveProperty('notes')
+    expect(trackers.itemsOf('exercise').find((e) => e.id === 'sq')).not.toHaveProperty('notes')
   })
 
   it('updates what reads an item’s details when its first details arrive (W5)', () => {
@@ -35,10 +37,10 @@ describe('details store', () => {
     expect([notes.value, field.value]).toEqual(['Elbows in', 'A bowl'])
   })
 
-  it('starts with no details in any section', () => {
+  it('starts with no details for any tracker', () => {
     const details = useDetailsStore()
     expect(details.docs).toEqual(noDetails())
-    expect(details.docs).toEqual({ exercise: {}, cardio: {}, diet: {} })
+    expect(details.docs).toEqual({})
     expect(details.get('exercise', 'sq')).toEqual({})
     expect(details.notesOf('diet', 'veg')).toBe('')
     expect(details.fieldOf('diet', 'veg', 'serving')).toBe('')
@@ -49,7 +51,7 @@ describe('details store', () => {
     expect(details.setNotes('exercise', 'sq', '  **Slow** down \n')).toBe(true)
     expect(details.get('exercise', 'sq')).toEqual({ notes: '**Slow** down' })
     expect(details.setNotes('exercise', 'sq', ' \n ')).toBe(true)
-    expect(details.docs.exercise).toEqual({})
+    expect(details.docs.exercise ?? {}).toEqual({})
   })
 
   it('sets fields beside the notes, keeps keys the type does not list, and clears blanks', () => {
@@ -66,7 +68,7 @@ describe('details store', () => {
     details.setField('exercise', 'sq', 'tempo', ' ')
     expect(details.get('exercise', 'sq')).toEqual({ notes: 'Knees out' })
     details.setNotes('exercise', 'sq', '')
-    expect(details.docs.exercise).toEqual({})
+    expect(details.docs.exercise ?? {}).toEqual({})
   })
 
   it('refuses a field key the API would drop, and changes nothing', () => {
@@ -74,7 +76,7 @@ describe('details store', () => {
     for (const key of ['Bad Key', '2nd', '', 'x'.repeat(33), '__proto__']) {
       expect(details.setField('exercise', 'sq', key, 'text')).toBe(false)
     }
-    expect(details.docs.exercise).toEqual({})
+    expect(details.docs.exercise ?? {}).toEqual({})
   })
 
   it('refuses notes over 20,000 characters, counted once trimmed and in code points', () => {
@@ -126,9 +128,22 @@ describe('details store', () => {
     details.adoptItem('exercise', 'sq', { notes: 'C' })
     details.adoptItem('diet', 'veg', null)
     details.adoptItem('diet', 'fish', {})
-    expect(details.docs).toEqual({ exercise: { sq: { notes: 'C' } }, cardio: {}, diet: {} })
+    expect(details.docs).toEqual({ exercise: { sq: { notes: 'C' } }, diet: {} })
     details.clear()
-    expect(details.docs).toEqual({ exercise: {}, cardio: {}, diet: {} })
+    expect(details.docs).toEqual({})
+  })
+
+  it('keeps each tracker’s details apart, a new tracker’s and one named like a prototype key', () => {
+    const details = useDetailsStore()
+    expect(details.setNotes('xk3j9a2b1c', 'dips', 'Lean forward')).toBe(true)
+    expect(details.notesOf('xk3j9a2b1c', 'dips')).toBe('Lean forward')
+    expect(details.notesOf('exercise', 'dips')).toBe('')
+    expect(details.get('constructor', 'name')).toEqual({})
+    expect(details.setField('constructor', 'a', 'works', 'Legs')).toBe(true)
+    expect(details.fieldOf('constructor', 'a', 'works')).toBe('Legs')
+    // Clearing an item of a tracker with no details adds nothing.
+    details.adoptItem('xnone', 'a', null)
+    expect(Object.keys(details.docs)).toEqual(['xk3j9a2b1c', 'constructor'])
   })
 
   it('refuses an id the API cannot name, __proto__ among them, and changes nothing', () => {
@@ -139,8 +154,8 @@ describe('details store', () => {
       expect(details.canSetNotes('exercise', id, 'Note')).toBe(false)
       expect(details.setField('exercise', id, 'works', 'Legs')).toBe(false)
     }
-    expect(details.docs.exercise).toEqual({})
-    expect(Object.getPrototypeOf(details.docs.exercise)).toBe(Object.prototype)
+    expect(details.docs.exercise ?? {}).toEqual({})
+    expect(Object.getPrototypeOf(details.docs)).toBe(Object.prototype)
     expect(details.get('exercise', '__proto__')).toEqual({})
     expect(details.setNotes('exercise', 'x'.repeat(128), 'Note')).toBe(true)
     for (const id of ['a.b', '...', 'a\\b', 'a b?#%']) {

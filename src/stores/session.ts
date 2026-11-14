@@ -2,9 +2,8 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { request, type ApiError } from '@/lib/api'
 import { isRecord, parseJson, readKey, removeKey, writeKey } from '@/lib/storage'
-import { useCardioStore } from '@/stores/cardio'
-import { useDietStore } from '@/stores/diet'
 import { usePlannerStore } from '@/stores/planner'
+import { useTrackersStore } from '@/stores/trackers'
 import { useSyncStore } from '@/stores/sync'
 
 /** The last signed-in user, so a reload shows their cached data before the server answers. */
@@ -66,8 +65,7 @@ function savedUser(): string | null {
 export const useSessionStore = defineStore('session', () => {
   const sync = useSyncStore()
   const planner = usePlannerStore()
-  const cardio = useCardioStore()
-  const diet = useDietStore()
+  const trackers = useTrackersStore()
 
   /** `checking` only until the first answer when no user is remembered on this device. */
   const status = ref<'checking' | 'signed-out' | 'signed-in'>('checking')
@@ -88,8 +86,7 @@ export const useSessionStore = defineStore('session', () => {
     // A different user's data must never show, even for a moment.
     if (user.value !== null && user.value !== name) {
       planner.clear()
-      cardio.clear()
-      diet.clear()
+      trackers.clear()
     }
     user.value = name
     status.value = 'signed-in'
@@ -204,8 +201,7 @@ export const useSessionStore = defineStore('session', () => {
     sync.stop()
     if (name) sync.forget(name)
     planner.clear()
-    cardio.clear()
-    diet.clear()
+    trackers.clear()
     removeKey(SESSION_KEY)
     user.value = null
     confirmed.value = null
@@ -224,8 +220,7 @@ export const useSessionStore = defineStore('session', () => {
     if (remembered === user.value && status.value === 'signed-in') return
     sync.stop()
     planner.clear()
-    cardio.clear()
-    diet.clear()
+    trackers.clear()
     user.value = null
     confirmed.value = null
     expired.value = false

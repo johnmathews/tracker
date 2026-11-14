@@ -21,9 +21,8 @@ import {
  * twice (journal 261025-stale-tab, and the solid and hatch drawings of #38).
  *
  * Each row records what one version stores: the marks, the fields an exercise, a cardio item and a
- * food keep, the sections a cache holds, the keys of a cached section, and the keys an item's
- * details keep. A row may change only before its
- * version ships.
+ * food keep, the keys a cache holds, the keys of a cached section, the keys an item's details
+ * keep, and the keys of a cached tracker. A row may change only before its version ships.
  */
 type Format = {
   marks: string[]
@@ -33,6 +32,7 @@ type Format = {
   sections: string[]
   section: string[]
   details: string[]
+  tracker: string[]
 }
 
 const MARK_NAMES = [
@@ -66,6 +66,7 @@ const FORMATS: Record<string, Format> = {
     sections: ['diet', 'exercise', 'settings'],
     section: ['log', 'plans', 'revs'],
     details: [],
+    tracker: [],
   },
   // Item details (D2): an item's notes leave its plan for its details, one copy for every week.
   'tracker-cache-v4:': {
@@ -76,6 +77,7 @@ const FORMATS: Record<string, Format> = {
     sections: ['diet', 'exercise', 'settings'],
     section: ['detailRevs', 'details', 'log', 'plans', 'revs'],
     details: ['fields', 'notes'],
+    tracker: [],
   },
   // Cardio (K90): a third section, whose items keep a time and a distance.
   'tracker-cache-v5:': {
@@ -86,6 +88,18 @@ const FORMATS: Record<string, Format> = {
     sections: ['cardio', 'diet', 'exercise', 'settings'],
     section: ['detailRevs', 'details', 'log', 'plans', 'revs'],
     details: ['fields', 'notes'],
+    tracker: [],
+  },
+  // Trackers are the account's own (K123): the cache holds them, and each one's data by its id.
+  'tracker-cache-v6:': {
+    marks: MARK_NAMES,
+    exercise: ['duration', 'id', 'name', 'perSide', 'reps', 'sets', 'target', 'weight'],
+    cardio: ['distance', 'duration', 'id', 'name', 'target'],
+    food: ['id', 'name', 'target'],
+    sections: ['sections', 'settings', 'trackers'],
+    section: ['detailRevs', 'details', 'log', 'plans', 'revs'],
+    details: ['fields', 'notes'],
+    tracker: ['dailyTarget', 'endWeek', 'id', 'kind', 'name', 'position', 'rev', 'startWeek'],
   },
 }
 
@@ -120,14 +134,17 @@ describe('the stored format (K14)', () => {
       fields: { equipment: 'Mat' },
       probe: 'not a field',
     })
+    const tracker = { id: 'exercise', name: 'Strength', kind: 'strength', rev: 1, probe: 'x' }
+    const state = normaliseState({ trackers: [tracker], probe: 'not a key' })!
     const now = {
       marks: [...MARKS],
       exercise: keptFields(normaliseExercise),
       cardio: keptFields(normaliseCardio),
       food: keptFields(normaliseFood),
-      sections: Object.keys(normaliseState({ exercise: {}, diet: {} })!).sort(),
-      section: Object.keys(normaliseState({ exercise: {}, diet: {} })!.exercise).sort(),
+      sections: Object.keys(state).sort(),
+      section: Object.keys(state.sections.exercise!).sort(),
       details: Object.keys(details ?? {}).sort(),
+      tracker: Object.keys(state.trackers[0]!).sort(),
     }
     expect(
       now,

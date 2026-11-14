@@ -2,8 +2,9 @@
 import { computed, ref } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import { usePlannerStore } from '@/stores/planner'
-import { useCardioStore } from '@/stores/cardio'
-import { useDietStore } from '@/stores/diet'
+import { useTrackersStore } from '@/stores/trackers'
+import { firstTrackers } from '@/lib/trackers'
+import type { Mark } from '@/lib/storage'
 import { useDetailsStore } from '@/stores/details'
 import ItemPage from '@/components/ItemPage.vue'
 import { SegmentedControl } from '@/components/ui/segmented-control'
@@ -14,17 +15,16 @@ import StateExample from '../parts/StateExample.vue'
 // items (components/ItemPage/preview.html). Today is Wednesday 28 October; nothing is saved.
 setActivePinia(createPinia())
 const planner = usePlannerStore()
-const cardio = useCardioStore()
-const diet = useDietStore()
+const trackers = useTrackersStore()
 const details = useDetailsStore()
 planner.now = new Date(2026, 9, 28, 12)
-const G = 'great'
-const P = 'partial'
-const X = 'missed'
+const G: Mark = 'great'
+const P: Mark = 'partial'
+const X: Mark = 'missed'
 const _ = null
 const KS = { id: 'ks', name: 'Kettlebell swings', sets: 3, reps: 15, weight: 16, perSide: false }
 const PU = { id: 'pu', name: 'Push-ups', sets: 3, reps: 12, perSide: false, target: 4 }
-planner.plans = {
+const exercisePlans = {
   '2026-09-07': [{ ...KS, target: 3 }, PU],
   '2026-09-21': [PU],
   '2026-09-28': [
@@ -34,7 +34,7 @@ planner.plans = {
   ],
   '2026-10-12': [{ ...KS, target: 3 }, PU],
 }
-planner.log = {
+const exerciseLog = {
   '2026-10-26': { ks: [G, _, G, _, _, _, _] },
   '2026-10-19': { ks: [G, _, P, _, G, _, _] },
   '2026-10-12': { ks: [_, G, _, _, G, _, G] },
@@ -43,26 +43,31 @@ planner.log = {
   '2026-09-14': { ks: [G, _, G, _, _, G, _] },
   '2026-09-07': { ks: [_, P, _, _, G, _, _] },
 }
-cardio.plans = {
+const cardioPlans = {
   '2026-10-19': [
     { id: 'ru', name: 'Running', duration: 1800, distance: 5, target: 3 },
     { id: 'cy', name: 'Cycling', duration: 2700, target: 2 },
   ],
 }
-cardio.log = {
+const cardioLog = {
   '2026-10-26': { ru: [G, _, P, _, _, _, _] },
   '2026-10-19': { ru: [G, _, G, _, X, _, G] },
 }
-diet.plans = {
+const dietPlans = {
   '2026-10-12': [
     { id: 'nuts', name: 'Nuts', target: 5 },
     { id: 'fish', name: 'Fish', target: 2 },
   ],
 }
-diet.log = {
+const dietLog = {
   '2026-10-26': { nuts: [G, G, _, _, _, _, _] },
   '2026-10-19': { nuts: [G, G, G, G, G, _, _] },
 }
+trackers.adopt(firstTrackers(null), {
+  exercise: { plans: exercisePlans, log: exerciseLog },
+  cardio: { plans: cardioPlans, log: cardioLog },
+  diet: { plans: dietPlans, log: dietLog },
+})
 details.adopt({
   exercise: {
     ks: {

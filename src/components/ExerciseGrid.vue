@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { usePlannerStore } from '@/stores/planner'
+import { useTrackersStore } from '@/stores/trackers'
 import { useDetailsStore } from '@/stores/details'
 import type { Mark } from '@/lib/storage'
 import { SECTIONS } from '@/lib/trackerTypes'
@@ -18,7 +19,10 @@ import { MAX_DAILY_PICK, MIN_DAILY_PICK } from '@/lib/storage'
 import { newItemHref } from '@/lib/routes'
 
 const store = usePlannerStore()
+const trackers = useTrackersStore()
 const details = useDetailsStore()
+/** The tracker this section shows: the account's first, `exercise` (K123). */
+const ID = 'exercise'
 /** The section's type: its names and its chips (src/lib/trackerTypes.ts). */
 const type = SECTIONS.exercise
 
@@ -27,26 +31,30 @@ const type = SECTIONS.exercise
  * (K60). None while Daily goal is off (K85).
  */
 const metDays = computed(() =>
-  store.dailyGoal ? daysMet(store.dayCounts, store.dailyPick) : store.days.map(() => false),
+  store.dailyGoal ? daysMet(trackers.dayCounts(ID), dailyPick.value) : store.days.map(() => false),
 )
-/** Exercises a day, set on the title line in Edit plan (K56). */
+/** Exercises a day, set on the title line in Edit plan (K56): the tracker's daily target. */
 const dailyPick = computed({
-  get: () => store.dailyPick,
-  set: (value: number) => store.changeDailyPick(value - store.dailyPick),
+  get: () => trackers.dailyTarget(ID)!,
+  set: (value: number) => trackers.setDailyTarget(ID, value),
 })
 
 function marksFor(id: string): (Mark | null)[] {
-  return store.days.map((_, i) => store.markOf(id, i))
+  return store.days.map((_, i) => trackers.markOf(ID, id, i))
+}
+
+function toggle(id: string, day: number): void {
+  trackers.toggle(ID, id, day)
 }
 
 /** An exercise's notes, from its details: one copy for every week (D2). */
 function noteFor(item: { id: string }): string {
-  return details.notesOf('exercise', item.id)
+  return details.notesOf(ID, item.id)
 }
 
 /** Edit plan's Add opens the new item page (K104), not a dialog. */
 function add(): void {
-  location.hash = newItemHref('exercise')
+  location.hash = newItemHref(ID)
 }
 </script>
 
@@ -107,14 +115,14 @@ function add(): void {
       :mark-set="store.markSet"
       section="exercise"
       :table-label="`${type.label}, week of ${dayMonth(store.monday)}`"
-      :items="store.exercises"
+      :items="trackers.itemsOf(ID)"
       :days="store.days"
       :marks-for="marksFor"
       :details-for="type.details"
       :note-for="noteFor"
       :met-days="metDays"
       data-testid="exercise-grid"
-      @toggle="store.toggle"
+      @toggle="toggle"
     >
       <template #corner>
         <span class="title-1 text-[24px] leading-7 text-ink">{{ type.label }}</span>
