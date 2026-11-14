@@ -1,0 +1,70 @@
+<title>The week</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="tokens.css">
+<!-- A mockup (design-system skill, references/mockups.md). Every picture is the real app, signed in
+     as the demo account, with the proposal drawn into its page before the screenshot. -->
+<style>
+  body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font-sans); }
+  .mockup-page { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: var(--space-8, 32px) var(--space-16, 64px); max-width: 1360px; margin: 0 auto; display: grid; gap: var(--space-12, 48px); }
+  .mockup-head { display: grid; gap: var(--space-2, 8px); max-width: 70ch; }
+  .mockup-head h1, .option h2, .option h3 { margin: 0; text-wrap: balance; }
+  .mockup-head p, .option p, .option li { margin: 0; }
+  .option ul.points { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; max-width: 75ch; }
+  .mockup-meta { color: var(--ink-secondary); }
+  .option { display: grid; gap: var(--space-4, 16px); border-top: 1px solid var(--line); padding-top: var(--space-8, 32px); }
+  .option-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2, 8px) var(--space-3, 12px); }
+  .option-tag { color: var(--ink-secondary); }
+  .option[data-recommended] .option-tag::after { content: " · Recommended"; color: var(--ink); }
+  .decided { color: var(--ink-secondary); }
+  .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: var(--space-4, 16px); }
+  .phones { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 330px)); gap: var(--space-4, 16px); }
+  figure { margin: 0; min-width: 0; display: grid; gap: var(--space-2, 8px); align-content: start; }
+  figure img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: var(--radius-lg, 10px); }
+  figcaption { color: var(--ink-secondary); }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+</style>
+
+<main class="mockup-page">
+  <header class="mockup-head">
+    <p class="caption mockup-meta">Mockup · 2026-11-14 · Tracker</p>
+    <h1 class="title-1">The week</h1>
+    
+    <p class="body">The week as it is today, one tracker per screen. Nothing changes here in this round.
+      Comment on anything you want changed.</p>
+  </header>
+  <section class="option" id="exercises" aria-labelledby="exercises-h">
+  <div class="option-head"><h2 class="title-2" id="exercises-h">Exercises</h2><span class="label option-tag">Screen 1</span></div>
+  
+  <div class="shots">
+<figure><img src="exercises-desktop-light.png" alt="The Exercises screen, desktop, light" loading="lazy"><figcaption class="caption">Desktop · Light</figcaption></figure>
+<figure><img src="exercises-desktop-dark.png" alt="The Exercises screen, desktop, dark" loading="lazy"><figcaption class="caption">Desktop · Dark</figcaption></figure>
+</div>
+<div class="phones">
+<figure><img src="exercises-phone-light.png" alt="The Exercises screen, phone, light" loading="lazy"><figcaption class="caption">Phone · Light</figcaption></figure>
+<figure><img src="exercises-phone-dark.png" alt="The Exercises screen, phone, dark" loading="lazy"><figcaption class="caption">Phone · Dark</figcaption></figure>
+</div>
+</section><section class="option" id="cardio" aria-labelledby="cardio-h">
+  <div class="option-head"><h2 class="title-2" id="cardio-h">Cardio</h2><span class="label option-tag">Screen 2</span></div>
+  
+  <div class="shots">
+<figure><img src="cardio-desktop-light.png" alt="The Cardio screen, desktop, light" loading="lazy"><figcaption class="caption">Desktop · Light</figcaption></figure>
+<figure><img src="cardio-desktop-dark.png" alt="The Cardio screen, desktop, dark" loading="lazy"><figcaption class="caption">Desktop · Dark</figcaption></figure>
+</div>
+<div class="phones">
+<figure><img src="cardio-phone-light.png" alt="The Cardio screen, phone, light" loading="lazy"><figcaption class="caption">Phone · Light</figcaption></figure>
+<figure><img src="cardio-phone-dark.png" alt="The Cardio screen, phone, dark" loading="lazy"><figcaption class="caption">Phone · Dark</figcaption></figure>
+</div>
+</section><section class="option" id="food" aria-labelledby="food-h">
+  <div class="option-head"><h2 class="title-2" id="food-h">Food</h2><span class="label option-tag">Screen 3</span></div>
+  
+  <div class="shots">
+<figure><img src="food-desktop-light.png" alt="The Food screen, desktop, light" loading="lazy"><figcaption class="caption">Desktop · Light</figcaption></figure>
+<figure><img src="food-desktop-dark.png" alt="The Food screen, desktop, dark" loading="lazy"><figcaption class="caption">Desktop · Dark</figcaption></figure>
+</div>
+<div class="phones">
+<figure><img src="food-phone-light.png" alt="The Food screen, phone, light" loading="lazy"><figcaption class="caption">Phone · Light</figcaption></figure>
+<figure><img src="food-phone-dark.png" alt="The Food screen, phone, dark" loading="lazy"><figcaption class="caption">Phone · Dark</figcaption></figure>
+</div>
+</section>
+</main>
