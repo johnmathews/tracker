@@ -86,8 +86,9 @@ const ids = {
 
 /** The tracker's kind: its labels, fields and chips (src/lib/trackerTypes.ts). */
 const type = computed(() => trackers.typeOf(props.section))
-const isExercise = computed(() => type.value.id === 'strength')
-const isCardio = computed(() => type.value.id === 'cardio')
+/** A strength or mobility item: an exercise's plan fields (a mobility item's without weight). */
+const isExercise = computed(() => type.value.plan === 'exercise')
+const isCardio = computed(() => type.value.plan === 'cardio')
 const src = computed(() => source(props.section))
 /** The item in the week the page was opened from (the week the planner shows), if it's there. */
 const inWeek = computed(() => src.value.items.find((it) => it.id === props.itemId) ?? null)
@@ -124,9 +125,7 @@ const planLine = computed(() => {
 const form = useExerciseForm()
 /** A cardio item's time and distance (K90). */
 const cardioForm = useCardioForm()
-const planKind = computed(() =>
-  isExercise.value ? 'exercise' : isCardio.value ? 'cardio' : ('food' as const),
-)
+const planKind = computed(() => type.value.plan)
 const planErrors = reactive<PlanErrors>({})
 /** The plan item as this page last left it: a change from anywhere else reloads the controls. */
 let planSeen = ''
@@ -190,7 +189,7 @@ const latestRows = computed<[string, string][]>(() => {
     rows.push(['Measure', e.duration ? 'Time' : 'Reps'])
     if (e.duration) rows.push(['Seconds', String(e.duration)])
     else if (e.reps) rows.push(['Reps', String(e.reps)])
-    rows.push(['Weight in kg', e.weight ? String(e.weight) : 'Bodyweight'])
+    if (type.value.weighted) rows.push(['Weight in kg', e.weight ? String(e.weight) : 'Bodyweight'])
     rows.push([e.duration ? 'Timed' : 'Reps count', e.perSide ? 'Each side' : 'Per set'])
   }
   if (isCardio.value) {
@@ -770,6 +769,7 @@ const filled = computed(() =>
           <PlanFields
             v-if="inWeek"
             :kind="planKind"
+            :weighted="type.weighted"
             :form="form"
             :cardio-form="cardioForm"
             :target="inWeek.target"

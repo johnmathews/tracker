@@ -464,6 +464,38 @@ describe('weekly plans', () => {
   })
 })
 
+describe('a mobility tracker (W8)', () => {
+  it('plans by hold time or by reps, each side, and keeps no weight', () => {
+    const t = store()
+    const id = t.createTracker({ name: 'Mobility', kind: 'mobility' })!
+    expect(t.dailyTarget(id)).toBe(3)
+    const hold = t.addItem(id, {
+      name: 'Hip hold',
+      sets: 2,
+      duration: 45,
+      perSide: true,
+      weight: 8,
+    })!
+    const reps = t.addItem(id, { name: 'Cat-cow', sets: 3, reps: 10, perSide: false, weight: 4 })!
+    expect(t.itemsOf(id)).toEqual([
+      { id: hold, name: 'Hip hold', sets: 2, reps: 0, duration: 45, perSide: true, target: 3 },
+      { id: reps, name: 'Cat-cow', sets: 3, reps: 10, perSide: false, target: 3 },
+    ])
+    t.updateItem(id, reps, { name: 'Cat-cow', reps: 12, perSide: false, weight: 6 })
+    expect(t.itemsOf(id)[1]).toEqual({
+      id: reps,
+      name: 'Cat-cow',
+      reps: 12,
+      perSide: false,
+      target: 3,
+    })
+    // A press marks it as an exercise: great, then partial.
+    t.toggle(id, hold, 0)
+    t.toggle(id, hold, 0)
+    expect(t.markOf(id, hold, 0)).toBe('partial')
+  })
+})
+
 describe('the cardio tracker (K90)', () => {
   it('shows no cardio until some is planned, unlike the other two first trackers', () => {
     const t = store()

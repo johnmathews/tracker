@@ -92,15 +92,20 @@ function exerciseFields(input: NewItem, name: string): Omit<Exercise, 'id' | 'ta
 
 /**
  * The item as stored for a tracker of `kind`, or null when the trimmed name is empty: a cardio
- * item's whole seconds and km within their limits, each left out when not set; a strength item's
- * fields as `exerciseFields` cleans them; a food's name and goal.
+ * item's whole seconds and km within their limits, each left out when not set; a strength or
+ * mobility item's fields as `exerciseFields` cleans them, a mobility item's without a weight; a
+ * food's name and goal.
  */
 function buildItem(kind: TrackerTypeId, id: string, input: NewItem, goal: number): Item | null {
   const name = input.name.trim()
   if (!name) return null
   const target = clamp(goal, MIN_TARGET, MAX_TARGET)
-  if (kind === 'strength') return { id, ...exerciseFields(input, name), target }
-  if (kind === 'food') return { id, name, target }
+  const type = TRACKER_TYPES[kind]
+  if (type.plan === 'exercise') {
+    const fields = exerciseFields(type.weighted ? input : { ...input, weight: undefined }, name)
+    return { id, ...fields, target }
+  }
+  if (type.plan === 'food') return { id, name, target }
   const duration = Math.round(input.duration ?? 0)
   const distance = normaliseDistance(input.distance)
   return {

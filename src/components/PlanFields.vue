@@ -3,6 +3,7 @@ import { MAX_TARGET, MIN_TARGET } from '@/lib/storage'
 import { FIELDS } from '@/lib/itemPage'
 import { MEASURE_OPTIONS, type useExerciseForm } from '@/composables/exerciseForm'
 import type { useCardioForm } from '@/composables/cardioForm'
+import type { PlanKind } from '@/lib/trackerTypes'
 import PerSideToggle from '@/components/PerSideToggle.vue'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { Stepper } from '@/components/ui/stepper'
@@ -17,18 +18,23 @@ export type PlanErrors = {
   distance?: string
 }
 
-const props = defineProps<{
-  /** What the item is: an exercise has sets, reps and weight; cardio time and distance; a food
-   * only Times a week. */
-  kind: 'exercise' | 'cardio' | 'food'
-  form: ReturnType<typeof useExerciseForm>
-  cardioForm: ReturnType<typeof useCardioForm>
-  /** Times a week. */
-  target: number
-  errors: PlanErrors
-  /** Prefix for the fields' ids, unique on the page. */
-  idBase: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    /** What the item is: an exercise has sets, reps and weight; cardio time and distance; a food
+     * only Times a week (the kind's `plan`, src/lib/trackerTypes.ts). */
+    kind: PlanKind
+    /** An exercise's Weight in kg; false for a mobility item, which has none (W8). */
+    weighted?: boolean
+    form: ReturnType<typeof useExerciseForm>
+    cardioForm: ReturnType<typeof useCardioForm>
+    /** Times a week. */
+    target: number
+    errors: PlanErrors
+    /** Prefix for the fields' ids, unique on the page. */
+    idBase: string
+  }>(),
+  { weighted: true },
+)
 const emit = defineEmits<{
   /** A field changed; the form holds the new value. */
   change: []
@@ -50,8 +56,8 @@ function onPerSide(value: boolean): void {
 </script>
 
 <!-- This week's plan's controls (ItemPage card), as the item's page and the new item page show
-     them (K104): an exercise's Sets, Measure, the amount, Weight, Reps count and Times a week; a
-     cardio item's Minutes, Distance and Times a week (K90); a food's Times a week. -->
+     them (K104): an exercise's Sets, Measure, the amount, Weight, Reps count and Times a week, a
+     mobility item's the same without Weight; a cardio item's Minutes, Distance and Times a week (K90); a food's Times a week. -->
 <template>
   <div :class="FIELDS">
     <template v-if="kind === 'exercise'">
@@ -84,6 +90,7 @@ function onPerSide(value: boolean): void {
         @input="onInput(form.onRepsInput, $event)"
       />
       <TextField
+        v-if="weighted"
         :id="`${idBase}-weight`"
         :model-value="form.weight.value"
         label="Weight in kg"

@@ -6,6 +6,7 @@ import ItemPage from '@/components/ItemPage.vue'
 import { ConfirmHost } from '@/components/ui/confirm-dialog'
 import { usePlannerStore } from '@/stores/planner'
 import { trackerView } from '@/lib/__tests__/trackerView'
+import { useTrackersStore } from '@/stores/trackers'
 import { useDetailsStore } from '@/stores/details'
 import type { Cardio, Exercise, Food } from '@/lib/storage'
 import type { Section } from '@/lib/trackerTypes'
@@ -570,6 +571,33 @@ describe('a cardio item (K90)', () => {
     expect(wrapper!.get('[data-testid="item-arrange-line"]').text()).toBe(
       'Choose which sections every cardio page shows, and their order. Changes apply at once.',
     )
+  })
+})
+
+describe('a mobility item (W8)', () => {
+  it('has an exercise’s plan fields without Weight, and its latest plan without one', () => {
+    const trackers = useTrackersStore()
+    const id = trackers.createTracker({ name: 'Mobility', kind: 'mobility' })!
+    trackerView(id).plans = {
+      '2026-10-12': [{ id: 'hip', name: 'Hip hold', sets: 2, reps: 0, duration: 45, target: 3 }],
+      '2026-10-19': [{ id: 'cat', name: 'Cat-cow', sets: 3, reps: 10, target: 3 }],
+    }
+    wrapper = mount(ItemPage, { props: { section: id, itemId: 'cat' }, attachTo: document.body })
+    expect(wrapper.get('[data-testid="item-type"]').text()).toBe('Exercise')
+    expect(wrapper.find('input[data-field="weight"]').exists()).toBe(false)
+    expect(field('sets').element.value).toBe('3')
+    expect(field('reps').element.value).toBe('10')
+    wrapper.unmount()
+    wrapper = mount(ItemPage, { props: { section: id, itemId: 'hip' }, attachTo: document.body })
+    const dl = section('plan').get('dl')
+    expect(dl.findAll('div').map((d) => [d.get('dt').text(), d.get('dd').text()])).toEqual([
+      ['Sets', '2'],
+      ['Measure', 'Time'],
+      ['Seconds', '45'],
+      ['Timed', 'Per set'],
+      ['Times a week', '3'],
+    ])
+    expect(wrapper.findAll('[data-testid="item-chip"]').map((c) => c.text())).toEqual(['2 × 45 s'])
   })
 })
 

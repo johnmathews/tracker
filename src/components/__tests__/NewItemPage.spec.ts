@@ -9,6 +9,7 @@ import { mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import NewItemPage from '@/components/NewItemPage.vue'
 import { usePlannerStore } from '@/stores/planner'
+import { useTrackersStore } from '@/stores/trackers'
 import { trackerView } from '@/lib/__tests__/trackerView'
 import { useDetailsStore } from '@/stores/details'
 import { markFromWeek } from '@/lib/routes'
@@ -161,6 +162,38 @@ describe('the new item page (K104)', () => {
       duration: 45,
       perSide: true,
     })
+  })
+
+  it('adds a mobility item by hold time, each side, with no weight (W8)', async () => {
+    const trackers = useTrackersStore()
+    const id = trackers.createTracker({ name: 'Mobility', kind: 'mobility' })!
+    wrapper = mount(NewItemPage, { props: { section: id }, attachTo: document.body })
+    expect(wrapper.get('[data-testid="new-add"]').text()).toBe('Add mobility')
+    expect(wrapper.get('[data-testid="item-type"]').text()).toBe('New exercise')
+    expect(wrapper.find('input[data-field="weight"]').exists()).toBe(false)
+    expect(wrapper.find('input[data-field="sets"]').exists()).toBe(true)
+    await nameField().setValue('Hip hold')
+    await wrapper
+      .findAll('button')
+      .find((r) => r.text() === 'Time')!
+      .trigger('click')
+    await field('reps').setValue('45')
+    await wrapper
+      .findAll('button')
+      .find((r) => r.text() === 'Each side')!
+      .trigger('click')
+    await add()
+    expect(trackers.itemsOf(id)).toEqual([
+      {
+        id: expect.any(String),
+        name: 'Hip hold',
+        sets: 1,
+        reps: 0,
+        duration: 45,
+        perSide: true,
+        target: 3,
+      },
+    ])
   })
 
   it('adds nothing without a name, and says so with focus on the field', async () => {

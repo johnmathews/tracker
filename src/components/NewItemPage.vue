@@ -38,8 +38,8 @@ const ids = { form: useId(), name: useId(), plan: useId(), notes: useId(), detai
 
 /** The tracker's kind: its names, its fields and its plan's fields (src/lib/trackerTypes.ts). */
 const type = computed(() => trackers.typeOf(props.section))
-/** The plan's fields to show: a strength item's are an exercise's. */
-const kind = computed(() => (type.value.id === 'strength' ? 'exercise' : type.value.id))
+/** The plan's fields to show: a strength or mobility item's are an exercise's. */
+const kind = computed(() => type.value.plan)
 
 /**
  * The sections the new item can fill: the plan always, first unless the type's arrangement moves
@@ -228,6 +228,7 @@ async function add(): Promise<void> {
             <p :class="LEDE" data-testid="item-plan-line">{{ planLine }}</p>
             <PlanFields
               :kind="kind"
+              :weighted="type.weighted"
               :form="form"
               :cardio-form="cardioForm"
               :target="target"
