@@ -55,8 +55,8 @@ defineProps<{
          is three columns on screen, like the Header's, so they sit under the bar's week. Folded
          they follow the title, wrapping under it when the line is too narrow. -->
     <slot name="actions" />
-    <!-- The end of the line (Edit plan's Add, K113): the third column's end, over the grid's
-         Remove column. Folded, the end of the title's line. -->
+    <!-- The end of the line (Edit plan's Add, K113): the third column's end, at the end of the
+         grid's width. Folded, the end of the title's line. -->
     <div
       v-if="$slots.end"
       data-slot="section-end"

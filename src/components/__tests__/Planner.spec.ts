@@ -3,7 +3,7 @@
  * and Chip cards in brand/design-system/project/components/, mounted in the real app.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
 import App from '@/App.vue'
@@ -34,10 +34,6 @@ async function mountConfig(cache?: SyncState): Promise<VueWrapper> {
 const ex = () => wrapper.get('[data-testid="exercise-grid"]')
 const diet = () => wrapper.get('[data-testid="diet-grid"]')
 const marks = (name: string) => wrapper.findAll(`button[aria-label^="${name},"]`)
-
-async function settle(): Promise<void> {
-  for (let i = 0; i < 4; i++) await new Promise((resolve) => setTimeout(resolve, 0))
-}
 
 describe('the planner grids (W10)', () => {
   beforeEach(() => {
@@ -195,37 +191,25 @@ describe('the planner grids (W10)', () => {
       expect(ex().find('[data-testid="row-total"]').exists()).toBe(false)
     })
 
-    it('puts remove at the end of the row, as an IconButton, and only the name in its header (F28, K104)', async () => {
+    it('has the week’s columns in Edit plan: no Remove, only the name in its header (K104, K120)', async () => {
       await mountConfig()
-      const remove = ex().get('button[aria-label="Remove Squats"]')
-      expect(remove.attributes('data-slot')).toBe('icon-button')
-      // No Edit button: the name opens the item's page, where Edit plan edits it (K104).
-      const header = ex()
-        .findAll('[data-testid="item-name"]')
-        .find((n) => n.text() === 'Squats')!
-        .element.closest('[role="rowheader"]')!
-      expect(header.querySelector('button')).toBeNull()
-      expect(header.querySelector('[role="spinbutton"]')).toBeNull()
-      const last = header.closest('tr')!.lastElementChild!
-      expect(last.getAttribute('role')).toBe('gridcell')
-      expect(last.contains(remove.element)).toBe(true)
-      expect(last.hasAttribute('data-noprint')).toBe(true)
-      // Its column has a header for screen readers.
-      const heads = ex().findAll('thead th')
-      expect(heads.at(-1)!.text()).toBe('Remove')
-      // Foods are the same: remove at the end, nothing after the name.
-      const food = diet().get('button[aria-label="Remove Fish"]').element.closest('tr')!
-      expect(food.lastElementChild!.contains(food.querySelector('[data-action="remove"]'))).toBe(
-        true,
+      // An item comes off the week from its own page (K120), so no row has a Remove button.
+      expect(wrapper.find('button[aria-label^="Remove"]').exists()).toBe(false)
+      expect(wrapper.find('[data-action="remove"]').exists()).toBe(false)
+      for (const grid of [ex(), diet()]) {
+        expect(grid.findAll('thead th').at(-1)!.text()).toBe('Sun 25')
+        expect(grid.findAll('col')).toHaveLength(8)
+        for (const row of grid.findAll('tbody tr')) {
+          expect(row.findAll('td')).toHaveLength(7)
+          expect(
+            row.find('[role="rowheader"] button:not([data-testid="item-note"])').exists(),
+          ).toBe(false)
+        }
+      }
+      // The template is the week's: the names and the seven days.
+      expect(ex().classes()).toContain(
+        'screen:grid-cols-[var(--grid-name-w)_repeat(7,minmax(0,1fr))]',
       )
-      expect(food.querySelector('[role="rowheader"] button')).toBeNull()
-    })
-
-    it('drops the Remove column outside Edit plan', async () => {
-      await mountConfig()
-      await wrapper.get('[data-testid="edit-plan-button"]').trigger('click')
-      expect(ex().findAll('thead th').at(-1)!.text()).toBe('Sun 25')
-      expect(ex().find('button[aria-label^="Remove"]').exists()).toBe(false)
     })
 
     it('holds the row header at an IconButton’s height in both modes, so rows keep their height (F25)', async () => {
@@ -234,41 +218,6 @@ describe('the planner grids (W10)', () => {
       expect(block().classes()).toContain('min-h-11')
       await wrapper.get('[data-testid="edit-plan-button"]').trigger('click')
       expect(block().classes()).toContain('min-h-11')
-    })
-
-    /** Press a row's Remove, then answer the ConfirmDialog with `answer`. */
-    async function removeRow(grid: ReturnType<typeof ex>, name: string, answer: string) {
-      await grid.get(`button[aria-label="Remove ${name}"]`).trigger('click')
-      await settle()
-      const dialog = new DOMWrapper(document.querySelector<HTMLElement>('[role="alertdialog"]')!)
-      await dialog
-        .findAll('button')
-        .find((b) => b.text() === answer)!
-        .trigger('click')
-      await settle()
-      await flushPromises()
-    }
-    const focused = () => document.activeElement?.getAttribute('aria-label')
-
-    it('moves focus to the next row’s Remove after a removal, not to the page', async () => {
-      await mountConfig()
-      await removeRow(ex(), 'Squats', 'Cancel')
-      expect(focused()).toBe('Remove Squats')
-      await removeRow(ex(), 'Squats', 'Remove')
-      expect(marks('Squats')).toHaveLength(0)
-      expect(focused()).toBe('Remove Back extensions')
-      // Focus put back on a control lets its cell's controls into the Tab order (gridNav); other
-      // rows' Remove buttons stay parked.
-      expect(document.activeElement!.getAttribute('tabindex')).toBeNull()
-      expect(ex().get('button[aria-label="Remove Pull-ups"]').attributes('tabindex')).toBe('-1')
-    })
-
-    it('falls back to the previous row, then to the Add button, as rows run out', async () => {
-      await mountConfig()
-      await removeRow(diet(), 'Nuts', 'Remove')
-      expect(focused()).toBe('Remove Fish')
-      for (const name of ['Fish', 'Fruit', 'Vegetables']) await removeRow(diet(), name, 'Remove')
-      expect(document.activeElement?.getAttribute('data-testid')).toBe('add-food')
     })
   })
 
@@ -403,14 +352,9 @@ describe('the planner grids (W10)', () => {
       await press('F2')
       expect(focused()).toBe(link)
       expect(tabStops().filter((el) => ex().element.contains(el))).toEqual([link])
-      // End reaches the row's Remove cell; Enter there reaches its button.
+      // End reaches the row's Sunday: the row ends with the days, as in the week (K120).
       await press('End')
-      const cell = focused()
-      expect(cell.tagName).toBe('TD')
-      await press('Enter')
-      expect(name(focused())).toBe('Remove Squats')
-      await press('Escape')
-      expect(focused()).toBe(cell)
+      expect(name(focused())).toBe('Squats, Sunday 25 October')
     })
   })
 

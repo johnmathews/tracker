@@ -131,11 +131,9 @@ function add(): void {
         :marks-for="marksFor"
         :details-for="type.details"
         :note-for="noteFor"
-        :config-mode="planner.configMode"
         :met-days="metDays"
         data-testid="diet-grid"
         @toggle="diet.toggle"
-        @remove="diet.removeFood"
       >
         <template #corner>
           <span class="title-1 text-[24px] leading-7 text-ink">{{ type.label }}</span>

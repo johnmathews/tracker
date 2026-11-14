@@ -11,21 +11,19 @@ import { onBeforeUnmount, onMounted, type Ref } from 'vue'
  * - **One tab stop.** Exactly one target has `tabindex="0"`; every other has -1. It starts on the
  *   first target matching `start` (today's DayMark in the first row), else the first widget (the
  *   first day of a week that isn't this one), else the first cell; once a cell has been focused it
- *   is the last cell focused. Rows coming and going (Edit plan, adding, removing, another week) are picked up by a
- *   MutationObserver; a tab stop whose row has gone falls back to the start.
+ *   is the last cell focused. Rows coming and going (adding, removing, another week) are picked up
+ *   by a MutationObserver; a tab stop whose row has gone falls back to the start.
  * - **Keys.** Arrows move cell by cell and never wrap; Home and End go to the first and last cell
  *   in the row, Ctrl+Home and Ctrl+End to the first and last cell of the grid. Space and Enter are
  *   the widget's own (a DayMark toggles; Enter on a name's link opens the item's page in one
  *   press, F9, and Space on it does nothing); on a cell without one they do nothing.
- * - **Controls inside a cell.** Anything else focusable in a cell (a note's button and, in Edit
- *   plan, Remove in the row's last cell) is parked at `tabindex="-1"`, so
- *   Tab doesn't stop on every row's controls. F2 on the cell (or Enter, on a cell without a
- *   widget) lets them back into the Tab order and focuses the
- *   first; Tab and Shift+Tab move among them (Shift+Tab from the first returns to the cell, which
- *   keeps the tab stop), arrows stay with the control (a Stepper's value), and Escape parks them and
- *   puts focus back on the cell. Leaving the cell parks them too. Focus that reaches a control some
- *   other way (a click, or the focus put back after a removal) lets that cell's controls in just the
- *   same, so ConfirmDialog's return to a Remove button works unchanged.
+ * - **Controls inside a cell.** Anything else focusable in a cell (a note's button beside the
+ *   name's link) is parked at `tabindex="-1"`, so Tab doesn't stop on every row's controls. F2 on
+ *   the cell lets them back into the Tab order and focuses the first; Tab and Shift+Tab move among
+ *   them (Shift+Tab from the first returns to the cell, which keeps the tab stop), arrows stay with
+ *   the control, and Escape parks them and puts focus back on the cell. Leaving the cell parks them
+ *   too. Focus that reaches a control some other way (a click, or focus a popover puts back) lets
+ *   that cell's controls in just the same.
  */
 export interface GridNavOptions {
   /** A cell's one widget, which takes the cell's focus: the DayMark button. */
@@ -164,10 +162,9 @@ export function createGridNav(table: HTMLTableElement, options: GridNavOptions):
       target.focus()
       return
     }
-    // Enter is a widget's own (a DayMark steps, a name's link opens the item's page, F9); on a
-    // cell without one it lets the controls in, as F2 does on any cell.
-    const entering = ev.key === 'F2' || (ev.key === 'Enter' && target === cell)
-    if (entering && controlsIn(cell).length > 0) {
+    // F2 lets a cell's other controls in. Enter stays the widget's own (a DayMark steps, a name's
+    // link opens the item's page, F9).
+    if (ev.key === 'F2' && controlsIn(cell).length > 0) {
       ev.preventDefault()
       enter(cell)
       controlsIn(cell)

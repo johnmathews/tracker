@@ -1,4 +1,4 @@
-<!-- @dsCard group="Screens" height=5900 subtitle="An item's own page, in rows like Settings: this week's plan, notes, details and recent weeks, shown and ordered per type; in Edit plan the Name field and Remove, and the new item page (K104)" -->
+<!-- @dsCard group="Screens" height=6500 subtitle="An item's own page, in rows like Settings: the name with its pen, this week's plan, notes, details and recent weeks, shown and ordered per type, and Remove; the same in Edit plan (K120, K121), and the new item page (K104)" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -112,9 +112,25 @@
   .btn.primary:hover { background: color-mix(in srgb, var(--ink) 82%, var(--canvas)); }
   .acts { display: flex; align-items: center; gap: 12px; }
 
-  /* Edit plan and the new item page (K104): the Name field where the name is, up to 560px. */
+  /* The name's pen (K121): an IconButton right after the name, in ink-secondary (ink under the
+     pointer), at the page's 52px with a 28px icon. */
+  .pen { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 52px; height: 52px; padding: 0; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink-secondary); cursor: pointer; }
+  .pen svg { width: 28px; height: 28px; }
+  .pen:hover { background: var(--tile); color: var(--ink); }
+  /* Renaming (K121, option E1): a field in the title's own type (title-1 at 40px), the panel fill,
+     the control border and radius-sm, up to 640px, with Done (a quiet Button) beside it. */
+  .renamebox { display: flex; flex-direction: column; gap: 8px; width: min(100%, 640px); min-width: 0; }
+  input.rename { height: auto; padding: 6px 14px; font-family: var(--font-serif); font-size: 40px; line-height: 46px; font-weight: 600; font-variant-numeric: normal; }
+  input.rename[aria-invalid="true"] { border-color: var(--error-ink); }
+  .err { display: flex; align-items: flex-start; gap: var(--space-2); margin: 4px 0 0; color: var(--error-ink); font-size: 16px; line-height: 22px; }
+  .err svg { flex: none; width: 16px; height: 16px; margin-top: 3px; }
+  .renaming .chip, .renaming .pen, .titleline .renamebox, .titleline .done { display: none; }
+  .renaming .renamebox { display: flex; }
+  .renaming .done { display: inline-flex; }
+  .renaming h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  /* The new item page (K104): the Name field where the name is, up to 560px. */
   .namefield { width: 100%; max-width: 560px; }
-  .titleline .namefield { flex: 1 1 100%; }
   .page > .namefield { margin: 12px 0 28px; }
   h1.type.label { font-weight: 600; }
   .btn.quiet[data-arranging="true"] { border-color: var(--control-border); }
@@ -152,7 +168,9 @@
     .back svg, .btn svg { width: 22px; height: 22px; }
     .type.label, .field > .label, dl.plan dt { font-size: 16px; line-height: 22px; }
     .chip.label { font-size: 16px; line-height: 22px; }
-    h1.title-1 { font-size: 30px; line-height: 36px; }
+    h1.title-1, input.rename { font-size: 30px; line-height: 36px; }
+    .pen { width: 44px; height: 44px; }
+    .pen svg { width: 24px; height: 24px; }
     .titleline { margin-bottom: 20px; }
     h2.title-2 { font-size: 22px; line-height: 28px; }
     .sec { display: flex; flex-direction: column; gap: 16px; padding: 24px 0; }
@@ -185,7 +203,7 @@
   <main class="page">
     <div class="topline"><a class="back" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span>Back to the week</span></a><button type="button" class="btn quiet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/></svg><span>Arrange sections</span></button></div>
     <p class="type label">Exercise</p>
-    <div class="titleline"><h1 class="title-1" tabindex="-1">Kettlebell swings</h1><span class="chip label">3 × 15</span><span class="chip label">16 kg</span></div>
+    <div class="titleline" data-rename><h1 class="title-1" tabindex="-1">Kettlebell swings</h1><button type="button" class="pen" aria-label="Rename Kettlebell swings" data-pen><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></button><span class="chip label">3 × 15</span><span class="chip label">16 kg</span><div class="renamebox"><input class="rename" aria-label="Name" value="Kettlebell swings"></div><button type="button" class="btn quiet done" data-done><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>Done</span></button></div>
 
     <section class="sec" aria-labelledby="s-plan">
       <h2 class="title-2" id="s-plan">This week’s plan</h2>
@@ -239,23 +257,34 @@ Move to 20 kg once all three sets feel easy. [Form video](https://youtube.com/wa
       <h2 class="title-2" id="s-weeks">Recent weeks</h2>
       <div class="content" id="weeks"></div>
     </section>
-  </main>
-</div>
 
-<div class="gap"></div>
-<p class="variant label">In Edit plan: the Name field and Remove</p>
-<div class="stage">
-  <div class="page">
-    <div class="topline"><a class="back" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span>Back to the week</span></a><button type="button" class="btn quiet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/></svg><span>Arrange sections</span></button></div>
-    <p class="type label">Exercise</p>
-    <div class="titleline"><h1 class="title-1 vh" tabindex="-1">Kettlebell swings</h1><div class="field namefield"><label class="label" for="ep-name">Name</label><input id="ep-name" value="Kettlebell swings"></div></div>
-    <section class="sec" aria-labelledby="ep-remove">
-      <h2 class="title-2" id="ep-remove">Remove</h2>
+    <section class="sec" aria-labelledby="s-remove">
+      <h2 class="title-2" id="s-remove">Remove</h2>
       <div class="content">
         <p class="lede">Takes Kettlebell swings off this week’s plan. Weeks with their own plan keep it, and its marks stay.</p>
         <button type="button" class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg><span>Remove from this week</span></button>
       </div>
     </section>
+  </main>
+</div>
+
+<div class="gap"></div>
+<p class="variant label">Renaming, after the pen (K121): the name in a field in its own type, with Done. Enter or Done saves, Escape puts the old name back; the chips come back after it. The same in Edit plan</p>
+<div class="stage">
+  <div class="page">
+    <div class="topline"><a class="back" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span>Back to the week</span></a><button type="button" class="btn quiet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/></svg><span>Arrange sections</span></button></div>
+    <p class="type label">Exercise</p>
+    <div class="titleline renaming"><h1 class="title-1" tabindex="-1">Kettlebell swings</h1><div class="renamebox"><input class="rename" aria-label="Name" value="Kettlebell swings"></div><button type="button" class="btn quiet done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>Done</span></button></div>
+  </div>
+</div>
+
+<div class="gap"></div>
+<p class="variant label">Renaming, an empty name: Enter or Done saves nothing, and the item keeps its last name</p>
+<div class="stage">
+  <div class="page">
+    <div class="topline"><a class="back" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span>Back to the week</span></a><button type="button" class="btn quiet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/></svg><span>Arrange sections</span></button></div>
+    <p class="type label">Exercise</p>
+    <div class="titleline renaming"><h1 class="title-1" tabindex="-1">Kettlebell swings</h1><div class="renamebox"><input class="rename" aria-label="Name" value="" aria-invalid="true" aria-describedby="rn-err"><p class="err" id="rn-err"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg><span>Enter a name.</span></p></div><button type="button" class="btn quiet done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>Done</span></button></div>
   </div>
 </div>
 
@@ -348,19 +377,27 @@ Good with yoghurt in the morning, or on their own after training.</textarea>
   <div class="page">
     <div class="topline"><a class="back" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span>Back to the week</span></a><button type="button" class="btn quiet" data-arranging="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>Done</span></button></div>
     <p class="type label">Exercise</p>
-    <div class="titleline"><h1 class="title-1" tabindex="-1">Kettlebell swings</h1><span class="chip label">3 × 15</span><span class="chip label">16 kg</span></div>
+    <div class="titleline"><h1 class="title-1" tabindex="-1">Kettlebell swings</h1><button type="button" class="pen" aria-label="Rename Kettlebell swings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></button><span class="chip label">3 × 15</span><span class="chip label">16 kg</span></div>
     <p class="lede ar-lede">Choose which sections every exercise page shows, and their order. Changes apply at once.</p>
     <div id="arrange"></div>
   </div>
 </div>
 
 <div class="gap"></div>
-<p class="variant label">Every section hidden</p>
+<p class="variant label">Every section hidden: Remove still ends the page, since no type arranges it</p>
 <div class="stage">
   <div class="page">
     <p class="type label">Food</p>
-    <div class="titleline"><h1 class="title-1" tabindex="-1">Fish</h1></div>
+    <div class="titleline"><h1 class="title-1" tabindex="-1">Fish</h1><button type="button" class="pen" aria-label="Rename Fish"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></button></div>
     <p class="lede">Every section is hidden. Arrange sections to show one.</p>
+    <div class="gap"></div>
+    <section class="sec" aria-labelledby="h-remove">
+      <h2 class="title-2" id="h-remove">Remove</h2>
+      <div class="content">
+        <p class="lede">Takes Fish off this week’s plan. Weeks with their own plan keep it, and its marks stay.</p>
+        <button type="button" class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg><span>Remove from this week</span></button>
+      </div>
+    </section>
   </div>
 </div>
 
@@ -473,6 +510,36 @@ Good with yoghurt in the morning, or on their own after training.</textarea>
     if (on) { const ta = box.querySelector('textarea'); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length) }
     else nb.focus()
   }
+  // The name's pen (K121): the title becomes the field with the name selected; Enter or Done saves
+  // (an empty name says so and waits), Escape puts the old name back. Focus returns to the pen.
+  const line = document.querySelector('[data-rename]')
+  const h1 = line.querySelector('h1')
+  const field = line.querySelector('input.rename')
+  const penBtn = line.querySelector('[data-pen]')
+  const box = line.querySelector('.renamebox')
+  function setError(on) {
+    box.querySelector('.err')?.remove()
+    field.removeAttribute('aria-invalid')
+    field.removeAttribute('aria-describedby')
+    if (!on) return
+    box.insertAdjacentHTML('beforeend', '<p class="err" id="p-err"><span>Enter a name.</span></p>')
+    field.setAttribute('aria-invalid', 'true')
+    field.setAttribute('aria-describedby', 'p-err')
+  }
+  function leave() { setError(false); line.classList.remove('renaming'); penBtn.focus() }
+  function save() {
+    const name = field.value.trim()
+    if (!name) { setError(true); field.focus(); return }
+    h1.textContent = name
+    penBtn.setAttribute('aria-label', `Rename ${name}`)
+    leave()
+  }
+  penBtn.addEventListener('click', () => { field.value = h1.textContent; line.classList.add('renaming'); field.focus(); field.select() })
+  line.querySelector('[data-done]').addEventListener('click', save)
+  field.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); save() }
+    if (e.key === 'Escape') { e.preventDefault(); leave() }
+  })
   // Escape in the field does what Done does.
   document.getElementById('notes-ta').addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { e.preventDefault(); toggleNotes(document.querySelector('[data-notes]'), false) }

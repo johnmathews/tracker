@@ -6,14 +6,14 @@ import { createGridNav, useGridNav, type GridNav } from '@/composables/gridNav'
 /**
  * A small WeekGrid: a header row (never a stop), two body rows of name, three days and a total,
  * and a Picked row whose last cell is aria-hidden. Day 2 is today. `edit` puts controls in the
- * row headers, as Edit plan does.
+ * row headers, to stand for any cell's controls beside its widget.
  */
 function html({ today = true, edit = false } = {}): string {
   const header = (name: string) =>
     `<th role="rowheader" data-c="${name}">${name}${
       edit
         ? `<button data-c="${name}-lower" aria-disabled="true">-</button><input data-c="${name}-input" />` +
-          `<button data-c="${name}-skip" tabindex="-1">?</button><button data-c="${name}-remove" disabled>x</button>`
+          `<button data-c="${name}-skip" tabindex="-1">?</button><button data-c="${name}-off" disabled>x</button>`
         : ''
     }</th>`
   const day = (name: string, i: number) =>
@@ -250,7 +250,7 @@ describe('createGridNav', () => {
     })
   })
 
-  describe('controls inside a cell (Edit plan)', () => {
+  describe('controls inside a cell', () => {
     it('keeps them out of the Tab order until the cell is entered', () => {
       setup({ edit: true })
       expect(el('a-lower').getAttribute('tabindex')).toBe('-1')
@@ -258,10 +258,14 @@ describe('createGridNav', () => {
       expect(stops()).toEqual([el('a-2')])
     })
 
-    it('Enter or F2 on the cell lets them in and focuses the first; Escape puts them back', () => {
+    it('F2 on the cell lets them in and focuses the first; Escape puts them back', () => {
       setup({ edit: true })
       el('a').focus()
+      // Enter doesn't: it is a widget's own, and this cell has none (K120 took Remove's cell).
       expect(press('Enter')).toBe(true)
+      expect(document.activeElement).toBe(el('a'))
+      expect(el('a-lower').getAttribute('tabindex')).toBe('-1')
+      expect(press('F2')).toBe(true)
       expect(document.activeElement).toBe(el('a-lower'))
       expect(el('a-lower').hasAttribute('tabindex')).toBe(false)
       expect(el('a-input').hasAttribute('tabindex')).toBe(false)
@@ -288,7 +292,7 @@ describe('createGridNav', () => {
     it('puts them back when focus leaves the cell, but not when it moves inside it', () => {
       setup({ edit: true })
       el('a').focus()
-      press('Enter')
+      press('F2')
       el('a-input').focus()
       expect(el('a-lower').hasAttribute('tabindex')).toBe(false)
       el('a').focus()
@@ -297,10 +301,10 @@ describe('createGridNav', () => {
       expect(el('a-lower').getAttribute('tabindex')).toBe('-1')
     })
 
-    it('lets them in when focus reaches one some other way (a click, focus after removal)', () => {
+    it('lets them in when focus reaches one some other way (a click, focus put back)', () => {
       setup({ edit: true })
       el('a').focus()
-      press('Enter')
+      press('F2')
       el('b-input').focus()
       expect(stops()).toEqual([el('b')])
       expect(el('b-lower').hasAttribute('tabindex')).toBe(false)
@@ -327,13 +331,13 @@ describe('createGridNav', () => {
       for (const n of added.querySelectorAll('[data-c]'))
         n.setAttribute('data-c', n.getAttribute('data-c')!.replace('b', 'c'))
       for (const n of added.querySelectorAll('[tabindex]')) n.removeAttribute('tabindex')
-      added.cells[0]!.insertAdjacentHTML('beforeend', '<button data-c="c-remove">x</button>')
+      added.cells[0]!.insertAdjacentHTML('beforeend', '<button data-c="c-note">x</button>')
       table.tBodies[0]!.append(added)
       await observed()
       expect(stops()).toEqual([el('b-1')])
       expect(el('c-1').getAttribute('tabindex')).toBe('-1')
       expect(el('c-total').getAttribute('tabindex')).toBe('-1')
-      expect(el('c-remove').getAttribute('tabindex')).toBe('-1')
+      expect(el('c-note').getAttribute('tabindex')).toBe('-1')
     })
 
     it('moves a stop nobody chose to today once rows arrive in an empty grid', async () => {
@@ -359,7 +363,7 @@ describe('createGridNav', () => {
     it('forgets the cell being edited when its row goes', async () => {
       setup({ edit: true })
       el('b').focus()
-      press('Enter')
+      press('F2')
       table.tBodies[0]!.rows[1]!.remove()
       await observed()
       el('a-input').focus()

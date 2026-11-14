@@ -120,6 +120,17 @@ function target(testid: 'exercises-a-day' | 'foods-a-day'): string | undefined {
   return wrapper.get(`[data-testid="${testid}"] [role="spinbutton"]`).attributes('aria-valuenow')
 }
 
+/**
+ * Opens an item's page and presses its "Remove from this week" (K120: the one Remove), leaving the
+ * question open.
+ */
+async function askRemove(section: string, id: string): Promise<void> {
+  location.hash = `#/item/${section}/${id}`
+  await settle()
+  await wrapper.get('[data-testid="item-remove-button"]').trigger('click')
+  await settle()
+}
+
 /** Opens the new item page from the Add button under a grid (K104). */
 async function openAdd(kind: 'exercise' | 'food' = 'exercise') {
   await wrapper.get(`[data-testid="add-${kind}"]`).trigger('click')
@@ -273,21 +284,24 @@ describe('App', () => {
     expect(thisWeek()).toBeUndefined()
   })
 
-  it('removes an exercise only after confirmation', async () => {
-    await mountConfig()
-    const remove = wrapper.get('button[aria-label="Remove Squats"]')
-    await remove.trigger('click')
-    await settle()
+  it('removes an exercise from its page only after confirmation, outside Edit plan too (K120)', async () => {
+    mountApp()
+    await askRemove('exercise', 'sq')
     expect(confirmation()!.get('h2').text()).toBe('Remove Squats?')
     expect(confirmation()!.text()).toContain(
       'It comes off this week’s plan. Weeks with their own plan keep it, and its marks stay.',
     )
     await answer('Cancel')
     expect(confirmation()).toBeNull()
-    expect(rowCells('Squats')).toHaveLength(7)
-    await remove.trigger('click')
+    expect(wrapper.find('[data-testid="item-page"]').exists()).toBe(true)
+    expect(usePlannerStore().exercises.map((e) => e.name)).toContain('Squats')
+    await wrapper.get('[data-testid="item-remove-button"]').trigger('click')
     await settle()
     await answer('Remove')
+    await settle()
+    // Back on the week, without the row.
+    expect(wrapper.find('[data-testid="item-page"]').exists()).toBe(false)
+    expect(rowCells('Pull-ups')).toHaveLength(7)
     expect(rowCells('Squats')).toHaveLength(0)
   })
 
@@ -1175,7 +1189,8 @@ describe('config mode and weekly plans', () => {
     expect(done.classes()).toContain('sr-only')
     expect(wrapper.findAll('[data-slot="bar-action"]').map((b) => b.text())).not.toContain('Done')
     expect(wrapper.find('button[aria-label="Edit Squats"]').exists()).toBe(false)
-    expect(wrapper.find('button[aria-label="Remove Fish"]').exists()).toBe(true)
+    // No Remove on the rows either: an item comes off the week on its page (K120).
+    expect(wrapper.find('button[aria-label^="Remove"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="add-food"]').exists()).toBe(true)
   })
 
@@ -1266,8 +1281,7 @@ describe('config mode and weekly plans', () => {
 
   it('closes an open question when another tab signs in as someone else', async () => {
     await mountConfig()
-    await wrapper.get('button[aria-label="Remove Squats"]').trigger('click')
-    await settle()
+    await askRemove('exercise', 'sq')
     expect(confirmation()).not.toBeNull()
 
     // Bob has a copy on this device, so his data shows at once, with no reload in between.
@@ -1281,19 +1295,23 @@ describe('config mode and weekly plans', () => {
     await flushPromises()
     await settle()
     expect(confirmation()).toBeNull()
-    expect(wrapper.find('h1').text()).toBe('19–25 October')
+    // Bob's week (his default plan) shows, and nothing came off it.
+    expect(api.signedIn).toBe('bob')
+    expect(usePlannerStore().exercises.map((e) => e.name)).toContain('Squats')
   })
 
-  it('does not remove a row if the week changed while it asked', async () => {
+  it('does not remove an item if the week changed while it asked', async () => {
     await mountConfig()
-    await wrapper.get('button[aria-label="Remove Squats"]').trigger('click')
-    await settle()
+    await askRemove('exercise', 'sq')
     vi.setSystemTime(new Date(2026, 9, 26, 0, 5))
     usePlannerStore().refreshNow()
     await flushPromises()
     await answer('Remove')
-    expect(wrapper.find('h1').text()).toBe('26 Oct – 1 Nov')
-    expect(rowCells('Squats')).toHaveLength(7)
+    // Neither the week it asked about nor the new one loses Squats.
+    expect(usePlannerStore().weekKey).toBe('2026-10-26')
+    expect(usePlannerStore().exercises.map((e) => e.name)).toContain('Squats')
+    usePlannerStore().weekOffset = -1
+    expect(usePlannerStore().exercises.map((e) => e.name)).toContain('Squats')
   })
 
   it('opens Add as a page with no bar, and comes back with focus on that Add button (K104)', async () => {

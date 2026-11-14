@@ -1,11 +1,9 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive } from 'vue'
 import type { Day } from '@/stores/planner'
 import { DAY_NAMES, addDays, dateKey, fullDate } from '@/lib/dates'
 import { EXERCISE_CYCLE, cycleDay, type Tracked } from '@/lib/tracker'
 import type { Log, Mark } from '@/lib/storage'
-import { Pencil } from '@lucide/vue'
-import { BarAction } from '@/components/ui/bar-action'
 import TrackerGrid from '@/components/TrackerGrid.vue'
 import ExampleGroup from '../parts/ExampleGroup.vue'
 import StateExample from '../parts/StateExample.vue'
@@ -45,7 +43,6 @@ const log = reactive<Log>({
   },
 })
 const week = computed(() => log[WEEK]!)
-const editing = ref(false)
 
 /** The grid's keys (WeekGrid card, Accessibility; src/composables/gridNav.ts). */
 const KEYS: [string, string][] = [
@@ -55,27 +52,19 @@ const KEYS: [string, string][] = [
   ['Ctrl+Home, Ctrl+End', 'First and last cell of the grid.'],
   ['Space, Enter', 'Step a day’s mark: great, partial, missed in each drawing, then empty.'],
   ['Enter on a name', 'Opens the item’s own page, in one press.'],
-  ['F2, Escape', 'Into a cell’s other controls: a note, or Remove in Edit plan. Escape back.'],
+  ['F2, Escape', 'Into a cell’s other controls: a note’s button. Escape back.'],
 ]
 
 function marksFor(id: string): (Mark | null)[] {
   return week.value[id] ?? []
 }
-function remove(id: string): void {
-  rows.splice(
-    rows.findIndex((r) => r.id === id),
-    1,
-  )
-}
 </script>
 
-<!-- The card's grid, drawn by the app's own TrackerGrid, and Edit plan as the Header's toggle (K48). A press steps a mark; nothing is saved. -->
+<!-- The card's grid, drawn by the app's own TrackerGrid. Edit plan has the same columns (K120), so
+     there is no toggle. A press steps a mark; nothing is saved. -->
 <template>
   <ExampleGroup>
     <StateExample state="On screen. Today is Thursday." class="w-full">
-      <BarAction label="Edit plan" :pressed="editing" @click="editing = !editing"
-        ><Pencil
-      /></BarAction>
       <div id="sg-week-grid-screen" class="w-full">
         <TrackerGrid
           section="exercise"
@@ -85,9 +74,7 @@ function remove(id: string): void {
           :days="days"
           :marks-for="marksFor"
           :details-for="(item) => (item as Row).chips"
-          :config-mode="editing"
           @toggle="(id, day) => cycleDay(log, WEEK, id, day, EXERCISE_CYCLE)"
-          @remove="remove"
         />
       </div>
     </StateExample>

@@ -138,19 +138,21 @@ test.describe('the app passes axe', () => {
       await expectNoAxeViolations(page)
     })
 
-    test(`a cardio item’s page, in Edit plan with its Name and Remove (K90, K104), ${theme}`, async ({
+    test(`a cardio item’s page, its pen and Remove, then renaming in Edit plan (K90, K120, K121), ${theme}`, async ({
       page,
     }) => {
       await page.setViewportSize({ width: 1280, height: 900 })
       await openApp(page, { theme })
       await page.getByTestId('cardio-grid').getByRole('link', { name: 'Running' }).click()
       await page.getByRole('heading', { level: 1, name: 'Running' }).waitFor()
+      await page.getByTestId('item-remove').waitFor()
       await settle(page)
       await expectNoAxeViolations(page)
       await page.goBack()
       await page.getByTestId('cardio-grid').waitFor()
       await callUpBar(page)
       await page.getByTestId('cardio-grid').getByRole('link', { name: 'Cycling' }).click()
+      await page.getByRole('button', { name: 'Rename Cycling' }).click()
       await page.getByRole('textbox', { name: 'Name' }).waitFor()
       await settle(page)
       await expectNoAxeViolations(page)

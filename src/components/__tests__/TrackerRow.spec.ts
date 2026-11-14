@@ -30,7 +30,6 @@ function mountRow(note?: string): VueWrapper {
             href: '#/item/exercise/pu',
             details: ['3 × 12'],
             note,
-            configMode: false,
             days: DAYS,
             marks: Array(7).fill(null),
           }),
@@ -81,5 +80,23 @@ describe('TrackerRow notes (K43)', () => {
     const panel = body.closest<HTMLElement>('[data-slot="popover-content"]')!
     expect(panel.className).toContain('overflow-y-auto')
     expect(panel.className).toContain('max-h-(--reka-popover-content-available-height)')
+  })
+})
+
+describe('TrackerRow in Edit plan (K120)', () => {
+  it('ends with the seven days: no Remove cell, and nothing but the name’s link in its header', () => {
+    mountRow()
+    const row = document.querySelector('tr')!
+    expect(row.querySelectorAll('td')).toHaveLength(7)
+    expect(row.querySelector('[data-action="remove"]')).toBeNull()
+    expect(row.querySelector('button[aria-label^="Remove"]')).toBeNull()
+    const header = row.querySelector('[role="rowheader"]')!
+    expect(header.querySelector('[data-slot="item-link"]')!.getAttribute('href')).toBe(
+      '#/item/exercise/pu',
+    )
+    expect(header.querySelector('button')).toBeNull()
+    // Folded, the name takes the whole line: no room kept for a button.
+    expect(header.className).toContain('folded:pr-0')
+    expect(header.className).not.toContain('folded:pr-[15%]')
   })
 })

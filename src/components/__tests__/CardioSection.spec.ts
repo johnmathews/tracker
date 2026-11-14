@@ -156,12 +156,17 @@ describe('CardioSection (K90)', () => {
     const plan = api.accounts.get(USER)!.plans.cardio[WEEK]!.items as { name: string }[]
     expect(plan.map((c) => c.name)).toEqual(['Cycling', 'Running', 'Swimming'])
 
-    await grid().get('button[aria-label="Remove Running"]').trigger('click')
+    // Removing is on the item's page (K120): the row has no Remove.
+    expect(grid().find('button[aria-label="Remove Running"]').exists()).toBe(false)
+    location.hash = '#/item/cardio/ru'
+    await settle()
+    await wrapper.get('[data-testid="item-remove-button"]').trigger('click')
     await flushPromises()
     const confirm = document.querySelector<HTMLElement>('[role="alertdialog"]')!
     expect(confirm.querySelector('h2')!.textContent).toBe('Remove Running?')
     ;[...confirm.querySelectorAll('button')].find((b) => b.textContent === 'Remove')!.click()
     await flushPromises()
+    await settle()
     expect(names()).toEqual(['Cycling', 'Swimming'])
   })
 })

@@ -112,11 +112,9 @@ function add(): void {
       :marks-for="marksFor"
       :details-for="type.details"
       :note-for="noteFor"
-      :config-mode="store.configMode"
       :met-days="metDays"
       data-testid="exercise-grid"
       @toggle="store.toggle"
-      @remove="store.removeExercise"
     >
       <template #corner>
         <span class="title-1 text-[24px] leading-7 text-ink">{{ type.label }}</span>

@@ -223,7 +223,7 @@ export const SECTIONS: readonly StyleGuideSection[] = [
     id: 'sg-item-page',
     title: 'ItemPage',
     summary:
-      'An item’s own page, in rows like Settings: this week’s plan first, then its notes, details and recent weeks. In Edit plan it also renames, removes and adds.',
+      'An item’s own page, in rows like Settings: the name with its pen, this week’s plan first, then its notes, details and recent weeks, and Remove. Edit plan’s Add opens the new item page.',
     component: ItemPageSection,
   },
   {

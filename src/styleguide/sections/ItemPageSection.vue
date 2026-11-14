@@ -117,7 +117,8 @@ const page = computed(() => PAGES.find((p) => p.id === showing.value)!)
 </script>
 
 <!-- The app's own ItemPage, in a frame on the page's margins, for each state the card shows, one at
-     a time. Notes, details, the plan and Arrange sections (K66) work, in this page's store only. -->
+     a time. Notes, details, the plan, the name's pen (K121), Remove (K120) and Arrange sections
+     (K66) work, in this page's store only. -->
 <template>
   <ExampleGroup>
     <SegmentedControl v-model="showing" label="Example" :options="OPTIONS" />

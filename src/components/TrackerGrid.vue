@@ -3,12 +3,12 @@ import type { Day } from '@/stores/planner'
 import type { Mark, MarkSet } from '@/lib/storage'
 import type { Tracked } from '@/lib/tracker'
 import { useGridNav } from '@/composables/gridNav'
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import TrackerRow from '@/components/TrackerRow.vue'
 import { itemHref } from '@/lib/routes'
 import type { Section } from '@/lib/trackerTypes'
 
-const props = defineProps<{
+defineProps<{
   /** The section the rows belong to: each name links to its item's page in it. */
   section: Section
   /** The rows' kind, for the name column's hidden header: "Exercise" or "Food". */
@@ -23,7 +23,6 @@ const props = defineProps<{
   detailsFor?: (item: Tracked) => string[]
   /** Each item's notes, from its details (the same on every week); none when not given. */
   noteFor?: (item: Tracked) => string
-  configMode: boolean
   /**
    * Which days reach the section's daily pick (K30, K57). A met day's name turns pen and is
    * underlined (K60).
@@ -33,7 +32,6 @@ const props = defineProps<{
 
 defineEmits<{
   toggle: [id: string, day: number]
-  remove: [id: string]
 }>()
 
 defineSlots<{
@@ -41,19 +39,7 @@ defineSlots<{
   corner?: () => unknown
 }>()
 
-/**
- * The column template on screen (WeekGrid card): the names and the seven days, and in Edit plan
- * a Remove column (no Week column, K33),
- * both from main.css's sizes (K54).
- * Folded there are only the seven days. On paper the colgroup's widths apply instead.
- */
-const columns = computed(() =>
-  props.configMode
-    ? 'screen:grid-cols-[var(--grid-name-w)_repeat(7,minmax(0,1fr))_var(--grid-remove-w)]'
-    : 'screen:grid-cols-[var(--grid-name-w)_repeat(7,minmax(0,1fr))]',
-)
-// One tab stop for the whole grid, on today's DayMark in the first row (see gridNav for the keys
-// and for Edit plan's Remove cells).
+// One tab stop for the whole grid, on today's DayMark in the first row (see gridNav for the keys).
 const table = ref<HTMLTableElement | null>(null)
 useGridNav(table, {
   widget: '[data-slot="day-mark-button"], [data-slot="item-link"]',
@@ -76,20 +62,19 @@ useGridNav(table, {
   Nothing scrolls sideways. On paper it is a
   table again, at the colgroup's widths and DayMark's fixed size.
 
-  Edit plan adds a Remove column after the days, and the name column stays as wide as the week's
-  (K104: no Edit button); its rows are a fixed 100u (K54).
+  Edit plan has the week's columns: no Edit button (K104) and no Remove column (K120). Its rows are
+  a fixed 100u (K54).
 
   Keyboard (F15): the WAI-ARIA grid, one tab stop per grid (useGridNav). A day cell's focus is its
   DayMark and a name cell's its name's link, each the cell's one widget (Enter on a name opens the
-  item's page, F9); Edit plan's Remove cells take focus themselves and draw the focus ring inset.
+  item's page, F9).
 -->
 <template>
   <table
     ref="table"
     role="grid"
     :aria-label="tableLabel"
-    class="w-full table-fixed border-collapse tabular-nums screen:grid screen:grid-rows-[auto_repeat(var(--rows),minmax(var(--grid-row-min),1fr))] screen:content-center full:max-h-[calc(var(--rows)*var(--grid-row-max)_+_var(--grid-head-h))] folded:max-h-none folded:grid-cols-7 folded:grid-rows-none folded:content-start"
-    :class="columns"
+    class="w-full table-fixed border-collapse tabular-nums screen:grid screen:grid-cols-[var(--grid-name-w)_repeat(7,minmax(0,1fr))] screen:grid-rows-[auto_repeat(var(--rows),minmax(var(--grid-row-min),1fr))] screen:content-center full:max-h-[calc(var(--rows)*var(--grid-row-max)_+_var(--grid-head-h))] folded:max-h-none folded:grid-cols-7 folded:grid-rows-none folded:content-start"
     :style="{ '--rows': items.length }"
   >
     <!-- Paper's column widths; on screen the grid's template sets them, and a colgroup would be
@@ -97,7 +82,6 @@ useGridNav(table, {
     <colgroup class="screen:hidden">
       <col class="w-50" />
       <col v-for="d in days" :key="d.key" />
-      <col v-if="configMode" class="w-14" />
     </colgroup>
     <thead class="screen:contents">
       <tr role="row" class="border-b border-ink screen:contents">
@@ -138,15 +122,6 @@ useGridNav(table, {
           <span v-if="d.isToday" class="sr-only">, today</span>
           <span v-if="metDays?.[i]" class="sr-only">, daily goal met</span>
         </th>
-        <th
-          v-if="configMode"
-          scope="col"
-          role="columnheader"
-          class="p-0 screen:border-b screen:border-ink folded:hidden"
-          data-noprint
-        >
-          <span class="sr-only">Remove</span>
-        </th>
       </tr>
     </thead>
 
@@ -159,12 +134,10 @@ useGridNav(table, {
         :href="itemHref(section, it.id)"
         :details="detailsFor?.(it)"
         :note="noteFor?.(it)"
-        :config-mode="configMode"
         :days="days"
         :marks="marksFor(it.id)"
         :mark-set="markSet"
         @toggle="$emit('toggle', it.id, $event)"
-        @remove="$emit('remove', it.id)"
       />
     </tbody>
   </table>
