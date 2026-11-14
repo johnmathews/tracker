@@ -192,8 +192,9 @@ def build_mcp(config: Config, max_body: int) -> McpEndpoint:
     resource = origin + MCP_PATH
     server = MCPServer(
         "tracker",
-        instructions="A weekly training tracker: exercise, cardio and food plans, and the days "
-        "marked against them.",
+        instructions="A weekly training tracker: the person's own trackers, each a weekly plan "
+        "of items and the days marked against them. " + TRACKERS_HELP + " The other tools take a "
+        "tracker's id or name.",
         token_verifier=Tokens(config, resource),
         # Strings, not AnyHttpUrl(...): that adds a slash to a bare origin, and the issuer must
         # match the authorization server's metadata exactly (F8). The 401's `resource_metadata`
@@ -232,7 +233,14 @@ class WhoAmI(TypedDict):
     scope: auth.TokenScope
 
 
+class TrackerListResult(insights.TrackerList):
+    this_week: str
+    today: str
+
+
 class WeekSummaryResult(insights.WeekSummary):
+    #: The tracker's id.
+    tracker: str
     this_week: str
     today: str
 
@@ -260,14 +268,27 @@ class ConsistencyResult(insights.Consistency):
     this_week: str
 
 
+#: The tracker a tool acts on when it is given none: the account's first strength tracker, the
+#: one every tool acted on before trackers were the account's own.
+DEFAULT_TRACKER = "exercise"
+TRACKER_HELP = (
+    "Which tracker: its `id`, or its name in any case, as `list_trackers` gives them. Defaults "
+    "to `exercise`, the first Strength tracker."
+)
 SECTION_HELP = (
-    "Which tracker: `exercise` (workouts and training, the default), `cardio` (cycling, running "
-    "and the like: a duration and a distance, a weekly goal, no daily target) or `diet` (food)."
+    "The old name for `tracker`, kept so older clients keep working: `exercise`, `cardio` or "
+    "`diet`. Give `tracker` instead."
 )
 WEEK_HELP = "The week, as its Monday written YYYY-MM-DD. Defaults to the current week."
 COUNT_HELP = "How many weeks back to look, this week included: 1 to 26. Defaults to 8."
-SectionArg = Annotated[Section, Field(description=SECTION_HELP)]
+TrackerArg = Annotated[str | None, Field(description=TRACKER_HELP)]
+SectionArg = Annotated[Section | None, Field(description=SECTION_HELP)]
 WeekArg = Annotated[str | None, Field(description=WEEK_HELP)]
+#: What each tool that takes a tracker says about the weeks it shows in (spec §2).
+SHOWN_HELP = (
+    "A tracker shows from the week it was created in up to the week it was deleted from; a "
+    "week it doesn't show in is refused."
+)
 CARRIED_HELP = (
     "A change to a week applies to that week and to the later weeks that carry its plan "
     "forward, as in the app. A week with no plan of its own first gets a copy of the plan it "
@@ -278,26 +299,31 @@ UNDO_HELP = (
     "so a change can be undone by hand."
 )
 ItemIdArg = Annotated[str, Field(description="The item's `id`, from `week_summary` or `goals`.")]
-SetsArg = Annotated[int | None, Field(description="Exercises only: sets, 0 to 20 (0 clears).")]
+SetsArg = Annotated[
+    int | None, Field(description="Strength trackers only: sets, 0 to 20 (0 clears).")
+]
 #: A cardio session runs up to a day (validate.MAX_CARDIO_DURATION).
 RepsArg = Annotated[
     int | None,
-    Field(description="Exercises only: reps a set, 0 to 9999. Giving reps clears `seconds`."),
+    Field(
+        description="Strength trackers only: reps a set, 0 to 9999. Giving reps clears `seconds`."
+    ),
 ]
 SecondsArg = Annotated[
     int | None,
     Field(
-        description="Exercises: seconds a set for a timed exercise, 0 to 3600 (0 clears); giving "
+        description="Strength: seconds a set for a timed exercise, 0 to 3600 (0 clears); giving "
         "seconds sets `reps` to 0. Cardio: the whole session's seconds, 0 to 86400 (1800 is 30 "
         "min; 0 clears)."
     ),
 ]
-PerSideArg = Annotated[bool | None, Field(description="Exercises only: done on each side.")]
+PerSideArg = Annotated[bool | None, Field(description="Strength trackers only: done on each side.")]
 WeightArg = Annotated[
-    float | None, Field(description="Exercises only: weight in kg, 0 to 500 (0 is bodyweight).")
+    float | None,
+    Field(description="Strength trackers only: weight in kg, 0 to 500 (0 is bodyweight)."),
 ]
 DistanceArg = Annotated[
-    float | None, Field(description="Cardio only: distance in km, 0 to 1000 (0 clears).")
+    float | None, Field(description="Cardio trackers only: distance in km, 0 to 1000 (0 clears).")
 ]
 TimesArg = Annotated[int | None, Field(description="The goal: times a week, 0 to 7.")]
 #: What the reads of many items say about their notes.
@@ -307,8 +333,8 @@ NOTES_CUT = (
 #: K85: the app's Daily goal switch, off, takes the daily targets and the met days away.
 DAILY_GOAL_OFF = (
     "While Daily goal is off, `daily_target`, each day's `met` and `days_met` are null: there is "
-    "no daily target, so say nothing about met days. Cardio has no daily target ever, so its are "
-    "always null; that is not Daily goal turned off."
+    "no daily target, so say nothing about met days. A cardio tracker has no daily target ever, "
+    "so its are always null; that is not Daily goal turned off."
 )
 NOTE_HELP = (
     "An item's `note` is the item's own, the same in every week, as on its page in the app: "
@@ -327,10 +353,26 @@ NoteArg = Annotated[
 MARK_HELP = (
     "How the day went: `great` (done), `partial` (done in part) or `missed` (tried and "
     "couldn't), each alone (the zigzag) or with `-solid` or `-hatch`, the drawings the app "
-    "offers; null clears the day. Exercise and cardio take any of them. A food takes only "
-    "`great`, `great-solid` or `great-hatch`."
+    "offers; null clears the day. Strength and cardio trackers take any of them. A food takes "
+    "only `great`, `great-solid` or `great-hatch`."
 )
 DailyArg = Annotated[int | None, Field(description="1 to 8. Left as it is when not given.")]
+#: What the instructions and each tool say a tracker is.
+TRACKERS_HELP = (
+    "The person keeps their own trackers, each with an id, a name and a kind: `strength` "
+    "(exercises with sets, reps or seconds, and weight), `cardio` (sessions with a time and a "
+    "distance, and no daily target) or `food` (foods eaten). Call `list_trackers` to see them."
+)
+
+
+def _ref(tracker: str | None, section: Section | None) -> str:
+    """The tracker a call names: `tracker`, or `section`, its old name, or the default. Both
+    given must agree."""
+    if tracker is not None and section is not None and tracker != section:
+        raise ToolError("tracker: give tracker or section, not both")
+    if tracker is not None:
+        return tracker
+    return section if section is not None else DEFAULT_TRACKER
 
 
 def _writing[T](config: Config, write: Callable[[sqlite3.Connection, int], T]) -> T:
@@ -377,37 +419,61 @@ def _add_tools(server: MCPServer, config: Config) -> None:
         return {"email": user.username, "scope": user.scope}
 
     @server.tool(
+        title="List trackers",
+        description=f"{TRACKERS_HELP} Gives every tracker, deleted ones too, in the week's order: "
+        "its `id`, `name`, `kind` and `daily_target` (how many items a day make a met day), the "
+        "week it starts in (`start_week`, null for the first three) and the week it was deleted "
+        "from (`end_week`, null while it is live), and whether this week shows it "
+        "(`shows_this_week`). A deleted tracker's earlier weeks can still be read and changed. "
+        f"{DAILY_GOAL_OFF} Call it first to learn the ids the other tools take.",
+        annotations=READ_ONLY,
+    )
+    def list_trackers() -> TrackerListResult:
+        out = _reading(config, insights.trackers)
+        return {**out, "this_week": config.this_week(), "today": config.today().isoformat()}
+
+    @server.tool(
         title="Week summary",
-        description="How one week went: each item's marks against its times-a-week goal, which "
-        "goals were met, and which days met the daily target, as the app shows that week. A "
-        "cardio item also has its `seconds` and `distance_km` when it has them. "
-        f"{DAILY_GOAL_OFF} Call "
-        "it first to answer 'how is my training going this week'. A week with no plan of its "
-        "own shows the plan it carries forward (`plan_week`), or the defaults (`plan_week` is "
-        "null; cardio has none). The result also has `this_week` and `today`, the account's "
-        f"current week and date. {NOTES_CUT}",
+        description="How one week of one tracker went: each item's marks against its "
+        "times-a-week goal, which goals were met, and which days met the daily target, as the "
+        "app shows that week. A cardio item also has its `seconds` and `distance_km` when it has "
+        f"them. {DAILY_GOAL_OFF} Call it to answer 'how is my training going this week'. A week "
+        "with no plan of its own shows the plan it carries forward (`plan_week`), or the "
+        "defaults (`plan_week` is null; only the first Strength and Food trackers have any). "
+        f"{SHOWN_HELP} The result also has `this_week` and `today`, the account's current week "
+        f"and date. {NOTES_CUT}",
         annotations=READ_ONLY,
     )
     def week_summary(
-        section: SectionArg = "exercise",
-        week: Annotated[str | None, Field(description=WEEK_HELP)] = None,
+        tracker: TrackerArg = None,
+        week: WeekArg = None,
+        section: SectionArg = None,
     ) -> WeekSummaryResult:
         this_week = config.this_week()
-        out = _reading(
-            config,
-            lambda c, uid, today: insights.week_summary(c, uid, section, week or this_week, today),
-        )
-        return {**out, "this_week": this_week, "today": config.today().isoformat()}
+        ref = _ref(tracker, section)
+
+        def read(c: sqlite3.Connection, uid: int, today: date) -> tuple[str, insights.WeekSummary]:
+            found = insights.tracker_of(c, uid, ref)
+            return found["id"], insights.week_summary(c, uid, found["id"], week or this_week, today)
+
+        tracker_id, out = _reading(config, read)
+        return {
+            **out,
+            "tracker": tracker_id,
+            "this_week": this_week,
+            "today": config.today().isoformat(),
+        }
 
     @server.tool(
         title="Weeks",
-        description="Several weeks side by side, oldest first, each shaped like `week_summary`: "
-        "call it to compare weeks or see a trend over a month or two. At most 26 weeks. Defaults "
-        f"to the last 4 weeks ending this week. {NOTES_CUT}",
+        description="Several weeks of one tracker side by side, oldest first, each shaped like "
+        "`week_summary`: call it to compare weeks or see a trend over a month or two. At most 26 "
+        "weeks. Defaults to the last 4 weeks ending this week. Weeks the tracker doesn't show in "
+        f"are left out. {NOTES_CUT}",
         annotations=READ_ONLY,
     )
     def weeks(
-        section: SectionArg = "exercise",
+        tracker: TrackerArg = None,
         start: Annotated[
             str | None,
             Field(
@@ -421,9 +487,11 @@ def _add_tools(server: MCPServer, config: Config) -> None:
                 description="The last week, as its Monday YYYY-MM-DD. Defaults to the current week."
             ),
         ] = None,
+        section: SectionArg = None,
     ) -> WeeksResult:
         this_week = config.this_week()
         last = end or this_week
+        ref = _ref(tracker, section)
 
         def read(c: sqlite3.Connection, uid: int, today: date) -> insights.Weeks:
             # Three weeks before `end`. When `end` is no Monday the reader refuses it by name, so
@@ -435,43 +503,45 @@ def _add_tools(server: MCPServer, config: Config) -> None:
                     - timedelta(weeks=3)
                 ).isoformat()
             )
-            return insights.weeks(c, uid, section, first, last, today)
+            return insights.weeks(c, uid, ref, first, last, today)
 
         out = _reading(config, read)
         return {**out, "this_week": this_week, "today": config.today().isoformat()}
 
     @server.tool(
         title="Item history",
-        description="One exercise, cardio item or food over the last weeks: its goal and marks "
-        "in each week "
-        "that shows it, and whether the goal was met. Call it for 'how are my squats going'. "
-        "Get `item_id` from `week_summary` or `goals`. Weeks that do not show the item have "
-        "`in_plan` false. `notes` is the item's whole note, uncut (up to 20,000 characters), "
-        "where the other reads cut it at 500: read it here before writing a note back.",
+        description="One item of one tracker over the last weeks: its goal and marks in each "
+        "week that shows it, and whether the goal was met. Call it for 'how are my squats "
+        "going'. Get `item_id` from `week_summary` or `goals`. Weeks that do not show the item, "
+        "or not the tracker, have `in_plan` false. `notes` is the item's whole note, uncut (up "
+        "to 20,000 characters), where the other reads cut it at 500: read it here before "
+        "writing a note back.",
         annotations=READ_ONLY,
     )
     def item_history(
         item_id: Annotated[str, Field(description="The item's `id`, from `goals` or a week.")],
-        section: SectionArg = "exercise",
+        tracker: TrackerArg = None,
         weeks: Annotated[int, Field(description=COUNT_HELP)] = 8,
+        section: SectionArg = None,
     ) -> ItemHistoryResult:
+        ref = _ref(tracker, section)
         out = _reading(
             config,
-            lambda c, uid, today: insights.item_history(c, uid, section, item_id, weeks, today),
+            lambda c, uid, today: insights.item_history(c, uid, ref, item_id, weeks, today),
         )
         return {**out, "this_week": config.this_week(), "today": config.today().isoformat()}
 
     @server.tool(
         title="Goals",
-        description="What this week asks for: every exercise, cardio item and food with its "
-        "times-a-week goal (a cardio item with its `seconds` and `distance_km`), the daily "
-        "targets (exercises a day, foods a day), `daily_goal`, the 'My goals' note (`note`) and "
-        "the limits note (`limits`: what the person has to work around, such as injuries, "
-        "equipment, time or food), each in the person's own words and '' when there is none. "
-        "While Daily goal is off, `daily_goal` is false and both daily targets are null: say "
-        "nothing about a number a day or met days. Call it for 'what are my goals' or before "
-        "comparing progress with them. Always this week's plan, for exercise, cardio and diet. "
-        f"Cardio has no daily target. {NOTES_CUT}",
+        description="What this week asks for, per tracker this week shows (`trackers`, in the "
+        "week's order): each tracker's `id`, `name`, `kind` and `daily_target`, and its items "
+        "with their times-a-week goals (a cardio item with its `seconds` and `distance_km`). "
+        "Then `daily_goal`, the 'My goals' note (`note`) and the limits note (`limits`: what the "
+        "person has to work around, such as injuries, equipment, time or food), each in the "
+        "person's own words and '' when there is none. While Daily goal is off, `daily_goal` is "
+        "false and every daily target is null: say nothing about a number a day or met days. "
+        "Call it for 'what are my goals' or before comparing progress with them. Always this "
+        f"week's plan. A cardio tracker has no daily target. {NOTES_CUT}",
         annotations=READ_ONLY,
     )
     def goals() -> GoalsResult:
@@ -480,20 +550,22 @@ def _add_tools(server: MCPServer, config: Config) -> None:
 
     @server.tool(
         title="Consistency",
-        description="How steady training has been: the share of days that met the daily target, "
-        "the share of weekly goals met in finished weeks, and the current streaks. "
-        "While Daily goal is off, and always for cardio, the daily target and every met-day field "
-        "are null. Call it for "
-        "'am I consistent' or 'how long a streak do I have'. Counts the last weeks, this week "
-        "included, up to today.",
+        description="How steady one tracker has been: the share of days that met the daily "
+        "target, the share of weekly goals met in finished weeks, and the current streaks. "
+        "While Daily goal is off, and always for a cardio tracker, the daily target and every "
+        "met-day field are null. Call it for 'am I consistent' or 'how long a streak do I "
+        "have'. Counts the last weeks, this week included, up to today; weeks the tracker "
+        "doesn't show in don't count.",
         annotations=READ_ONLY,
     )
     def consistency(
-        section: SectionArg = "exercise",
+        tracker: TrackerArg = None,
         weeks: Annotated[int, Field(description=COUNT_HELP)] = 8,
+        section: SectionArg = None,
     ) -> ConsistencyResult:
+        ref = _ref(tracker, section)
         out = _reading(
-            config, lambda c, uid, today: insights.consistency(c, uid, section, weeks, today)
+            config, lambda c, uid, today: insights.consistency(c, uid, ref, weeks, today)
         )
         return {**out, "this_week": config.this_week()}
 
@@ -501,16 +573,17 @@ def _add_tools(server: MCPServer, config: Config) -> None:
 
     @server.tool(
         title="Add item",
-        description="Add an exercise, a cardio item or a food to a week's plan, with a new id. An "
+        description="Add an item to a week's plan in one tracker, with a new id: an exercise to "
+        "a strength tracker, a session to a cardio tracker, a food to a food tracker. An "
         "exercise counts reps or seconds, not both. A cardio item has `seconds` (the whole "
         "session), `distance_km`, either, both or neither. A new item's goal is 3 times a week "
-        f"unless `times_a_week` is given. {CARRIED_HELP} {NOTE_HELP} {UNDO_HELP} Needs a write "
-        "token.",
+        f"unless `times_a_week` is given. {SHOWN_HELP} {CARRIED_HELP} {NOTE_HELP} {UNDO_HELP} "
+        "Needs a write token.",
         annotations=ADDING,
     )
     def add_item(
         name: Annotated[str, Field(description="The name, up to 80 characters.")],
-        section: SectionArg = "exercise",
+        tracker: TrackerArg = None,
         week: WeekArg = None,
         sets: SetsArg = None,
         reps: RepsArg = None,
@@ -520,6 +593,7 @@ def _add_tools(server: MCPServer, config: Config) -> None:
         distance_km: DistanceArg = None,
         times_a_week: TimesArg = None,
         note: NoteArg = None,
+        section: SectionArg = None,
     ) -> edits.PlanEdit:
         fields = {
             "name": name,
@@ -532,23 +606,21 @@ def _add_tools(server: MCPServer, config: Config) -> None:
             "times_a_week": times_a_week,
             "note": note,
         }
-        target = week or config.this_week()
-        return _writing(
-            config, lambda c, uid: edits.add_item(c, config, uid, section, target, fields)
-        )
+        ref, target = _ref(tracker, section), week or config.this_week()
+        return _writing(config, lambda c, uid: edits.add_item(c, config, uid, ref, target, fields))
 
     @server.tool(
         title="Update item",
-        description="Change one exercise, cardio item or food in a week's plan: only the fields "
-        "given change, and the item keeps its id and its marks. Use it to rename an item, change "
-        "its goal (`times_a_week`), an exercise's sets, reps or weight, a cardio item's seconds "
-        f"or distance, or its note. {CARRIED_HELP} "
+        description="Change one item in a week's plan: only the fields given change, and the "
+        "item keeps its id and its marks. Use it to rename an item, change its goal "
+        "(`times_a_week`), an exercise's sets, reps or weight, a cardio item's seconds or "
+        f"distance, or its note. {SHOWN_HELP} {CARRIED_HELP} "
         f"{NOTE_HELP} A note alone copies no week. {UNDO_HELP} Needs a write token.",
         annotations=SETTING,
     )
     def update_item(
         item_id: ItemIdArg,
-        section: SectionArg = "exercise",
+        tracker: TrackerArg = None,
         week: WeekArg = None,
         name: Annotated[str | None, Field(description="A new name, up to 80 characters.")] = None,
         sets: SetsArg = None,
@@ -559,6 +631,7 @@ def _add_tools(server: MCPServer, config: Config) -> None:
         distance_km: DistanceArg = None,
         times_a_week: TimesArg = None,
         note: NoteArg = None,
+        section: SectionArg = None,
     ) -> edits.PlanEdit:
         fields = {
             "name": name,
@@ -571,70 +644,97 @@ def _add_tools(server: MCPServer, config: Config) -> None:
             "times_a_week": times_a_week,
             "note": note,
         }
-        target = week or config.this_week()
+        ref, target = _ref(tracker, section), week or config.this_week()
         return _writing(
             config,
-            lambda c, uid: edits.update_item(c, config, uid, section, target, item_id, fields),
+            lambda c, uid: edits.update_item(c, config, uid, ref, target, item_id, fields),
         )
 
     @server.tool(
         title="Remove item",
-        description="Take one exercise, cardio item or food out of a week's plan. Its marks stay "
-        "stored but no longer count, as in the app; adding it back gives it a new id. "
-        f"{CARRIED_HELP} `item` in the result is the removed item. Needs a write token.",
+        description="Take one item out of a week's plan. Its marks stay stored but no longer "
+        f"count, as in the app; adding it back gives it a new id. {SHOWN_HELP} {CARRIED_HELP} "
+        "`item` in the result is the removed item. Needs a write token.",
         annotations=REMOVING,
     )
     def remove_item(
         item_id: ItemIdArg,
-        section: SectionArg = "exercise",
+        tracker: TrackerArg = None,
         week: WeekArg = None,
+        section: SectionArg = None,
     ) -> edits.PlanEdit:
-        target = week or config.this_week()
+        ref, target = _ref(tracker, section), week or config.this_week()
         return _writing(
-            config, lambda c, uid: edits.remove_item(c, config, uid, section, target, item_id)
+            config, lambda c, uid: edits.remove_item(c, config, uid, ref, target, item_id)
         )
 
     @server.tool(
         title="Mark day",
-        description="Mark how one exercise, cardio item or food went on one date, or clear the "
-        "day. The "
-        "item must be in that date's week. Marking a week with no plan of its own first gives "
-        "it a copy of the plan it shows, as a tick in the app does, so later edits to the "
-        "earlier week no longer reach it; later weeks that carry it forward follow it. The "
-        "result has the day's mark `before` and `after`. Needs a write token.",
+        description="Mark how one item went on one date, or clear the day. The item must be in "
+        "that date's week, and the week must show the tracker. Marking a week with no plan of "
+        "its own first gives it a copy of the plan it shows, as a tick in the app does, so "
+        "later edits to the earlier week no longer reach it; later weeks that carry it forward "
+        "follow it. The result has the day's mark `before` and `after`. Needs a write token.",
         annotations=SETTING,
     )
     def mark_day(
         item_id: ItemIdArg,
         mark: Annotated[Mark | None, Field(description=MARK_HELP)],
-        section: SectionArg = "exercise",
+        tracker: TrackerArg = None,
         date: Annotated[
             str | None, Field(description="The day, YYYY-MM-DD. Defaults to today.")
         ] = None,
+        section: SectionArg = None,
     ) -> edits.MarkEdit:
+        ref = _ref(tracker, section)
+
         def write(c: sqlite3.Connection, uid: int) -> edits.MarkEdit:
             day = config.today() if date is None else edits.parse_date(date)
-            return edits.mark_day(c, config, uid, section, day, item_id, mark)
+            return edits.mark_day(c, config, uid, ref, day, item_id, mark)
 
         return _writing(config, write)
 
     @server.tool(
         title="Set daily targets",
-        description="Set how many exercises a day and how many foods a day make a day count "
-        "as met (the app's 'Exercises a day' and 'Foods a day'). Each is 1 to 8; one not given "
-        "stays as it is. The result has both targets `before` and `after`, and `daily_goal`. "
-        "While Daily goal is off (`daily_goal` false) the numbers are saved but count only once "
-        "it is back on, which only the app can do. Cardio has no daily target. Needs a write "
-        "token.",
+        description="Set how many items a day make a day count as met, for one strength or food "
+        "tracker: give `tracker` and `daily_target`, 1 to 8. The older form still works: "
+        "`exercises_a_day` sets the `exercise` tracker's and `foods_a_day` the `diet` "
+        "tracker's. The result has each target `before` and `after`, and `daily_goal`. While "
+        "Daily goal is off (`daily_goal` false) the numbers are saved but count only once it is "
+        "back on, which only the app can do. A cardio tracker has no daily target. Needs a "
+        "write token.",
         annotations=SETTING,
     )
     def set_daily_targets(
-        exercises_a_day: DailyArg = None,
-        foods_a_day: DailyArg = None,
+        tracker: Annotated[
+            str | None,
+            Field(
+                description="Which tracker: its `id`, or its name in any case, as "
+                "`list_trackers` gives them. Give `daily_target` with it."
+            ),
+        ] = None,
+        daily_target: DailyArg = None,
+        exercises_a_day: Annotated[
+            int | None,
+            Field(description="The older form: the `exercise` tracker's daily target, 1 to 8."),
+        ] = None,
+        foods_a_day: Annotated[
+            int | None,
+            Field(description="The older form: the `diet` tracker's daily target, 1 to 8."),
+        ] = None,
     ) -> edits.TargetsEdit:
+        if (tracker is None) != (daily_target is None):
+            missing = "daily_target" if daily_target is None else "tracker"
+            raise ToolError(f"{missing}: give tracker and daily_target together")
+        if tracker is None and daily_target is not None:
+            raise ToolError("tracker: give the tracker whose daily_target this is")
         return _writing(
             config,
             lambda c, uid: edits.set_daily_targets(
-                c, uid, exercises_a_day=exercises_a_day, foods_a_day=foods_a_day
+                c,
+                uid,
+                None if tracker is None else {tracker: daily_target},
+                exercises_a_day=exercises_a_day,
+                foods_a_day=foods_a_day,
             ),
         )

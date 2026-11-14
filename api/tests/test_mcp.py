@@ -16,7 +16,7 @@ from httpx2 import Response
 from tracker_api import auth
 from tracker_api.app import MAX_BODY, create_app
 from tracker_api.config import Config
-from tracker_api.data import put_settings
+from tracker_api.data import create_tracker, end_tracker, put_settings
 from tracker_api.mcp_server import MCP_PATH, OUT_OF_RANGE, caller
 
 from .conftest import ORIGIN, Clock
@@ -26,7 +26,7 @@ from .test_insights import load as load_tracked
 EMAIL = "alice@example.com"
 PASSWORD = "correct horse battery"
 ACCEPT = "application/json, text/event-stream"
-READ_TOOLS = ["week_summary", "weeks", "item_history", "goals", "consistency"]
+READ_TOOLS = ["list_trackers", "week_summary", "weeks", "item_history", "goals", "consistency"]
 WRITE_TOOLS = ["add_item", "update_item", "remove_item", "mark_day", "set_daily_targets"]
 INITIALIZE = {
     "protocolVersion": "2025-11-25",
@@ -371,6 +371,16 @@ def tool_error(client: TestClient, token: str, name: str, **arguments: Any) -> s
     return out["content"][0]["text"]  # type: ignore[no-any-return]
 
 
+def goal_items(goals: dict[str, Any], tracker_id: str) -> list[dict[str, Any]]:
+    """One tracker's items in the `goals` result."""
+    (tracker,) = [t for t in goals["trackers"] if t["id"] == tracker_id]
+    return tracker["items"]  # type: ignore[no-any-return]
+
+
+def daily_targets(goals: dict[str, Any]) -> dict[str, int | None]:
+    return {t["id"]: t["daily_target"] for t in goals["trackers"]}
+
+
 def plans(*items: tuple[str, str, int]) -> dict[str, Any]:
     return {
         "plans": {THIS_WEEK: [{"id": i, "name": n, "target": t} for i, n, t in items]},
@@ -389,10 +399,14 @@ def test_every_read_tool_is_listed_read_only_with_a_description(
         assert len(tools[name]["description"]) > 40
         assert tools[name]["outputSchema"]
     props = tools["week_summary"]["inputSchema"]["properties"]
-    assert props["section"]["enum"] == ["exercise", "cardio", "diet"]
+    assert "list_trackers" in props["tracker"]["description"]
+    assert "name" in props["tracker"]["description"]
+    # `section`, the old name, stays for older clients.
+    assert props["section"]["anyOf"][0]["enum"] == ["exercise", "cardio", "diet"]
+    assert "older clients" in props["section"]["description"]
     assert "Monday" in props["week"]["description"]
-    assert "food" in props["section"]["description"]
-    assert "no daily target" in props["section"]["description"]
+    for name in ("week_summary", "weeks", "item_history", "consistency"):
+        assert {"tracker", "section"} <= set(tools[name]["inputSchema"]["properties"]), name
 
 
 def test_week_summary_defaults_to_this_weeks_exercises(
@@ -440,7 +454,7 @@ def test_a_carried_week_reports_the_source_weeks_items(
 
 def test_weeks_defaults_to_the_last_four_weeks(agent: TestClient, uid: int, token: str) -> None:
     out = tool(agent, token, "weeks")
-    assert out["section"] == "exercise"
+    assert out["tracker"] == "exercise"
     assert (out["start"], out["end"]) == ("2026-09-28", THIS_WEEK)
     assert [w["week"] for w in out["weeks"]] == [
         "2026-09-28",
@@ -481,7 +495,7 @@ def test_item_history_gives_the_whole_note_the_other_reads_cut(
     assert tool(agent, token, "item_history", item_id="sq")["notes"] == whole
     cut = whole[:499] + "…"
     assert tool(agent, token, "week_summary")["items"][0]["notes"] == cut
-    assert tool(agent, token, "goals")["exercise"][0]["notes"] == cut
+    assert goal_items(tool(agent, token, "goals"), "exercise")[0]["notes"] == cut
     tools = {t["name"]: t for t in result(call(agent, "tools/list", token=token))["tools"]}
     for name in ("week_summary", "weeks", "goals"):
         assert "cut at 500" in tools[name]["description"], name
@@ -496,10 +510,15 @@ def test_goals_reports_the_defaults_for_an_account_with_no_plans(
 ) -> None:
     out = tool(agent, token, "goals")
     assert (out["week"], out["this_week"], out["today"]) == (THIS_WEEK, THIS_WEEK, TODAY)
-    assert [(g["id"], g["target"]) for g in out["exercise"]][:2] == [("pu", 4), ("pl", 4)]
-    assert [g["name"] for g in out["diet"]] == ["Vegetables", "Fruit", "Fish", "Nuts"]
-    assert out["exercises_a_day"] >= 1
-    assert out["foods_a_day"] >= 1
+    exercise = goal_items(out, "exercise")
+    assert [(g["id"], g["target"]) for g in exercise][:2] == [("pu", 4), ("pl", 4)]
+    assert goal_items(out, "cardio") == []
+    assert [g["name"] for g in goal_items(out, "diet")] == ["Vegetables", "Fruit", "Fish", "Nuts"]
+    assert [(t["id"], t["name"], t["kind"], t["daily_target"]) for t in out["trackers"]] == [
+        ("exercise", "Strength", "strength", 3),
+        ("cardio", "Cardio", "cardio", None),
+        ("diet", "Food", "food", 2),
+    ]
     assert out["daily_goal"] is True
     assert out["note"] == ""
     assert out["limits"] == ""
@@ -532,11 +551,9 @@ def test_the_reads_leave_daily_targets_out_while_daily_goal_is_off(
         settings={"dailyPick": 1, "dailyGoal": False},
     )
     goals = tool(agent, token, "goals")
-    assert (goals["exercises_a_day"], goals["foods_a_day"], goals["daily_goal"]) == (
-        None,
-        None,
-        False,
-    )
+    assert {t["daily_target"] for t in goals["trackers"]} == {None}
+    assert goals["daily_goal"] is False
+    assert {t["daily_target"] for t in tool(agent, token, "list_trackers")["trackers"]} == {None}
     week = tool(agent, token, "week_summary")
     assert (week["daily_target"], week["days_met"], week["goals_met"]) == (None, None, 1)
     assert {d["met"] for d in week["days"]} == {None}
@@ -548,7 +565,7 @@ def test_the_reads_leave_daily_targets_out_while_daily_goal_is_off(
         None,
     )
     tools = {t["name"]: t for t in result(call(agent, "tools/list", token=token))["tools"]}
-    for name in ("week_summary", "goals", "consistency", "set_daily_targets"):
+    for name in ("list_trackers", "week_summary", "goals", "consistency", "set_daily_targets"):
         assert "Daily goal is off" in tools[name]["description"], name
     # The result's schema lets the nulls through.
     assert tools["goals"]["outputSchema"]["properties"]["daily_goal"]["type"] == "boolean"
@@ -556,7 +573,7 @@ def test_the_reads_leave_daily_targets_out_while_daily_goal_is_off(
 
 def test_consistency_defaults_to_eight_weeks(agent: TestClient, uid: int, token: str) -> None:
     out = tool(agent, token, "consistency")
-    assert out["section"] == "exercise"
+    assert out["tracker"] == "exercise"
     assert out["end"] == THIS_WEEK
     assert out["start"] == "2026-08-31"
     assert out["days"] == 8 * 7 - 2  # up to Friday
@@ -588,11 +605,20 @@ def test_a_refused_argument_is_a_tool_error_naming_the_field(
 
 
 @pytest.mark.parametrize("name", ["week_summary", "weeks", "item_history", "consistency"])
-def test_an_unknown_section_is_a_tool_error_naming_the_field(
+def test_an_unknown_tracker_is_a_tool_error_naming_the_field(
     agent: TestClient, uid: int, token: str, name: str
 ) -> None:
     extra = {"item_id": "sq"} if name == "item_history" else {}
+    text = tool_error(agent, token, name, tracker="sleep", **extra)
+    assert text.endswith(
+        ": tracker: no tracker has the id or name 'sleep'; the trackers are exercise (Strength), "
+        "cardio (Cardio), diet (Food)"
+    )
+    # `section` is checked against its three ids, by the schema.
     assert "section" in tool_error(agent, token, name, section="sleep", **extra)
+    # Both given must agree.
+    text = tool_error(agent, token, name, tracker="Food", section="cardio", **extra)
+    assert text.endswith(": tracker: give tracker or section, not both")
 
 
 def test_a_missing_item_id_is_a_tool_error(agent: TestClient, uid: int, token: str) -> None:
@@ -791,7 +817,7 @@ def test_cardio_through_the_tools(
     assert (summary["daily_target"], summary["days_met"]) == (None, None)
     (item,) = summary["items"]
     assert (item["seconds"], item["distance_km"], item["missed"]) == (5400, 21.1, 1)
-    assert tool(agent, writer, "goals")["cardio"][0]["seconds"] == 5400
+    assert goal_items(tool(agent, writer, "goals"), "cardio")[0]["seconds"] == 5400
     login = client.post("/api/auth/login", json={"username": EMAIL, "password": PASSWORD})
     assert login.status_code == 200
     state = client.get("/api/state").json()["cardio"]
@@ -821,13 +847,13 @@ def test_mark_day_defaults_to_today(agent: TestClient, uid: int, writer: str) ->
 
 
 def test_set_daily_targets_through_the_tool(agent: TestClient, uid: int, writer: str) -> None:
+    """The older form still works: `foods_a_day` is the `diet` tracker's target."""
     out = tool(agent, writer, "set_daily_targets", foods_a_day=4)
     assert out == {
-        "before": {"exercises_a_day": 3, "foods_a_day": 2},
-        "after": {"exercises_a_day": 3, "foods_a_day": 4},
+        "targets": [{"tracker": "diet", "name": "Food", "before": 2, "after": 4}],
         "daily_goal": True,
     }
-    assert tool(agent, writer, "goals")["foods_a_day"] == 4
+    assert daily_targets(tool(agent, writer, "goals"))["diet"] == 4
 
 
 def test_set_daily_targets_keeps_working_while_daily_goal_is_off(
@@ -835,15 +861,14 @@ def test_set_daily_targets_keeps_working_while_daily_goal_is_off(
 ) -> None:
     """The numbers are kept for when Daily goal is back on; the result says it is off."""
     put_settings(conn, uid, {"accent": "#30d158", "dailyPick": 3, "dailyGoal": False})
-    out = tool(agent, writer, "set_daily_targets", exercises_a_day=5)
+    out = tool(agent, writer, "set_daily_targets", tracker="strength", daily_target=5)
     assert out == {
-        "before": {"exercises_a_day": 3, "foods_a_day": 2},
-        "after": {"exercises_a_day": 5, "foods_a_day": 2},
+        "targets": [{"tracker": "exercise", "name": "Strength", "before": 3, "after": 5}],
         "daily_goal": False,
     }
-    assert tool(agent, writer, "goals")["exercises_a_day"] is None
+    assert daily_targets(tool(agent, writer, "goals"))["exercise"] is None
     put_settings(conn, uid, {"accent": "#30d158", "dailyPick": 5, "dailyGoal": True})
-    assert tool(agent, writer, "goals")["exercises_a_day"] == 5
+    assert daily_targets(tool(agent, writer, "goals"))["exercise"] == 5
 
 
 @pytest.mark.parametrize(
@@ -862,6 +887,11 @@ def test_set_daily_targets_keeps_working_while_daily_goal_is_off(
         ("mark_day", {"item_id": "sq", "mark": "done"}, "mark\n"),
         ("set_daily_targets", {"exercises_a_day": 0}, "exercises_a_day: "),
         ("set_daily_targets", {}, "give"),
+        ("set_daily_targets", {"tracker": "diet"}, "daily_target: "),
+        ("set_daily_targets", {"daily_target": 3}, "tracker: "),
+        ("set_daily_targets", {"tracker": "cardio", "daily_target": 3}, "no daily target"),
+        ("add_item", {"name": "Dips", "tracker": "sleep"}, "tracker: no tracker"),
+        ("add_item", {"name": "Dips", "tracker": "diet", "section": "exercise"}, "not both"),
     ],
 )
 def test_a_refused_write_is_a_tool_error_the_agent_can_act_on(
@@ -875,6 +905,128 @@ def test_a_refused_write_is_a_tool_error_the_agent_can_act_on(
 ) -> None:
     assert words in write_error(agent, writer, name, arguments)
     assert rows(conn) == (0, 0, 0)
+
+
+# --- the account's own trackers (spec §4, "Claude tools") -----------------------------------------
+
+
+def test_the_instructions_describe_the_persons_own_trackers(agent: TestClient, token: str) -> None:
+    info = result(call(agent, "initialize", INITIALIZE, token=token))
+    text = info["instructions"]
+    assert "the person's own trackers" in text
+    assert "list_trackers" in text
+    assert "exercise, cardio and food plans" not in text
+
+
+def test_list_trackers_lists_a_created_tracker(
+    agent: TestClient, conn: sqlite3.Connection, uid: int, token: str
+) -> None:
+    create_tracker(conn, uid, "xyoga1", "Yoga", "strength", THIS_WEEK)
+    create_tracker(conn, uid, "xold1", "Old", "food", "2026-10-05")
+    end_tracker(conn, uid, "xold1", THIS_WEEK)
+    out = tool(agent, token, "list_trackers")
+    assert (out["this_week"], out["today"], out["daily_goal"]) == (THIS_WEEK, TODAY, True)
+    assert [(t["id"], t["name"], t["kind"], t["shows_this_week"]) for t in out["trackers"]] == [
+        ("exercise", "Strength", "strength", True),
+        ("cardio", "Cardio", "cardio", True),
+        ("diet", "Food", "food", True),
+        ("xyoga1", "Yoga", "strength", True),
+        ("xold1", "Old", "food", False),
+    ]
+    assert out["trackers"][3] == {
+        "id": "xyoga1",
+        "name": "Yoga",
+        "kind": "strength",
+        "daily_target": 3,
+        "start_week": THIS_WEEK,
+        "end_week": None,
+        "shows_this_week": True,
+    }
+    assert (out["trackers"][4]["start_week"], out["trackers"][4]["end_week"]) == (
+        "2026-10-05",
+        THIS_WEEK,
+    )
+
+
+@pytest.mark.parametrize("ref", ["xyoga1", "Yoga", "yoga"])
+def test_add_item_and_mark_day_on_a_new_tracker(
+    agent: TestClient, conn: sqlite3.Connection, uid: int, writer: str, ref: str
+) -> None:
+    """A tracker the person made, named by its id or its name in any case."""
+    create_tracker(conn, uid, "xyoga1", "Yoga", "strength", THIS_WEEK)
+    out = write(agent, writer, "add_item", {"tracker": ref, "name": "Plank", "seconds": 60})
+    assert (out["tracker"], out["before"], out["copied_from"]) == ("xyoga1", [], "defaults")
+    plank = out["item"]
+    out = tool(agent, writer, "mark_day", tracker=ref, item_id=plank["id"], mark="partial")
+    assert (out["tracker"], out["after"]) == ("xyoga1", "partial")
+    summary = tool(agent, writer, "week_summary", tracker=ref)
+    assert summary["tracker"] == "xyoga1"
+    assert [(it["name"], it["partial"]) for it in summary["items"]] == [("Plank", 1)]
+    assert [it["name"] for it in goal_items(tool(agent, writer, "goals"), "xyoga1")] == ["Plank"]
+    history = tool(agent, writer, "item_history", tracker=ref, item_id=plank["id"], weeks=2)
+    assert [w["in_plan"] for w in history["weeks"]] == [False, True]
+    # The first Strength tracker's defaults are its own.
+    assert tool(agent, writer, "week_summary")["items"][0]["id"] == "pu"
+
+
+def test_an_ended_tracker_is_absent_from_its_end_week_on(
+    agent: TestClient, conn: sqlite3.Connection, uid: int, writer: str
+) -> None:
+    create_tracker(conn, uid, "xyoga1", "Yoga", "strength", "2026-10-12")
+    write(agent, writer, "add_item", {"tracker": "Yoga", "name": "Plank", "week": "2026-10-12"})
+    end_tracker(conn, uid, "xyoga1", THIS_WEEK)
+    text = write_error(agent, writer, "add_item", {"tracker": "Yoga", "name": "Dips"})
+    assert text.endswith(
+        "week: Yoga (xyoga1) was deleted from the week of 2026-10-19 on, so the week of "
+        "2026-10-19 doesn't show it; its earlier weeks still do"
+    )
+    assert "doesn't show it" in tool_error(agent, writer, "week_summary", tracker="Yoga")
+    assert "xyoga1" not in daily_targets(tool(agent, writer, "goals"))
+    weeks = tool(agent, writer, "weeks", tracker="Yoga")
+    assert [w["week"] for w in weeks["weeks"]] == ["2026-10-12"]
+    # Its earlier weeks still read and take changes.
+    earlier = tool(agent, writer, "week_summary", tracker="Yoga", week="2026-10-12")
+    assert [it["name"] for it in earlier["items"]] == ["Plank"]
+    out = write(
+        agent, writer, "add_item", {"tracker": "Yoga", "name": "Dips", "week": "2026-10-12"}
+    )
+    assert [it["name"] for it in out["after"]] == ["Plank", "Dips"]
+
+
+def test_section_still_names_the_first_three_trackers(
+    agent: TestClient, conn: sqlite3.Connection, uid: int, writer: str
+) -> None:
+    """Older clients send `section`; it reads and writes as `tracker` does."""
+    out = write(agent, writer, "add_item", {"section": "diet", "name": "Beans"})
+    assert out["tracker"] == "diet"
+    by_section = tool(agent, writer, "week_summary", section="diet")
+    assert by_section == tool(agent, writer, "week_summary", tracker="diet")
+    assert by_section == tool(agent, writer, "week_summary", tracker="diet", section="diet")
+    assert by_section["items"][-1]["name"] == "Beans"
+    beans = out["item"]["id"]
+    assert tool(agent, writer, "mark_day", section="diet", item_id=beans, mark="great")["after"]
+    assert tool(agent, writer, "consistency", section="diet", weeks=1)["tracker"] == "diet"
+
+
+def test_goals_and_daily_targets_per_tracker(
+    agent: TestClient, conn: sqlite3.Connection, uid: int, writer: str
+) -> None:
+    create_tracker(conn, uid, "xsnack1", "Snacks", "food", THIS_WEEK)
+    out = tool(agent, writer, "set_daily_targets", tracker="snacks", daily_target=1)
+    assert out == {
+        "targets": [{"tracker": "xsnack1", "name": "Snacks", "before": 2, "after": 1}],
+        "daily_goal": True,
+    }
+    goals = tool(agent, writer, "goals")
+    assert daily_targets(goals) == {"exercise": 3, "cardio": None, "diet": 2, "xsnack1": 1}
+    assert goal_items(goals, "xsnack1") == []
+    # The older form sets the first trackers', beside a new one's.
+    out = tool(
+        agent, writer, "set_daily_targets", tracker="xsnack1", daily_target=4, exercises_a_day=5
+    )
+    assert [(t["tracker"], t["after"]) for t in out["targets"]] == [("xsnack1", 4), ("exercise", 5)]
+    assert daily_targets(tool(agent, writer, "goals"))["exercise"] == 5
+    assert tool(agent, writer, "week_summary", tracker="Snacks")["daily_target"] == 4
 
 
 @pytest.mark.parametrize(
