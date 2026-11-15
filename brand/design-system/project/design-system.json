@@ -197,9 +197,9 @@
   ],
   "lastChange": {
     "by": "John Mathews",
-    "at": "2026-11-15T11:28:28Z",
+    "at": "2026-11-15T12:40:00Z",
     "via": "Claude Code",
-    "note": "Account trackers (K122-K126): SectionHeader takes the tracker's name, with Edit plan's pen to rename it, Add and Delete tracker; PlannerScreen shows one screen per tracker, Strength first; Header has Add tracker in Edit plan; a new NewTrackerPage card (name, kind, Mobility); ItemPage covers a mobility item."
+    "note": "K127-K129: ItemPage's Remove names the tracker and says what stays; NewTrackerPage drops Starts and the Kind label, with one plain line per kind; SectionHeader's Delete tracker dialog reads 'Remove Strength from this week and future weeks.' over 'History is not deleted.'; ConfirmDialog keeps its message's line breaks."
   },
 
   "layout": "files",
