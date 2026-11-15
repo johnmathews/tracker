@@ -1,0 +1,414 @@
+<title>The week title and This week</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="tokens.css">
+<!--
+  A mockup (design-system skill, references/mockups.md). Two questions:
+  1. Where "This week" goes: next to the bar's next-week arrow (John's words), and in the band at
+     the top of the week, where the bar is out of sight. Three options, A, B, C.
+  2. The Settings control that picks the week title: the dates or the week number. Two options.
+  The stages are drawn by the script at the foot from the Header, PlannerScreen and SettingsPage
+  cards' sizes at u = 1 (1280 × 800) and folded (390 wide), then scaled to fit each pane. No new
+  colour: every value is a system token.
+-->
+<style>
+  body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font-sans); }
+  .mockup-page {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: var(--space-8, 32px) var(--space-16, 64px);
+    max-width: 1200px; margin: 0 auto; display: grid; gap: var(--space-12, 48px);
+  }
+  .mockup-head { display: grid; gap: var(--space-2, 8px); max-width: 70ch; }
+  .mockup-head h1, .option h2, .question h2 { margin: 0; text-wrap: balance; }
+  .mockup-head p, .option p { margin: 0; }
+  .mockup-head ul { margin: 0; padding-left: 1.2em; }
+  .mockup-meta { color: var(--ink-secondary); }
+  .question { display: grid; gap: var(--space-8, 32px); }
+  .question > header { display: grid; gap: var(--space-2, 8px); max-width: 70ch; }
+  .question > header p { margin: 0; }
+  .option { display: grid; gap: var(--space-4, 16px); }
+  .option-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2, 8px) var(--space-3, 12px); }
+  .option-tag { color: var(--ink-secondary); }
+  .option[data-recommended] .option-tag::after { content: " · Recommended"; color: var(--ink); }
+  .panes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--space-4, 16px); }
+  .pane { min-width: 0; background: var(--canvas); color: var(--ink); border: 1px solid var(--line);
+          border-radius: var(--radius-lg, 10px); padding: var(--space-4, 16px); display: grid; gap: var(--space-3, 12px); align-content: start; }
+  .pane-label { color: var(--ink-secondary); margin: 0; }
+  .measures { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); }
+  .measures li { border: 1px solid var(--line); border-radius: var(--radius-sm, 4px); padding: 2px var(--space-2, 8px); font-variant-numeric: tabular-nums; }
+  .measures li[data-pass="no"] { border-color: currentColor; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  /* ---- A stage: a real-size screen, scaled down to its pane by the script (zoom). ---- */
+  * { box-sizing: border-box; }
+  .shot { display: grid; gap: 6px; min-width: 0; }
+  .shot > .cap { margin: 0; color: var(--ink-secondary); }
+  .fit { min-width: 0; overflow: hidden; }
+  .screen { position: relative; background: var(--canvas); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden; font-variant-numeric: tabular-nums; }
+  /* Edit plan's frame round the window (K112, K117): 8px, 4px on a phone. */
+  .screen.edit::after { content: ""; position: absolute; inset: 0; border: 8px solid var(--edit); border-radius: inherit; pointer-events: none; }
+  .screen.edit.phone::after { border-width: 4px; }
+  svg.i { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  /* The Header (Header card), at u = 1. */
+  .bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 48px; border-bottom: 1px solid var(--line); background: var(--canvas); }
+  .week { display: flex; align-items: center; }
+  .week-label { min-width: 6.5em; padding-inline: 8px; text-align: center; font: 600 40px/44px var(--font-serif); white-space: nowrap; }
+  .arrow { display: grid; place-items: center; width: 60px; height: 60px; padding: 0; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); }
+  .arrow svg { width: 32px; height: 32px; }
+  .end { display: flex; align-items: stretch; gap: 8px; }
+  .bar-action { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-width: 96px; min-height: 44px; padding: 10px 12px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); }
+  .bar-action svg { width: 32px; height: 32px; }
+  .bar-action .name { font: 600 17px/22px var(--font-sans); white-space: nowrap; }
+  .phone .bar { flex-direction: column; align-items: stretch; gap: 6px; padding: 8px 12px 10px; }
+  .phone .week { justify-content: center; }
+  .phone .week-label { font-size: 26px; line-height: 30px; min-width: 0; }
+  /* Folded, the button goes under the week when the row has no room for it. */
+  .phone .bar .week { flex-wrap: wrap; row-gap: 4px; }
+  .phone .arrow { width: 48px; height: 48px; }
+  .phone .arrow svg { width: 26px; height: 26px; }
+  .phone .end { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; }
+  .phone .bar-action { min-width: 0; padding: 8px 4px; gap: 4px; }
+  .phone .bar-action svg { width: 26px; height: 26px; }
+  .phone .bar-action .name { font-size: 16px; line-height: 20px; }
+
+  /* The band (PlannerScreen card, K88): the week's h1 at the top centre, 28u above, 12u below. */
+  .band { position: relative; display: flex; align-items: center; justify-content: center; padding: 28px 48px 12px; text-align: center; }
+  .band h1 { margin: 0; font: 600 40px/1.1 var(--font-serif); white-space: nowrap; }
+  .phone .band { padding: 34px 16px 8px; }
+  .phone .band h1 { font-size: 30px; }
+  /* The handle (Header card) over the band's middle, where a finger is. */
+  .handle { position: absolute; top: 8px; left: 50%; width: 40px; height: 5px; margin-left: -20px; border-radius: 999px; background: var(--control-border); }
+
+  /* The top of the Strength screen (SectionHeader and WeekGrid), for place only. */
+  .sec { padding: 12px 48px 0; }
+  .sec h2 { margin: 0 0 12px; font: 600 34px/1.15 var(--font-serif); }
+  .grid { display: grid; grid-template-columns: 320px repeat(7, minmax(0, 1fr)); align-items: center; }
+  .grid .d { text-align: center; font-size: 19px; line-height: 26px; padding-bottom: 8px; }
+  .grid .d b { display: block; font-size: 23px; }
+  .grid .n { font-size: 23px; line-height: 30px; padding: 14px 0; border-top: 1px solid var(--line); }
+  .grid .c { display: grid; place-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+  .box { width: 52px; height: 52px; border: 1.5px solid var(--control-border); border-radius: 6px; }
+  .phone .sec { padding: 10px 16px 0; }
+  .phone .sec h2 { font-size: 26px; }
+  .phone .grid { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .phone .grid .n { grid-column: 1 / -1; font-size: 19px; line-height: 24px; padding: 10px 0 6px; }
+  .phone .grid .c { border-top: 0; padding: 0 0 10px; }
+  .phone .grid .d { font-size: 15px; line-height: 20px; }
+  .phone .grid .d b { font-size: 18px; }
+  .phone .box { width: 38px; height: 38px; }
+  .row-edit { display: flex; align-items: center; gap: 16px; padding: 20px 48px; border-bottom: 1px solid var(--line); }
+  .row-edit h2 { margin: 0; font: 600 34px/1.15 var(--font-serif); }
+  .phone .row-edit { padding: 14px 16px; }
+  .phone .row-edit h2 { font-size: 26px; }
+  .row-edit .lede { color: var(--ink-secondary); font-size: 19px; }
+
+  /* ---- Question 1: the button's three looks. ---- */
+  /* A and C: a secondary Button (Button card) after the arrow: 1px control-border, ink text. */
+  .tw { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: var(--candidate-tw-h); padding: 0 var(--candidate-tw-px); margin-left: var(--candidate-tw-gap);
+        border: 1px solid var(--control-border); border-radius: var(--radius-md); background: transparent; color: var(--ink); font: 600 var(--candidate-tw-fs)/1.2 var(--font-sans); white-space: nowrap; }
+  #a, #a [data-theme], #c, #c [data-theme], #p1, #p1 [data-theme], #p2, #p2 [data-theme] { --candidate-tw-h: 48px; --candidate-tw-px: 18px; --candidate-tw-fs: 19px; --candidate-tw-gap: 12px; }
+  #a .phone, #c .phone, #p1 .phone, #p2 .phone { --candidate-tw-h: 44px; --candidate-tw-px: 12px; --candidate-tw-fs: 16px; --candidate-tw-gap: 4px; }
+  .band .tw { margin-left: 20px; }
+  .phone .band .tw { margin-left: 10px; }
+  /* B: a BarAction (icon over name) after the arrow; in the band, a quiet icon-and-name at its end. */
+  .bar .week .bar-action { margin-left: 8px; }
+  .band .end-tw { position: absolute; right: 48px; top: 50%; translate: 0 calc(-50% + 8px); display: inline-flex; align-items: center; gap: 8px; height: 48px; padding: 0 14px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); font: 600 19px/1 var(--font-sans); }
+  .band .end-tw svg { width: 26px; height: 26px; }
+  .phone .band .end-tw { right: 8px; width: 44px; height: 44px; padding: 0; justify-content: center; translate: 0 calc(-50% + 13px); }
+  .phone .band .end-tw .name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .phone .bar .week .bar-action { margin-left: 2px; min-width: 0; padding: 4px 6px; gap: 2px; }
+  .phone .bar .week .bar-action svg { width: 22px; height: 22px; }
+  .phone .bar .week .bar-action .name { font-size: 14px; line-height: 18px; }
+  /* C: the band has the week's arrows too, as the bar has. */
+  .band .week .arrow { width: 52px; height: 52px; }
+  .band .week .arrow svg { width: 28px; height: 28px; }
+  .phone .band .week .arrow { width: 44px; height: 44px; }
+  .phone .band .week .arrow svg { width: 24px; height: 24px; }
+  .phone .band.two { flex-direction: column; gap: 6px; }
+  .phone .band.two .tw { margin-left: 0; }
+  /* P1: the title shrinks to leave the button its room. */
+  .band.fitted { container-type: inline-size; }
+  .phone .band.fitted h1 { font-size: min(30px, calc((100cqi - 190px) / 8.6)); }
+
+  /* ---- Question 2: Settings › Appearance (SettingsPage card), at its page's size. ---- */
+  .set { padding: 28px 48px 40px; }
+  .set .back { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-size: 19px; line-height: 26px; text-decoration: underline; text-underline-offset: 4px; }
+  .set .back svg { width: 26px; height: 26px; }
+  .set h1 { margin: 12px 0 20px; font: 600 40px/46px var(--font-serif); }
+  .tabs { display: flex; flex-wrap: wrap; column-gap: 32px; border-bottom: 1px solid var(--line); }
+  .tabs span { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 0; color: var(--ink-secondary); font: 600 19px/26px var(--font-sans); white-space: nowrap; }
+  .tabs span[aria-selected="true"] { color: var(--ink); box-shadow: inset 0 -3px 0 var(--ink); }
+  .set section { display: grid; grid-template-columns: 320px minmax(0, 1fr); align-items: start; padding: 32px 0 0; }
+  .set h2 { margin: 0; font: 600 27px/34px var(--font-serif); }
+  .body-col { display: flex; flex-direction: column; gap: 28px; min-width: 0; }
+  .group { display: flex; flex-direction: column; gap: 12px; }
+  .group > .label { font-size: 19px; line-height: 25px; }
+  .above { color: var(--ink-secondary); font-size: 19px; line-height: 25px; font-style: italic; }
+  .seg { display: inline-flex; flex-wrap: wrap; align-self: flex-start; max-width: 100%; border: 1px solid var(--control-border); border-radius: var(--radius-md); }
+  .seg span { height: 58px; display: inline-flex; align-items: center; padding: 0 22px; border-radius: var(--radius-sm); color: var(--ink); font: 600 19px/25px var(--font-sans); white-space: nowrap; }
+  .seg span[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
+  .choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .choice { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 14px; padding: 12px 16px; border: 1px solid var(--control-border); border-radius: var(--radius-md); color: var(--ink); }
+  .choice[aria-checked="true"] { border: 2px solid var(--ink); padding: 11px 15px; }
+  .choice[aria-checked="true"] .name { font-weight: 600; }
+  .choice .name { flex: 1; min-width: 0; font-size: 19px; line-height: 25px; }
+  .choice .picture { width: 100%; padding-left: 37px; font: 600 27px/34px var(--font-serif); white-space: nowrap; }
+  .dot { flex: none; width: 23px; height: 23px; border: 1px solid var(--control-border); border-radius: 999px; display: grid; place-items: center; }
+  .choice[aria-checked="true"] .dot { border: 2px solid var(--ink); }
+  .choice[aria-checked="true"] .dot::after { content: ""; width: 12px; height: 12px; border-radius: 999px; background: var(--ink); }
+  .phone .set { padding: 20px 16px 32px; }
+  .phone .set h1 { font-size: 30px; line-height: 36px; margin-bottom: 16px; }
+  .phone .tabs { column-gap: 24px; }
+  .phone .tabs span { font-size: 18px; }
+  .phone .set section { display: flex; flex-direction: column; gap: 16px; padding-top: 24px; }
+  .phone .set h2 { font-size: 22px; line-height: 28px; }
+  .phone .body-col { gap: 20px; }
+  .phone .group > .label, .phone .above { font-size: 16px; line-height: 22px; }
+  .phone .seg span { height: 46px; padding: 0 16px; font-size: 16px; }
+  .phone .choices { grid-template-columns: minmax(0, 1fr); }
+  .phone .choice { flex-wrap: nowrap; padding: 10px 14px; }
+  .phone .choice[aria-checked="true"] { padding: 9px 13px; }
+  .phone .choice .picture { width: auto; padding-left: 0; font-size: 22px; line-height: 28px; }
+
+  .notes { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; max-width: 75ch; }
+</style>
+
+<main class="mockup-page">
+  <header class="mockup-head">
+    <p class="caption mockup-meta">Mockup · 2026-11-15 · Tracker · round 2</p>
+    <h1 class="title-1">The week title and This week</h1>
+    <p class="body">Round 2. Decided: A (the button after the week) and S1 (a SegmentedControl), saved with the account. John's comments renamed the button "View current week" and the segments "Date" and "Week number". The longer name raises one open question, on a phone: question 0 below.</p>
+    <p class="body">Today is Sunday 15 November (week 46). The stages show last week, 2–8 November (week 45), at 1280 × 800 and on a 390-wide phone, scaled to fit.</p>
+  </header>
+
+  <div class="question" id="q0">
+    <header>
+      <h2 class="title-2">0. Open: the band on a phone</h2>
+      <p class="body">"View current week" is 165px wide on a phone, "This week" was 102px. Beside the title it leaves the longest weeks too little room on a 390-wide phone. The bar already puts the button under the week there. The band needs one of these. Desktop is unchanged: the button follows the title.</p>
+    </header>
+    <section class="option" id="p2" data-recommended aria-labelledby="p2-h">
+      <div class="option-head"><h2 class="title-2" id="p2-h">P2. Under the title</h2><span class="label option-tag">Option P2</span></div>
+      <p class="body">On a phone the button sits under the title, centred, as in the bar. The title keeps its 30px. While another week is on screen the band is one row taller (52px), so the week starts lower.</p>
+      <div class="panes" data-phone="p2"></div>
+    </section>
+    <section class="option" id="p1" aria-labelledby="p1-h">
+      <div class="option-head"><h2 class="title-2" id="p1-h">P1. Beside the title, which shrinks</h2><span class="label option-tag">Option P1</span></div>
+      <p class="body">The button stays beside the title, and the title shrinks to fit: about 19.5px at 390 wide while the button shows, whatever the week, and less on a narrower phone. The band keeps its height.</p>
+      <div class="panes" data-phone="p1"></div>
+    </section>
+  </div>
+
+  <div class="question" id="q1">
+    <header>
+      <h2 class="title-2">1. Where the button goes (decided: A)</h2>
+      <p class="body">It shows only while another week is on screen, and goes back to this week. In Edit plan it sits after the bar's › arrow. In the week view the bar is out of sight, so the band at the top of the week needs it too.</p>
+    </header>
+
+    <section class="option" id="a" data-recommended aria-labelledby="a-h">
+      <div class="option-head"><h2 class="title-2" id="a-h">A. A button after the week</h2><span class="label option-tag">Option A</span></div>
+      <p class="body">A secondary Button, "View current week", in words only. In the bar it follows the › arrow (48px tall, 19px). In the band it follows the week's title, and the two are centred together. One look in both places. On a phone, a long week leaves no room after the arrow, so the button goes under the week. The phone band is question 0; it is drawn here as P2.</p>
+      <div class="panes" data-option="a"></div>
+    </section>
+
+    <section class="option" id="b" aria-labelledby="b-h">
+      <div class="option-head"><h2 class="title-2" id="b-h">B. A bar action after the arrow</h2><span class="label option-tag">Option B</span></div>
+      <p class="body">Today's BarAction (calendar over its name) moves from the end of the bar to after the › arrow. In the band it is a quiet calendar and name at the right edge. In the band on a phone there is room for the calendar only, named "This week" for a screen reader. In the phone's bar, a long week puts it under the week.</p>
+      <div class="panes" data-option="b"></div>
+    </section>
+
+    <section class="option" id="c" aria-labelledby="c-h">
+      <div class="option-head"><h2 class="title-2" id="c-h">C. The band gets the arrows too</h2><span class="label option-tag">Option C</span></div>
+      <p class="body">The band reads like the bar: ‹ week › and then the button. The week view can then change weeks without Edit plan. That is a bigger change. On a phone the button drops under the week, so the band grows while another week is on screen.</p>
+      <div class="panes" data-option="c"></div>
+    </section>
+  </div>
+
+  <div class="question" id="q2">
+    <header>
+      <h2 class="title-2">2. The setting (decided: S1)</h2>
+      <p class="body">Settings › Appearance, after Theme. It defaults to the dates. It changes the bar, the band and print. A screen reader hears both: "Week 46, 9–15 November".</p>
+    </header>
+
+    <section class="option" id="s1" data-recommended aria-labelledby="s1-h">
+      <div class="option-head"><h2 class="title-2" id="s1-h">S1. A SegmentedControl that shows each title</h2><span class="label option-tag">Option S1</span></div>
+      <p class="body">Like Theme: "Week title", then "Date" and "Week number" (John, round 2).</p>
+      <div class="panes" data-setting="seg"></div>
+    </section>
+
+    <section class="option" id="s2" aria-labelledby="s2-h">
+      <div class="option-head"><h2 class="title-2" id="s2-h">S2. A RadioCard with a picture</h2><span class="label option-tag">Option S2</span></div>
+      <p class="body">Like Marks: "Date" and "Week number", each with this week's title in the serif under its name.</p>
+      <div class="panes" data-setting="radio"></div>
+    </section>
+
+    <section class="option" id="titles" aria-labelledby="t-h">
+      <div class="option-head"><h2 class="title-2" id="t-h">With "Week 46" chosen, this week</h2><span class="label option-tag">Either setting</span></div>
+      <p class="body">The band and the bar on this week: no "View current week" button. A week in another year adds its year, as the dates do: "Week 2, 2027".</p>
+      <div class="panes" data-titles></div>
+      <ul class="measures caption">
+        <li data-fg="var(--control-border)" data-bg="var(--canvas)" data-min="3">The button's border on the page</li>
+        <li data-fg="var(--ink)" data-bg="var(--canvas)" data-min="4.5">Its words</li>
+      </ul>
+    </section>
+  </div>
+</main>
+
+<script>
+  const I = {
+    left: '<path d="m15 18-6-6 6-6"/>',
+    right: '<path d="m9 18 6-6-6-6"/>',
+    cal: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>',
+    ask: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+    plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+    gear: '<path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/>',
+    print: '<path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/>',
+    full: '<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>',
+    user: '<path d="M17.925 20.056a6 6 0 0 0-11.851.001"/><circle cx="12" cy="11" r="4"/><circle cx="12" cy="12" r="10"/>',
+    back: '<path d="m15 18-6-6 6-6"/>',
+  }
+  const svg = (k) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${I[k]}</svg>`
+  const arrows = (title, tag = 'span') =>
+    `<button class="arrow" type="button" aria-label="Previous week">${svg('left')}</button><${tag} class="week-label">${title}</${tag}><button class="arrow" type="button" aria-label="Next week">${svg('right')}</button>`
+  const action = (icon, name) => `<span class="bar-action">${svg(icon)}<span class="name">${name}</span></span>`
+  const twButton = '<span class="tw">View current week</span>'
+
+  /** The bar in Edit plan. `opt` places This week; `other` says whether another week is on screen. */
+  function bar(opt, title, other, phone) {
+    let after = ''
+    if (other && (opt === 'a' || opt === 'c')) after = twButton
+    if (other && opt === 'b') after = action('cal', 'View current week')
+    if (other && opt === 'now') after = ''
+    const acts = phone
+      ? [action('ask', 'Ask'), action('plus', 'Add tracker'), action('gear', 'Settings'), action('user', 'Profile')]
+      : [action('ask', 'Ask'), action('plus', 'Add tracker'), action('gear', 'Settings'), action('print', 'Print…'), action('full', 'Full screen'), action('user', 'Profile')]
+    return `<div class="bar"><nav class="week" aria-label="Week">${arrows(title)}${after}</nav><div class="end">${acts.join('')}</div></div>`
+  }
+
+  /** The band at the top of the week view. */
+  function band(opt, title, other, phone) {
+    const handle = phone ? '<span class="handle" aria-hidden="true"></span>' : ''
+    if (opt === 'c') {
+      const nav = `<span class="week">${arrows(title, 'h1')}${other && !phone ? twButton : ''}</span>`
+      return `<div class="band${other && phone ? ' two' : ''}">${handle}${nav}${other && phone ? twButton : ''}</div>`
+    }
+    let extra = ''
+    // A on a phone: under the title, as question 0's recommended P2, until that is picked.
+    if (other && opt === 'a' && phone) return `<div class="band two">${handle}<h1>${title}</h1>${twButton}</div>`
+    if (other && opt === 'a') extra = twButton
+    if (other && opt === 'b') extra = `<span class="end-tw">${svg('cal')}<span class="name">View current week</span></span>`
+    return `<div class="band">${handle}<h1>${title}</h1>${extra}</div>`
+  }
+
+  const DAYS = [['Mon', 2], ['Tue', 3], ['Wed', 4], ['Thu', 5], ['Fri', 6], ['Sat', 7], ['Sun', 8]]
+  function grid(phone) {
+    const head = (phone ? '' : '<span></span>') + DAYS.map(([d, n]) => `<span class="d">${phone ? d[0] : d}<b>${n}</b></span>`).join('')
+    const rows = ['Push-ups', 'Pull-ups', 'Squats'].map((name) => `<span class="n">${name}</span>` + DAYS.map(() => '<span class="c"><span class="box"></span></span>').join('')).join('')
+    return `<div class="sec"><h2>Strength</h2><div class="grid">${head}${rows}</div></div>`
+  }
+
+  function shot(cap, w, inner, extra = '') {
+    return `<div class="shot"><p class="caption cap">${cap}</p><div class="fit"><div class="screen ${extra}" data-w="${w}" style="width:${w}px">${inner}</div></div></div>`
+  }
+
+  // Question 1: per option, four stages: week view and Edit plan, desktop and phone.
+  for (const host of document.querySelectorAll('[data-option]')) {
+    const opt = host.dataset.option
+    const stages = [
+      shot('Week view, 1280 wide, last week, dates', 1280, band(opt, '2–8 November', true, false) + grid(false)),
+      shot('Edit plan, 1280 wide, last week, week number', 1280, bar(opt, 'Week 45', true, false) + '<div class="row-edit"><h2>Strength</h2><span class="lede">3 per day</span></div>', 'edit'),
+      shot('Week view, phone, the longest title, 21–27 September', 390, band(opt, '21–27 September', true, true) + grid(true), 'phone'),
+      shot('Edit plan, phone, the longest title, 21–27 September', 390, bar(opt, '21–27 September', true, true) + '<div class="row-edit"><h2>Strength</h2></div>', 'phone edit'),
+      shot('Week view, phone, last week, week number', 390, band(opt, 'Week 45', true, true) + grid(true), 'phone'),
+    ].join('')
+    host.innerHTML = ['light', 'dark'].map((t) => `<div class="pane" data-theme="${t}"><p class="label pane-label">${t === 'light' ? 'Light' : 'Dark'}</p>${stages}</div>`).join('')
+  }
+
+  // Question 0: the band on a phone, P1 (beside, the title shrinking) and P2 (under).
+  for (const host of document.querySelectorAll('[data-phone]')) {
+    const kind = host.dataset.phone
+    const make = (title) => {
+      const handle = '<span class="handle" aria-hidden="true"></span>'
+      const cls = kind === 'p2' ? 'band two' : 'band fitted'
+      return `<div class="${cls}">${handle}<h1>${title}</h1>${twButton}</div>`
+    }
+    const stages = [
+      shot('Week view, phone, 21–27 September', 390, make('21–27 September') + grid(true), 'phone'),
+      shot('Week view, phone, a week last year', 390, make('20–26 October 2025') + grid(true), 'phone'),
+      shot('Week view, phone, week number', 390, make('Week 39') + grid(true), 'phone'),
+    ].join('')
+    host.innerHTML = ['light', 'dark'].map((t) => `<div class="pane" data-theme="${t}"><p class="label pane-label">${t === 'light' ? 'Light' : 'Dark'}</p>${stages}</div>`).join('')
+  }
+
+  // Question 2: Settings › Appearance with each control.
+  function settings(kind, phone) {
+    const control = kind === 'seg'
+      ? '<div class="group"><span class="label">Week title</span><div class="seg"><span aria-pressed="true">Date</span><span aria-pressed="false">Week number</span></div></div>'
+      : '<div class="group"><span class="label">Week title</span><div class="choices"><span class="choice" aria-checked="true"><span class="dot"></span><span class="name">Date</span><span class="picture">9–15 November</span></span><span class="choice" aria-checked="false"><span class="dot"></span><span class="name">Week number</span><span class="picture">Week 46</span></span></div></div>'
+    return `<div class="set"><span class="back">${svg('back')}Back to the week</span><h1>Settings</h1>
+      <div class="tabs"><span aria-selected="true">Appearance</span><span>Daily goal</span><span>Your data</span><span>Connections</span></div>
+      <section><h2>Appearance</h2><div class="body-col"><span class="above">Marks, as today, above.</span>
+      <div class="group"><span class="label">Theme</span><div class="seg"><span aria-pressed="true">System</span><span aria-pressed="false">Light</span><span aria-pressed="false">Dark</span></div></div>
+      ${control}</div></section></div>`
+  }
+  for (const host of document.querySelectorAll('[data-setting]')) {
+    const kind = host.dataset.setting
+    const stages = shot('Settings › Appearance, 1280 wide', 1280, settings(kind, false)) + shot('Phone', 390, settings(kind, true), 'phone')
+    host.innerHTML = ['light', 'dark'].map((t) => `<div class="pane" data-theme="${t}"><p class="label pane-label">${t === 'light' ? 'Light' : 'Dark'}</p>${stages}</div>`).join('')
+  }
+  for (const host of document.querySelectorAll('[data-titles]')) {
+    const stages =
+      shot('Week view, 1280 wide', 1280, band('a', 'Week 46', false, false) + grid(false)) +
+      shot('Edit plan, 1280 wide', 1280, bar('a', 'Week 46', false, false) + '<div class="row-edit"><h2>Strength</h2><span class="lede">3 per day</span></div>', 'edit') +
+      shot('Week view, phone', 390, band('a', 'Week 46', false, true) + grid(true), 'phone') +
+      shot('Edit plan, phone', 390, bar('a', 'Week 46', false, true) + '<div class="row-edit"><h2>Strength</h2></div>', 'phone edit')
+    host.innerHTML = ['light', 'dark'].map((t) => `<div class="pane" data-theme="${t}"><p class="label pane-label">${t === 'light' ? 'Light' : 'Dark'}</p>${stages}</div>`).join('')
+  }
+
+  // Scale each real-size screen to its pane.
+  const fit = () => {
+    for (const s of document.querySelectorAll('.screen[data-w]')) {
+      const room = s.parentElement.clientWidth
+      s.style.zoom = String(Math.min(1, room / Number(s.dataset.w)))
+    }
+  }
+  fit()
+  addEventListener('resize', fit)
+
+  // Overflow check, for the render: a row wider than its screen is reported on the console.
+  for (const s of document.querySelectorAll('.screen[data-w]')) {
+    for (const el of s.querySelectorAll('.bar .week, .band, .bar .end')) {
+      if (el.scrollWidth > el.clientWidth + 1) console.warn('overflow', s.closest('[data-option],[data-setting],[data-titles]')?.outerHTML.slice(0, 40), el.className, el.scrollWidth, el.clientWidth)
+    }
+  }
+</script>
+
+<script>
+  // Measures: for each <li data-fg data-bg data-min>, the WCAG contrast of the two colours in each
+  // theme, resolved inside the option (so --candidate-* values apply), written after the label.
+  (() => {
+    const rgb = (value, scope, theme) => {
+      const probe = document.createElement('span')
+      probe.dataset.theme = theme
+      probe.style.color = value
+      scope.append(probe)
+      const parts = getComputedStyle(probe).color.match(/[\d.]+/g).map(Number)
+      probe.remove()
+      return parts.slice(0, 3)
+    }
+    const lum = ([r, g, b]) => [r, g, b]
+      .map((c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4 })
+      .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0)
+    const ratio = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05) }
+    for (const li of document.querySelectorAll('.measures li[data-fg]')) {
+      const scope = li.closest('.option') || document.body
+      const min = Number(li.dataset.min || 0)
+      const results = ['light', 'dark'].map((theme) => {
+        const r = ratio(rgb(li.dataset.fg, scope, theme), rgb(li.dataset.bg, scope, theme))
+        return { theme, r, ok: !min || r >= min }
+      })
+      li.dataset.pass = results.every((x) => x.ok) ? 'yes' : 'no'
+      li.append(`: ${results.map((x) => `${x.theme} ${x.r.toFixed(1)}:1${x.ok ? '' : ' (below ' + min + ':1)'}`).join(', ')}`)
+    }
+  })()
+</script>
