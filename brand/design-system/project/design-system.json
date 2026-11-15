@@ -197,9 +197,9 @@
   ],
   "lastChange": {
     "by": "John Mathews",
-    "at": "2026-11-15T12:40:00Z",
+    "at": "2026-11-15T20:30:00Z",
     "via": "Claude Code",
-    "note": "K127-K129: ItemPage's Remove names the tracker and says what stays; NewTrackerPage drops Starts and the Kind label, with one plain line per kind; SectionHeader's Delete tracker dialog reads 'Remove Strength from this week and future weeks.' over 'History is not deleted.'; ConfirmDialog keeps its message's line breaks."
+    "note": "K130-K133: Header puts 'View current week' after the next-week arrow while another week is on screen (it was the This week BarAction), names ← and → as keys for the previous and next week, and the week band carries the same button after its title (under it on a phone); SettingsPage adds Week title, Date | Week number, after Theme; BarAction's samples show Ask instead of This week."
   },
 
   "layout": "files",
