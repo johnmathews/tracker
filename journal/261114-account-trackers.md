@@ -53,4 +53,28 @@
 - Reordering trackers on screen: the API takes a position, the screens don't offer it yet.
 - Bringing a deleted tracker back.
 - Dropping `settings.dailyPick` and `foodPick` and the old `/api/state` keys, once no tab on
-  version 5 code can be live.
+  version 5 code can be live (issue #74).
+
+## 4. Wrap-up review (2026-11-15)
+
+Two reviewers read the API and web halves before the push, and a third audited the docs.
+
+- **API:** no high-confidence bugs (migration 16, per-account isolation, import limits,
+  transactions, the visibility rule). Two low-confidence notes stay as they are, by choice:
+  - importing into an account with no saved settings applies the file's daily goals to the first
+    trackers, as the "settings apply only when none are saved" rule says;
+  - `REVERT_TRACKERS` loses a daily target set while an account had no settings row. It is an
+    emergency path.
+- **Web, fixed:**
+  - a second press of Add tracker (or Enter) before the week opened added a second tracker. The
+    new tracker page now adds once (test: "pressed twice").
+  - `sendEnd` and `sendCreate` read the sync base with `!`. A queued end on a load with no cache
+    would throw and block the outbox. Both are null-safe now.
+  - a refused `tracker-create` now drops the writes queued for that tracker with it, and says
+    why once. At the 100-tracker cap the notice says the account is full.
+- **Docs, fixed:** `docs/development.md` listed the deleted cardio and diet store specs, and missed
+  the trackers store spec, the import-summary spec, the `trackerView` helper and the v6 parse
+  fixtures. The README's docs table now links the spec.
+- Every ci.yml step passed locally after the fixes: web lint, format, types, 1531 unit tests,
+  build, the design-system gate, tokens, e2e 125 of 125; API ruff, mypy, pytest with coverage,
+  and pip-audit (no known vulnerabilities).

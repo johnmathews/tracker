@@ -234,6 +234,9 @@ listed in [api.md](api.md) §10):
   merging one), plus building an export, the merge summary and the download. Add a fixture rather
   than an inline case when the behaviour is part of the export contract: the API's tests
   (`api/tests/test_parity.py`) read the same files.
+- `fixtures/transfer/parse/v6-*.json`: the version 6 cases: an empty file, sections by tracker id
+  (a kind's unknown fields dropped, such as a mobility item's weight), the trackers list and its
+  normal form, and a `trackers` that isn't a list.
 - `fixtures/transfer/sample/`: two pairs of a realistic `localStorage` snapshot and the export it
   makes. `storage-v6.json` is alice's cache under the current key, `tracker-cache-v6:alice`, as the
   sync store keeps it, and a `tracker-settings-v1` holding the dark theme; `export-v6.json` is the
@@ -348,13 +351,19 @@ listed in [api.md](api.md) §10):
   `savedSettings` (tracked in memory, set by adopting or changing settings, never by the theme),
   no note kept in the week (an exercise's notes are its details), and `clear` forgetting the
   details too.
-- `src/stores/__tests__/diet.spec.ts`: food toggling in the planner's week, shared week navigation,
-  goal clamping, renaming, add/remove, carrying food plans forward, `adopt`, `adoptWeek` and `clear`, the
-  old diet keys never being written, and no note kept in the week.
-- `src/stores/__tests__/cardio.spec.ts`: the cardio store (K90): no default items, the exercise's
-  cycle in each mark set, every kind of mark counting towards the goal, adding and changing a time
-  and a distance (rounded and capped), the goal clamped and kept, removal from one week only, and
-  following the planner's week.
+- `src/stores/__tests__/trackers.spec.ts`: the trackers store (K123): the account's trackers in
+  the week's order, the weeks a tracker shows in (spec §2), creating one last and empty in the week
+  on screen, the name rules and the 100-tracker cap, renaming, ending from the week on screen while
+  earlier weeks keep its plans and marks, daily targets (none for cardio), and adopting and
+  clearing. Per kind: the strength tracker's default exercises, marks, goals and plan fields; a
+  mobility tracker by hold time or reps with no weight (K126); cardio (K90) with no default items,
+  a time and a distance; food's default foods and eaten marks; weekly plans carried forward and kept
+  apart per tracker; and the keys from before accounts never being read or written.
+- `src/lib/__tests__/trackerView.ts`: a test helper, not a spec. It reads a tracker's items, plans
+  and marks from the trackers store in one shape for every kind.
+- `src/composables/__tests__/importSummary.spec.ts`: what an import adds (K123): trackers the account
+  doesn't have and their data, data skipped for a tracker the account holds as another kind (as the
+  API does), and a file from before version 6 read onto the first three trackers.
 - `src/stores/__tests__/details.spec.ts`: the details store: a note edited on one week showing on
   every week (owned plans included), readers updating when an item's first details arrive, storing
   as the API would, fields beside the notes (unknown keys kept), and refusing a bad field key, notes
