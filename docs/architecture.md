@@ -157,8 +157,8 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 │                       Connect; then leaves for Claude's callback
 ├── SettingsPage.vue    the SettingsPage card, at #/settings: Back to the week, then a tab per
 │   │                   section (K119, the Tabs primitive), each at #/settings/<tab>:
-│   │                   Appearance (Marks, then Theme, K59), Daily goal (K85), Your data
-│   │                   (Export and Import…, see §4) and Connections
+│   │                   Appearance (Week title, Marks, then Theme, K136), Daily goal (K85),
+│   │                   Your data (Export and Import…, see §4) and Connections
 │   └── ConnectionsSection.vue   the Connections row (K74): the MCP address with Copy and how to
 │                       connect Claude, the Apps connected by OAuth, and the personal Tokens
 ├── ProfilePage.vue     the ProfilePage card, at #/profile (K106): Back to the week, then Account
