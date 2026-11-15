@@ -197,9 +197,9 @@
   ],
   "lastChange": {
     "by": "John Mathews",
-    "at": "2026-11-15T20:30:00Z",
+    "at": "2026-11-15T21:28:00Z",
     "via": "Claude Code",
-    "note": "K130-K133: Header puts 'View current week' after the next-week arrow while another week is on screen (it was the This week BarAction), names ← and → as keys for the previous and next week, and the week band carries the same button after its title (under it on a phone); SettingsPage adds Week title, Date | Week number, after Theme; BarAction's samples show Ask instead of This week."
+    "note": "K134-K137: a red day is 'too difficult'. In Ticks and Stamped ticks partial and too difficult are a hand-drawn wave in their pens (the circle and the cross are gone); in Faces and Stamped faces too difficult is the so-so face in red (the sad face is gone); the accessible names say 'too difficult'. SettingsPage's Appearance runs Week title, Marks, Theme."
   },
 
   "layout": "files",
