@@ -57,7 +57,12 @@ function onKind(value: string): void {
  * Adds the tracker, empty, after every other, starting in the week on screen (K124), then goes
  * back to the week. Nothing is added while Name shows a message; focus goes to it.
  */
+/** Set once the tracker is added: the page stays up until the week opens, and a second press of
+ * Add tracker (or Enter) must not add a second tracker. */
+let added = false
+
 async function add(): Promise<void> {
+  if (added) return
   const id = name.value.trim()
     ? trackers.createTracker({ name: name.value, kind: kind.value })
     : null
@@ -69,6 +74,7 @@ async function add(): Promise<void> {
     root.value!.querySelector<HTMLInputElement>(`#${CSS.escape(ids.name)}`)!.focus()
     return
   }
+  added = true
   emit('added', id)
   leaveForWeek()
 }

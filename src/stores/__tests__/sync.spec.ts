@@ -14,6 +14,7 @@ import {
   QUOTA_NOTICE,
   REFUSED_NOTICE,
   TRACKER_CONFLICT_NOTICE,
+  TRACKER_FULL_NOTICE,
   DETAILS_CONFLICT_NOTICE,
   diff,
   legacyState,
@@ -1227,8 +1228,24 @@ describe('trackers (K123)', () => {
     trackers.createTracker({ name: 'One too many', kind: 'food' })
     trackers.toggle('exercise', 'pu', 0)
     await settle()
+    expect(sync.notice).toBe(TRACKER_FULL_NOTICE)
+    expect(sync.pending).toBe(0)
+    expect(api.accounts.get(USER)!.ticks.exercise[WEEK]).toEqual({ pu: 1 })
+  })
+
+  it('drops the writes queued for a tracker the server refused to create, saying why once', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { sync, trackers } = await start(emptyState())
+    api.failNext('POST', '/trackers', 409, { error: 'exists' })
+    const id = trackers.createTracker({ name: 'Taken', kind: 'food' })!
+    trackers.addItem(id, { name: 'Oats' })
+    trackers.endTracker(id)
+    trackers.toggle('exercise', 'pu', 0)
+    await settle()
     expect(sync.notice).toBe(REFUSED_NOTICE)
     expect(sync.pending).toBe(0)
+    expect(api.paths(`/trackers/${id}`)).toEqual([])
+    expect(api.paths(`/plans/${id}/`)).toEqual([])
     expect(api.accounts.get(USER)!.ticks.exercise[WEEK]).toEqual({ pu: 1 })
   })
 

@@ -611,6 +611,18 @@ describe('Add tracker and the new tracker page (K124)', () => {
     expect(headings()).toEqual(['Strength', 'Cardio', 'Food'])
   })
 
+  it('adds one tracker when Add tracker is pressed twice before the week opens', async () => {
+    await mountConfig()
+    const page = await openNewTracker()
+    await page.get('[data-testid="new-tracker-name"]').setValue('Rides')
+    const form = page.get('form')
+    await form.trigger('submit')
+    await form.trigger('submit')
+    await settle()
+    expect(headings()).toEqual(['Strength', 'Cardio', 'Food', 'Rides'])
+    expect(useTrackersStore().list).toHaveLength(4)
+  })
+
   it('goes back on Cancel with focus on Add tracker, adding nothing', async () => {
     await mountConfig()
     const page = await openNewTracker()

@@ -171,6 +171,9 @@ export const TRACKER_CONFLICT_NOTICE =
   'A tracker was changed on another device, so this device now shows that version.'
 /** A write refused because the account is at its quota (413 `quota`, docs/api.md §3). */
 export const QUOTA_NOTICE = 'Your account is full, so a change was undone here.'
+/** A new tracker refused because the account already holds the most it may (409 `too-many`). */
+export const TRACKER_FULL_NOTICE =
+  'The account already holds 100 trackers, deleted ones included, so the new tracker was removed here.'
 export const REFUSED_NOTICE =
   'The server refused a change, so it was undone here. Reload to see what was saved.'
 const FIRST_RETRY = 5_000
@@ -851,7 +854,7 @@ export const useSyncStore = defineStore('sync', () => {
     const theirs = storedTracker(res.data, mine.position)
     if (!theirs) return 'done'
     trackerRevs[theirs.id] = theirs.rev
-    base!.trackers[theirs.id] = infoOf(theirs)
+    if (base) base.trackers[theirs.id] = infoOf(theirs)
     const now = trackers.get(op.section)
     if (now && now.position !== theirs.position) {
       trackers.adoptTracker({ ...now, position: theirs.position })
@@ -912,7 +915,8 @@ export const useSyncStore = defineStore('sync', () => {
     const theirs = storedTracker(res.data, 0)
     if (!theirs) return 'done'
     trackerRevs[section] = theirs.rev
-    if (base!.trackers[section]) base!.trackers[section].endWeek = theirs.endWeek
+    const known = base?.trackers[section]
+    if (known) known.endWeek = theirs.endWeek
     const mine = trackers.get(section)
     const end = earlier(mine?.endWeek ?? null, theirs.endWeek)
     if (mine && mine.endWeek !== end) trackers.adoptTracker({ ...mine, endWeek: end })
@@ -966,6 +970,16 @@ export const useSyncStore = defineStore('sync', () => {
     // keeping it would block every write behind it. Drop it, and say so: the next read will
     // show the server's state without this change.
     console.warn('sync: dropped a refused write', op, error)
+    if (op.kind === 'tracker-create') {
+      // The tracker doesn't exist on the server, so every write queued for it would be refused
+      // too. Drop them with it, and say why once.
+      writeOutbox(
+        readOutbox().filter((q) => q.id === op.id || !('section' in q) || q.section !== op.section),
+      )
+      notice.value =
+        error.kind === 'refused' && error.code === 'too-many' ? TRACKER_FULL_NOTICE : REFUSED_NOTICE
+      return 'done'
+    }
     notice.value =
       error.kind === 'refused' && error.code === 'quota' ? QUOTA_NOTICE : REFUSED_NOTICE
     return 'done'
