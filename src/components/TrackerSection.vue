@@ -181,7 +181,7 @@ async function remove(ev: MouseEvent): Promise<void> {
   let after: HTMLElement | null = null
   const yes = await confirm({
     title: `Delete ${name}?`,
-    message: `${name} comes off this week and every week after it. Your history stays: past weeks keep ${name}, with its marks and notes.`,
+    message: `Remove ${name} from this week and future weeks.\nHistory is not deleted.`,
     confirmLabel: 'Delete',
     returnFocus: () => (button.isConnected ? button : after),
   })

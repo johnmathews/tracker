@@ -4,7 +4,7 @@ A small modal question before something that can't be undone: what will happen, 
 
 - A Dialog without a close button or fields: `panel`, 1px `line` border, `radius-lg`, `shadow-overlay`, on the `scrim` at 40%, at the page's size (K55): max(24px, 32u) padding, at most max(400px, 600u) wide, buttons 60u tall.
 - **Title** in `title-2` at max(22px, 27u): the question, naming the thing ("Remove Push-ups?").
-- **Body** in `body` at max(18px, 19u): the facts, briefly, then what stays. No "Are you sure", no warning icon, no capitals.
+- **Body** in `body` at max(18px, 19u): the facts, briefly, then what stays. No "Are you sure", no warning icon, no capitals. A line break in the message is kept, so each sentence can sit on its own line (K129).
 - **Buttons:** secondary "Cancel", then primary with the verb from the title ("Remove", "Sign out"). Never "OK" or "Yes".
 - **No red button.** A destructive action still uses the `ink` primary (K8); the verb does the work. `error-ink` is only for errors.
 - Ask only when something is lost. Importing a file only adds plans and marks ("Existing plans and marks stay as they are"), so it confirms inline in Settings, not here.
@@ -13,7 +13,7 @@ The app's two cases, rewritten in voice:
 
 | Where | Today (`window.confirm`) | ConfirmDialog |
 | --- | --- | --- |
-| `ItemPage.vue`, Remove from this week (K120) | "Remove Push-ups?" | **Remove Push-ups?** It comes off this week's plan. Weeks with their own plan keep it, and its marks stay. · Cancel · Remove |
+| `ItemPage.vue`, Remove from this week on (K120, K127) | "Remove Push-ups?" | **Remove Push-ups?** Remove ‘Push-ups’ from this week’s plan and also future weeks. History is unchanged and existing data is not removed. · Cancel · Remove |
 | `ProfilePage.vue` and the profile Menu, Sign out | "2 changes haven't synced yet. Sign out anyway?" | **Sign out now?** Two changes on this device haven't reached the server yet. Signing out now loses them. · Cancel · Sign out |
 
 Removing a food uses the first pattern ("Remove Fish?"). The removal touches only this week's plan and the weeks that follow it without a plan of their own; it never deletes the log.

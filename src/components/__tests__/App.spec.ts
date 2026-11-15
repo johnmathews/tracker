@@ -129,7 +129,7 @@ function target(testid: 'exercise-a-day' | 'diet-a-day'): string | undefined {
 }
 
 /**
- * Opens an item's page and presses its "Remove from this week" (K120: the one Remove), leaving the
+ * Opens an item's page and presses its "Remove from this week on" (K120: the one Remove), leaving the
  * question open.
  */
 async function askRemove(section: string, id: string): Promise<void> {
@@ -297,7 +297,7 @@ describe('App', () => {
     await askRemove('exercise', 'sq')
     expect(confirmation()!.get('h2').text()).toBe('Remove Squats?')
     expect(confirmation()!.text()).toContain(
-      'It comes off this week’s plan. Weeks with their own plan keep it, and its marks stay.',
+      'Remove ‘Squats’ from this week’s plan and also future weeks. History is unchanged and existing data is not removed.',
     )
     await answer('Cancel')
     expect(confirmation()).toBeNull()

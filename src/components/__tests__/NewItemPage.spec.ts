@@ -71,7 +71,7 @@ describe('the new item page (K104)', () => {
     expect(field('reps').element.value).toBe('1')
     expect(wrapper!.get('[role="spinbutton"]').attributes('aria-valuenow')).toBe('3')
     // The plan first; Recent weeks has nothing yet, so it isn't there.
-    expect(headings()).toEqual(['This week’s plan', 'Notes', 'Details'])
+    expect(headings()).toEqual(['Goals', 'Notes', 'Details'])
     expect(wrapper!.get('[data-testid="item-plan-line"]').text()).toBe(
       'Adds it to this week’s plan, and the weeks after it that have no plan of their own.',
     )
@@ -100,13 +100,13 @@ describe('the new item page (K104)', () => {
       hidden: ['notes', 'plan'],
     })
     mountPage()
-    expect(headings()).toEqual(['Details', 'This week’s plan'])
+    expect(headings()).toEqual(['Details', 'Goals'])
   })
 
   it('names another week in its plan heading and line', () => {
     usePlannerStore().nextWeek()
     mountPage()
-    expect(headings()[0]).toBe('Plan for the week of 26 October')
+    expect(headings()[0]).toBe('Goals for the week of 26 October')
     expect(wrapper!.get('[data-testid="item-plan-line"]').text()).toBe(
       'Adds it to the plan for the week of 26 October, and the weeks after it that have no plan of their own.',
     )

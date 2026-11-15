@@ -1,4 +1,4 @@
-<!-- @dsCard group="Screens" height=1500 subtitle="The page Add tracker opens: Back, Cancel and Add tracker; a name; the kind as a SegmentedControl with a line saying what it records; Starts this week, empty (K124)" -->
+<!-- @dsCard group="Screens" height=1500 subtitle="The page Add tracker opens: Back, Cancel and Add tracker; a name; the kind as a SegmentedControl with a line on what you log (K124, K128)" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -37,7 +37,8 @@
   h2.title-2 { margin: 0; font-size: 27px; line-height: 34px; }
   .lede { margin: 0; max-width: 60ch; color: var(--ink-secondary); font-size: 19px; line-height: 28px; }
   .kind { display: flex; flex-direction: column; gap: 16px; }
-  .kind-line { margin: 0; max-width: 60ch; color: var(--ink); font-size: 19px; line-height: 28px; }
+  .kind-line { display: grid; gap: 4px; max-width: 60ch; color: var(--ink); font-size: 19px; line-height: 28px; }
+  .kind-line p { margin: 0; }
   .seg-field { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
   /* SegmentedControl, as its card, at the page's size. */
   .seg { display: inline-flex; flex-wrap: wrap; max-width: 100%; border: 1px solid var(--control-border); border-radius: var(--radius-md); }
@@ -72,16 +73,11 @@
     <section class="sec" aria-labelledby="a-kind">
       <h2 class="title-2" id="a-kind">Kind</h2>
       <div class="content">
-        <p class="lede">What each item in it records. The kind is set once.</p>
         <div class="kind">
-          <div class="seg-field"><span class="label" id="a-kind-label">Kind</span><div class="seg" role="group" aria-labelledby="a-kind-label"><button type="button" aria-pressed="true" data-kind="strength">Strength</button><button type="button" aria-pressed="false" data-kind="cardio">Cardio</button><button type="button" aria-pressed="false" data-kind="food">Food</button><button type="button" aria-pressed="false" data-kind="mobility">Mobility</button></div></div>
-          <p class="kind-line" aria-live="polite">Strength: sets, then reps or time, and weight. Marked great, partial or missed.</p>
+          <div class="seg-field"><div class="seg" role="group" aria-label="Kind"><button type="button" aria-pressed="true" data-kind="strength">Strength</button><button type="button" aria-pressed="false" data-kind="cardio">Cardio</button><button type="button" aria-pressed="false" data-kind="food">Food</button><button type="button" aria-pressed="false" data-kind="mobility">Mobility</button></div></div>
+          <div class="kind-line" aria-live="polite"><p class="v">Log sets, reps, time and weight.</p></div>
         </div>
       </div>
-    </section>
-    <section class="sec" aria-labelledby="a-starts">
-      <h2 class="title-2" id="a-starts">Starts</h2>
-      <div class="content"><p class="lede">This week, empty. Add items to it in Edit plan.</p></div>
     </section>
   </form>
 </div>
@@ -96,16 +92,11 @@
     <section class="sec" aria-labelledby="b-kind">
       <h2 class="title-2" id="b-kind">Kind</h2>
       <div class="content">
-        <p class="lede">What each item in it records. The kind is set once.</p>
         <div class="kind">
-          <div class="seg-field"><span class="label" id="b-kind-label">Kind</span><div class="seg" role="group" aria-labelledby="b-kind-label"><button type="button" aria-pressed="false" data-kind="strength">Strength</button><button type="button" aria-pressed="false" data-kind="cardio">Cardio</button><button type="button" aria-pressed="true" data-kind="food">Food</button><button type="button" aria-pressed="false" data-kind="mobility">Mobility</button></div></div>
-          <p class="kind-line" aria-live="polite">Food: a number of times a week. Marked eaten.</p>
+          <div class="seg-field"><div class="seg" role="group" aria-label="Kind"><button type="button" aria-pressed="false" data-kind="strength">Strength</button><button type="button" aria-pressed="false" data-kind="cardio">Cardio</button><button type="button" aria-pressed="true" data-kind="food">Food</button><button type="button" aria-pressed="false" data-kind="mobility">Mobility</button></div></div>
+          <div class="kind-line" aria-live="polite"><p class="v">Log portions.</p></div>
         </div>
       </div>
-    </section>
-    <section class="sec" aria-labelledby="b-starts">
-      <h2 class="title-2" id="b-starts">Starts</h2>
-      <div class="content"><p class="lede">This week, empty. Add items to it in Edit plan.</p></div>
     </section>
   </form>
 </div>
@@ -113,17 +104,17 @@
 (() => {
   // The Kind control works: one kind chosen, and its line under the control.
   const LINES = {
-    strength: 'Strength: sets, then reps or time, and weight. Marked great, partial or missed.',
-    cardio: 'Cardio: time and distance. Marked great, partial or missed.',
-    food: 'Food: a number of times a week. Marked eaten.',
-    mobility: 'Mobility: sets, then reps or a hold time, each side if you like. Marked great, partial or missed.',
+    strength: 'Log sets, reps, time and weight.',
+    cardio: 'Log time and distance.',
+    food: 'Log portions.',
+    mobility: 'Log sets, reps or hold time, each side.',
   }
   for (const form of document.querySelectorAll('form[data-page]')) {
     const line = form.querySelector('.kind-line')
     for (const button of form.querySelectorAll('.seg button')) {
       button.addEventListener('click', () => {
         for (const b of form.querySelectorAll('.seg button')) b.setAttribute('aria-pressed', String(b === button))
-        line.textContent = LINES[button.dataset.kind]
+        line.querySelector('.v').textContent = LINES[button.dataset.kind]
       })
     }
   }

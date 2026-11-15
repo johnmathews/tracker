@@ -922,9 +922,9 @@ describe('the name’s pen and Remove, the same in both modes (K120, K121)', () 
       const sections = page().findAll('section')
       expect(sections.at(-1)!.attributes('data-testid')).toBe('item-remove')
       expect(section('remove').text()).toContain(
-        'Takes Kettlebell swings off this week’s plan. Weeks with their own plan keep it, and its marks stay.',
+        'Remove ‘Kettlebell swings’ from the Strength tracker for this week and future weeks. Existing data is not removed.',
       )
-      expect(section('remove').get('button').text()).toBe('Remove from this week')
+      expect(section('remove').get('button').text()).toBe('Remove from this week on')
     })
   }
 

@@ -278,12 +278,12 @@ function cancelName(ev: KeyboardEvent): void {
 const { confirm } = useConfirm()
 const removeLine = computed(
   () =>
-    `Takes ${shown.value!.name} off this week’s plan. Weeks with their own plan keep it, and its marks stay.`,
+    `Remove ‘${shown.value!.name}’ from the ${trackers.get(props.section)?.name ?? type.value.label} tracker for this week and future weeks. Existing data is not removed.`,
 )
 
 /**
- * Remove asks first, then takes the item off the week the page shows and goes back to it. It is
- * the one way an item comes off the week (K120). The week is pinned when asking: past midnight on
+ * Remove asks first, then takes the item off the week the page shows and every week after it
+ * (K127), and goes back to the week. It is the one way an item comes off the week (K120). The week is pinned when asking: past midnight on
  * Sunday the question no longer applies, and nothing is removed.
  */
 async function remove(ev: MouseEvent): Promise<void> {
@@ -291,8 +291,7 @@ async function remove(ev: MouseEvent): Promise<void> {
   const week = planner.weekKey
   const yes = await confirm({
     title: `Remove ${shown.value!.name}?`,
-    message:
-      'It comes off this week’s plan. Weeks with their own plan keep it, and its marks stay.',
+    message: `Remove ‘${shown.value!.name}’ from this week’s plan and also future weeks. History is unchanged and existing data is not removed.`,
     confirmLabel: 'Remove',
     returnFocus: () => (button.isConnected ? button : null),
   })
@@ -813,7 +812,7 @@ const filled = computed(() =>
       <div :class="BODY">
         <p :class="LEDE">{{ removeLine }}</p>
         <Button class="self-start" data-testid="item-remove-button" @click="remove"
-          ><Trash2 :stroke-width="1.5" />Remove from this week</Button
+          ><Trash2 :stroke-width="1.5" />Remove from this week on</Button
         >
       </div>
     </section>

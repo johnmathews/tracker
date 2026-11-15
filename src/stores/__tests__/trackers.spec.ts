@@ -448,6 +448,24 @@ describe('weekly plans', () => {
     expect(items(EX).find((e) => e.id === 'sq')!.target).toBe(4)
   })
 
+  it('removes an item from this week on: later weeks follow, earlier ones keep it (K127)', () => {
+    const t = store()
+    const p = usePlannerStore()
+    // Last week has a plan of its own, so it isn't this week's carried back.
+    p.prevWeek()
+    t.changeTarget(EX, 'sq', 1)
+    p.nextWeek()
+    t.removeItem(EX, 'pu')
+    expect(names()).not.toContain('Push-ups')
+    p.nextWeek()
+    p.nextWeek()
+    expect(names()).not.toContain('Push-ups')
+    p.prevWeek()
+    p.prevWeek()
+    p.prevWeek()
+    expect(names()).toContain('Push-ups')
+  })
+
   it('keeps each tracker’s plans apart, a new one’s too', () => {
     const t = store()
     const id = t.createTracker({ name: 'Upper body', kind: 'strength' })!

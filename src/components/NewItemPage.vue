@@ -53,7 +53,7 @@ const sections = computed(() => {
 
 const isCurrent = computed(() => planner.weekKey === planner.currentWeekKey)
 const planHeading = computed(() =>
-  isCurrent.value ? 'This week’s plan' : `Plan for the week of ${dayMonth(planner.monday)}`,
+  isCurrent.value ? 'Goals' : `Goals for the week of ${dayMonth(planner.monday)}`,
 )
 const planLine = computed(() =>
   isCurrent.value

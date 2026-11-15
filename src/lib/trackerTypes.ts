@@ -52,8 +52,8 @@ export type TrackerType = {
   id: TrackerTypeId
   /** The kind's name, as the new tracker page's Kind control says it: "Strength" (K124). */
   label: string
-  /** What an item of the kind records, after the kind's name on the new tracker page (K124). */
-  records: string
+  /** What an item of the kind records: the new tracker page's line under Kind (K128). */
+  settings: string
   /** One item, as the grid's row header says it: "Exercise". */
   itemLabel: string
   /** Items in the plural, for the daily target's Stepper: "Exercises a day" (K63). */
@@ -132,7 +132,7 @@ export const TRACKER_TYPES: Readonly<Record<TrackerTypeId, TrackerType>> = {
   strength: {
     id: 'strength',
     label: 'Strength',
-    records: 'sets, then reps or time, and weight. Marked great, partial or missed.',
+    settings: 'Log sets, reps, time and weight.',
     itemLabel: 'Exercise',
     itemsLabel: 'Exercises',
     addLabel: 'Add exercise',
@@ -154,7 +154,7 @@ export const TRACKER_TYPES: Readonly<Record<TrackerTypeId, TrackerType>> = {
   cardio: {
     id: 'cardio',
     label: 'Cardio',
-    records: 'time and distance. Marked great, partial or missed.',
+    settings: 'Log time and distance.',
     itemLabel: 'Cardio',
     itemsLabel: 'Cardio',
     addLabel: 'Add cardio',
@@ -175,7 +175,7 @@ export const TRACKER_TYPES: Readonly<Record<TrackerTypeId, TrackerType>> = {
   food: {
     id: 'food',
     label: 'Food',
-    records: 'a number of times a week. Marked eaten.',
+    settings: 'Log portions.',
     itemLabel: 'Food',
     itemsLabel: 'Foods',
     addLabel: 'Add food',
@@ -197,8 +197,7 @@ export const TRACKER_TYPES: Readonly<Record<TrackerTypeId, TrackerType>> = {
   mobility: {
     id: 'mobility',
     label: 'Mobility',
-    records:
-      'sets, then reps or a hold time, each side if you like. Marked great, partial or missed.',
+    settings: 'Log sets, reps or hold time, each side.',
     itemLabel: 'Exercise',
     itemsLabel: 'Exercises',
     addLabel: 'Add mobility',

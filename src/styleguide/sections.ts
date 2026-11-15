@@ -239,7 +239,7 @@ export const SECTIONS: readonly StyleGuideSection[] = [
     id: 'sg-new-tracker-page',
     title: 'NewTrackerPage',
     summary:
-      'The page Edit plan’s Add tracker opens: a name, a kind with a line saying what it records, and when it starts.',
+      'The page Edit plan’s Add tracker opens: a name, and a kind with its settings and marks.',
     component: NewTrackerPageSection,
   },
   {

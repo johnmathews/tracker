@@ -115,7 +115,7 @@ test('a mobility tracker takes an item by hold time; deleted, it leaves this wee
   const screens = await page.locator('[data-planner-screen]').count()
   await page.getByTestId(`delete-${id}`).click()
   const dialog = page.getByRole('alertdialog', { name: 'Delete Mobility?' })
-  await expect(dialog).toContainText('Your history stays')
+  await expect(dialog).toContainText('History is not deleted.')
   await dialog.getByRole('button', { name: 'Delete', exact: true }).click()
   await expect(page.locator('[data-planner-screen]')).toHaveCount(screens - 1)
   await expect(page.locator(`[data-tracker="${id}"]`)).toHaveCount(0)

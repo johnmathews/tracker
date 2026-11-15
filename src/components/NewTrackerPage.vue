@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, ref, useId, useTemplateRef } from 'vue'
 import { ChevronLeft } from '@lucide/vue'
 import { useTrackersStore } from '@/stores/trackers'
-import { BODY, H2, LEDE, ROW } from '@/lib/itemPage'
+import { BODY, H2, ROW } from '@/lib/itemPage'
 import { backToWeek, leaveForWeek } from '@/lib/routes'
 import { MAX_TRACKERS, MAX_TRACKER_NAME } from '@/lib/trackers'
 import { TRACKER_KINDS, TRACKER_TYPES, type TrackerTypeId } from '@/lib/trackerTypes'
@@ -23,7 +23,7 @@ const emit = defineEmits<{
 
 const trackers = useTrackersStore()
 const root = useTemplateRef<HTMLElement>('root')
-const ids = { name: useId(), kind: useId(), starts: useId() }
+const ids = { name: useId(), kind: useId() }
 
 /** The kinds the registry has, in its order: adding one there adds it here. */
 const KIND_OPTIONS = TRACKER_KINDS.map((k) => ({ value: k, label: TRACKER_TYPES[k].label }))
@@ -31,10 +31,8 @@ const KIND_OPTIONS = TRACKER_KINDS.map((k) => ({ value: k, label: TRACKER_TYPES[
 const name = ref('')
 const nameError = ref<string | undefined>()
 const kind = ref<TrackerTypeId>('strength')
-/** The line under the Kind control: what each item of the chosen kind records. */
-const kindLine = computed(
-  () => `${TRACKER_TYPES[kind.value].label}: ${TRACKER_TYPES[kind.value].records}`,
-)
+/** The chosen kind's line under the control: what you log (K128). */
+const kindInfo = computed(() => TRACKER_TYPES[kind.value])
 
 // Arriving here opens at the top, where Add tracker is, with the cursor in Name.
 onMounted(() => {
@@ -84,9 +82,10 @@ async function add(): Promise<void> {
   The new tracker page (K124), at #/new-tracker: Edit plan's Add tracker opens it. It is framed
   like the new item page (K104), and shares the item page's slot and control sizes (main.css):
   Back to the week at the head's start, Cancel and Add tracker at its end, then "New tracker"
-  over the Name field. A Kind row holds a SegmentedControl of the registry's kinds, with a line
-  saying what the chosen kind records, and a Starts row says the tracker starts in the week on
-  screen, empty. Nothing is saved until Add tracker, which adds it last and goes back to the week.
+  over the Name field. A Kind row holds a SegmentedControl of the registry's kinds (the row's
+  heading names it, so it has no label of its own), then one plain sentence for the chosen kind:
+  what you log (K128). Nothing is saved until Add tracker, which adds it, empty, last and in the
+  week on screen, and goes back to the week.
 -->
 <template>
   <div
@@ -131,29 +130,21 @@ async function add(): Promise<void> {
       <section :aria-labelledby="ids.kind" :class="ROW" data-testid="new-tracker-kind">
         <h2 :id="ids.kind" :class="H2">Kind</h2>
         <div :class="BODY">
-          <p :class="LEDE">What each item in it records. The kind is set once.</p>
-          <div class="flex flex-col gap-[calc(var(--u)*16)]">
+          <div class="flex flex-col items-start gap-[calc(var(--u)*16)]">
             <SegmentedControl
               :model-value="kind"
-              label="Kind"
+              ariaLabel="Kind"
               :options="KIND_OPTIONS"
               @update:model-value="onKind"
             />
-            <p
-              class="body max-w-[60ch] text-(length:--set-text) leading-normal text-ink"
+            <div
+              class="body flex max-w-[60ch] flex-col gap-1 text-(length:--set-text) leading-normal text-ink"
               aria-live="polite"
               data-testid="new-tracker-kind-line"
             >
-              {{ kindLine }}
-            </p>
+              <p>{{ kindInfo.settings }}</p>
+            </div>
           </div>
-        </div>
-      </section>
-
-      <section :aria-labelledby="ids.starts" :class="ROW" data-testid="new-tracker-starts">
-        <h2 :id="ids.starts" :class="H2">Starts</h2>
-        <div :class="BODY">
-          <p :class="LEDE">This week, empty. Add items to it in Edit plan.</p>
         </div>
       </section>
     </form>

@@ -278,7 +278,10 @@ export const useTrackersStore = defineStore('trackers', () => {
     return true
   }
 
-  /** Removes the item from this week; its log history stays in storage. */
+  /**
+   * Removes the item from this week's plan; later weeks follow it, as plans carry forward (K127).
+   * Earlier weeks keep it, and its marks and details stay in storage.
+   */
   function removeItem(id: string, item: string): void {
     const kept = own(id).filter((it) => it.id !== item)
     ensure(id).plans[planner.weekKey] = kept

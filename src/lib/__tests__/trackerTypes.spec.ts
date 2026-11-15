@@ -95,7 +95,8 @@ describe('the tracker-type registry', () => {
     expect(words(SECTIONS.exercise)).toEqual(['Strength', 'Exercise', 'Exercises', 'Add exercise'])
     expect(words(SECTIONS.diet)).toEqual(['Food', 'Food', 'Foods', 'Add food'])
     expect(words(SECTIONS.cardio)).toEqual(['Cardio', 'Cardio', 'Cardio', 'Add cardio'])
-    expect(SECTIONS.cardio.records).toBe('time and distance. Marked great, partial or missed.')
+    expect(SECTIONS.cardio.settings).toBe('Log time and distance.')
+    expect(SECTIONS.diet.settings).toBe('Log portions.')
   })
 
   it('gives cardio no daily target, and the others theirs (K90)', () => {
@@ -175,9 +176,7 @@ describe('the tracker-type registry', () => {
       'Exercises',
       'Add mobility',
     ])
-    expect(m.records).toBe(
-      'sets, then reps or a hold time, each side if you like. Marked great, partial or missed.',
-    )
+    expect(m.settings).toBe('Log sets, reps or hold time, each side.')
     expect([m.plan, m.weighted]).toEqual(['exercise', false])
     expect([TRACKER_TYPES.strength.plan, TRACKER_TYPES.strength.weighted]).toEqual([
       'exercise',

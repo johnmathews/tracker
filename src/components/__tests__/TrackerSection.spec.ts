@@ -456,7 +456,11 @@ describe('TrackerSection: Delete tracker (K122)', () => {
     await flushPromises()
     expect(dialog()!.querySelector('h2')!.textContent).toBe('Delete Cardio?')
     expect(dialog()!.textContent).toContain(
-      'Cardio comes off this week and every week after it. Your history stays: past weeks keep Cardio, with its marks and notes.',
+      'Remove Cardio from this week and future weeks.\nHistory is not deleted.',
+    )
+    // Each sentence on a line of its own (K129).
+    expect(dialog()!.querySelector('[data-slot="confirm-message"]')!.className).toContain(
+      'whitespace-pre-line',
     )
     await answer('Cancel')
     expect(dialog()).toBeNull()
@@ -547,32 +551,34 @@ describe('Add tracker and the new tracker page (K124)', () => {
     expect(has('bar')).toBe(false)
     expect(wrapper.find('[data-slot="bar"]').exists()).toBe(false)
     expect(page.get('h1').text()).toBe('New tracker')
-    expect(page.findAll('h2').map((h) => h.text())).toEqual(['Kind', 'Starts'])
+    // K128: no Starts row, no line over the control, and the row's heading is its only label.
+    expect(page.findAll('h2').map((h) => h.text())).toEqual(['Kind'])
+    expect(page.find('[data-testid="new-tracker-starts"]').exists()).toBe(false)
+    expect(page.find('[data-slot="segmented-control-label"]').exists()).toBe(false)
+    expect(page.find('[data-slot="segmented-control"] [aria-label="Kind"]').exists()).toBe(true)
+    expect(page.text()).not.toContain('The kind is set once')
     expect(page.get('[data-testid="back-to-week"]').text()).toBe('Back to the week')
     expect(page.get('[data-testid="new-tracker-add"]').text()).toBe('Add tracker')
-    expect(page.get('[data-testid="new-tracker-starts"]').text()).toContain(
-      'This week, empty. Add items to it in Edit plan.',
-    )
     const name = page.get<HTMLInputElement>('[data-testid="new-tracker-name"]')
     expect(document.activeElement).toBe(name.element)
     expect(name.element.maxLength).toBe(60)
   })
 
-  it('offers the registry’s kinds and says what the chosen one records', async () => {
+  it('offers the registry’s kinds and shows what the chosen one logs (K128)', async () => {
     await mountConfig()
     const page = await openNewTracker()
     const kinds = page.findAll('[data-slot="segmented-control"] button')
     expect(kinds.map((k) => k.text())).toEqual(['Strength', 'Cardio', 'Food', 'Mobility'])
-    const line = () => page.get('[data-testid="new-tracker-kind-line"]').text()
-    expect(line()).toBe(
-      'Strength: sets, then reps or time, and weight. Marked great, partial or missed.',
-    )
+    const lines = () =>
+      page
+        .get('[data-testid="new-tracker-kind-line"]')
+        .findAll('p')
+        .map((p) => p.text())
+    expect(lines()).toEqual(['Log sets, reps, time and weight.'])
     await kinds[2]!.trigger('click')
-    expect(line()).toBe('Food: a number of times a week. Marked eaten.')
+    expect(lines()).toEqual(['Log portions.'])
     await kinds[3]!.trigger('click')
-    expect(line()).toBe(
-      'Mobility: sets, then reps or a hold time, each side if you like. Marked great, partial or missed.',
-    )
+    expect(lines()).toEqual(['Log sets, reps or hold time, each side.'])
   })
 
   it('asks for a name before adding anything', async () => {

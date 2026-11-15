@@ -1,12 +1,11 @@
-The page Edit plan's Add tracker opens, at `#/new-tracker`: a name, a kind with a line saying what it records, and when the tracker starts (K124). It is framed like the new item page (ItemPage, K104).
+The page Edit plan's Add tracker opens, at `#/new-tracker`: a name, and a kind with a line on what you log (K124, K128). It is framed like the new item page (ItemPage, K104).
 
 ## Use
 
 - **Opening it:** the Header's "Add tracker" BarAction, shown in Edit plan only, before Settings (K124). The page has no bar, like Settings and an item's page (K52), and opens at its top with the cursor in Name.
 - **The head,** on the page's 48u margins: a TextLink at its left, "Back to the week", at 19u with a 26u `chevron-left`, and at its right Cancel (a quiet Button) and "Add tracker" (the primary Button), so Add tracker is in view while the page fills. Then "New tracker" in `label` `ink-secondary`, the page's `<h1>`, over a TextField labelled "Name", up to 560u wide, 28u above the first row.
 - **The rows,** like an item's page (Layout A, K65): a `line` rule above each, its heading in `title-2` in the week's 320u name column, its content beside it.
-  - **Kind:** a line in `body` `ink-secondary`, "What each item in it records. The kind is set once.", then a SegmentedControl labelled "Kind" with the registry's kinds in its order, Strength first and chosen, then Cardio, Food and Mobility. Under it, in `body` `ink`, the chosen kind's line: "Strength: sets, then reps or time, and weight. Marked great, partial or missed." "Cardio: time and distance. Marked great, partial or missed." "Food: a number of times a week. Marked eaten." "Mobility: sets, then reps or a hold time, each side if you like. Marked great, partial or missed." The line is a polite live region, so a screen reader hears it change. A kind added to the registry (`src/lib/trackerTypes.ts`) joins the control with its own line. On a phone the control may wrap onto two lines, as any SegmentedControl may.
-  - **Starts:** "This week, empty. Add items to it in Edit plan.", in `body` `ink-secondary`. "This week" is the week on screen, as Delete tracker's (K122).
+  - **Kind:** a SegmentedControl with the registry's kinds in its order, Strength first and chosen, then Cardio, Food and Mobility. It has no visible label: the row's heading, "Kind", names it (K128). It is as wide as its kinds, never the row. Under it, in `body` `ink` at the page's text size, one plain sentence for the chosen kind, with no label: what you log. Strength: "Log sets, reps, time and weight." Cardio: "Log time and distance." Food: "Log portions." Mobility: "Log sets, reps or hold time, each side." The line are a polite live region, so a screen reader hears it change. A kind added to the registry (`src/lib/trackerTypes.ts`, its `settings` and `marks`) joins the control with its own line. On a phone the control may wrap onto two lines, as any SegmentedControl may.
 - **Add tracker,** or Enter in Name, adds the tracker after every other, empty, with its kind's daily target, starting in the week on screen. The page goes back to the week, still in Edit plan, with focus on the new tracker's Add button. Cancel and Back to the week add nothing and put focus back on Add tracker.
 - **The name** is trimmed and holds up to 60 characters (the field stops there). An empty name shows the TextField's error, "Enter a name.", adds nothing and puts focus in Name. An account holds at most 100 trackers, deleted ones included; past that the error says "An account holds at most 100 trackers, deleted ones included."
 - The sizes are the item page's (main.css): labels and text 19u, every control 60u tall. Folded, each row's heading sits over its content and the head's buttons wrap under Back.
@@ -23,7 +22,7 @@ The page Edit plan's Add tracker opens, at `#/new-tracker`: a name, a kind with 
 ## Accessibility
 
 - One `<h1>`, "New tracker"; each row a `<section aria-labelledby>` on its `<h2>`.
-- The SegmentedControl is a single-choice toggle group named by its visible label, "Kind"; the kind's line is `aria-live="polite"`.
+- The SegmentedControl is a single-choice toggle group named "Kind" by `aria-label`, since the row's heading is its visible name; the kind's line is `aria-live="polite"`.
 - Add tracker is the form's submit button, so Enter in Name adds.
 
 ## You provide

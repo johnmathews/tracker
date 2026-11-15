@@ -26,9 +26,8 @@ cache and the outbox, where the API's paths still call it `section`. The first t
 the old section names as their ids: `SECTIONS` maps `exercise`, `cardio` and `diet` to their kinds,
 and `FIRST_NAMES` names them Strength, Cardio and Food. Each kind gives:
 
-- its name on the new tracker page's Kind control and the line saying what an item records
-  (`label`, `records`: "Strength", "sets, then reps or time, and weight. Marked great, partial or
-  missed."), the label of one item and of several (`itemLabel`, `itemsLabel`: "Exercise",
+- its name on the new tracker page's Kind control and the two lines under it (`label`,
+  `settings`: "Strength", "Log sets, reps, time and weight."; K128), the label of one item and of several (`itemLabel`, `itemsLabel`: "Exercise",
   "Exercises", as in "Exercises a day"), and the Add button's words (`addLabel`: "Add exercise",
   "Add cardio", "Add food", "Add mobility");
 - the plan fields an item has (`plan`: an exercise's for strength and mobility, cardio's or a

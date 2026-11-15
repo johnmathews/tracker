@@ -82,7 +82,8 @@ function onCloseAutoFocus(event: Event): void {
           title
         }}</AlertDialogTitle>
         <AlertDialogDescription
-          class="body mt-[max(8px,calc(var(--u)*16))] text-(length:--set-text) leading-normal text-ink"
+          class="body mt-[max(8px,calc(var(--u)*16))] text-(length:--set-text) leading-normal whitespace-pre-line text-ink"
+          data-slot="confirm-message"
           >{{ message }}</AlertDialogDescription
         >
         <p v-if="error" role="alert" class="caption mt-4 flex items-start gap-1 text-error-ink">
