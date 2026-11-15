@@ -1,0 +1,33 @@
+{
+  "description": "The week title as the week number (K131) is kept as \"number\".",
+  "input": {
+    "format": "tracker-export",
+    "version": 5,
+    "settings": {
+      "accent": "#0a84ff",
+      "dailyPick": 4,
+      "foodPick": 3,
+      "goals": "",
+      "weekTitle": "number"
+    }
+  },
+  "expected": {
+    "ok": true,
+    "data": {
+      "trackers": [],
+      "sections": {
+        "exercise": { "plans": {}, "log": {}, "details": {} },
+        "cardio": { "plans": {}, "log": {}, "details": {} },
+        "diet": { "plans": {}, "log": {}, "details": {} }
+      },
+      "settings": {
+        "accent": "#0a84ff",
+        "dailyPick": 4,
+        "foodPick": 3,
+        "weekTitle": "number",
+        "goals": "",
+        "limits": ""
+      }
+    }
+  }
+}

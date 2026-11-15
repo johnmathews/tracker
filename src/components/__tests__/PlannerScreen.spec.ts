@@ -175,9 +175,16 @@ describe('the planner’s screens (K24–K27)', () => {
     const label = bar().get('[data-testid="week-label"]')
     expect(label.classes()).toContain('title-1')
     expect(label.classes()).toContain('text-(length:--bar-week)')
-    // Another week on screen: "This week" is the first of the actions.
+    // Another week on screen: "View current week" follows the next-week arrow, in the week's nav (K130),
+    // and is none of the actions.
     await wrapper.get('button[aria-label="Next week"]').trigger('click')
-    expect(bar().findAll('[data-slot="bar-action"]')[0]!.text()).toBe('This week')
+    const nav = bar().get('nav[aria-label="Week"]')
+    expect(nav.element.lastElementChild!.textContent).toBe('View current week')
+    expect(
+      bar()
+        .findAll('[data-slot="bar-action"]')
+        .map((a) => a.text()),
+    ).not.toContain('View current week')
   })
 
   it('has Full screen where the browser has one, just before Profile, in Edit plan too (K49, K91, K106)', async () => {
@@ -312,6 +319,51 @@ describe('the planner’s screens (K24–K27)', () => {
         expect(location.hash).toBe('#/ask')
       } finally {
         history.replaceState(null, '', location.pathname)
+      }
+    })
+
+    it('← and → go to the previous and the next week, on the week and in Edit plan (K133)', async () => {
+      mountApp()
+      const label = () => bar().get('[data-testid="week-label"]').text()
+      expect(label()).toBe('19–25 October')
+      expect(bar().get('[aria-label="Previous week"]').attributes('aria-keyshortcuts')).toBe(
+        'ArrowLeft',
+      )
+      expect(bar().get('[aria-label="Next week"]').attributes('aria-keyshortcuts')).toBe(
+        'ArrowRight',
+      )
+      expect((await press('ArrowRight')).defaultPrevented).toBe(true)
+      expect(label()).toBe('26 Oct – 1 Nov')
+      await press('ArrowLeft')
+      await press('ArrowLeft')
+      expect(label()).toBe('12–18 October')
+      await press('e')
+      expect(editing()).toBe(true)
+      await press('ArrowRight')
+      expect(label()).toBe('19–25 October')
+      // Not with a modifier: Alt+← is the browser's Back.
+      expect((await press('ArrowLeft', { altKey: true })).defaultPrevented).toBe(false)
+      expect(label()).toBe('19–25 October')
+    })
+
+    it('← and → stay with a grid’s cells and a SegmentedControl, which move by them (K133)', async () => {
+      mountApp()
+      const label = () => bar().get('[data-testid="week-label"]').text()
+      const cell = dayCell().element as HTMLElement
+      cell.focus()
+      await press('ArrowRight', {}, cell)
+      expect(label()).toBe('19–25 October')
+      const group = document.createElement('div')
+      group.setAttribute('role', 'radiogroup')
+      const option = document.createElement('button')
+      group.append(option)
+      document.body.append(group)
+      try {
+        option.focus()
+        expect((await press('ArrowLeft', {}, option)).defaultPrevented).toBe(false)
+        expect(label()).toBe('19–25 October')
+      } finally {
+        group.remove()
       }
     })
 

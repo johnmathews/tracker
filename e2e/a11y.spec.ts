@@ -77,6 +77,21 @@ test.describe('the app passes axe', () => {
       await expectNoAxeViolations(page)
     })
 
+    test(`another week, View current week in the band and the bar, desktop, ${theme}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 1280, height: 900 })
+      await openApp(page, { theme })
+      await callUpBar(page)
+      await page.getByRole('button', { name: 'Next week' }).click()
+      await expect(page.getByTestId('this-week-button')).toBeVisible()
+      await expectNoAxeViolations(page)
+      // Out of Edit plan: the band's own (K130).
+      await page.keyboard.press('Escape')
+      await expect(page.getByTestId('band-this-week-button')).toBeVisible()
+      await expectNoAxeViolations(page)
+    })
+
     test(`the Settings page, every tab, desktop, ${theme}`, async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 900 })
       await openApp(page, { theme })

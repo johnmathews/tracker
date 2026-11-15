@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Calendar, Maximize, Pencil, Printer, Settings } from '@lucide/vue'
+import { Maximize, MessageCircle, Pencil, Printer, Settings } from '@lucide/vue'
 import { BarAction } from '@/components/ui/bar-action'
 import ExampleGroup from '../parts/ExampleGroup.vue'
 import StateExample from '../parts/StateExample.vue'
@@ -33,9 +33,9 @@ const editing = ref(true)
         /></BarAction>
       </StateExample>
     </ExampleGroup>
-    <ExampleGroup title="At the Header’s right, another week on screen">
+    <ExampleGroup title="At the Header’s right">
       <div class="flex flex-wrap gap-(--bar-gap)">
-        <BarAction label="This week"><Calendar /></BarAction>
+        <BarAction label="Ask"><MessageCircle /></BarAction>
         <BarAction label="Settings"><Settings /></BarAction>
         <BarAction label="Print…"><Printer /></BarAction>
         <BarAction label="Full screen"><Maximize /></BarAction>

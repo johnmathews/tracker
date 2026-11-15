@@ -387,6 +387,13 @@ MIGRATIONS = [
         END
     END;
     """,
+    # The week title (K131): each week titled by its dates or by its ISO week number, saved with
+    # the account (K132). Saved settings take dates, as the app showed them, and as a file
+    # without one reads.
+    """
+    ALTER TABLE settings ADD COLUMN week_title TEXT NOT NULL DEFAULT 'dates'
+        CHECK (week_title IN ('dates', 'number'));
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 
@@ -394,7 +401,7 @@ SCHEMA_VERSION = len(MIGRATIONS)
 #: transaction, then start the older API. The daily targets need nothing, since the settings
 #: kept them in step. Rows of trackers made since stay in plans, ticks and item_details, where
 #: older code never reads them. `tests/test_db.py` checks it gives back the schema and rows of
-#: version 15.
+#: version 15. It undoes step 16 only: a database past it has each later step undone first.
 REVERT_TRACKERS = """
 UPDATE settings
 SET item_sections = json_set(

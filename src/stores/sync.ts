@@ -452,6 +452,7 @@ export function diff(base: Snapshot, local: Snapshot): Op[] {
   if (
     bs.accent !== ls.accent ||
     bs.dailyGoal !== ls.dailyGoal ||
+    bs.weekTitle !== ls.weekTitle ||
     bs.goals !== ls.goals ||
     bs.limits !== ls.limits ||
     // No key and `{}` are both every page as it comes (K66).
@@ -597,6 +598,7 @@ export const useSyncStore = defineStore('sync', () => {
       settings: {
         accent: planner.accent,
         ...(planner.dailyGoalKnown ? { dailyGoal: planner.dailyGoal } : {}),
+        ...(planner.weekTitleKnown ? { weekTitle: planner.weekTitle } : {}),
         goals: planner.goals,
         limits: planner.limits,
         itemSections: planner.itemSections,
@@ -815,7 +817,7 @@ export const useSyncStore = defineStore('sync', () => {
     // The arrangement always goes, `{}` for the default: the API keeps the saved one when the
     // key is missing (an older tab), so leaving it out could never reset it. Goals go only once
     // this tab has read them or the person set them: an absent key keeps the saved ones (F1).
-    // Your limits (K107) and Daily goal (K85) the same way. The daily picks are the `exercise`
+    // Your limits (K107), Daily goal (K85) and the week title (K132) the same way. The daily picks are the `exercise`
     // and `diet` trackers' targets, which the API keeps in step with them (K123): a missing
     // `dailyPick` would reset the target.
     const res = await call('PUT', '/settings', {
@@ -823,6 +825,7 @@ export const useSyncStore = defineStore('sync', () => {
       ...picks(),
       itemSections: planner.itemSections,
       ...(planner.dailyGoalKnown ? { dailyGoal: planner.dailyGoal } : {}),
+      ...(planner.weekTitleKnown ? { weekTitle: planner.weekTitle } : {}),
       ...(planner.goalsKnown ? { goals: planner.goals } : {}),
       ...(planner.limitsKnown ? { limits: planner.limits } : {}),
     })
@@ -1185,6 +1188,7 @@ export const useSyncStore = defineStore('sync', () => {
         details.docs,
         planner.accent,
         planner.dailyGoal,
+        planner.weekTitle,
         planner.goals,
         planner.limits,
         planner.itemSections,

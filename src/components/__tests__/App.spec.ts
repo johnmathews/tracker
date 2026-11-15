@@ -276,8 +276,8 @@ describe('App', () => {
 
   it('navigates weeks and returns to this week', async () => {
     mountApp()
-    const thisWeek = () => wrapper.findAll('button').find((b) => b.text() === 'This week')
-    // "This week" shows only while another week is on screen (Header card).
+    const thisWeek = () => wrapper.findAll('button').find((b) => b.text() === 'View current week')
+    // "View current week" shows only while another week is on screen (Header card, K130).
     expect(thisWeek()).toBeUndefined()
     expect(wrapper.get('[data-testid="week-label"]').text()).toBe('19–25 October')
     await wrapper.get('button[aria-label="Previous week"]').trigger('click')
@@ -684,7 +684,7 @@ describe('the Settings page', () => {
         .get(PANEL)
         .findAll('[data-slot="radio-card-label"], [data-slot="segmented-control-label"]')
         .map((l) => l.text()),
-    ).toEqual(['Marks', 'Theme'])
+    ).toEqual(['Marks', 'Theme', 'Week title'])
     expect(wrapper.get(PANEL).find('[data-slot="stepper"]').exists()).toBe(false)
     // The week is off screen, and the bar holds only the wordmark.
     expect(wrapper.find('[data-testid="exercise-grid"]').exists()).toBe(false)

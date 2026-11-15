@@ -304,6 +304,7 @@ describe('parseSettings', () => {
       limits: '',
       theme: 'system',
       markSet: 'squiggles',
+      weekTitle: 'dates',
     })
     expect(DEFAULT_SETTINGS.accent).toBe('#30d158')
   })
@@ -322,6 +323,7 @@ describe('parseSettings', () => {
       limits: '',
       theme: 'dark',
       markSet: 'squiggles',
+      weekTitle: 'dates',
     })
     expect(parseSettings(JSON.stringify({ dailyPick: 0 })).dailyPick).toBe(1)
     expect(parseSettings(JSON.stringify({ foodPick: 0 })).foodPick).toBe(1)

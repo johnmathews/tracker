@@ -196,6 +196,11 @@ item details don't change. To roll back, run `db.REVERT_TRACKERS` in one transac
 starting the older API: it moves the key back, drops the trigger and the table, and sets the
 version to 15. The daily targets need nothing, since the settings kept them in step. Rows of
 trackers made since stay in `plans`, `ticks` and `item_details`, where older code never reads them.
+`REVERT_TRACKERS` undoes step 16 only, so on a later version each later step is undone first.
+
+Version 17 adds the week title (K131): `settings.week_title`, `'dates'` or `'number'` with a CHECK,
+default `'dates'`, so saved settings read as dates. It only adds a column, so rolling the code back
+leaves it unused.
 
 Version 12 adds OAuth's five tables: `oauth_requests`, `oauth_grants`, `oauth_retired`, `oauth_codes` and `oauth_access` (§3.3). It only adds, so it reshapes no data. Every code and token is stored as its SHA-256 only. `oauth_grants` cascades from its user, and the other three grant tables from the grant, so removing a grant removes its codes, access tokens and retired refresh tokens. Rolling the API back leaves the tables unused.
 
@@ -245,7 +250,7 @@ but the same `Content-Type` header.
 | `PUT /plans/{section}/{week}`              | session | `{items, rev}` → `{rev}`; 409 `conflict` with the server copy. `section` is a tracker id                              |
 | `PUT /ticks/{section}/{week}/{item}/{day}` | session | `{mark}` → `{days}`, the week's seven marks for that item                                                             |
 | `PUT /details/{section}/{item}`            | session | `{details, rev}` → `{rev}`; 409 `conflict` with the server copy (below)                                               |
-| `PUT /settings`                            | session | `{accent, dailyPick, foodPick, dailyGoal, goals, limits, itemSections}` → the stored settings; a missing key keeps the saved one (below) |
+| `PUT /settings`                            | session | `{accent, dailyPick, foodPick, dailyGoal, weekTitle, goals, limits, itemSections}` → the stored settings; a missing key keeps the saved one (below) |
 | `GET /export`                              | session | the export file (`architecture.md` §4)                                                                                |
 | `POST /import`                             | session | an export file, merged in; → `{trackers, weeks, ticks, details, settings, conversations}` added                       |
 | `GET /ask`                                 | session | `{remaining, limit}`: questions left today, and the per-account cap (§3.2)                                            |
@@ -296,7 +301,7 @@ keys. Plan items differ by kind:
   weight is. Each is left out when not set, and an exercise's fields drop;
 - a food is `{id, name, target}`.
 
-`settings` is `{accent, dailyPick, foodPick, dailyGoal, goals, limits, itemSections?}`, or null before any are saved.
+`settings` is `{accent, dailyPick, foodPick, dailyGoal, weekTitle, goals, limits, itemSections?}`, or null before any are saved.
 
 **Trackers** (K123, the spec `docs/specs/2026-11-14-account-trackers.md`). A tracker is
 `{id, name, kind, position, dailyTarget, startWeek, endWeek, rev}`:
@@ -353,6 +358,12 @@ default, a pick is clamped to 1 to 8) and returns what it stored. A body without
 `foodPick`) are kept but apply nowhere, so no day is met and the insights give no daily target
 (§1.1). A body without `dailyGoal`, or with a value that isn't a boolean, keeps the saved one. The
 state and the export always carry it; a file without it reads as on.
+`weekTitle` (`"dates"` or `"number"`, default `"dates"`) is how the app titles a week (K131):
+`"dates"` gives "9–15 November", and `"number"` gives "Week 46". It is saved with the account
+(K132), so every device shows the same title. Only the app reads it: Ask and the MCP tools don't.
+A body without `weekTitle`, or with any other value, keeps the saved one. The state and the export
+always carry it. A file without it reads as dates, and an import applies a file's only where no
+settings are saved.
 `itemSections` is each tracker kind's item-page arrangement, keyed by kind (`strength`, `cardio`,
 `food`, `mobility`; a kind left out has the default): `{"strength": {"order": ["history", "notes", "details", "plan"], "hidden": ["details"]}}`.
 The key `exercise`, the kind's name before K123, reads as `strength`, and a `strength` key wins
@@ -1203,7 +1214,8 @@ runs. A rule changed on one side without the other fails one of the two suites. 
 and an exercise's fields dropped. The
 `parse/goals*.json` and `parse/limits*.json` cases hold My goals and the limits note to one
 normaliser each, and `merge-settings.json` holds the import's settings rule, goals and limits
-filling only empty ones included. The `parse/conversations*.json`
+filling only empty ones included. The `parse/daily-goal*.json` and `parse/week-title*.json` cases
+keep Daily goal only as a boolean and the week title only as `"dates"` or `"number"`. The `parse/conversations*.json`
 cases hold Ask's conversations to one normaliser (`normalise_conversations`,
 `normaliseConversations`): the id rule, the cuts at 80, 2,000 and 64,000 code points, the times
 as whole numbers from 0 to 2^53 − 1, the five stops, no answer kept without `end_turn` or

@@ -11,6 +11,7 @@ from .db import transaction
 from .item_sections import normalise_item_sections, with_old_keys
 from .types import SECTION_TYPES, TYPES, PickKey, TypeId
 from .validate import (
+    DEFAULT_WEEK_TITLE,
     EXPORT_FORMAT,
     EXPORT_VERSION,
     MAX_TRACKERS,
@@ -33,6 +34,7 @@ from .validate import (
     days_to_masks,
     details_fit,
     encode_details,
+    is_week_title,
     masks_to_days,
     merge_conversations,
     merge_settings,
@@ -403,8 +405,8 @@ def load_tracked(conn: sqlite3.Connection, user_id: int, section: str) -> Tracke
 
 def load_settings(conn: sqlite3.Connection, user_id: int) -> Portable | None:
     row = conn.execute(
-        "SELECT accent, daily_pick, food_pick, goals, limits, daily_goal, item_sections"
-        " FROM settings WHERE user_id = ?",
+        "SELECT accent, daily_pick, food_pick, goals, limits, daily_goal, week_title,"
+        " item_sections FROM settings WHERE user_id = ?",
         (user_id,),
     ).fetchone()
     if row is None:
@@ -416,6 +418,7 @@ def load_settings(conn: sqlite3.Connection, user_id: int) -> Portable | None:
         "goals": row["goals"],
         "limits": row["limits"],
         "dailyGoal": bool(row["daily_goal"]),
+        "weekTitle": row["week_title"],
     }
     # Normalised on the way out too, so a type this version's registry lacks drops (P29).
     stored = row["item_sections"]
@@ -712,17 +715,21 @@ def put_settings(conn: sqlite3.Connection, user_id: int, raw: dict[str, Any]) ->
     two writes, so the caller holds a transaction."""
     # A tab still running the app from before foods a day (K57) sends no foodPick, and one from
     # before arranging the item page (K66) no itemSections, one from before My goals no goals, one
-    # from before Daily goal (K85) no dailyGoal, and one from before the limits note (K107) no
-    # limits; keep the saved ones rather than reset them. The app sends `itemSections: {}` for the
-    # default arrangement. Goals or limits that aren't a string count as not sent, and a tab never
-    # sends a note it hasn't read (F1); a dailyGoal that isn't a boolean likewise (F2). The result
-    # always has dailyGoal: on when nothing gave one.
+    # from before Daily goal (K85) no dailyGoal, one from before the limits note (K107) no limits,
+    # and one from before the week title (K131) no weekTitle; keep the saved ones rather than
+    # reset them. The app sends `itemSections: {}` for the default arrangement. Goals or limits
+    # that aren't a string count as not sent, and a tab never sends a note it hasn't read (F1); a
+    # dailyGoal that isn't a boolean likewise (F2), and a weekTitle that isn't "dates" or
+    # "number". The result always has dailyGoal, on when nothing gave one, and weekTitle, dates
+    # when nothing gave one.
     saved = load_settings(conn, user_id)
     if saved is not None:
         if "foodPick" not in raw:
             raw = {**raw, "foodPick": saved["foodPick"]}
         if not isinstance(raw.get("dailyGoal"), bool):
             raw = {**raw, "dailyGoal": saved["dailyGoal"]}
+        if not is_week_title(raw.get("weekTitle")):
+            raw = {**raw, "weekTitle": saved["weekTitle"]}
         if "itemSections" not in raw:
             raw = {**raw, "itemSections": saved.get("itemSections", {})}
         if not isinstance(raw.get("goals"), str):
@@ -731,15 +738,16 @@ def put_settings(conn: sqlite3.Connection, user_id: int, raw: dict[str, Any]) ->
             raw = {**raw, "limits": saved["limits"]}
     settings = normalise_portable(raw)
     settings.setdefault("dailyGoal", True)
+    settings.setdefault("weekTitle", DEFAULT_WEEK_TITLE)
     item_sections = settings.get("itemSections")
     conn.execute(
         "INSERT INTO settings"
-        " (user_id, accent, daily_pick, food_pick, goals, limits, daily_goal, item_sections)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        " (user_id, accent, daily_pick, food_pick, goals, limits, daily_goal, week_title,"
+        " item_sections) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
         " ON CONFLICT (user_id) DO UPDATE SET accent = excluded.accent,"
         " daily_pick = excluded.daily_pick, food_pick = excluded.food_pick,"
         " goals = excluded.goals, limits = excluded.limits, daily_goal = excluded.daily_goal,"
-        " item_sections = excluded.item_sections",
+        " week_title = excluded.week_title, item_sections = excluded.item_sections",
         (
             user_id,
             settings["accent"],
@@ -748,6 +756,7 @@ def put_settings(conn: sqlite3.Connection, user_id: int, raw: dict[str, Any]) ->
             settings["goals"],
             settings["limits"],
             int(settings["dailyGoal"]),
+            settings["weekTitle"],
             json.dumps(item_sections, separators=(",", ":")) if item_sections else None,
         ),
     )

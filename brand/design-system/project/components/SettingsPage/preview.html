@@ -1,4 +1,4 @@
-<!-- @dsCard group="Screens" height=980 subtitle="Settings as a page of its own, a tab per section, in rows like the week: appearance (marks, theme), daily goal, your data, connections" -->
+<!-- @dsCard group="Screens" height=980 subtitle="Settings as a page of its own, a tab per section, in rows like the week: appearance (marks, theme, week title), daily goal, your data, connections" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -151,6 +151,13 @@
         <button type="button" tabindex="0" aria-pressed="true">System</button>
         <button type="button" tabindex="-1" aria-pressed="false">Light</button>
         <button type="button" tabindex="-1" aria-pressed="false">Dark</button>
+      </div>
+    </div>
+    <div class="group">
+      <span class="label" id="g-week">Week title</span>
+      <div class="seg" role="group" aria-labelledby="g-week">
+        <button type="button" tabindex="0" aria-pressed="true">Date</button>
+        <button type="button" tabindex="-1" aria-pressed="false">Week number</button>
       </div>
     </div>
       </div>

@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { dateKey, dayMonth, fullDate, mondayOf, weekDates, weekRange, weekTitle } from '@/lib/dates'
+import {
+  dateKey,
+  dayMonth,
+  fullDate,
+  isoWeek,
+  mondayOf,
+  weekDates,
+  weekNumber,
+  weekRange,
+  weekTitle,
+} from '@/lib/dates'
 
 describe('mondayOf', () => {
   it('returns the same day at midnight for a Monday', () => {
@@ -80,5 +90,38 @@ describe('weekRange', () => {
   it('shortens both months across a month or a year', () => {
     expect(weekRange(new Date(2026, 8, 28))).toBe('28 Sept – 4 Oct')
     expect(weekRange(new Date(2026, 11, 28))).toBe('28 Dec – 3 Jan')
+  })
+})
+
+describe('isoWeek', () => {
+  it('numbers Monday-start weeks as ISO 8601 does, the week holding the Thursday', () => {
+    expect(isoWeek(new Date(2026, 10, 9))).toEqual({ week: 46, year: 2026 })
+    expect(isoWeek(new Date(2026, 10, 2))).toEqual({ week: 45, year: 2026 })
+    // 2026 starts on a Thursday, so it has 53 weeks; the last ends on 3 January 2027.
+    expect(isoWeek(new Date(2025, 11, 29))).toEqual({ week: 1, year: 2026 })
+    expect(isoWeek(new Date(2026, 11, 28))).toEqual({ week: 53, year: 2026 })
+    expect(isoWeek(new Date(2027, 0, 4))).toEqual({ week: 1, year: 2027 })
+    // 2027 starts on a Friday: its 1 January belongs to 2026's week 53.
+    expect(isoWeek(new Date(2027, 11, 27))).toEqual({ week: 52, year: 2027 })
+  })
+})
+
+describe('weekNumber', () => {
+  const now = new Date(2026, 10, 15)
+
+  it('is "Week N" within this week-year (K131)', () => {
+    expect(weekNumber(new Date(2026, 10, 9), now)).toBe('Week 46')
+    expect(weekNumber(new Date(2026, 11, 28), now)).toBe('Week 53')
+  })
+
+  it('adds the week-year when it is another one', () => {
+    expect(weekNumber(new Date(2027, 0, 4), now)).toBe('Week 1, 2027')
+    expect(weekNumber(new Date(2025, 10, 10), now)).toBe('Week 46, 2025')
+    // Seen from 2 January 2027, still in 2026's week 53, that week needs no year.
+    expect(weekNumber(new Date(2026, 11, 28), new Date(2027, 0, 2))).toBe('Week 53')
+  })
+
+  it('leaves the year out when asked, as the bar does', () => {
+    expect(weekNumber(new Date(2027, 0, 4), now, false)).toBe('Week 1')
   })
 })

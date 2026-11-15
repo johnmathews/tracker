@@ -12,6 +12,7 @@ import {
   normaliseDetails,
   normaliseGoals,
   normaliseLimits,
+  isWeekTitle,
   normalisePortableSettings,
   type Conversation,
   type Days,
@@ -540,6 +541,8 @@ export class FakeApi {
         foodPick: Number(body.foodPick ?? a.settings?.foodPick ?? 2),
         // As the API: a client that sends no Daily goal keeps the saved one (K85).
         dailyGoal: typeof body.dailyGoal === 'boolean' ? body.dailyGoal : a.settings?.dailyGoal,
+        // The week title the same way (K132).
+        weekTitle: isWeekTitle(body.weekTitle) ? body.weekTitle : a.settings?.weekTitle,
         // As the API: goals that aren't a string are not sent, so the saved ones stay (F1).
         goals:
           typeof body.goals === 'string' ? normaliseGoals(body.goals) : (a.settings?.goals ?? ''),

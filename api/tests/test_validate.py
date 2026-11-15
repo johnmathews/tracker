@@ -196,6 +196,30 @@ def test_an_export_carries_daily_goal_and_saved_settings_keep_theirs() -> None:
     assert merge_settings(saved, off) == saved
 
 
+def test_week_title_is_kept_only_as_dates_or_number() -> None:
+    """K131: "dates" or "number" is kept, and anything else, or nothing, leaves the key out (not
+    known), which reads as dates."""
+    assert normalise_portable({"weekTitle": "dates"})["weekTitle"] == "dates"
+    assert normalise_portable({"weekTitle": "number"})["weekTitle"] == "number"
+    assert "weekTitle" not in normalise_portable({})
+    others: list[Any] = [None, "weeks", "Number", " number", "", 46, True, [], {}]
+    for other in others:
+        assert "weekTitle" not in normalise_portable({"weekTitle": other}), other
+
+
+def test_an_export_carries_the_week_title_and_saved_settings_keep_theirs() -> None:
+    """K132: a file's week title reads as it was; one from before it has none. An import keeps
+    the account's saved value."""
+    file = {"format": "tracker-export", "version": 6, "settings": {"weekTitle": "number"}}
+    number = parse_export(json.dumps(file))["settings"]
+    assert number is not None and number["weekTitle"] == "number"
+    older = parse_export(json.dumps({**file, "settings": {"dailyPick": 4}}))["settings"]
+    assert older is not None and "weekTitle" not in older
+    assert merge_settings(None, number) == number
+    saved = normalise_portable({"dailyPick": 4, "weekTitle": "dates"})
+    assert merge_settings(saved, number) == saved
+
+
 def test_the_limits_note_normalises_and_merges_like_my_goals() -> None:
     """K107: up to 1,000 code points, trimmed, "" for blank or anything that isn't a string. A file
     from before it reads as none. An import fills a saved empty note and never replaces one."""

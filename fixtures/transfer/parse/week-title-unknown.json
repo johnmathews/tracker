@@ -1,0 +1,26 @@
+{
+  "description": "A week title other than \"dates\" or \"number\" is left out, which reads as dates and never overwrites a saved one (K131).",
+  "input": {
+    "format": "tracker-export",
+    "version": 5,
+    "settings": {
+      "accent": "#0a84ff",
+      "dailyPick": 4,
+      "foodPick": 3,
+      "goals": "",
+      "weekTitle": "weeks"
+    }
+  },
+  "expected": {
+    "ok": true,
+    "data": {
+      "trackers": [],
+      "sections": {
+        "exercise": { "plans": {}, "log": {}, "details": {} },
+        "cardio": { "plans": {}, "log": {}, "details": {} },
+        "diet": { "plans": {}, "log": {}, "details": {} }
+      },
+      "settings": { "accent": "#0a84ff", "dailyPick": 4, "foodPick": 3, "goals": "", "limits": "" }
+    }
+  }
+}

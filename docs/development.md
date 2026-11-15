@@ -134,7 +134,7 @@ clock is fixed to Wednesday 21 October 2026, so every run sees the same week. Th
 mark and details writes, so a later read returns what the app wrote.
 
 - `a11y.spec.ts`: axe (WCAG 2.0–2.2 A and AA plus best practice) on the style guide in both themes,
-  and on the app's (its mocked week holds every kind of mark) week view, the bar called up, Edit plan, Settings on each of its tabs (K119), an item's page (desktop with its notes being edited, folded at 390px, and while arranging at both sizes, with nothing scrolling sideways), a cardio item's page with its pen and Remove, and renaming one in Edit plan (K120, K121), the new item page (K104), the new tracker page with Mobility chosen and its name asked for (desktop and folded at 390px, K124), the Delete tracker dialog (K122), a tracker being renamed in Edit plan, the Ask page (an answer with the history beside it, its Delete all question open, and at 375px with the history drawer open), the folded week at 375px,
+  and on the app's (its mocked week holds every kind of mark) week view, the bar called up, Edit plan, another week with "View current week" in the bar and the band (K130), Settings on each of its tabs (K119), an item's page (desktop with its notes being edited, folded at 390px, and while arranging at both sizes, with nothing scrolling sideways), a cardio item's page with its pen and Remove, and renaming one in Edit plan (K120, K121), the new item page (K104), the new tracker page with Mobility chosen and its name asked for (desktop and folded at 390px, K124), the Delete tracker dialog (K122), a tracker being renamed in Edit plan, the Ask page (an answer with the history beside it, its Delete all question open, and at 375px with the history drawer open), the folded week at 375px,
   sign-in, and create an account (empty and with errors showing), in light and dark. The style
   guide's run first finds its tracker sections on the page: SectionHeader in Edit plan with its
   pen and Delete tracker, and the new tracker page's four kinds; and the focus ring's shape, a solid 2px outline at 2px offset. Two
@@ -186,6 +186,12 @@ mark and details writes, so a later read returns what the app wrote.
   while still moving; `Input.synthesizeScrollGesture` scrolls nothing in headless Linux): a fling up
   from Cardio onto a tall Strength ends at its top, in one movement, never turning back or setting
   off again after slowing (K116, K118); and Edit plan's frame is 4px there (K117).
+- `week-title.spec.ts`: "View current week" (K130) follows the bar's next-week arrow in Edit plan
+  and the band's title in the week view, the two centred together, only on another week;
+  Settings' Week title (K131), "Date" or "Week number", titles the bar and the band "Week 43", the
+  dates read aloud after it, and sends `weekTitle` (K132). At 390px the band's button sits under
+  the title at its 30px, the band a row taller until this week is back, the first screen under
+  it, nothing sticking out for "20–26 October 2025"; the bar puts it under the week.
 - `trackers.spec.ts`: the account's own trackers (K122–K126). Add tracker in Edit plan's bar
   opens the new tracker page; a new tracker shows last with its name, focus on its Add, and the
   tracker before it gains an arrow to it. Its pen renames it: Enter saves, Escape restores, and
@@ -208,7 +214,7 @@ The app's tests sit in `__tests__/` next to the code they cover (the API's are i
 listed in [api.md](api.md) §10):
 
 - `src/lib/__tests__/dates.spec.ts`: Monday maths, offsets, year boundary, the 2026-10-25 week (a
-  DST change in EU timezones), labels.
+  DST change in EU timezones), labels, and the ISO week number across 2026's week 53 (K131).
 - `src/lib/__tests__/storage.spec.ts`: v2 plan validation and round-trip, migration from the v1
   (prototype) format, log normalisation, sets and weight, diet parsing, settings parsing,
   skip-unchanged writes, storage that throws, a cardio item's time and distance and no default
@@ -524,7 +530,7 @@ listed in [api.md](api.md) §10):
   (K24–K27, K79–K82, K99, K109, K113, K114): the `planner-screens` class, and Edit plan's sticky bar with its
   `edit-screens` class, screens at least the window less the bar, the arrows and `--bar-height`
   (the way on at the screen's foot, each Add in its section's title line), no top-edge strip,
-  the bar led by the week in `title-1` with no wordmark and "This week" first among the actions,
+  the bar led by the week in `title-1` with no wordmark and "View current week" after its next-week arrow (K130),
   no Edit plan or Done BarAction and the keyboard's hidden "Edit plan" ("Done" in Edit plan)
   after "Skip to today", the week's keys (E in and out, Esc out of full screen and then Edit plan,
   F, P and S, and none in a field, with a modifier, repeating or under a dialog; K91; A for Ask,

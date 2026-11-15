@@ -37,14 +37,15 @@ DAILY_GOAL_STEP = "ADD COLUMN daily_goal"
 SECTION_CHECK_STEP = "CREATE TABLE plans_new"
 LIMITS_STEP = "ADD COLUMN limits"
 TRACKERS_STEP = "CREATE TABLE trackers"
+WEEK_TITLE_STEP = "ADD COLUMN week_title"
 
 
 def test_steps_are_numbered_as_the_docs_say() -> None:
     """Schema 6 adds API tokens, 7 item details, 8 the item pages' arrangement, 9 My goals,
     10 Ask's caps, 11 Ask's history, 12 OAuth connections, 13 Daily goal, 14 plans and ticks
-    without a CHECK on the section, for Cardio, 15 the limits note, and 16 the trackers
-    (docs/api.md §2)."""
-    assert SCHEMA_VERSION == 16
+    without a CHECK on the section, for Cardio, 15 the limits note, 16 the trackers and 17 the
+    week title (docs/api.md §2)."""
+    assert SCHEMA_VERSION == 17
     steps = (
         TOKENS_STEP,
         DETAILS_STEP,
@@ -57,8 +58,9 @@ def test_steps_are_numbered_as_the_docs_say() -> None:
         SECTION_CHECK_STEP,
         LIMITS_STEP,
         TRACKERS_STEP,
+        WEEK_TITLE_STEP,
     )
-    assert [_step_of(m) + 1 for m in steps] == [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    assert [_step_of(m) + 1 for m in steps] == [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
 
 
 def test_section_check_step_keeps_plans_and_ticks_and_takes_cardio(
@@ -415,6 +417,7 @@ def test_item_sections_migration_adds_an_empty_column(
         "goals": "",
         "limits": "",
         "dailyGoal": True,
+        "weekTitle": "dates",
     }
     c.close()
 
@@ -475,6 +478,7 @@ def test_goals_migration_gives_saved_settings_none(
         "goals": "",
         "limits": "",
         "dailyGoal": True,
+        "weekTitle": "dates",
     }
     with pytest.raises(sqlite3.IntegrityError):
         c.execute("UPDATE settings SET goals = NULL")
@@ -510,6 +514,7 @@ def test_limits_migration_gives_saved_settings_none(
         "goals": "Run 5 km.",
         "limits": "",
         "dailyGoal": False,
+        "weekTitle": "dates",
     }
     with pytest.raises(sqlite3.IntegrityError):
         c.execute("UPDATE settings SET limits = NULL")
@@ -543,11 +548,65 @@ def test_daily_goal_migration_turns_it_on_for_saved_settings(
         "goals": "Run 5 km.",
         "limits": "",
         "dailyGoal": True,
+        "weekTitle": "dates",
     }
     for bad in ("NULL", "2", "'yes'"):
         with pytest.raises(sqlite3.IntegrityError):
             c.execute(f"UPDATE settings SET daily_goal = {bad}")  # noqa: S608
     c.close()
+
+
+def test_week_title_migration_gives_saved_settings_dates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Settings saved before the week title (K131) keep every value, and read as dates, the title
+    the app showed. The CHECK takes "dates" and "number" only."""
+    from tracker_api import db
+    from tracker_api.data import load_settings
+
+    c = connect(tmp_path / "f.db")
+    monkeypatch.setattr(db, "MIGRATIONS", db.MIGRATIONS[: _step_of(WEEK_TITLE_STEP)])
+    db.migrate(c)
+    monkeypatch.undo()
+    assert c.execute("PRAGMA user_version").fetchone()[0] == 16
+    c.execute("INSERT INTO users (id, username, password_hash, created_at) VALUES (1, 'a', 'h', 0)")
+    c.execute(
+        "INSERT INTO settings (user_id, accent, daily_pick, food_pick, goals, limits, daily_goal)"
+        " VALUES (1, '#bf5af2', 6, 5, 'Run 5 km.', 'Knees.', 0)"
+    )
+    db.migrate(c)
+    assert c.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
+    assert c.execute("SELECT week_title FROM settings").fetchone()[0] == "dates"
+    assert load_settings(c, 1) == {
+        "accent": "#bf5af2",
+        "dailyPick": 6,
+        "foodPick": 5,
+        "goals": "Run 5 km.",
+        "limits": "Knees.",
+        "dailyGoal": False,
+        "weekTitle": "dates",
+    }
+    c.execute("UPDATE settings SET week_title = 'number'")
+    number = load_settings(c, 1)
+    assert number is not None and number["weekTitle"] == "number"
+    for bad in ("NULL", "'weeks'", "'Number'", "1"):
+        with pytest.raises(sqlite3.IntegrityError):
+            c.execute(f"UPDATE settings SET week_title = {bad}")  # noqa: S608
+    c.close()
+
+
+def test_a_fresh_database_gives_new_settings_dates(conn: sqlite3.Connection) -> None:
+    """On a fresh schema the column is there, TEXT and NOT NULL, and a settings row written
+    without it reads as dates."""
+    columns = {r["name"]: r for r in conn.execute("PRAGMA table_info(settings)")}
+    assert columns["week_title"]["type"] == "TEXT"
+    assert columns["week_title"]["notnull"] == 1
+    assert columns["week_title"]["dflt_value"] == "'dates'"
+    conn.execute(
+        "INSERT INTO users (id, username, password_hash, created_at) VALUES (1, 'a', 'h', 0)"
+    )
+    conn.execute("INSERT INTO settings (user_id, accent, daily_pick) VALUES (1, '#30d158', 3)")
+    assert conn.execute("SELECT week_title FROM settings").fetchone()[0] == "dates"
 
 
 def test_ask_log_holds_times_only_and_goes_with_its_user(tmp_path: Path) -> None:
@@ -981,12 +1040,15 @@ def test_revert_trackers_gives_back_version_15(
 ) -> None:
     """REVERT_TRACKERS, run after step 16, gives back the schema and every row of version 15,
     the arranged exercise page under its old key included."""
+    from tracker_api import db
     from tracker_api.db import REVERT_TRACKERS
 
     c = before_trackers(tmp_path / "f.db", monkeypatch)
     tables = [r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type = 'table'")]
     schema = sorted(tuple(r) for r in c.execute("SELECT type, name, sql FROM sqlite_master"))
     before = table_rows(c, *tables)
+    # Up to step 16 alone: REVERT_TRACKERS undoes that step, and a later one is undone first.
+    monkeypatch.setattr(db, "MIGRATIONS", db.MIGRATIONS[: _step_of(TRACKERS_STEP) + 1])
     migrate(c)
     with transaction(c):
         c.executescript(REVERT_TRACKERS)
@@ -1004,5 +1066,6 @@ def test_revert_trackers_gives_back_version_15(
     assert after == before
     # And the step runs again from there.
     migrate(c)
+    monkeypatch.undo()
     assert c.execute("SELECT count(*) FROM trackers").fetchone()[0] == 9
     c.close()

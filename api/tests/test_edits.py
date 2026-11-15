@@ -876,6 +876,7 @@ def test_set_daily_targets_keeps_the_accent_and_the_other_target(
         "goals": "Run 5 km.",
         "limits": "",
         "dailyGoal": True,
+        "weekTitle": "dates",
     }
     out = edits.set_daily_targets(conn, uid, foods_a_day=1)
     assert out["targets"] == [{"tracker": "diet", "name": "Food", "before": 4, "after": 1}]
@@ -886,6 +887,7 @@ def test_set_daily_targets_keeps_the_accent_and_the_other_target(
         "goals": "Run 5 km.",
         "limits": "",
         "dailyGoal": True,
+        "weekTitle": "dates",
     }
     assert targets(conn, uid) == {"exercise": 5, "cardio": None, "diet": 1}
 
@@ -1018,6 +1020,7 @@ def test_set_daily_targets_refuses_and_writes_nothing(
         "goals": "",
         "limits": "",
         "dailyGoal": True,
+        "weekTitle": "dates",
     }
 
 

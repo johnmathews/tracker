@@ -140,6 +140,15 @@ export type Settings = {
   theme: Theme
   /** How marked days are drawn; the device's choice. */
   markSet: MarkSet
+  /** The week's title (K131): its dates, or its number. Saved with the account (K132). */
+  weekTitle: WeekTitle
+}
+
+/** The week titled by its dates ("9–15 November") or its number ("Week 46"; K131). */
+export const WEEK_TITLES = ['dates', 'number'] as const
+export type WeekTitle = (typeof WEEK_TITLES)[number]
+export function isWeekTitle(v: unknown): v is WeekTitle {
+  return (WEEK_TITLES as readonly unknown[]).includes(v)
 }
 
 /** Exercise plans per week plus the log: `{ plans, log }`. */
@@ -200,6 +209,7 @@ export const DEFAULT_SETTINGS: Settings = {
   limits: '',
   theme: 'system',
   markSet: 'squiggles',
+  weekTitle: 'dates',
 }
 
 export function defaultExercises(): Exercise[] {
@@ -561,6 +571,8 @@ export type PortableSettings = Pick<
    * reads as on and, sent to the API, keeps the saved one.
    */
   dailyGoal?: boolean
+  /** The week's title (K131), left out where it isn't known, as `dailyGoal`: it reads as dates. */
+  weekTitle?: WeekTitle
   /** Each type's item-page arrangement (K66, P29); left out while every page has the default. */
   itemSections?: ItemSections
 }
@@ -578,7 +590,8 @@ export type KnownSettings = Omit<PortableSettings, 'goals' | 'limits'> & {
 
 /**
  * Any `#rrggbb` accent, daily picks for exercises and foods clamped to 1–8, each falling back to
- * its default, Daily goal only when it is a boolean, My goals and Your limits as `normaliseGoals` and
+ * its default, Daily goal only when it is a boolean, the week title only when it is one of
+ * WEEK_TITLES, My goals and Your limits as `normaliseGoals` and
  * `normaliseLimits` read them, and the item pages' arrangement as
  * `normaliseItemSections` reads it, left out when every page has the default.
  */
@@ -603,6 +616,7 @@ export function normalisePortableSettings(v: Record<string, unknown>): PortableS
     dailyPick,
     foodPick,
     ...(typeof v.dailyGoal === 'boolean' ? { dailyGoal: v.dailyGoal } : {}),
+    ...(isWeekTitle(v.weekTitle) ? { weekTitle: v.weekTitle } : {}),
     goals: normaliseGoals(v.goals),
     limits: normaliseLimits(v.limits),
     ...(Object.keys(itemSections).length ? { itemSections } : {}),
@@ -618,6 +632,7 @@ export function parseSettings(raw: string | null): Settings {
   return {
     ...portable,
     dailyGoal: portable.dailyGoal ?? DEFAULT_SETTINGS.dailyGoal,
+    weekTitle: portable.weekTitle ?? DEFAULT_SETTINGS.weekTitle,
     theme,
     markSet,
   }

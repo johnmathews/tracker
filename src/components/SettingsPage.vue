@@ -7,7 +7,7 @@ import { useSessionStore } from '@/stores/session'
 import { useSyncStore } from '@/stores/sync'
 import { request } from '@/lib/api'
 import { useImportSummary } from '@/composables/importSummary'
-import { MARK_KINDS, MARK_SETS, isMarkSet, type MarkSet } from '@/lib/storage'
+import { MARK_KINDS, MARK_SETS, isMarkSet, isWeekTitle, type MarkSet } from '@/lib/storage'
 import { THEMES, type Theme } from '@/lib/theme'
 import { APP_NAME } from '@/lib/app'
 import { SETTINGS_TABS, settingsHref, type SettingsTab } from '@/lib/routes'
@@ -107,6 +107,17 @@ const summary = useImportSummary()
 const theme = computed({
   get: () => store.theme,
   set: (value: string) => store.setTheme(value as Theme),
+})
+/** Week title (K131): "Date" or "Week number" (John's words). It is saved with the account (K132). */
+const WEEK_TITLE_OPTIONS = [
+  { value: 'dates', label: 'Date' },
+  { value: 'number', label: 'Week number' },
+]
+const weekTitle = computed({
+  get: () => store.weekTitle,
+  set: (value: string) => {
+    if (isWeekTitle(value)) store.setWeekTitle(value)
+  },
 })
 const markSet = computed({
   get: () => store.markSet,
@@ -246,6 +257,12 @@ async function confirmImport(data: ExportData): Promise<void> {
               </template>
             </RadioCard>
             <SegmentedControl v-model="theme" label="Theme" :options="THEME_OPTIONS" />
+            <SegmentedControl
+              v-model="weekTitle"
+              label="Week title"
+              :options="WEEK_TITLE_OPTIONS"
+              data-testid="week-title-control"
+            />
           </div>
         </section>
       </TabsContent>

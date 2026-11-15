@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, toRef, useTemplateRef } from 'vue'
 import {
-  Calendar,
   ChevronLeft,
   ChevronRight,
   CircleUserRound,
@@ -20,6 +19,7 @@ import { useTrackersStore } from '@/stores/trackers'
 import { weekRange } from '@/lib/dates'
 import { NEW_TRACKER_HREF, settingsHref } from '@/lib/routes'
 import { BarAction } from '@/components/ui/bar-action'
+import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Menu, MenuItem } from '@/components/ui/menu'
 import { IconButton } from '@/components/ui/icon-button'
@@ -69,7 +69,6 @@ onBeforeUnmount(() => {
 
 const session = useSessionStore()
 const trackers = useTrackersStore()
-const otherWeek = computed(() => store.weekKey !== store.currentWeekKey)
 
 function print(): void {
   window.print()
@@ -128,10 +127,27 @@ function addHere(): boolean {
   return !!add
 }
 
+/**
+ * ← and → move a week (K133), unless focus is in something that moves by the arrows itself: a
+ * grid's cells, a SegmentedControl, tabs, a menu, a list or a slider.
+ */
+function weekBy(move: () => void): () => boolean {
+  return () => {
+    const owner = document.activeElement?.closest(
+      '[role="grid"], [role="radiogroup"], [role="group"], [role="tablist"], [role="menu"], [role="menubar"], [role="listbox"], [role="slider"], [role="toolbar"]',
+    )
+    if (owner) return false
+    move()
+    return true
+  }
+}
+
 // The week's keys (K91): E in and out of Edit plan, Esc out of full screen and then out of Edit
 // plan, F full screen, P print and S Settings, as their buttons do. A opens Ask, or in Edit plan
-// adds to the tracker on screen (K109).
+// adds to the tracker on screen (K109). ← and → go to the previous and the next week (K133).
 useShortcuts(() => ({
+  arrowleft: weekBy(store.prevWeek),
+  arrowright: weekBy(store.nextWeek),
   a: () => (store.configMode ? addHere() : session.ask === true && (openAsk(), true)),
   e: toggleEditPlan,
   escape: () => {
@@ -246,40 +262,51 @@ function skipToToday(): void {
     <div
       class="flex items-center justify-between gap-x-4 px-(--screen-pad-x) py-(--bar-pad-y) folded:flex-wrap folded:gap-x-(--bar-gap) folded:gap-y-1.5 folded:px-3 folded:pt-2 folded:pb-2.5"
     >
-      <nav class="flex items-center folded:basis-full folded:justify-center" aria-label="Week">
+      <nav
+        class="flex items-center folded:basis-full folded:flex-wrap folded:justify-center folded:gap-y-1"
+        aria-label="Week"
+      >
         <IconButton
           label="Previous week"
+          aria-keyshortcuts="ArrowLeft"
           class="size-(--bar-arrow-box) [&_svg]:size-(--bar-arrow)"
           @click="store.prevWeek"
           ><ChevronLeft
         /></IconButton>
+        <!-- The week by its dates or its number (K131); with the number, a screen reader hears
+             the dates too. -->
         <span
           class="title-1 min-w-[6.5em] px-2 text-center text-(length:--bar-week) leading-tight whitespace-nowrap tabular-nums"
           aria-live="polite"
           data-testid="week-label"
+          >{{ store.barLabel
+          }}<span v-if="store.weekTitle === 'number'" class="sr-only"
+            >, {{ weekRange(store.monday) }}</span
+          ></span
         >
-          {{ weekRange(store.monday) }}
-        </span>
         <IconButton
           label="Next week"
+          aria-keyshortcuts="ArrowRight"
           class="size-(--bar-arrow-box) [&_svg]:size-(--bar-arrow)"
           @click="store.nextWeek"
           ><ChevronRight
         /></IconButton>
+        <!-- "View current week" after the arrow while another week is on screen (K130). Folded, a long
+             week leaves no room after the arrow, so it wraps under the week. -->
+        <Button
+          v-if="store.otherWeek"
+          class="ml-(--this-week-gap) h-(--this-week-h) px-(--this-week-pad-x) text-(length:--this-week-text)"
+          data-testid="this-week-button"
+          @click="store.thisWeek"
+          >View current week</Button
+        >
       </nav>
-      <!-- The actions: "This week" first while another week is on screen (K81), then Ask (only
+      <!-- The actions: Ask (only
            once the API has said it answers questions, so it never flashes in or out), Add tracker
            in Edit plan only (K124), Settings, Print and Full screen, each naming its key (K91),
            and last Profile, which opens the profile menu (K106). Folded, they share the second row
            equally. -->
       <div class="flex items-stretch gap-(--bar-gap) folded:contents">
-        <BarAction
-          v-if="otherWeek"
-          label="This week"
-          class="folded:flex-1 folded:basis-0"
-          @click="store.thisWeek"
-          ><Calendar
-        /></BarAction>
         <BarAction
           v-if="session.ask === true"
           label="Ask"

@@ -38,8 +38,8 @@ OLD_EXPORT_FORMATS = ("fitness-planner-export", "exercise-planner-export")
 #: Settings may carry My goals (`goals`) and the limits note (`limits`, K107) with no new version,
 #: as `foodPick` came: a reader from before them drops the key, and a file without them reads as
 #: none. Ask's conversations (`conversations`) came the same way, and so did Daily goal
-#: (`dailyGoal`, K85): a file without it reads as on, and Cardio (`cardio`, K90): a file without
-#: it has none.
+#: (`dailyGoal`, K85): a file without it reads as on, Cardio (`cardio`, K90): a file without it
+#: has none, and the week title (`weekTitle`, K131): a file without it reads as dates.
 EXPORT_VERSION = 6
 #: The last version whose notes live in plan items.
 LAST_ITEM_NOTES_VERSION = 4
@@ -183,6 +183,12 @@ class Tracker(TrackerInfo):
     rev: int
 
 
+#: How the app titles a week (K131): by its dates, or by its ISO week number.
+type WeekTitle = Literal["dates", "number"]
+WEEK_TITLES: tuple[WeekTitle, ...] = ("dates", "number")
+DEFAULT_WEEK_TITLE: WeekTitle = "dates"
+
+
 class Portable(TypedDict):
     """The settings that belong to the person rather than the device: everything but the theme."""
 
@@ -198,6 +204,10 @@ class Portable(TypedDict):
     #: isn't known (a file or a tab from before it), which reads as on; settings the API has saved
     #: always have it.
     dailyGoal: NotRequired[bool]
+    #: The week title (K131): each week titled by its dates ("9 to 15 November") or by its ISO week
+    #: number ("Week 46"). Saved with the account (K132). Left out where it isn't known (a file or
+    #: a tab from before it), which reads as dates; settings the API has saved always have it.
+    weekTitle: NotRequired[WeekTitle]
     #: Each type's item-page arrangement (K66, P29); left out while every page has the default.
     itemSections: NotRequired[ItemSections]
 
@@ -733,6 +743,10 @@ def normalise_plans(kind: TypeId, v: object) -> Plans:
     return plans
 
 
+def is_week_title(v: object) -> TypeIs[WeekTitle]:
+    return v in WEEK_TITLES
+
+
 def normalise_portable(v: dict[str, Any]) -> Portable:
     accent = v.get("accent")
     out: Portable = {
@@ -752,6 +766,10 @@ def normalise_portable(v: dict[str, Any]) -> Portable:
     daily_goal = v.get("dailyGoal")
     if isinstance(daily_goal, bool):
         out["dailyGoal"] = daily_goal
+    # Kept only when it is one of the two titles: anything else is not known.
+    week_title = v.get("weekTitle")
+    if is_week_title(week_title):
+        out["weekTitle"] = week_title
     item_sections = normalise_item_sections(v.get("itemSections"))
     if item_sections:
         out["itemSections"] = item_sections

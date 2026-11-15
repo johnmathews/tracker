@@ -290,3 +290,79 @@ describe('Daily goal in Settings (K85)', () => {
     })
   })
 })
+
+describe('Week title in Settings (K131, K132)', () => {
+  const control = () => wrapper.get('[data-testid="week-title-control"]')
+  const segment = (name: string) =>
+    control()
+      .findAll('button')
+      .find((b) => b.text() === name)!
+  const band = () => wrapper.get('[data-slot="week-band"]')
+  const bandButton = () => wrapper.find('[data-testid="band-this-week-button"]')
+  async function toWeek(): Promise<void> {
+    location.hash = '#/'
+    await settle()
+  }
+
+  it('follows Theme in Appearance, Date or Week number, Date chosen and nothing sent', async () => {
+    await openSettings({ tab: 'appearance' })
+    expect(
+      control()
+        .findAll('button')
+        .map((b) => b.text()),
+    ).toEqual(['Date', 'Week number'])
+    expect(segment('Date').attributes('aria-pressed')).toBe('true')
+    expect(segment('Week number').attributes('aria-pressed')).toBe('false')
+    // Unknown until the server says or the person picks: nothing is sent for it (K132).
+    expect(usePlannerStore().weekTitleKnown).toBe(false)
+    expect(puts()).toEqual([])
+  })
+
+  it('picked, saves with the account and titles the bar and the band by the number', async () => {
+    await openSettings({ tab: 'appearance' })
+    await segment('Week number').trigger('click')
+    await settle()
+    expect(segment('Week number').attributes('aria-pressed')).toBe('true')
+    expect(puts()).toEqual([{ ...SENT, weekTitle: 'number', goals: 'Ten pull-ups by March.' }])
+    expect(api.accounts.get(USER)!.settings!.weekTitle).toBe('number')
+    await toWeek()
+    // The number for the eye; a screen reader hears the dates after it.
+    const h1 = band().get('h1')
+    expect(h1.text()).toBe('Week 44, 26 Oct – 1 Nov')
+    expect(h1.get('.sr-only').text()).toBe(', 26 Oct – 1 Nov')
+    expect(wrapper.get('[data-testid="week-label"]').text()).toBe('Week 44, 26 Oct – 1 Nov')
+    await wrapper.get('button[aria-label="Previous week"]').trigger('click')
+    expect(h1.text()).toBe('Week 43, 19–25 October')
+  })
+
+  it('reads the number from the account', async () => {
+    await openSettings({
+      saved: { ...PICKS, weekTitle: 'number', goals: '', limits: '' },
+      tab: 'appearance',
+    })
+    expect(segment('Week number').attributes('aria-pressed')).toBe('true')
+    await toWeek()
+    expect(band().get('h1').text()).toBe('Week 44, 26 Oct – 1 Nov')
+    usePlannerStore().setGoals('Run 5 km.')
+    await settle()
+    expect(puts().at(-1)).toEqual({ ...SENT, weekTitle: 'number', goals: 'Run 5 km.', limits: '' })
+  })
+
+  it('puts "View current week" after the band’s title on another week, in the week view only (K130)', async () => {
+    await openSettings({ tab: 'appearance' })
+    await toWeek()
+    expect(bandButton().exists()).toBe(false)
+    await wrapper.get('button[aria-label="Next week"]').trigger('click')
+    expect(bandButton().text()).toBe('View current week')
+    expect(band().element.lastElementChild).toBe(bandButton().element)
+    // Edit plan has the bar's own; the band there is for a screen reader only.
+    usePlannerStore().setConfigMode(true)
+    await settle()
+    expect(bandButton().exists()).toBe(false)
+    usePlannerStore().setConfigMode(false)
+    await settle()
+    await bandButton().trigger('click')
+    expect(band().get('h1').text()).toBe('26 Oct – 1 Nov')
+    expect(bandButton().exists()).toBe(false)
+  })
+})

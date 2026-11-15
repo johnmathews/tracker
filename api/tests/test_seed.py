@@ -101,6 +101,7 @@ def test_fills_three_weeks_ending_today_with_every_kind_and_drawing(
         "goals": "",
         "limits": "",
         "dailyGoal": True,
+        "weekTitle": "dates",
     }
 
 

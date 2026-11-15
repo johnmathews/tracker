@@ -1,6 +1,15 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { DAY_NAMES, dateKey, fullDate, mondayOf, weekDates, weekTitle } from '@/lib/dates'
+import {
+  DAY_NAMES,
+  dateKey,
+  fullDate,
+  mondayOf,
+  weekDates,
+  weekNumber,
+  weekRange,
+  weekTitle as weekTitleOf,
+} from '@/lib/dates'
 import {
   DEFAULT_SETTINGS,
   SETTINGS_KEY,
@@ -13,6 +22,7 @@ import {
   writeKey,
   type KnownSettings,
   type MarkSet,
+  type WeekTitle,
 } from '@/lib/storage'
 import type { Theme } from '@/lib/theme'
 import {
@@ -77,6 +87,10 @@ export const usePlannerStore = defineStore('planner', () => {
   const dailyGoal = ref(DEFAULT_SETTINGS.dailyGoal)
   /** Whether `dailyGoal` came from the server, a cache that carried it, or the person (as goals). */
   const dailyGoalKnown = ref(false)
+  /** The week's title, its dates or its number (K131), saved with the account (K132). */
+  const weekTitle = ref<WeekTitle>(DEFAULT_SETTINGS.weekTitle)
+  /** Whether `weekTitle` came from the server, a cache that carried it, or the person. */
+  const weekTitleKnown = ref(false)
   /** Each kind's item-page arrangement (K66); a kind left out shows every section in order. */
   const itemSections = ref<ItemSections>({})
   const theme = ref<Theme>(parseSettings(readKey(SETTINGS_KEY)).theme)
@@ -88,8 +102,23 @@ export const usePlannerStore = defineStore('planner', () => {
 
   const monday = computed(() => mondayOf(now.value, weekOffset.value))
   const weekKey = computed(() => dateKey(monday.value))
-  /** The page heading: "19–25 October", with the year when it isn't this one. */
-  const label = computed(() => weekTitle(monday.value, now.value))
+  /** Whether another week than this one is on screen: "This week" shows (K130). */
+  const otherWeek = computed(() => weekKey.value !== currentWeekKey.value)
+  /** The week's dates, with the year when it isn't this one: "19–25 October". */
+  const dates = computed(() => weekTitleOf(monday.value, now.value))
+  /**
+   * The page heading, in the band and on paper: the dates, or "Week 46" (K131), each with its
+   * year when it isn't this one.
+   */
+  const label = computed(() =>
+    weekTitle.value === 'number' ? weekNumber(monday.value, now.value) : dates.value,
+  )
+  /** The bar's label, without a year: "19–25 October" or "Week 46". */
+  const barLabel = computed(() =>
+    weekTitle.value === 'number'
+      ? weekNumber(monday.value, now.value, false)
+      : weekRange(monday.value),
+  )
 
   const days = computed<Day[]>(() => {
     const todayKey = dateKey(now.value)
@@ -143,6 +172,10 @@ export const usePlannerStore = defineStore('planner', () => {
       dailyGoal.value = settings.dailyGoal
       dailyGoalKnown.value = true
     }
+    if (settings?.weekTitle !== undefined) {
+      weekTitle.value = settings.weekTitle
+      weekTitleKnown.value = true
+    }
     itemSections.value = normaliseItemSections(settings?.itemSections)
     settingsSaved.value = settings !== null
   }
@@ -160,6 +193,8 @@ export const usePlannerStore = defineStore('planner', () => {
     limitsKnown.value = false
     dailyGoal.value = DEFAULT_SETTINGS.dailyGoal
     dailyGoalKnown.value = false
+    weekTitle.value = DEFAULT_SETTINGS.weekTitle
+    weekTitleKnown.value = false
     useDetailsStore().clear()
     configMode.value = false
     weekOffset.value = 0
@@ -191,6 +226,13 @@ export const usePlannerStore = defineStore('planner', () => {
     dailyGoalKnown.value = true
     settingsSaved.value = true
   }
+  /** The week titled by its dates or its number (K131), from Settings; it syncs (K132). */
+  function setWeekTitle(next: WeekTitle): void {
+    if (weekTitleKnown.value && next === weekTitle.value) return
+    weekTitle.value = next
+    weekTitleKnown.value = true
+    settingsSaved.value = true
+  }
   function setTheme(next: Theme): void {
     theme.value = next
   }
@@ -214,6 +256,7 @@ export const usePlannerStore = defineStore('planner', () => {
     return {
       accent: accent.value,
       ...(dailyGoalKnown.value ? { dailyGoal: dailyGoal.value } : {}),
+      ...(weekTitleKnown.value ? { weekTitle: weekTitle.value } : {}),
       ...(goalsKnown.value ? { goals: goals.value } : {}),
       ...(limitsKnown.value ? { limits: limits.value } : {}),
       ...(Object.keys(itemSections.value).length
@@ -249,6 +292,12 @@ export const usePlannerStore = defineStore('planner', () => {
     limitsKnown,
     dailyGoal,
     dailyGoalKnown,
+    weekTitle,
+    weekTitleKnown,
+    setWeekTitle,
+    otherWeek,
+    dates,
+    barLabel,
     itemSections,
     theme,
     now,

@@ -142,13 +142,14 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 │                       session; links to #/signup, and to #/forgot where the API sends email
 │   (all five inside AuthCard.vue: a centred Panel with the BrandMark)
 ├── AppNavbar.vue       the Header card: Skip to today and a hidden Edit plan ("Done" in Edit
-│                       plan) for the keyboard; ‹ the week › first, as the page's title (K81);
-│                       then the BarActions This week, Ask (only while the API answers
+│                       plan) for the keyboard; ‹ the week › first, as the page's title (K81),
+│                       by its dates or its number (K131), and "View current week" after the › while
+│                       another week is on screen (K130); then the BarActions Ask (only while the API answers
 │                       questions), Add tracker (in Edit plan only, K124), Settings, Print…,
 │                       Full screen (useFullscreen, where the
 │                       browser has one) and Profile, which opens the profile Menu: Signed in
 │                       as, Profile and Sign out (useSignOut, K106); the week's keys E, Esc,
-│                       F, P, S and A (useShortcuts, K91, K109); full width, sized by main.css's --bar-* (K47, K49); on the
+│                       F, P, S and A, ← and → (useShortcuts, K91, K109, K133); full width, sized by main.css's --bar-* (K47, K49); on the
 │                       planner's screens out of sight until a long press or the handle opens
 │                       Edit plan (useBarReveal, §6.6)
 ├── ConnectPage.vue     an OAuth consent link (#/connect/<id>, K73), signed in or out: who is
@@ -193,7 +194,8 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 ├── WeekHeader.vue      the page's h1, the week ("19–25 October"): on the planner's screens a band
 │                       fixed at the top, with a hairline once a screen is under it (K88); visually
 │                       hidden in Edit plan, on a short screen and on paper, where each
-│                       SectionHeader prints the week over its own page (K97)
+│                       SectionHeader prints the week over its own page (K97); by its dates or
+│                       "Week 46" (K131); on another week, "View current week" after it, or under it when folded (K130)
 └── TrackerSection.vue  one per tracker the week shows, in position order (K123): its
     │                   SectionHeader with the tracker's name; in Edit plan the pen (renaming
     │                   in a field in the title's type, Enter or Done saves, Escape restores),
@@ -243,6 +245,7 @@ the settings.
 | `goals`, `goalsKnown`         | the sync store: server and per-user cache | My goals, `''` by default; Ask and the MCP read them. `goalsKnown` is below |
 | `limits`, `limitsKnown`       | the sync store: server and per-user cache | Your limits (K107), `''` by default; read and sent like `goals`             |
 | `dailyGoal`, `dailyGoalKnown` | the sync store: server and per-user cache | Daily goal (K85), `true` by default; sent only once known, like `goals`     |
+| `weekTitle`, `weekTitleKnown` | the sync store: server and per-user cache | Week title (K131, K132), `dates` by default or `number`; sent once known    |
 | `itemSections`                | the sync store: server and per-user cache | each kind's item-page arrangement (K66); `{}` is every page as it comes     |
 | `theme`                       | `tracker-settings-v1` (the device)        | `system` (default), `light` or `dark`                                       |
 | `markSet`                     | `tracker-settings-v1` (the device)        | `squiggles` (default), `ticks`, `stamped-ticks`, `faces`, `stamped-faces`   |
@@ -253,13 +256,16 @@ the settings.
 The stores start empty (showing the defaults) and never write the user's data themselves. The sync
 store fills them with `adopt` and saves their changes (§7).
 
-**Derived:** `monday`, `weekKey`, `currentWeekKey`, `label` and `days` (`name` "Thu", `date` "22",
+**Derived:** `monday`, `weekKey`, `currentWeekKey`, `otherWeek` (another week is on screen, so
+"View current week" shows; K130), `dates` (the week's dates, with the year when it isn't this one),
+`label` (the band's and print's title: `dates`, or "Week 46" by `weekTitle`; K131), `barLabel`
+(the same without a year) and `days` (`name` "Thu", `date` "22",
 `full` "Thursday 22 October" for the DayMarks' names, `key`, `isToday`, and `isFuture` for days
 still to come).
 
 **Actions:** `setConfigMode`, `prevWeek`, `nextWeek`, `thisWeek`, `refreshNow`, `setGoals` and
 `setLimits` (normalised as the API stores them; the same text again changes nothing),
-`setDailyGoal`, `setTheme`, `arrangementFor` and `setArrangement` (by kind), `portableSettings`
+`setDailyGoal`, `setWeekTitle`, `setTheme`, `arrangementFor` and `setArrangement` (by kind), `portableSettings`
 (the accent and, once known, Daily goal, the goals and the limits, and the arrangement),
 `savedSettings` (the same, or null while the user has none of their own), `adopt` (replace the
 settings wholesale) and `clear` (forget the user on sign-out, the details store included, keeping
@@ -627,7 +633,7 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
   week shows is a screen (K123), the page sprints between them, and the navbar keeps out of sight until it is
   wanted (K24, K25; §6.6). Edit plan has a sticky navbar (K27) and is one tracker per screen under
   it too (K99), full width at the week's sizes with rows a fixed 100u (K54). Settings has no navbar (K52) and is full
-  width in rows like the week (K51), and an item's page follows it, rows and all (K64, K65). The navbar keeps the week controls, This week, Ask,
+  width in rows like the week (K51), and an item's page follows it, rows and all (K64, K65). The navbar keeps the week controls with View current week after them (K130), Ask,
   Add tracker (Edit plan only, K124), Settings, Print…, Full screen and Profile (K106).
 - **Light and dark themes.** The handoff is dark-only. Settings offers System (the default, which
   follows `prefers-color-scheme` live), Light and Dark. `App.vue` toggles a `dark` class on
@@ -733,7 +739,9 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
   button (reading "Done") turns it off; the bar has no Done (K91). `useShortcuts`
   (`src/composables/shortcuts.ts`) carries the week's keys: E, Esc (full screen first, then Edit
   plan), F full screen, P print, S Settings, and A for Ask, or in Edit plan the Add button of the
-  screen showing most under the bar (K109). `App.vue` adds H or B for back and L for forward,
+  screen showing most under the bar (K109), and ← and → for the previous and the next week, unless
+  focus is in a grid, a SegmentedControl, tabs, a menu, a list or a slider, which move by the
+  arrows themselves (K133). `App.vue` adds H or B for back and L for forward,
   signed in, on every page (K105). `ownedElsewhere` leaves a key alone in a field,
   with Ctrl, ⌘ or Alt, repeating, mid-composition, or while a dialog or popover is open. Edit plan
   shows "Add exercise", "Add cardio" and "Add food" buttons at the end of each title line (K113), and
@@ -778,8 +786,8 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
   column (K33). The Header has a Full screen button where the browser supports one (K34).
 - **Print is the light theme on white paper, from either theme** (§6.7).
 - **Narrow screens.** Folded (held upright under 1000px wide, or under 760px wide), the navbar
-  puts the week across its first row (by CSS order) and shares its second row equally among the
-  BarActions, This week first when shown. There is no wordmark on any screen (K81). Below 640px
+  puts the week across its first row (by CSS order), "View current week" after it or, without room, under
+  it (K130), and shares its second row equally among the BarActions. There is no wordmark on any screen (K81). Below 640px
   it drops Print…. The markup keeps the desktop order, which is the
   tab order. Held upright under 1000px wide,
   or on any screen under 760px wide, the grids fold (K26): each row's name line spans the seven

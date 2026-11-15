@@ -111,6 +111,13 @@
   --bar-tile-gap: calc(var(--u) * 6);
   --bar-tile-pad-x: calc(var(--u) * 12);
   --bar-tile-pad-y: calc(var(--u) * 10);
+  /* "This week" (K130): a secondary Button after the week, in the bar and the band. */
+  --this-week-h: max(44px, calc(var(--u) * 48));
+  --this-week-pad-x: max(12px, calc(var(--u) * 18));
+  --this-week-text: max(16px, calc(var(--u) * 19));
+  --this-week-gap: max(4px, calc(var(--u) * 12));
+  /* Folded, the space between the band's title and the button under it. */
+  --this-week-under: 6px;
   /* The Settings page at the week's size (K51): headings like the row names, the rest at 19u. */
   --set-h2: max(22px, calc(var(--u) * 27));
   --set-label: max(16px, calc(var(--u) * 19));
@@ -242,6 +249,10 @@
     --bar-tile-gap: 4px;
     --bar-tile-pad-x: 4px;
     --bar-tile-pad-y: 8px;
+    --this-week-h: 44px;
+    --this-week-pad-x: 12px;
+    --this-week-text: calc(var(--n) * 16);
+    --this-week-gap: 4px;
     --set-h2: calc(var(--n) * 22);
     --set-label: calc(var(--n) * 16);
     --set-text: calc(var(--n) * 18);
@@ -513,6 +524,19 @@
   font-size: var(--set-text);
   line-height: 1.55;
 }
+/* The band while "View current week" shows (K130). Folded, the button sits under the title
+   (option P2 of the mockup's round 2), so the band is a row taller while it shows. Not on a short
+   screen, where there is no band (--week-band is 0 there). */
+@media screen and (orientation: portrait) and (width < 1000px),
+  screen and (width < 760px) and (height > 540px) {
+  :root.planner-screens:has([data-slot='week-band'][data-other-week]) {
+    --week-band: calc(
+      var(--screen-pad-top) + var(--fs-title) * 1.1 + var(--this-week-under) + var(--this-week-h) +
+        var(--week-pad-bottom) + 1px
+    );
+  }
+}
+
 /*
  * Edit plan's daily targets, centred on the title lines (K62) and reading "4 per day" (K63). Two
  * thirds of the page's 60u controls, max(44px, 40u): 44px on a laptop and a phone, 60px at
