@@ -17,10 +17,10 @@
   every week after, after a confirmation; earlier weeks keep it, with its marks and notes. An
   account holds up to 100 trackers.
 - **Strength.** Each day, pick a few exercises (default three) and mark their cells. A press steps
-  a day through green (done well), yellow (partly done) and red (tried and couldn't), first in a
+  a day through green (done well), yellow (partly done) and red (too difficult), first in a
   zigzag, then a solid fill, then a hatch, and back to empty: the colour says how it went, and the
   marker drawing is yours to choose. **Marks** in Settings swaps the squiggles for ticks (a tick, a
-  circle, a cross) or faces (happy, so-so, sad), drawn in marker or stamped on a coloured box; a
+  wave, a wave) or faces (happy, so-so, so-so), drawn in marker or stamped on a coloured box; a
   press then steps green, yellow, red and back to empty. Each exercise has a weekly goal of 0–7 days, set
   on its page. A day whose marked exercises reach **Exercises a day** turns green: its
   name in the header goes green and is underlined. **Daily goal** in Settings turns this off,

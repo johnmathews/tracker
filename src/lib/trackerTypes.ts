@@ -160,7 +160,7 @@ export const TRACKER_TYPES: Readonly<Record<TrackerTypeId, TrackerType>> = {
     addLabel: 'Add cardio',
     plan: 'cardio',
     weighted: false,
-    // Marked like an exercise: done well, in part, or tried and missed (K90).
+    // Marked like an exercise: done well, in part, or too difficult (K90).
     cycle: (set) => (set === 'squiggles' ? EXERCISE_CYCLE : EXERCISE_KIND_CYCLE),
     details: (item) => cardioDetails(item as Cardio),
     fields: [

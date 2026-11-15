@@ -678,13 +678,13 @@ describe('the Settings page', () => {
         .findAll('h2')
         .map((h) => h.text()),
     ).toEqual(['Appearance'])
-    // Marks, then Theme (K59); the daily targets are set in Edit plan (K56).
+    // Week title, then Marks, then Theme (K136); the daily targets are set in Edit plan (K56).
     expect(
       wrapper
         .get(PANEL)
         .findAll('[data-slot="radio-card-label"], [data-slot="segmented-control-label"]')
         .map((l) => l.text()),
-    ).toEqual(['Marks', 'Theme', 'Week title'])
+    ).toEqual(['Week title', 'Marks', 'Theme'])
     expect(wrapper.get(PANEL).find('[data-slot="stepper"]').exists()).toBe(false)
     // The week is off screen, and the bar holds only the wordmark.
     expect(wrapper.find('[data-testid="exercise-grid"]').exists()).toBe(false)

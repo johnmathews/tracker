@@ -304,8 +304,14 @@ describe('Week title in Settings (K131, K132)', () => {
     await settle()
   }
 
-  it('follows Theme in Appearance, Date or Week number, Date chosen and nothing sent', async () => {
+  it('comes first in Appearance, Date or Week number, Date chosen and nothing sent', async () => {
     await openSettings({ tab: 'appearance' })
+    // Week title, then Marks, then Theme (K136).
+    const text = control().element.closest('section')!.textContent!
+    const at = (label: string): number => text.indexOf(label)
+    expect(at('Week title')).toBeGreaterThan(-1)
+    expect(at('Week title')).toBeLessThan(at('Marks'))
+    expect(at('Marks')).toBeLessThan(at('Theme'))
     expect(
       control()
         .findAll('button')

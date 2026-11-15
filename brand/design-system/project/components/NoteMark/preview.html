@@ -56,7 +56,7 @@
       <span class="caption">Partial</span>
     </li>
     <li>
-      <div class="cell"><button type="button" data-mark="missed" data-drawing="zigzag" class="mark" aria-pressed="true" aria-label="Pull-ups, Wednesday 21 October, has a note, couldn't do it"></button><span class="note-mark" aria-hidden="true"></span></div>
+      <div class="cell"><button type="button" data-mark="missed" data-drawing="zigzag" class="mark" aria-pressed="true" aria-label="Pull-ups, Wednesday 21 October, has a note, too difficult"></button><span class="note-mark" aria-hidden="true"></span></div>
       <span class="caption">Missed</span>
     </li>
     <li>
@@ -83,8 +83,8 @@
     exercise: DRAWINGS.flatMap((d) => ['great', 'partial', 'missed'].map((k) => [k, d])),
     food: DRAWINGS.map((d) => ['great', d]),
   };
-  const MARK_WORDS = { great: '', partial: ', partly done', missed: ", couldn't do it" };
-  const baseName = (mark) => mark.dataset.name || (mark.dataset.name = mark.getAttribute('aria-label').replace(/, (partly done|couldn't do it)$/, ''));
+  const MARK_WORDS = { great: '', partial: ', partly done', missed: ", too difficult" };
+  const baseName = (mark) => mark.dataset.name || (mark.dataset.name = mark.getAttribute('aria-label').replace(/, (partly done|too difficult)$/, ''));
   function step(mark) {
     const cycle = CYCLES[mark.closest('[data-cycle]')?.dataset.cycle || 'exercise'];
     const drawing = mark.dataset.drawing || 'zigzag';

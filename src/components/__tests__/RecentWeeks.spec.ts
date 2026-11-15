@@ -79,7 +79,7 @@ describe('RecentWeeks', () => {
     expect(said(1)).toBe(
       'Week of 19 October. Marked Monday, Wednesday (partly done) and Friday. , goal met',
     )
-    expect(said(2)).toBe("Week of 12 October. Marked Wednesday (couldn't do it).")
+    expect(said(2)).toBe('Week of 12 October. Marked Wednesday (too difficult).')
     expect(said(4)).toBe('Week of 28 September. Nothing marked.')
   })
 

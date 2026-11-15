@@ -15,7 +15,7 @@ Tracker is a weekly plan for exercise and diet: one row per exercise or food, on
 - **Simple and durable.** A tool for years of ordinary weeks. Nothing in it wears out or goes out of fashion: hairline rules, two typefaces, almost no shadow.
 - **Rooted in now.** This week fills the screen. Nothing archival competes with it. This is what the whiteboard lends.
 - **Quiet record.** Months and years sit below, small and dense. A week off shows as empty rings, plainly, without comment. This is what Apple Notes and the Moleskine lend: restraint and quality, not their look.
-- **A mark per session.** The marker stroke is the whole reward: green for a day done well, yellow for part of one, red for a day tried and missed, all of them counted. No streaks, badges, confetti or slogans, and no guilt for a red one.
+- **A mark per session.** The marker stroke is the whole reward: green for a day done well, yellow for part of one, red for a day that was too difficult, all of them counted. No streaks, badges, confetti or slogans, and no guilt for a red one.
 
 ## Two layers, one system
 

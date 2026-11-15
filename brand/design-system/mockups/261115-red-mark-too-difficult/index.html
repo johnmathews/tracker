@@ -1,0 +1,323 @@
+<title>Red mark: too difficult</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="tokens.css">
+<!--
+  A mockup (design-system skill, references/mockups.md).
+  The question: what a red mark looks like in the tick and face sets, now that red means "too
+  difficult" rather than "didn't happen"; and the Appearance tab's new order. The green and yellow
+  marks, the squiggles, the pens, the box and the stamped look stay as they are.
+  The candidate symbols are paths on the DayMark's 36-unit square, in CANDIDATES below; the box and
+  the solid fill come from the app (paths.js). Stroke widths are the app's: 4.5 units plain, 3.25 in
+  paper when stamped.
+-->
+<style>
+  body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font-sans); }
+  .mockup-page {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: var(--space-8, 32px) var(--space-16, 64px);
+    max-width: 1200px; margin: 0 auto; display: grid; gap: var(--space-12, 48px);
+  }
+  .mockup-head { display: grid; gap: var(--space-2, 8px); max-width: 70ch; }
+  .mockup-head h1, .option h2, .question h2 { margin: 0; text-wrap: balance; }
+  .mockup-head p, .option p, .question p { margin: 0; }
+  .mockup-meta { color: var(--ink-secondary); }
+  .question { display: grid; gap: var(--space-8, 32px); padding-top: var(--space-8, 32px); border-top: 1px solid var(--line); }
+  .question > header { display: grid; gap: var(--space-3, 12px); max-width: 70ch; }
+  .option { display: grid; gap: var(--space-4, 16px); }
+  .option-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2, 8px) var(--space-3, 12px); }
+  .option-tag { color: var(--ink-secondary); }
+  .option[data-recommended] .option-tag::after { content: " · Recommended"; color: var(--ink); }
+  .panes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--space-4, 16px); }
+  .panes.wide { grid-template-columns: minmax(0, 1fr); }
+  .pane { min-width: 0; background: var(--canvas); color: var(--ink); border: 1px solid var(--line);
+          border-radius: var(--radius-lg, 10px); padding: var(--space-4, 16px); overflow-x: auto; container-type: inline-size; }
+  .pane-label { color: var(--ink-secondary); margin: 0 0 var(--space-3, 12px); }
+  .measures { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); }
+  .measures li { border: 1px solid var(--line); border-radius: var(--radius-sm, 4px); padding: 2px var(--space-2, 8px); font-variant-numeric: tabular-nums; }
+  .measures li[data-pass="no"] { border-color: currentColor; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  /* ---- DayMark, as the app draws it: the box over the ink, ink running past the box. ---- */
+  .smark { width: 60px; height: 60px; display: grid; place-items: center; flex: none; }
+  .smark svg { width: 94%; height: 94%; overflow: visible; }
+  .smark .box { stroke: var(--control-border); }
+  .smark[data-mark="great"] { color: var(--pen); }
+  .smark[data-mark="partial"] { color: var(--pen-partial); }
+  .smark[data-mark="missed"] { color: var(--pen-missed); }
+  .smark .paper { color: var(--canvas); }
+
+  /* Now and new, side by side: the current red mark, then the candidate, at the Marks setting's 60px. */
+  .compare { display: flex; flex-wrap: wrap; gap: var(--space-6, 24px); }
+  .compare figure { margin: 0; display: grid; gap: var(--space-2, 8px); justify-items: start; }
+  .compare figcaption { color: var(--ink-secondary); }
+  .compare .trio { display: flex; gap: 10px; }
+
+  /* ---- A week row, as the WeekGrid draws it: the name column, then seven day cells, each
+     mark 86% of its cell with the drawing at 94% (K24). Scaled to the pane. ---- */
+  .week { display: grid; grid-template-columns: minmax(90px, 1.4fr) repeat(7, minmax(0, 1fr)); border-top: 1px solid var(--line); }
+  .week + .week { border-top: 0; }
+  .week .name { display: flex; align-items: center; padding-right: 8px; font-size: 17px; line-height: 22px; font-weight: 600; border-bottom: 1px solid var(--line); }
+  .week .name small { display: block; font-weight: 400; color: var(--ink-secondary); font-size: 14px; }
+  .week .d { aspect-ratio: 1; display: grid; place-items: center; border-bottom: 1px solid var(--line); border-left: 1px solid var(--line); max-height: 100px; }
+  .week .d .smark { width: 86%; height: 86%; }
+  .days { display: grid; grid-template-columns: minmax(90px, 1.4fr) repeat(7, minmax(0, 1fr)); color: var(--ink-secondary); font-size: 14px; padding-bottom: 6px; }
+  .days span { text-align: center; }
+  .said { margin-top: var(--space-3, 12px) !important; color: var(--ink-secondary); }
+  .said q { color: var(--ink); quotes: "“" "”"; }
+
+  /* ---- The SettingsPage card's Appearance section, at the page's size (u = 1). ---- */
+  .settings h2 { margin: 0; font-size: 27px; line-height: 34px; }
+  .settings section { display: grid; grid-template-columns: 320px minmax(0, 1fr); align-items: start; padding: 32px 0 8px; }
+  .tabs { display: flex; flex-wrap: wrap; column-gap: 32px; border-bottom: 1px solid var(--line); }
+  .tabs span { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 0; color: var(--ink-secondary); font: 600 19px/26px var(--font-sans); }
+  .tabs span[aria-current] { color: var(--ink); box-shadow: inset 0 -3px 0 var(--ink); }
+  .body-col { display: flex; flex-direction: column; gap: 28px; min-width: 0; }
+  .field, .group { display: flex; flex-direction: column; gap: 12px; }
+  .field > .label, .group > .label { font-size: 19px; line-height: 25px; }
+  .seg { display: inline-flex; flex-wrap: wrap; align-self: flex-start; max-width: 100%; border: 1px solid var(--control-border); border-radius: var(--radius-md); }
+  .seg button { height: 58px; padding: 0 22px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); font: 600 19px/25px var(--font-sans); cursor: pointer; }
+  .seg button:hover { background: var(--tile); }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
+  .choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .choice { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 14px; padding: 12px 16px;
+            border: 1px solid var(--control-border); border-radius: var(--radius-md); background: transparent; color: var(--ink);
+            font: inherit; text-align: left; cursor: pointer; }
+  .choice:hover { background: var(--tile); }
+  .choice[aria-checked="true"] { border: 2px solid var(--ink); padding: 11px 15px; }
+  .choice[aria-checked="true"] .name { font-weight: 600; }
+  .choice .name { flex: 1; min-width: 0; font-size: 19px; line-height: 25px; }
+  .choice .picture { display: flex; gap: 10px; width: 100%; padding-left: 37px; }
+  .dot { flex: none; width: 23px; height: 23px; border: 1px solid var(--control-border); border-radius: var(--radius-full); display: grid; place-items: center; }
+  .choice[aria-checked="true"] .dot { border: 2px solid var(--ink); }
+  .choice[aria-checked="true"] .dot::after { content: ""; width: 12px; height: 12px; border-radius: var(--radius-full); background: var(--ink); }
+  .moved { outline: 2px dashed var(--ink-secondary); outline-offset: 8px; border-radius: var(--radius-sm); }
+  /* Folded: one column, the heading over its settings, at the system's sizes. */
+  @container (max-width: 760px) {
+    .settings section { display: flex; flex-direction: column; gap: 16px; padding: 24px 0 8px; }
+    .settings h2 { font-size: 22px; line-height: 28px; }
+    .tabs { column-gap: 24px; }
+    .tabs span { font-size: 18px; }
+    .body-col { gap: 20px; }
+    .field > .label, .group > .label { font-size: 16px; line-height: 22px; }
+    .choice .name { font-size: 18px; line-height: 26px; }
+    .seg button { height: 46px; padding: 0 16px; font-size: 16px; }
+    .choices { grid-template-columns: minmax(0, 1fr); }
+    .choice { flex-wrap: nowrap; padding: 10px 14px; }
+    .choice[aria-checked="true"] { padding: 9px 13px; }
+    .choice .picture { width: auto; gap: 6px; padding-left: 0; }
+    .choice .smark { width: 44px; height: 44px; }
+    .moved { outline-offset: 4px; }
+  }
+  @container (max-width: 480px) {
+    .week .name { font-size: 14px; line-height: 18px; }
+    .week .name small { font-size: 12px; }
+    .days { font-size: 12px; }
+  }
+</style>
+
+<main class="mockup-page">
+  <header class="mockup-head">
+    <p class="caption mockup-meta">Mockup · 2026-11-15 · Tracker</p>
+    <h1 class="title-1">Red mark: too difficult</h1>
+    <p class="body">A red ✗ or a sad face reads as “didn’t happen”. A red day means you showed up and it was too difficult. This page decides the new red symbol for the tick sets and for the face sets, and shows the Appearance tab in its new order. Green, yellow, the squiggles, the pens and the box stay as they are.</p>
+    <p class="body">Red days get new words too: a screen reader says “too difficult” where it said “couldn’t do it”.</p>
+  </header>
+
+  <!-- 1. The red tick -->
+  <section class="question" aria-labelledby="q1">
+    <header>
+      <h2 class="title-2" id="q1">1. The red tick (decided: A, one wave; round 3: the yellow circle is the wave too)</h2>
+      <p class="body">Ticks and Stamped ticks. Today the red mark is a cross. Both options are a hand-drawn wave at the tick’s marker width.</p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Now</p>
+          <div class="compare">
+            <figure><div class="trio" data-trio="ticks" data-v="now"></div><figcaption class="caption">Ticks</figcaption></figure>
+            <figure><div class="trio" data-trio="stamped-ticks" data-v="now"></div><figcaption class="caption">Stamped ticks</figcaption></figure>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <section class="option" id="t-a" data-recommended aria-labelledby="t-a-h">
+      <div class="option-head"><h2 class="title-2" id="t-a-h">A. One wave (~)</h2><span class="label option-tag">Option 1A</span></div>
+      <p class="body">A single tilde across the middle of the box: up, down, and up again at the right. The plainest “~”, and nothing else in the sets looks like it.</p>
+      <div class="panes" data-option="ticks" data-v="a"></div>
+    </section>
+
+    <section class="option" id="t-b" aria-labelledby="t-b-h">
+      <div class="option-head"><h2 class="title-2" id="t-b-h">B. Two waves (∿∿)</h2><span class="label option-tag">Option 1B</span></div>
+      <p class="body">A longer wave with two humps, like a shaky line. It reads more as “struggled”, but at phone size it gets close to a squiggle.</p>
+      <div class="panes" data-option="ticks" data-v="b"></div>
+    </section>
+  </section>
+
+  <!-- 2. The red face -->
+  <section class="question" aria-labelledby="q2">
+    <header>
+      <h2 class="title-2" id="q2">2. The red face: the so-so face in red</h2>
+      <p class="body">Faces and Stamped faces. Today the red face is sad. John’s pick in round 2: the yellow so-so face’s straight mouth, drawn in red (C). The yellow and red faces then share a shape and differ only by colour; the screen reader still says “partly done” or “too difficult”. A and B, the open mouths, stay below for comparison.</p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Now</p>
+          <div class="compare">
+            <figure><div class="trio" data-trio="faces" data-v="now"></div><figcaption class="caption">Faces</figcaption></figure>
+            <figure><div class="trio" data-trio="stamped-faces" data-v="now"></div><figcaption class="caption">Stamped faces</figcaption></figure>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <section class="option" id="f-c" data-recommended aria-labelledby="f-c-h">
+      <div class="option-head"><h2 class="title-2" id="f-c-h">C. So-so face in red (:|)</h2><span class="label option-tag">Option 2C</span></div>
+      <p class="body">The partly-done face’s straight mouth and eyes, in the red pen. Calm: “not today”, with no sadness and no surprise.</p>
+      <div class="panes" data-option="faces" data-v="c"></div>
+    </section>
+
+    <section class="option" id="f-a" aria-labelledby="f-a-h">
+      <div class="option-head"><h2 class="title-2" id="f-a-h">A. Round o</h2><span class="label option-tag">Option 2A</span></div>
+      <p class="body">A small round mouth, the size of the so-so face’s mouth. It reads as “oof” or puffing hard: effort, not sadness.</p>
+      <div class="panes" data-option="faces" data-v="a"></div>
+    </section>
+
+    <section class="option" id="f-b" aria-labelledby="f-b-h">
+      <div class="option-head"><h2 class="title-2" id="f-b-h">B. Tall O</h2><span class="label option-tag">Option 2B</span></div>
+      <p class="body">A taller, wider mouth, open wide. A stronger “that was hard”, though it can also read as surprise.</p>
+      <div class="panes" data-option="faces" data-v="b"></div>
+    </section>
+  </section>
+
+  <!-- 3. The Appearance tab -->
+  <section class="question" aria-labelledby="q3">
+    <header>
+      <h2 class="title-2" id="q3">3. The Appearance tab: Week title first (decided)</h2>
+      <p class="body">Week title, then Marks, then Theme. The controls and what they do are unchanged. The Marks tiles show 1A and 2C. The dashed outline marks the setting that moved and is not part of the design.</p>
+    </header>
+    <div class="panes wide" data-settings></div>
+    <ul class="measures caption">
+      <li data-fg="var(--canvas)" data-bg="var(--pen-missed)" data-min="3">Stamped symbol (paper) on the red pen, unchanged from today</li>
+      <li data-fg="var(--pen-missed)" data-bg="var(--canvas)" data-min="3">Red symbol on the page, unchanged from today</li>
+    </ul>
+  </section>
+</main>
+
+<script src="paths.js"></script>
+<script>
+(() => {
+  // The candidate symbols, on the DayMark's 36-unit square. "now" is the app's today.
+  const TICK = {
+    great: 'M8.6 18.2C10.6 19.9 12.6 22.4 14.6 25.9C15 26.6 15.6 26.6 16 25.9C19.4 19.2 24.6 11.6 31.6 5.2',
+    partial: 'M8.2 20.6C9.6 15.2 13.8 14.4 17.4 18C21 21.6 25.6 21.8 27.8 15.6',
+  }
+  const FACE = {
+    great: 'M10.2 19.8C12.6 26.4 23 26.8 25.8 19.6',
+    partial: 'M11 23.2C15.4 22.6 20.4 23.6 25 22.8',
+  }
+  const CANDIDATES = {
+    ticks: {
+      now: 'M9.2 9.4C15 14.8 21.4 21.6 27.4 27.6M27 9C21.6 14 15.4 20.6 9.2 27.4',
+      a: 'M8.2 20.6C9.6 15.2 13.8 14.4 17.4 18C21 21.6 25.6 21.8 27.8 15.6',
+      b: 'M7.2 19.6C8.4 15.4 11.6 14.8 13.2 18.2C14.8 21.6 18.2 21.6 19.6 18C21 14.6 24.4 14.4 26 17.8C26.8 19.4 28 19.8 29 18.4',
+    },
+    faces: {
+      now: 'M10.6 27C12.8 20.6 23 20.4 25.4 26.8',
+      c: 'M11 23.2C15.4 22.6 20.4 23.6 25 22.8',
+      a: 'M18.2 19.8C20.8 19.7 22.4 21.6 22.3 24C22.2 26.6 20.3 28.3 17.9 28.2C15.4 28.1 13.8 26.2 13.9 23.8C14 21.6 15.6 19.9 17.8 19.8',
+      b: 'M18.1 19.4C20.8 19.3 22.1 21.8 22 24.5C21.9 27.3 20.3 29.5 17.9 29.4C15.5 29.3 14 27.1 14.1 24.3C14.2 21.7 15.7 19.5 17.8 19.4',
+    },
+  }
+  const EYES = [[12.8, 13.4], [23.2, 13.2]]
+
+  // One mark as the app draws it (markLook in day-mark/index.ts).
+  const mark = (set, kind, v) => {
+    const box = `<path class="box" d="${DM.box}" fill="none" stroke-width="1.75"/>`
+    const open = `<span class="smark" data-mark="${kind}" aria-hidden="true"><svg viewBox="0 0 36 36" stroke-linecap="round" stroke-linejoin="round">`
+    if (set === 'squiggles') {
+      return `${open}<path d="${DM.zigzag}" fill="currentColor" fill-rule="evenodd"/>${box}</svg></span>`
+    }
+    const stamped = set.startsWith('stamped-')
+    const family = set.endsWith('ticks') ? 'ticks' : 'faces'
+    const path = kind === 'missed' ? CANDIDATES[family][v] : (family === 'ticks' ? TICK : FACE)[kind]
+    const width = stamped ? 3.25 : 4.5
+    const eye = stamped ? 2.1 : 2.6
+    const eyes = family === 'faces' ? EYES.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="${eye}" fill="currentColor"/>`).join('') : ''
+    const symbol = `<g${stamped ? ' class="paper"' : ''}><path d="${path}" fill="none" stroke="currentColor" stroke-width="${width}"/>${eyes}</g>`
+    const fill = stamped ? `<path d="${DM.solid}" fill="currentColor" fill-rule="evenodd"/>` : ''
+    return `${open}${fill}${symbol}${box}</svg></span>`
+  }
+  const empty = () => `<span class="smark" aria-hidden="true"><svg viewBox="0 0 36 36" stroke-linecap="round" stroke-linejoin="round"><path class="box" d="${DM.box}" fill="none" stroke-width="1.75"/></svg></span>`
+  const trio = (set, v) => ['great', 'partial', 'missed'].map((k) => mark(set, k, v)).join('')
+
+  document.querySelectorAll('[data-trio]').forEach((el) => {
+    el.innerHTML = trio(el.dataset.trio, el.dataset.v)
+  })
+
+  // A week row per set: Mon great, Tue too difficult, Wed partial, Thu great, Fri too difficult.
+  const WEEK = ['great', 'missed', 'partial', 'great', 'missed', null, null]
+  const DAYS = ['Mon 16', 'Tue 17', 'Wed 18', 'Thu 19', 'Fri 20', 'Sat 21', 'Sun 22']
+  const NAMES = { ticks: 'Ticks', 'stamped-ticks': 'Stamped ticks', faces: 'Faces', 'stamped-faces': 'Stamped faces' }
+  const week = (set, v, row) => `<div class="week"><div class="name"><span>${row}<small>${NAMES[set]}</small></span></div>${
+    WEEK.map((k) => `<div class="d">${k ? mark(set, k, v) : empty()}</div>`).join('')}</div>`
+  const days = `<div class="days" aria-hidden="true"><span></span>${DAYS.map((d) => `<span>${d}</span>`).join('')}</div>`
+  const pane = (theme, inner) => `<div class="pane" data-theme="${theme}"><p class="label pane-label">${theme === 'light' ? 'Light' : 'Dark'}</p>${inner}</div>`
+
+  document.querySelectorAll('[data-option]').forEach((el) => {
+    const family = el.dataset.option
+    const v = el.dataset.v
+    const sets = family === 'ticks' ? ['ticks', 'stamped-ticks'] : ['faces', 'stamped-faces']
+    const inner = `<div class="compare" style="margin-bottom:20px">${sets.map((s) => `<figure><div class="trio">${trio(s, v)}</div><figcaption class="caption">${NAMES[s]}: great, partly done, too difficult</figcaption></figure>`).join('')}</div>`
+      + days + week(sets[0], v, 'Squats') + week(sets[1], v, 'Push-ups')
+      + `<p class="caption said">A screen reader says <q>Squats, Tuesday 17 November, too difficult</q>.</p>`
+    el.innerHTML = pane('light', inner) + pane('dark', inner)
+  })
+
+  // The Appearance section in its new order: Week title, Marks, Theme.
+  const SETS = ['squiggles', 'ticks', 'stamped-ticks', 'faces', 'stamped-faces']
+  const SET_NAMES = { squiggles: 'Squiggles', ...NAMES }
+  const choices = SETS.map((s) => `<button type="button" role="radio" class="choice" aria-checked="${s === 'stamped-faces'}"><span class="dot"></span><span class="name">${SET_NAMES[s]}</span><span class="picture">${trio(s, s.endsWith('faces') ? 'c' : 'a')}</span></button>`).join('')
+  const settings = `<div class="settings">
+    <div class="tabs"><span aria-current="page">Appearance</span><span>Daily goal</span><span>Your data</span><span>Connections</span></div>
+    <section><h2>Appearance</h2><div class="body-col">
+      <div class="group moved"><span class="label">Week title</span><div class="seg"><button type="button" aria-pressed="true">Date</button><button type="button" aria-pressed="false">Week number</button></div></div>
+      <div class="field"><span class="label">Marks</span><div class="choices" role="radiogroup">${choices}</div></div>
+      <div class="group"><span class="label">Theme</span><div class="seg"><button type="button" aria-pressed="true">System</button><button type="button" aria-pressed="false">Light</button><button type="button" aria-pressed="false">Dark</button></div></div>
+    </div></section></div>`
+  document.querySelector('[data-settings]').innerHTML = pane('light', settings) + pane('dark', settings)
+
+  // Live controls: the tiles and the segments choose, as in the app.
+  document.addEventListener('click', (e) => {
+    const seg = e.target.closest('.seg button')
+    if (seg) seg.parentElement.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b === seg)))
+    const row = e.target.closest('[role="radio"]')
+    if (row) row.parentElement.querySelectorAll('[role="radio"]').forEach((r) => r.setAttribute('aria-checked', String(r === row)))
+  })
+})()
+</script>
+<script>
+  // Measures: for each <li data-fg data-bg data-min>, the WCAG contrast of the two colours in each
+  // theme, resolved inside the option (so --candidate-* values apply), written after the label.
+  (() => {
+    const rgb = (value, scope, theme) => {
+      const probe = document.createElement('span')
+      probe.dataset.theme = theme
+      probe.style.color = value
+      scope.append(probe)
+      const parts = getComputedStyle(probe).color.match(/[\d.]+/g).map(Number)
+      probe.remove()
+      return parts.slice(0, 3)
+    }
+    const lum = ([r, g, b]) => [r, g, b]
+      .map((c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4 })
+      .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0)
+    const ratio = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05) }
+    for (const li of document.querySelectorAll('.measures li[data-fg]')) {
+      const scope = li.closest('.option') || document.body
+      const min = Number(li.dataset.min || 0)
+      const results = ['light', 'dark'].map((theme) => {
+        const r = ratio(rgb(li.dataset.fg, scope, theme), rgb(li.dataset.bg, scope, theme))
+        return { theme, r, ok: !min || r >= min }
+      })
+      li.dataset.pass = results.every((x) => x.ok) ? 'yes' : 'no'
+      li.append(`: ${results.map((x) => `${x.theme} ${x.r.toFixed(1)}:1${x.ok ? '' : ' (below ' + min + ':1)'}`).join(', ')}`)
+    }
+  })()
+</script>

@@ -87,7 +87,7 @@ describe('DayMark', () => {
     await wrapper.setProps({ mark: 'partial', today: true })
     expect(label()).toBe('Squats, Thursday 22 October, today, partly done')
     await wrapper.setProps({ mark: 'missed', today: false })
-    expect(label()).toBe("Squats, Thursday 22 October, couldn't do it")
+    expect(label()).toBe('Squats, Thursday 22 October, too difficult')
     // The drawing carries no meaning, so the name never says it.
     await wrapper.setProps({ mark: 'partial-hatch' })
     expect(label()).toBe('Squats, Thursday 22 October, partly done')
@@ -127,6 +127,18 @@ describe('DayMark', () => {
       expect(symbol.get('path').attributes('d')).toBe(MARK_SYMBOLS.faces[mark].path)
       expect(symbol.findAll('circle')).toHaveLength(2)
     }
+  })
+
+  it('draws partial and too difficult as a wave in the tick sets and a so-so face in the face sets (K134, K135, K137)', () => {
+    // A wave is one stroke; a cross was two.
+    expect(MARK_SYMBOLS.ticks.missed.path.match(/M/g)).toHaveLength(1)
+    expect(MARK_SYMBOLS.ticks.partial.path).toBe(MARK_SYMBOLS.ticks.missed.path)
+    expect(MARK_SYMBOLS.faces.missed.path).toBe(MARK_SYMBOLS.faces.partial.path)
+    const wrapper = mount(DayMark, { props: { ...PROPS, mark: 'missed', set: 'faces' } })
+    expect(wrapper.get('[data-slot="day-mark-symbol"]').classes()).toContain('text-pen-missed')
+    expect(wrapper.get('button').attributes('aria-label')).toBe(
+      'Squats, Thursday 22 October, too difficult',
+    )
   })
 
   it('stamps: the box filled solid in the pen, the symbol in paper on it', () => {

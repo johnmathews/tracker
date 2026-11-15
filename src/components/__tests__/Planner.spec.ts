@@ -173,7 +173,7 @@ describe('the planner grids (W10)', () => {
         expect(mark.attributes('aria-pressed')).toBe('true')
         expect(stroke().classes()).toContain(pen)
       }
-      expect(mark.attributes('aria-label')).toBe("Push-ups, Tuesday 20 October, couldn't do it")
+      expect(mark.attributes('aria-label')).toBe('Push-ups, Tuesday 20 October, too difficult')
       expect(mark.text()).toBe('')
     })
   })

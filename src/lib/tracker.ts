@@ -15,7 +15,7 @@ export function markOf(week: WeekLog, id: string, day: number): Mark | null {
   return week[id]?.[day] ?? null
 }
 
-/** Any mark counts as done: a partial day and a day tried and missed count towards the goal. */
+/** Any mark counts as done: a partial day and a day that was too difficult count towards the goal. */
 export function isDone(week: WeekLog, id: string, day: number): boolean {
   return markOf(week, id, day) !== null
 }

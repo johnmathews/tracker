@@ -23,7 +23,7 @@ const look = computed(() => (props.mark ? markLook(props.set, props.mark) : null
   A day's mark as a picture (brand/design-system/project/components/DayMark): the hand-drawn box,
   60px on a 36-unit square, and the mark in its pen as the mark set says. The squiggles fill the
   box with the marker drawing the mark names (zigzag, solid or hatch); a tick or face set strokes
-  its symbol (tick, circle, cross; happy, so-so, sad), or stamps it, the box filled solid with the
+  its symbol (tick, wave, wave; happy, so-so, so-so), or stamps it, the box filled solid with the
   symbol in paper. The ink runs a little past the box, and the box is drawn over it, as a pen line
   shows through marker. Not pressable: DayMark puts it in its button, and the Marks setting shows
   each set with it. An empty box darkens on hover of the enclosing `group`.

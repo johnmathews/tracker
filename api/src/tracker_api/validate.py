@@ -108,7 +108,7 @@ TRACKER_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 
 type Item = dict[str, Any]
 type Plans = dict[str, list[Item]]
-#: How a marked day went: done well, done in part, or tried and couldn't. Every kind counts.
+#: How a marked day went: done well, done in part, or too difficult. Every kind counts.
 type MarkKind = Literal["great", "partial", "missed"]
 MARK_KINDS: tuple[MarkKind, ...] = ("great", "partial", "missed")
 #: A marked day: its kind, and the drawing a press chose for it (K17). The zigzag is the plain

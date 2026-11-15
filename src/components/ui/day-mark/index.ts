@@ -31,9 +31,10 @@ export const MARK_DRAWINGS: Record<Drawing, string> = {
 }
 
 /**
- * The tick and face sets' symbols on the same 36-unit square (DayMark card, K20): a tick, a circle
- * and a cross, or a happy, so-so and sad mouth under two eyes. Each is drawn as a marker stroke
- * with round ends, a little uneven like the box; the tick's long stroke runs past the box's corner.
+ * The tick and face sets' symbols on the same 36-unit square (DayMark card, K20): a tick and a
+ * wave, or a happy mouth and a so-so mouth under two eyes. Partial and too difficult share the wave
+ * (K134, K137) or the so-so face (K135), told apart by the pen. A red day was too difficult, not
+ * skipped, so it is never a cross or a sad face. Each is drawn as a marker stroke with round ends, a little uneven like the box; the tick's long stroke runs past the box's corner.
  */
 export type MarkSymbol = { path: string; eyes: boolean }
 export const MARK_SYMBOLS: Record<'ticks' | 'faces', Record<MarkKind, MarkSymbol>> = {
@@ -43,18 +44,18 @@ export const MARK_SYMBOLS: Record<'ticks' | 'faces', Record<MarkKind, MarkSymbol
       eyes: false,
     },
     partial: {
-      path: 'M18.6 9.8C23.4 9.6 26.6 13.4 26.4 18.2C26.2 23.2 22.4 26.6 17.8 26.4C13 26.2 9.6 22.6 9.8 17.8C10 13.4 13.2 10.2 17.4 9.6',
+      path: 'M8.2 20.6C9.6 15.2 13.8 14.4 17.4 18C21 21.6 25.6 21.8 27.8 15.6',
       eyes: false,
     },
     missed: {
-      path: 'M9.2 9.4C15 14.8 21.4 21.6 27.4 27.6M27 9C21.6 14 15.4 20.6 9.2 27.4',
+      path: 'M8.2 20.6C9.6 15.2 13.8 14.4 17.4 18C21 21.6 25.6 21.8 27.8 15.6',
       eyes: false,
     },
   },
   faces: {
     great: { path: 'M10.2 19.8C12.6 26.4 23 26.8 25.8 19.6', eyes: true },
     partial: { path: 'M11 23.2C15.4 22.6 20.4 23.6 25 22.8', eyes: true },
-    missed: { path: 'M10.6 27C12.8 20.6 23 20.4 25.4 26.8', eyes: true },
+    missed: { path: 'M11 23.2C15.4 22.6 20.4 23.6 25 22.8', eyes: true },
   },
 }
 /** The faces' eyes: centres on the 36-unit square. */
@@ -96,7 +97,7 @@ export const MARK_PENS: Record<MarkKind, string> = {
 export const MARK_WORDS: Record<MarkKind, string | null> = {
   great: null,
   partial: 'partly done',
-  missed: "couldn't do it",
+  missed: 'too difficult',
 }
 
 /** What a DayMark is told about its day; `name` is the row (an exercise or a food). */

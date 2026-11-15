@@ -357,8 +357,8 @@ NoteArg = Annotated[
     ),
 ]
 MARK_HELP = (
-    "How the day went: `great` (done), `partial` (done in part) or `missed` (tried and "
-    "couldn't), each alone (the zigzag) or with `-solid` or `-hatch`, the drawings the app "
+    "How the day went: `great` (done), `partial` (done in part) or `missed` (too "
+    "difficult), each alone (the zigzag) or with `-solid` or `-hatch`, the drawings the app "
     "offers; null clears the day. Strength, cardio and mobility trackers take any of them. A "
     "food takes "
     "only `great`, `great-solid` or `great-hatch`."

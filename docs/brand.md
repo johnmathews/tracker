@@ -56,7 +56,7 @@ Five project roles each mean one thing, and nothing else may use them:
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
 | `pen`         | Great: a day's mark, a day that met the daily pick (its name, underlined), and a met week's count in Recent weeks (underlined, K64) | Links, buttons, decoration |
 | `pen-partial` | Partly done: a day's mark                                                                                                           | Over the pick, warnings    |
-| `pen-missed`  | Tried and couldn't: a day's mark                                                                                                    | Errors                     |
+| `pen-missed`  | Too difficult: a day's mark                                                                                                         | Errors                     |
 | `caution-ink` | A caution, always with words; nothing on the planner uses it (K28). The consent screen's warning does (K73)                                                                  | Errors                     |
 | `edit`        | Edit plan is on: the frame round the window, 8px and 4px on a phone (K112, K117). A brighter blue than `focus`, so the two never read as one thing                                              | Text, buttons, decoration  |
 
@@ -64,7 +64,7 @@ The primary action is `ink`, not a brand colour (K8): one colour for "act", the 
 Outside the day's mark, no meaning rests on colour alone: a met day's name and a met week's count
 are underlined as well as green (K60, K64), and today adds "today" to the name. The day's mark is the one exception, by the
 owner's choice (K15): its pen alone tells great, partial and missed apart on screen, and the
-accessible name says "partly done" or "couldn't do it".
+accessible name says "partly done" or "too difficult".
 
 ## 4. The three pens
 
@@ -122,7 +122,7 @@ Labels are sentence case, never uppercase with letter-spacing.
 | ------- | --------------------------------------------------------- | ------------------------------------------ |
 | Great   | The hand-drawn box filled in `pen`, in a 64px button      | `aria-pressed="true"`                      |
 | Partial | The box filled in `pen-partial`                           | `aria-pressed="true"`, "partly done"       |
-| Missed  | The box filled in `pen-missed`                            | `aria-pressed="true"`, "couldn't do it"    |
+| Missed  | The box filled in `pen-missed`                            | `aria-pressed="true"`, "too difficult"    |
 | Empty   | The empty hand-drawn box, about 45px, in `control-border` | `aria-pressed="false"`                     |
 | Today   | Nothing on screen (K36)                                   | "today" in the name, `aria-current="date"` |
 | Note    | A 10px folded corner in `ink-secondary` (NoteMark)        | "has a note" in the name                   |
@@ -135,14 +135,15 @@ the hatch, then back to empty. A food has one kind, so it steps through great in
 empty. The box is drawn over the fill, and the ink runs a little past the box, as a quick hand does. Every mark counts towards the week and the day's count against the daily pick.
 
 **Mark sets** (K20, K21). Settings' **Marks** chooses how marked days are drawn on this device:
-Squiggles (the drawings above, the default), Ticks (a tick, a circle, a cross), Stamped ticks,
-Faces (happy, so-so, sad) and Stamped faces. Ticks and faces are a marker stroke in the pen with
+Squiggles (the drawings above, the default), Ticks (a tick, then a wave in yellow or red), Stamped ticks,
+Faces (happy, then so-so in yellow or red) and Stamped faces. Ticks and faces are a marker stroke in the pen with
 the box drawn over it; a stamped set colours the box solid in the pen and leaves the symbol in
 paper (`canvas`, the light canvas in print). In light, paper on `pen-partial` is 1.8:1, below 3:1,
 by the owner's choice (K23); the gate holds it to 1.5:1. A set changes only the look: the stored
 mark stays, so a squiggle drawing comes back on switching back. In a tick or face set a press steps
-an exercise great, partial, missed, then empty, and a food great, then empty. The symbols give
-each kind its own shape, so in those sets the kinds no longer rest on colour alone.
+an exercise great, partial, missed, then empty, and a food great, then empty. Great has its own shape
+in both. Partial and too difficult share the wave or the so-so face and differ by pen alone, by
+the owner's choice (K135, K137).
 
 Print is the light theme on white paper, from either theme (K16): words, boxes and marks keep their
 light colours, the surfaces go transparent and chips are outlined. Icons are Lucide outline at 1.5px stroke, never Unicode glyphs or emoji. Colour transitions

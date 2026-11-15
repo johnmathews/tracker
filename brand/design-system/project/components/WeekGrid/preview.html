@@ -137,7 +137,7 @@
         <td role="gridcell" class="d"><div class="day"><button type="button" data-mark="great" data-drawing="solid" class="mark" tabindex="-1" aria-pressed="true" aria-label="Pull-ups, Monday 19 October"></button></div></td>
         <td role="gridcell" class="d"><div class="day"><button type="button" data-drawing="zigzag" class="mark" tabindex="-1" aria-pressed="false" aria-label="Pull-ups, Tuesday 20 October"></button></div></td>
         <td role="gridcell" class="d"><div class="day"><button type="button" data-drawing="hatch" class="mark" tabindex="-1" aria-pressed="false" aria-label="Pull-ups, Wednesday 21 October"></button></div></td>
-        <td role="gridcell" class="d today"><div class="day"><button type="button" data-mark="missed" data-drawing="zigzag" class="mark" tabindex="-1" aria-pressed="true" aria-current="date" aria-label="Pull-ups, Thursday 22 October, today, couldn't do it"></button></div></td>
+        <td role="gridcell" class="d today"><div class="day"><button type="button" data-mark="missed" data-drawing="zigzag" class="mark" tabindex="-1" aria-pressed="true" aria-current="date" aria-label="Pull-ups, Thursday 22 October, today, too difficult"></button></div></td>
         <td role="gridcell" class="d"><div class="day"><button type="button" data-drawing="solid" class="mark" tabindex="-1" aria-pressed="false" aria-label="Pull-ups, Friday 23 October"></button></div></td>
         <td role="gridcell" class="d"><div class="day"><button type="button" data-drawing="hatch" class="mark" tabindex="-1" aria-pressed="false" aria-label="Pull-ups, Saturday 24 October"></button></div></td>
         <td role="gridcell" class="d"><div class="day"><button type="button" data-drawing="hatch" class="mark" tabindex="-1" aria-pressed="false" aria-label="Pull-ups, Sunday 25 October"></button></div></td>
@@ -200,8 +200,8 @@
     exercise: DRAWINGS.flatMap((d) => ['great', 'partial', 'missed'].map((k) => [k, d])),
     food: DRAWINGS.map((d) => ['great', d]),
   };
-  const MARK_WORDS = { great: '', partial: ', partly done', missed: ", couldn't do it" };
-  const baseName = (mark) => mark.dataset.name || (mark.dataset.name = mark.getAttribute('aria-label').replace(/, (partly done|couldn't do it)$/, ''));
+  const MARK_WORDS = { great: '', partial: ', partly done', missed: ", too difficult" };
+  const baseName = (mark) => mark.dataset.name || (mark.dataset.name = mark.getAttribute('aria-label').replace(/, (partly done|too difficult)$/, ''));
   function step(mark) {
     const cycle = CYCLES[mark.closest('[data-cycle]')?.dataset.cycle || 'exercise'];
     const drawing = mark.dataset.drawing || 'zigzag';

@@ -626,3 +626,18 @@ around the page". The frame's mockup is `brand/design-system/mockups/261111-edit
 | K131 | Settings › Appearance has "Week title" after Theme: a SegmentedControl, "Date" or "Week number"; the date is the default. The number is the ISO week (Monday start, the week holding the Thursday), with the week-year after a comma when it isn't the current one ("Week 1, 2027"); the bar leaves the year out, as it does for the dates. The bar, the band and print follow it, and a screen reader hears the dates after the number. Option S1 of two | "an option in settings to show either the start - end date of the current week (as it is currently) or the week number"; "Week 46", no year; John picked S1, "segmented", then "lets have the settings be either \"date\" or \"week number\"" |
 | K132 | The week title is saved with the account (`weekTitle`, `dates` or `number`; schema 17), synced and carried in Export and Import like Daily goal (K85). A tab sends it only once it knows it, and a body without a valid one keeps the saved value. Unlike Marks (K20) and Theme (P3), which stay on the device | John's answer at the mockup: "With the account" |
 | K133 | On the week and in Edit plan, ← goes to the previous week and → to the next, as the bar's arrows do; the arrows carry `aria-keyshortcuts`. Not while focus is in a grid's cells, a SegmentedControl, tabs, a menu, a list or a slider, which move by the arrows themselves, and never under K91's rules (a field, Ctrl, ⌘ or Alt, repeating, a dialog or popover) | "lets make the left and right arrows go to the previous or next week". A key, not a look: no mockup |
+
+### 4.30 A red day is too difficult, and Week title first (2026-11-15)
+
+John: "i am concerned that the red type of tick looks like what you would do when something didnt
+happen and not when something was very difficult", "change the red tick from an X to a ~",
+"lets do a red version of the current yellow :| face", the words "too difficult", and the
+Appearance tab "from marks - theme - week title to week title - marks - theme". The mockup is
+`brand/design-system/mockups/261115-red-mark-too-difficult`.
+
+| ID   | Decision | Why |
+| ---- | -------- | --- |
+| K134 | In Ticks and Stamped ticks a red day is a wave (~), one hand-drawn stroke across the box, in place of the cross. Option 1A of two. A red day's spoken words are "too difficult" in place of "couldn't do it", everywhere the kind is named (DayMark, RecentWeeks, ItemPage, the MCP help). Amends K20 | A cross reads as "didn't happen"; a red day means the person showed up and it was too difficult |
+| K135 | In Faces and Stamped faces a red day is the so-so face (straight mouth, two eyes) in `pen-missed`, in place of the sad face. Partial and too difficult then share a shape and differ by pen alone, as in the squiggles; the tick sets keep a shape per kind. Option 2C, John's own, chosen over the open-mouth faces 2A and 2B after the colour-only trade-off was put to him. Amends K20 | A sad face reads as failure; the so-so face is calm |
+| K136 | Settings › Appearance runs Week title, Marks, Theme. Amends K131's "after Theme" | John's order |
+| K137 | In Ticks and Stamped ticks a partial day is the wave too, in `pen-partial`, in place of the circle: "lets replace the yellow circle with a yellow tilda. so its a yellow version of the red squiggle". Both symbol sets now give great its own shape and share one between partial and too difficult, told apart by the pen. Amends K20 and K134 | John's call after trying K134 locally |

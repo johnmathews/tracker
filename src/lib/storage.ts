@@ -52,7 +52,7 @@ export type ItemDetails = { notes?: string; fields?: Record<string, string> }
 export type DetailsMap = Record<string, ItemDetails>
 
 /**
- * How a marked day went (DayMark card): done well, done in part, or tried and couldn't. Every kind
+ * How a marked day went (DayMark card): done well, done in part, or too difficult. Every kind
  * counts towards the week. Foods only ever take `great`.
  */
 export type MarkKind = 'great' | 'partial' | 'missed'
@@ -83,7 +83,7 @@ export function markDrawing(mark: Mark): Drawing {
 
 /**
  * How the marks are drawn (DayMark card, K20): the squiggles (each mark's own drawing), or one
- * symbol per kind, stroked or stamped: a tick, a circle and a cross, or a happy, so-so and sad
+ * symbol per kind, stroked or stamped: a tick, a wave and a wave, or a happy, so-so and so-so
  * face. The device's choice, like the theme; it never changes a stored mark (K21).
  */
 export const MARK_SETS = ['squiggles', 'ticks', 'stamped-ticks', 'faces', 'stamped-faces'] as const

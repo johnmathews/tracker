@@ -194,7 +194,7 @@ async function confirmImport(data: ExportData): Promise<void> {
 <!--
   The Settings page (brand/design-system/project/components/SettingsPage), at #/settings, with no
   Header (K52): a link back to the week, the heading, then a tab per section (K119, the Tabs card):
-  Appearance (Marks, then Theme, K59), Daily goal (K85), Your data and Connections
+  Appearance (Week title, Marks, then Theme, K136), Daily goal (K85), Your data and Connections
   (ConnectionsSection), each at #/settings/<tab>. My goals, Your limits and the account are on the
   Profile page (K106, K107). The daily targets are set in Edit plan (K56). Full width in rows like
   the week (K51): the open section's heading in the week's name column, its settings beside it,
@@ -244,6 +244,12 @@ async function confirmImport(data: ExportData): Promise<void> {
             Appearance
           </h2>
           <div class="flex min-w-0 flex-col gap-(--set-gap)">
+            <SegmentedControl
+              v-model="weekTitle"
+              label="Week title"
+              :options="WEEK_TITLE_OPTIONS"
+              data-testid="week-title-control"
+            />
             <RadioCard v-model="markSet" label="Marks" :options="MARK_SET_OPTIONS">
               <template #picture="{ option }">
                 <span
@@ -257,12 +263,6 @@ async function confirmImport(data: ExportData): Promise<void> {
               </template>
             </RadioCard>
             <SegmentedControl v-model="theme" label="Theme" :options="THEME_OPTIONS" />
-            <SegmentedControl
-              v-model="weekTitle"
-              label="Week title"
-              :options="WEEK_TITLE_OPTIONS"
-              data-testid="week-title-control"
-            />
           </div>
         </section>
       </TabsContent>

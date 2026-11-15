@@ -15,17 +15,17 @@ One day of one exercise or food: a box drawn as if on a whiteboard, empty or mar
   | --- | --- |
   | Great | `pen` (green) |
   | Partial | `pen-partial` (sunny yellow) |
-  | Missed ("tried and couldn't") | `pen-missed` (red) |
+  | Missed ("too difficult") | `pen-missed` (red) |
 
   The pen says which kind a day is; the drawing carries no meaning. The person chooses it by pressing (below), and it is saved with the day, so a day keeps its drawing everywhere: in the week and in an export. A mark is written `great`, `partial` or `missed` for the zigzag, and with the drawing after it for the others: `great-solid`, `missed-hatch`.
 
   The box is drawn over the fill, as a pen line shows through marker. The ink runs past the box's edges, as if scribbled quickly by hand, so the SVG is `overflow: visible`. The paths are `BOX_PATH` and `MARK_DRAWINGS` in the app's `day-mark/index.ts`; the previews draw the same ones (`data-drawing` picks one, the open zigzag by default).
-- **Mark sets** (K20): Settings' **Marks** chooses how a marked day is drawn on this device. **Squiggles**, the default, are the three drawings above. The other four draw one symbol per kind, so each kind has its own shape:
+- **Mark sets** (K20): Settings' **Marks** chooses how a marked day is drawn on this device. **Squiggles**, the default, are the three drawings above. The other four draw a symbol per kind, with partial and too difficult sharing one, told apart by the pen. A red day was too difficult, not skipped, so it is never a cross or a sad face (K134, K135, K137):
 
   | Set | Great | Partial | Missed |
   | --- | --- | --- | --- |
-  | Ticks | a tick | a circle | a cross |
-  | Faces | a happy face | a so-so face | a sad face |
+  | Ticks | a tick | a wave (~) | a wave (~) |
+  | Faces | a happy face | a so-so face | a so-so face |
 
   **Ticks** and **Faces** stroke the symbol in the pen at a marker's width (4.5 units, round ends), with the box drawn over it; the tick's long stroke runs past the box's corner. **Stamped ticks** and **Stamped faces** fill the box with the solid drawing in the pen and draw the symbol in paper (`canvas`, 3.25 units) on it. The paths are `MARK_SYMBOLS` and `markLook` in `day-mark/index.ts`. A set changes only the look: a stored `great-solid` is a tick in Ticks and the solid squiggle again in Squiggles (K21).
 - **Empty:** the box alone. A day not marked is an empty box, never a dash or a grey mark.
@@ -64,7 +64,7 @@ A marked box doesn't change on hover. A press draws the next mark at once; the b
   | Push-ups, Monday, great | "Push-ups, Monday 19 October" | pressed |
   | Squats, today, great | "Squats, Thursday 22 October, today" | pressed |
   | Squats, today, partial | "Squats, Thursday 22 October, today, partly done" | pressed |
-  | Squats, today, missed | "Squats, Thursday 22 October, today, couldn't do it" | pressed |
+  | Squats, today, missed | "Squats, Thursday 22 October, today, too difficult" | pressed |
   | Squats, today, partial, with a note | "Squats, Thursday 22 October, today, has a note, partly done" | pressed |
   | Fish, Saturday, empty | "Fish, Saturday 24 October" | not pressed |
 
@@ -72,7 +72,7 @@ A marked box doesn't change on hover. A press draws the next mark at once; the b
 - Today's mark says so twice: `aria-current="date"` on the button, and "today" in its name. The name carries it for every screen reader; `aria-current` lets assistive tech and the grid's keyboard model (WeekGrid) find today's mark without parsing words. Nothing on screen marks today (K36).
 - The NoteMark is `aria-hidden`; "has a note" in the name carries it.
 - Enter and Space step the mark. Inside a WeekGrid the mark is one cell of a roving-tabindex grid (see WeekGrid); on its own it is an ordinary tab stop.
-- Contrast, measured by the gate in both themes: `pen` reaches 4.5:1 on `canvas` and `panel` (it is also the text of a met total) and 3:1 on `tile`; `pen-missed` reaches 3:1 on `canvas`, `panel` and `tile`; the box is `control-border`, 3:1 on `canvas`, `panel` and `tile`. `pen-partial` is the exception, by the owner's choice (K18): a sunny yellow is 1.5–1.9:1 on the light grounds, and the gate holds it to 1.5:1 so it can't fade further; in dark it is above 7:1. The box drawn over it keeps a yellow mark findable. The kinds are told apart by their pens, the owner's call (K15): a fill of any kind differs from the empty box by shape, and the accessible name says "partly done" or "couldn't do it", but someone who can't tell green from red sees only "marked" in the squiggles. The tick and face sets give each kind its own shape. A stamped set's paper symbol on `pen-partial` is 1.8:1 in light, by the owner's choice (K23), held to 1.5:1 by the gate; on `pen` and `pen-missed` it reaches 3:1 in both themes.
+- Contrast, measured by the gate in both themes: `pen` reaches 4.5:1 on `canvas` and `panel` (it is also the text of a met total) and 3:1 on `tile`; `pen-missed` reaches 3:1 on `canvas`, `panel` and `tile`; the box is `control-border`, 3:1 on `canvas`, `panel` and `tile`. `pen-partial` is the exception, by the owner's choice (K18): a sunny yellow is 1.5–1.9:1 on the light grounds, and the gate holds it to 1.5:1 so it can't fade further; in dark it is above 7:1. The box drawn over it keeps a yellow mark findable. The kinds are told apart by their pens, the owner's call (K15): a fill of any kind differs from the empty box by shape, and the accessible name says "partly done" or "too difficult", but someone who can't tell green from red sees only "marked" in the squiggles. The tick and face sets give great its own shape, but partial and too difficult share the wave or the so-so face, told apart by the pen alone, by the owner's choice (K135, K137). A stamped set's paper symbol on `pen-partial` is 1.8:1 in light, by the owner's choice (K23), held to 1.5:1 by the gate; on `pen` and `pen-missed` it reaches 3:1 in both themes.
 
 ## You provide
 
