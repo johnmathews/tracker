@@ -10,8 +10,10 @@ import {
   cycleDay,
   cycleFor,
   EXERCISE_CYCLE,
+  EXERCISE_FILLED_CYCLE,
   EXERCISE_KIND_CYCLE,
   FOOD_CYCLE,
+  FOOD_FILLED_CYCLE,
   FOOD_KIND_CYCLE,
   markOf,
   metDays,
@@ -83,16 +85,13 @@ describe('tracker helpers', () => {
     const log: Log = {}
     cycleDay(log, '2026-10-19', 'a', 3, EXERCISE_CYCLE)
     expect(log).toEqual({ '2026-10-19': { a: [null, null, null, 'great', null, null, null] } })
-    const seen = Array.from({ length: 9 }, () => {
+    const seen = Array.from({ length: 6 }, () => {
       cycleDay(log, '2026-10-19', 'a', 3, EXERCISE_CYCLE)
       return log['2026-10-19']!.a![3]
     })
     expect(seen).toEqual([
       'partial',
       'missed',
-      'great-solid',
-      'partial-solid',
-      'missed-solid',
       'great-hatch',
       'partial-hatch',
       'missed-hatch',
@@ -100,19 +99,34 @@ describe('tracker helpers', () => {
     ])
   })
 
-  it('steps exercises through each drawing’s three kinds, and foods through green in each', () => {
-    // Drawing first (K17): green, yellow and red in the zigzag, then the solid, then the hatch.
-    expect(EXERCISE_CYCLE).toEqual(MARKS)
+  it('steps exercises through each squiggle’s three kinds, and foods through green in each', () => {
+    // Drawing first (K17): green, yellow and red in the zigzag, then the hatch (K141).
+    expect(EXERCISE_CYCLE).toEqual(MARKS.filter((m) => markDrawing(m) !== 'solid'))
     expect(nextMark(null, EXERCISE_CYCLE)).toBe('great')
-    expect(nextMark('missed', EXERCISE_CYCLE)).toBe('great-solid')
-    expect(nextMark('missed-solid', EXERCISE_CYCLE)).toBe('great-hatch')
+    expect(nextMark('missed', EXERCISE_CYCLE)).toBe('great-hatch')
     expect(nextMark('missed-hatch', EXERCISE_CYCLE)).toBeNull()
-    expect(FOOD_CYCLE).toEqual(['great', 'great-solid', 'great-hatch'])
+    // A solid fill from before the split shows as the zigzag, and steps on from its kind.
+    expect(nextMark('great-solid', EXERCISE_CYCLE)).toBe('partial')
+    expect(nextMark('missed-solid', EXERCISE_CYCLE)).toBe('great-hatch')
+    expect(FOOD_CYCLE).toEqual(['great', 'great-hatch'])
     expect(nextMark(null, FOOD_CYCLE)).toBe('great')
-    expect(nextMark('great', FOOD_CYCLE)).toBe('great-solid')
+    expect(nextMark('great', FOOD_CYCLE)).toBe('great-hatch')
     expect(nextMark('great-hatch', FOOD_CYCLE)).toBeNull()
     // A food marked another way (an import, say) clears on the next press.
     expect(nextMark('partial', FOOD_CYCLE)).toBeNull()
+  })
+
+  it('steps Filled in through the solid fill’s kinds once (K141)', () => {
+    expect(EXERCISE_FILLED_CYCLE).toEqual(['great-solid', 'partial-solid', 'missed-solid'])
+    expect(FOOD_FILLED_CYCLE).toEqual(['great-solid'])
+    expect(nextMark(null, EXERCISE_FILLED_CYCLE)).toBe('great-solid')
+    expect(nextMark('partial-solid', EXERCISE_FILLED_CYCLE)).toBe('missed-solid')
+    expect(nextMark('missed-solid', EXERCISE_FILLED_CYCLE)).toBeNull()
+    // A squiggle steps on from its kind: it is drawn filled in already.
+    expect(nextMark('great', EXERCISE_FILLED_CYCLE)).toBe('partial-solid')
+    expect(nextMark('partial-hatch', EXERCISE_FILLED_CYCLE)).toBe('missed-solid')
+    expect(nextMark(null, FOOD_FILLED_CYCLE)).toBe('great-solid')
+    expect(nextMark('great-hatch', FOOD_FILLED_CYCLE)).toBeNull()
   })
 
   it('steps a tick or face set through the plain kinds once (K21)', () => {
@@ -137,6 +151,8 @@ describe('tracker helpers', () => {
   it('picks the cycle for the item and the mark set', () => {
     expect(cycleFor('strength', 'squiggles')).toBe(EXERCISE_CYCLE)
     expect(cycleFor('food', 'squiggles')).toBe(FOOD_CYCLE)
+    expect(cycleFor('strength', 'filled')).toBe(EXERCISE_FILLED_CYCLE)
+    expect(cycleFor('food', 'filled')).toBe(FOOD_FILLED_CYCLE)
     for (const set of ['ticks', 'stamped-ticks', 'faces', 'stamped-faces'] as const) {
       expect(cycleFor('strength', set)).toBe(EXERCISE_KIND_CYCLE)
       expect(cycleFor('food', set)).toBe(FOOD_KIND_CYCLE)

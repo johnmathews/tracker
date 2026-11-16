@@ -17,4 +17,4 @@ A one- or two-line message next to the thing it is about, in one of four tones, 
 ## You provide
 
 - `tone` (`error`, `caution`, `success`, `info`) and the words. No exclamation marks, no blame, small numbers as words.
-- The app's "That file isn’t a Tracker export." becomes "That file isn’t a Tracker export. Choose a file made with Export."; "The server refused the import, so nothing changed." gains "Try again, or export a fresh file."
+- The app's "That file isn’t a Tracker export." becomes "That file isn’t a Tracker export. Choose a file made with Export."; "The server refused the import, so nothing changed." gains "Try again, or export a new file." (K140), and the file that isn't JSON says "That file isn’t a Tracker export." too

@@ -197,7 +197,7 @@ describe('App', () => {
     mountApp()
     const cell = rowCells('Push-ups')[1]!
     expect(cell.attributes('aria-pressed')).toBe('false')
-    for (const mark of MARKS) {
+    for (const mark of MARKS.filter((m) => markDrawing(m) !== 'solid')) {
       await cell.trigger('click')
       expect(cell.attributes('aria-pressed')).toBe('true')
       expect(cell.find(`[data-mark="${markKind(mark)}"]`).exists()).toBe(true)
@@ -212,7 +212,7 @@ describe('App', () => {
   it('marks a food eaten in each drawing, then clears it', async () => {
     mountApp()
     const cell = rowCells('Fish')[0]!
-    for (const drawing of DRAWINGS) {
+    for (const drawing of DRAWINGS.filter((d) => d !== 'solid')) {
       await cell.trigger('click')
       expect(cell.find('[data-mark="great"]').exists()).toBe(true)
       expect(cell.find(`[data-drawing="${drawing}"]`).exists()).toBe(true)
@@ -249,20 +249,28 @@ describe('App', () => {
     await cell().trigger('click')
     expect(cell().find('[data-slot="day-mark-stroke"]').attributes('data-drawing')).toBe('zigzag')
     await openSettings()
-    const marks = wrapper.get(PANEL).get('[role="radiogroup"]')
-    const rows = marks.findAll('[role="radio"]')
-    expect(rows.map((r) => r.text())).toEqual([
+    const rows = () => wrapper.get(PANEL).get('[role="radiogroup"]').findAll('[role="radio"]')
+    expect(rows().map((r) => r.text())).toEqual([
       'Squiggles',
+      'Filled in',
       'Ticks',
       'Stamped ticks',
       'Faces',
       'Stamped faces',
     ])
-    expect(rows.map((r) => r.attributes('aria-checked'))[0]).toBe('true')
+    expect(rows().map((r) => r.attributes('aria-checked'))[0]).toBe('true')
     // Each row shows its set's three marks, as pictures rather than buttons.
-    expect(rows[3]!.findAll('[data-testid="mark-set-sample"]')).toHaveLength(3)
-    expect(rows[3]!.find('button').exists()).toBe(false)
-    await rows[3]!.trigger('click')
+    expect(rows()[4]!.findAll('[data-testid="mark-set-sample"]')).toHaveLength(3)
+    expect(rows()[4]!.find('button').exists()).toBe(false)
+    // Filled in draws the same stored mark solid (K141).
+    await rows()[1]!.trigger('click')
+    expect(JSON.parse(localStorage.getItem('tracker-settings-v1')!)).toMatchObject({
+      markSet: 'filled',
+    })
+    await backToWeek()
+    expect(cell().get('[data-slot="day-mark-stroke"]').attributes('data-drawing')).toBe('solid')
+    await openSettings()
+    await rows()[4]!.trigger('click')
     expect(JSON.parse(localStorage.getItem('tracker-settings-v1')!)).toMatchObject({
       markSet: 'faces',
     })
@@ -297,7 +305,7 @@ describe('App', () => {
     await askRemove('exercise', 'sq')
     expect(confirmation()!.get('h2').text()).toBe('Remove Squats?')
     expect(confirmation()!.text()).toContain(
-      'Remove ‘Squats’ from this week’s plan and also future weeks. History is unchanged and existing data is not removed.',
+      'It comes off this week and the weeks after. Earlier weeks keep it, with its marks and notes.',
     )
     await answer('Cancel')
     expect(confirmation()).toBeNull()
@@ -1111,7 +1119,7 @@ describe('export and import', () => {
   })
 
   it.each([
-    ['not JSON', new File(['{oops'], 'x.json'), 'That file isn’t valid JSON.'],
+    ['not JSON', new File(['{oops'], 'x.json'), 'That file isn’t a Tracker export.'],
     ['another format', jsonFile({ plans: {} }), 'That file isn’t a Tracker export.'],
     [
       'a newer version',

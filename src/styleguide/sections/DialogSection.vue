@@ -59,7 +59,7 @@ const weight = ref('8')
       <SegmentedControl
         id="sg-dialog-edit-reps-count"
         v-model="repsCount"
-        :label="measure === 'time' ? 'Timed' : 'Reps count'"
+        label="Sides"
         :options="REPS_COUNT"
       />
     </div>

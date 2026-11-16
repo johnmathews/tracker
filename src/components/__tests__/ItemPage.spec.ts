@@ -232,9 +232,7 @@ describe('notes', () => {
     await button().trigger('click')
     // 12,000 characters of three bytes each: within 20,000, over the API's 32 KB.
     await type(area(), '€'.repeat(12_000))
-    expect(section('notes').text()).toContain(
-      'These notes are too long to save. Shorten them, then save again.',
-    )
+    expect(section('notes').text()).toContain('These notes are too long to save. Shorten them.')
     expect(useDetailsStore().notesOf('exercise', 'ks')).toContain('Hinge')
   })
 
@@ -305,7 +303,7 @@ describe('details', () => {
     mountPage()
     await type(field('works'), '€'.repeat(500))
     expect(section('details').text()).toContain(
-      'These details are too long to save. Shorten them or the notes, then save again.',
+      'These details are too long to save. Shorten them or the notes.',
     )
   })
 
@@ -342,17 +340,15 @@ describe('details', () => {
 })
 
 describe('this week’s plan', () => {
-  it('says what it changes, and has the Edit dialog’s controls without Name and Note', () => {
+  it('has the Edit dialog’s controls without Name and Note, and no line under its heading', () => {
     mountPage()
     const plan = section('plan')
-    expect(wrapper!.get('[data-testid="item-plan-line"]').text()).toBe(
-      'Changes this week’s plan, and the weeks after it that have no plan of their own.',
-    )
+    expect(wrapper!.find('[data-testid="item-plan-line"]').exists()).toBe(false)
     expect(
       plan
         .findAll('label, [data-slot="segmented-control-label"], [data-slot="stepper-label"]')
         .map((l) => l.text()),
-    ).toEqual(['Sets', 'Measure', 'Reps', 'Weight in kg', 'Reps count', 'Times a week'])
+    ).toEqual(['Sets', 'Measure', 'Reps', 'Weight in kg', 'Sides', 'Times a week'])
     expect(field('sets').element.value).toBe('3')
     expect(field('reps').element.value).toBe('15')
     expect(field('weight').element.value).toBe('16')
@@ -381,7 +377,7 @@ describe('this week’s plan', () => {
       .trigger('click')
     expect(stored().duration).toBe(20)
     expect(section('plan').text()).toContain('Seconds')
-    expect(section('plan').text()).toContain('Timed')
+    expect(section('plan').text()).toContain('Sides')
     await section('plan').get('button[aria-label="More times a week"]').trigger('click')
     expect(stored().target).toBe(4)
     // The chips in the head follow.
@@ -396,17 +392,13 @@ describe('this week’s plan', () => {
   it('shows the TextField’s error for a number that isn’t valid, and changes nothing', async () => {
     mountPage()
     await type(field('sets'), '25')
-    expect(section('plan').text()).toContain(
-      'This is 25 sets. Enter 20 or fewer to change the plan.',
-    )
+    expect(section('plan').text()).toContain('This is 25 sets. Enter 20 or fewer.')
     expect(field('sets').attributes('aria-invalid')).toBe('true')
     expect(stored().sets).toBe(3)
     await type(field('sets'), '5')
     expect(stored().sets).toBe(5)
     await type(field('weight'), '600')
-    expect(section('plan').text()).toContain(
-      'This is 600 kg. Enter 500 or fewer to change the plan.',
-    )
+    expect(section('plan').text()).toContain('This is 600 kg. Enter 500 or fewer.')
     expect(stored().weight).toBe(16)
     await type(field('weight'), '')
     expect(stored().weight).toBeUndefined()
@@ -415,9 +407,7 @@ describe('this week’s plan', () => {
       .find((b) => b.text() === 'Time')!
       .trigger('click')
     await type(field('reps'), '4000')
-    expect(section('plan').text()).toContain(
-      'This is 4,000 seconds. Enter 3,600 or fewer to change the plan.',
-    )
+    expect(section('plan').text()).toContain('This is 4,000 seconds. Enter 3,600 or fewer.')
     expect(stored().duration).toBe(15)
   })
 
@@ -434,9 +424,7 @@ describe('this week’s plan', () => {
     usePlannerStore().prevWeek()
     mountPage()
     expect(section('plan').get('h2').text()).toBe('Plan for the week of 12 October')
-    expect(wrapper!.get('[data-testid="item-plan-line"]').text()).toBe(
-      'Changes the plan for the week of 12 October, and the weeks after it that have no plan of their own.',
-    )
+    expect(wrapper!.find('[data-testid="item-plan-line"]').exists()).toBe(false)
   })
 
   it('has Times a week alone for a food, through the food’s goal', async () => {
@@ -503,14 +491,10 @@ describe('a cardio item (K90)', () => {
   it('says when a time or a distance is over its limit, and changes nothing', async () => {
     mountPage('cardio', 'ru')
     await type(field('minutes'), '1500')
-    expect(section('plan').text()).toContain(
-      'This is 1,500 minutes. Enter 1,440 or fewer to change the plan.',
-    )
+    expect(section('plan').text()).toContain('This is 1,500 minutes. Enter 1,440 or fewer.')
     expect(field('minutes').attributes('aria-invalid')).toBe('true')
     await type(field('distance'), '1200')
-    expect(section('plan').text()).toContain(
-      'This is 1,200 km. Enter 1,000 or fewer to change the plan.',
-    )
+    expect(section('plan').text()).toContain('This is 1,200 km. Enter 1,000 or fewer.')
     expect(runs()[0]).toEqual(RUN)
     await type(field('minutes'), '20')
     expect(runs()[0]).toEqual(RUN)
@@ -569,7 +553,7 @@ describe('a cardio item (K90)', () => {
     mountPage('cardio', 'ru')
     await wrapper!.get('[data-testid="item-arrange"]').trigger('click')
     expect(wrapper!.get('[data-testid="item-arrange-line"]').text()).toBe(
-      'Choose which sections every cardio page shows, and their order. Changes apply at once.',
+      'Choose which sections every cardio page shows, and their order.',
     )
   })
 })
@@ -594,7 +578,7 @@ describe('a mobility item (W8)', () => {
       ['Sets', '2'],
       ['Measure', 'Time'],
       ['Seconds', '45'],
-      ['Timed', 'Per set'],
+      ['Sides', 'Per set'],
       ['Times a week', '3'],
     ])
     expect(wrapper.findAll('[data-testid="item-chip"]').map((c) => c.text())).toEqual(['2 × 45 s'])
@@ -617,7 +601,7 @@ describe('an item not in the week', () => {
       ['Measure', 'Reps'],
       ['Reps', '15'],
       ['Weight in kg', '16'],
-      ['Reps count', 'Per set'],
+      ['Sides', 'Per set'],
       ['Times a week', '3'],
     ])
     expect(plan.findAll('input, button')).toHaveLength(0)
@@ -641,7 +625,7 @@ describe('an item not in the week', () => {
       ['Measure', 'Time'],
       ['Seconds', '45'],
       ['Weight in kg', 'Bodyweight'],
-      ['Timed', 'Each side'],
+      ['Sides', 'Each side'],
       ['Times a week', '2'],
     ])
   })
@@ -659,7 +643,7 @@ describe('an item not in the week', () => {
       section('plan')
         .findAll('dt')
         .map((d) => d.text()),
-    ).toEqual(['Measure', 'Weight in kg', 'Reps count', 'Times a week'])
+    ).toEqual(['Measure', 'Weight in kg', 'Sides', 'Times a week'])
     wrapper!.unmount()
     mountPage('diet', 'nuts')
     expect(
@@ -693,7 +677,7 @@ describe('recent weeks', () => {
     ])
     expect(weeks.get('ol').attributes('aria-labelledby')).toBe(weeks.get('h2').attributes('id'))
     expect(weeks.get('[data-testid="recent-weeks-line"]').text()).toBe(
-      'The goal was met in one of the last two weeks.',
+      'You met the goal in one of the last two weeks.',
     )
   })
 
@@ -759,7 +743,7 @@ describe('arranging the sections (K66)', () => {
     expect(arrange().text()).toBe('Done')
     expect(document.activeElement).toBe(arrange().element)
     expect(wrapper!.get('[data-testid="item-arrange-line"]').text()).toBe(
-      'Choose which sections every exercise page shows, and their order. Changes apply at once.',
+      'Choose which sections every exercise page shows, and their order.',
     )
     expect(headings()).toEqual(['Notes', 'Details', 'This week’s plan', 'Recent weeks'])
     for (const row of page().findAll('section')) {
@@ -791,7 +775,7 @@ describe('arranging the sections (K66)', () => {
     mountPage('diet', 'fish')
     await arrange().trigger('click')
     expect(wrapper!.get('[data-testid="item-arrange-line"]').text()).toBe(
-      'Choose which sections every food page shows, and their order. Changes apply at once.',
+      'Choose which sections every food page shows, and their order.',
     )
   })
 
@@ -921,9 +905,7 @@ describe('the name’s pen and Remove, the same in both modes (K120, K121)', () 
       expect(wrapper!.find('[data-testid="item-name-field"]').exists()).toBe(false)
       const sections = page().findAll('section')
       expect(sections.at(-1)!.attributes('data-testid')).toBe('item-remove')
-      expect(section('remove').text()).toContain(
-        'Remove ‘Kettlebell swings’ from the Strength tracker for this week and future weeks. Existing data is not removed.',
-      )
+      expect(section('remove').find('p').exists()).toBe(false)
       expect(section('remove').get('button').text()).toBe('Remove from this week on')
     })
   }

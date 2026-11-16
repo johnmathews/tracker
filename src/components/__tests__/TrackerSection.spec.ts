@@ -456,7 +456,7 @@ describe('TrackerSection: Delete tracker (K122)', () => {
     await flushPromises()
     expect(dialog()!.querySelector('h2')!.textContent).toBe('Delete Cardio?')
     expect(dialog()!.textContent).toContain(
-      'Remove Cardio from this week and future weeks.\nHistory is not deleted.',
+      'It comes off this week and the weeks after. Earlier weeks keep it.',
     )
     // Each sentence on a line of its own (K129).
     expect(dialog()!.querySelector('[data-slot="confirm-message"]')!.className).toContain(

@@ -90,7 +90,7 @@ describe('the consent screen (#/connect/<id>)', () => {
     expect(wrapper.find('[data-testid="exercise-grid"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('Sign in to see your plans')
     expect(wrapper.get('[data-testid="connect-warning"]').text()).toBe(
-      'Only continue if you just asked Claude to connect to your tracker. If you didn’t, choose Cancel.',
+      'Choose Connect only if you just asked Claude to connect. If you didn’t, choose Cancel.',
     )
     const who = wrapper.get('[data-testid="connect-who"]')
     expect(who.findAll('dt').map((d) => d.text())).toEqual(['Asking', 'Then back to'])
@@ -118,9 +118,7 @@ describe('the consent screen (#/connect/<id>)', () => {
     await open()
     expect(heading()).toBe('Connect Claude')
     expect(field('connect-email').element.value).toBe(SAM)
-    expect(wrapper.text()).toContain(
-      'You’re signed in, but connecting an app asks for your password again.',
-    )
+    expect(wrapper.text()).toContain('Enter your password again to connect Claude.')
   })
 
   it('names the app from its metadata, and a loopback redirect as this computer', async () => {

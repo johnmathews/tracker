@@ -14,12 +14,12 @@ const TABS = [
   {
     value: 'daily-goal',
     label: 'Daily goal',
-    text: 'A number of exercises and of foods to reach each day, set in Edit plan. A day that reaches it turns green.',
+    text: 'How many exercises and foods to mark each day. A day that reaches it turns green.',
   },
   {
     value: 'data',
     label: 'Your data',
-    text: 'Export saves everything to a file. Import adds a file’s plans and marks to yours and never deletes anything.',
+    text: 'Export saves everything to a file. Import adds a file’s plans and marks to yours.',
   },
   {
     value: 'connections',

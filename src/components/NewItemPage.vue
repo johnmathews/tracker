@@ -8,7 +8,7 @@ import { useExerciseForm } from '@/composables/exerciseForm'
 import { useCardioForm } from '@/composables/cardioForm'
 import { cardioPlanErrors, exercisePlanErrors, hasPlanErrors } from '@/composables/planErrors'
 import { dayMonth } from '@/lib/dates'
-import { BODY, FIELDS, H2, LEDE, ROW } from '@/lib/itemPage'
+import { BODY, FIELDS, H2, ROW } from '@/lib/itemPage'
 import { shownSections } from '@/lib/itemSections'
 import { backToWeek, leaveForWeek } from '@/lib/routes'
 import { MAX_DETAILS_NOTES, MAX_FIELD, NOTES_COUNT_FROM, codePoints } from '@/lib/storage'
@@ -53,12 +53,7 @@ const sections = computed(() => {
 
 const isCurrent = computed(() => planner.weekKey === planner.currentWeekKey)
 const planHeading = computed(() =>
-  isCurrent.value ? 'Goals' : `Goals for the week of ${dayMonth(planner.monday)}`,
-)
-const planLine = computed(() =>
-  isCurrent.value
-    ? 'Adds it to this week’s plan, and the weeks after it that have no plan of their own.'
-    : `Adds it to the plan for the week of ${dayMonth(planner.monday)}, and the weeks after it that have no plan of their own.`,
+  isCurrent.value ? 'This week’s plan' : `Plan for the week of ${dayMonth(planner.monday)}`,
 )
 
 const name = ref('')
@@ -225,7 +220,6 @@ async function add(): Promise<void> {
         >
           <h2 :id="ids.plan" :class="H2">{{ planHeading }}</h2>
           <div :class="BODY">
-            <p :class="LEDE" data-testid="item-plan-line">{{ planLine }}</p>
             <PlanFields
               :kind="kind"
               :weighted="type.weighted"

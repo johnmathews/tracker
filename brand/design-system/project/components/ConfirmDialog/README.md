@@ -13,7 +13,7 @@ The app's two cases, rewritten in voice:
 
 | Where | Today (`window.confirm`) | ConfirmDialog |
 | --- | --- | --- |
-| `ItemPage.vue`, Remove from this week on (K120, K127) | "Remove Push-ups?" | **Remove Push-ups?** Remove ‘Push-ups’ from this week’s plan and also future weeks. History is unchanged and existing data is not removed. · Cancel · Remove |
+| `ItemPage.vue`, Remove from this week on (K120, K127) | "Remove Push-ups?" | **Remove Push-ups?** It comes off this week and the weeks after. Earlier weeks keep it, with its marks and notes. · Cancel · Remove |
 | `ProfilePage.vue` and the profile Menu, Sign out | "2 changes haven't synced yet. Sign out anyway?" | **Sign out now?** Two changes on this device haven't reached the server yet. Signing out now loses them. · Cancel · Sign out |
 
 Removing a food uses the first pattern ("Remove Fish?"). The removal touches only this week's plan and the weeks that follow it without a plan of their own; it never deletes the log.

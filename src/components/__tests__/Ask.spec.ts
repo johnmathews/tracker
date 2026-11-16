@@ -220,7 +220,7 @@ describe('the Ask page', () => {
     await mountApp({ goals: 'Ten pull-ups in a row by March.', hash: '#/ask' })
     const empty = wrapper.get('[data-testid="ask-empty"]')
     expect(empty.text()).toContain(
-      'Ask about your exercises, cardio and food: whether you’re doing enough for your goals, how steady the weeks are, what to change. The answer reads your plans and marks for the last eight weeks, and your goals and limits in Profile.',
+      'Ask about your training and food. Answers read your last eight weeks, and your goals and limits in Profile.',
     )
     expect(empty.text()).not.toContain('Add your goals')
     expect(empty.findAll('button').map((b) => b.text())).toEqual([
@@ -287,7 +287,7 @@ describe('the Ask page', () => {
   it('says when there are no goals yet, and links to them', async () => {
     await mountApp({ goals: '', hash: '#/ask' })
     const empty = wrapper.get('[data-testid="ask-empty"]')
-    expect(empty.text()).toContain('for the last eight weeks.')
+    expect(empty.text()).toContain('Answers read your last eight weeks.')
     expect(empty.text()).toContain(
       'Your goals in Profile are empty, so answers can only compare you with the times a week you set.',
     )

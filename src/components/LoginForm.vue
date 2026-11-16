@@ -16,8 +16,8 @@ const problem = ref<AuthProblem | null>(null)
 
 const intro = computed(() =>
   session.expired
-    ? 'Your session has ended. Sign in again to keep syncing; changes made on this device are kept.'
-    : 'Sign in to see your plans and log on any device.',
+    ? 'Your session has ended. Sign in again to keep syncing. Your changes on this device are kept.'
+    : 'Sign in to see your plans and mark days on any device.',
 )
 // One message covers both fields: the server doesn't say which of the two was wrong.
 const wrong = computed(() => problem.value?.code === 'invalid')

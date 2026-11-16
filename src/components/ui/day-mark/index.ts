@@ -70,11 +70,17 @@ export const FACE_EYES = [
  * the symbol in paper a little thinner, so the paper between strokes stays open.
  */
 export type MarkLook =
-  | { type: 'drawing'; path: string }
+  | { type: 'drawing'; drawing: Drawing; path: string }
   | { type: 'symbol'; symbol: MarkSymbol; stamped: boolean; width: number; eye: number }
 
 export function markLook(set: MarkSet, mark: Mark): MarkLook {
-  if (set === 'squiggles') return { type: 'drawing', path: MARK_DRAWINGS[markDrawing(mark)] }
+  // Each set decides the look (K141): the squiggles draw a solid fill as the zigzag, and Filled
+  // in draws every mark solid.
+  if (set === 'squiggles' || set === 'filled') {
+    const stored = markDrawing(mark)
+    const drawing: Drawing = set === 'filled' ? 'solid' : stored === 'solid' ? 'zigzag' : stored
+    return { type: 'drawing', drawing, path: MARK_DRAWINGS[drawing] }
+  }
   const stamped = set.startsWith('stamped-')
   const symbols = MARK_SYMBOLS[set.endsWith('ticks') ? 'ticks' : 'faces']
   return {

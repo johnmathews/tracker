@@ -29,7 +29,7 @@ and `FIRST_NAMES` names them Strength, Cardio and Food. Each kind gives:
 - its name on the new tracker page's Kind control and the two lines under it (`label`,
   `settings`: "Strength", "Log sets, reps, time and weight."; K128), the label of one item and of several (`itemLabel`, `itemsLabel`: "Exercise",
   "Exercises", as in "Exercises a day"), and the Add button's words (`addLabel`: "Add exercise",
-  "Add cardio", "Add food", "Add mobility");
+  "Add cardio", "Add food", and "Add exercise" again for mobility, K140);
 - the plan fields an item has (`plan`: an exercise's for strength and mobility, cardio's or a
   food's) and whether an exercise's plan has a weight (`weighted`: strength only);
 - the marks a press steps through in each mark set (§6.2);
@@ -248,7 +248,7 @@ the settings.
 | `weekTitle`, `weekTitleKnown` | the sync store: server and per-user cache | Week title (K131, K132), `dates` by default or `number`; sent once known    |
 | `itemSections`                | the sync store: server and per-user cache | each kind's item-page arrangement (K66); `{}` is every page as it comes     |
 | `theme`                       | `tracker-settings-v1` (the device)        | `system` (default), `light` or `dark`                                       |
-| `markSet`                     | `tracker-settings-v1` (the device)        | `squiggles` (default), `ticks`, `stamped-ticks`, `faces`, `stamped-faces`   |
+| `markSet`                     | `tracker-settings-v1` (the device)        | `squiggles` (default), `filled`, `ticks`, `stamped-ticks`, `faces`, `stamped-faces` |
 | `configMode`                  | no                                        | `false` (normal mode) on every load                                         |
 | `weekOffset`                  | no                                        | `0` is the current week                                                     |
 | `now`                         | no                                        | a ref so "today" can move; see §5                                           |
@@ -853,9 +853,11 @@ symbol (`MARK_SYMBOLS`) stroked in the pen, or stamped: the solid drawing in the
 symbol in `canvas` (in print, the light canvas). A press emits `toggle`; the stores step the day
 with `cycleDay` and `nextMark` (`src/lib/tracker.ts`) over `cycleFor(type, markSet)`, which reads
 the type's `cycle` from the registry. The cycles live in `src/lib/trackerTypes.ts`, and `tracker.ts`
-re-exports them. In the squiggles `EXERCISE_CYCLE` is every mark, drawing first, and `FOOD_CYCLE`
-the three green ones; in a symbol set the plain kinds once (`EXERCISE_KIND_CYCLE`,
-`FOOD_KIND_CYCLE`). A squiggle drawing there steps on from its kind.
+re-exports them. In the squiggles `EXERCISE_CYCLE` is every zigzag and hatch mark, drawing first, and
+`FOOD_CYCLE` the two green ones; in Filled in the solid fill's kinds once
+(`EXERCISE_FILLED_CYCLE`, `FOOD_FILLED_CYCLE`, K141); in a symbol set the plain kinds once
+(`EXERCISE_KIND_CYCLE`, `FOOD_KIND_CYCLE`). A drawing another set chose steps on from the first of
+its kind there.
 `isDone` and the totals count every kind. [brand.md](brand.md) §4 has the values.
 
 ### 6.3 The primitives

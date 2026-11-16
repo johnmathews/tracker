@@ -10,7 +10,7 @@ import { countOf } from '@/lib/words'
 export const ASK_COPY = {
   /** Under the box while asking is open. */
   note: 'Answers come from an AI and can be wrong. They aren’t medical advice.',
-  offline: 'You’re offline. Asking needs a connection; your marks are saved on this device.',
+  offline: 'You’re offline. You can ask again once you’re back online.',
   /** `done.saved` false: the account is at its quota (docs/api.md §3.2). */
   notSaved: 'Your account is full, so this answer wasn’t saved.',
   /** The conversation went (deleted in another tab or on another device) before it was used. */
@@ -30,7 +30,7 @@ export const ASK_COPY = {
   refused: 'The AI didn’t answer this question. Try asking it another way.',
   long: 'The answer ran long and was cut short. Ask a follow-up for the rest.',
   server: 'The server had a problem, so the question wasn’t asked. Try again in a while.',
-  rejected: 'The server refused the question, so it wasn’t asked.',
+  rejected: 'The server refused the question, so it wasn’t asked. Try asking it another way.',
   deleteOffline: 'Can’t reach the server, so nothing was deleted. Try again when you’re online.',
   deleteFailed: 'The server had a problem, so nothing was deleted. Try again in a while.',
 } as const

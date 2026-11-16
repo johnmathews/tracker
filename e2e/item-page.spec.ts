@@ -36,10 +36,14 @@ test.describe('desktop', () => {
       if (i) expect(box.y).toBeGreaterThan(boxes[i - 1]!.y)
     }
     // u is 1 at 1280×800: the name column is 320px, so the content starts 320px from the heading.
-    const lede = (await page.getByTestId('item-plan-line').boundingBox())!
+    await expect(page.getByTestId('item-plan-line')).toHaveCount(0)
+    const sets = (await page
+      .getByTestId('item-plan')
+      .getByText('Sets', { exact: true })
+      .boundingBox())!
     const planHead = boxes[0]!
-    expect(Math.abs(lede.x - planHead.x - 320)).toBeLessThan(2)
-    expect(Math.abs(lede.y - planHead.y)).toBeLessThan(12)
+    expect(Math.abs(sets.x - planHead.x - 320)).toBeLessThan(2)
+    expect(Math.abs(sets.y - planHead.y)).toBeLessThan(12)
     // No bar on this page.
     await expect(page.locator('[data-slot="bar"]')).toHaveCount(0)
 
@@ -194,13 +198,16 @@ test.describe('phone, 390px', () => {
     await settle(page)
     const heads = await page.getByRole('heading', { level: 2 }).allTextContents()
     expect(heads).toEqual(['This week’s plan', 'Notes', 'Details', 'Recent weeks', 'Remove'])
-    // Each heading over its content: the plan's line starts under its heading, not beside it.
+    // Each heading over its content: the plan's first field starts under its heading, not beside it.
     const plan = (await page
       .getByRole('heading', { level: 2, name: 'This week’s plan' })
       .boundingBox())!
-    const lede = (await page.getByTestId('item-plan-line').boundingBox())!
-    expect(lede.y).toBeGreaterThan(plan.y + plan.height)
-    expect(Math.abs(lede.x - plan.x)).toBeLessThan(2)
+    const sets = (await page
+      .getByTestId('item-plan')
+      .getByText('Sets', { exact: true })
+      .boundingBox())!
+    expect(sets.y).toBeGreaterThan(plan.y + plan.height)
+    expect(Math.abs(sets.x - plan.x)).toBeLessThan(2)
     await expectNoSidewaysScroll(page)
     await page.getByRole('button', { name: 'Edit notes' }).click()
     await expectNoSidewaysScroll(page)

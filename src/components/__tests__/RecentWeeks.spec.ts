@@ -107,7 +107,7 @@ describe('RecentWeeks', () => {
   it('says over the list how many weeks met their goal, in words, only when one did', () => {
     mountWeeks()
     const line = wrapper!.get('[data-testid="recent-weeks-line"]')
-    expect(line.text()).toBe('The goal was met in one of the last five weeks.')
+    expect(line.text()).toBe('You met the goal in one of the last five weeks.')
     expect(line.get('span').classes()).toContain('text-ink')
     wrapper!.unmount()
     mountWeeks([WEEKS[0]!, WEEKS[2]!])

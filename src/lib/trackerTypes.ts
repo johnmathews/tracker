@@ -7,6 +7,7 @@ import {
   NEW_FOOD_TARGET,
   defaultExercises,
   defaultFoods,
+  markDrawing,
   markKind,
   normaliseCardio,
   normaliseExercise,
@@ -85,12 +86,28 @@ export type TrackerType = {
 }
 
 /**
- * The marks a press steps through, after an empty day and back to it (DayMark card, K17), drawing
- * first: an exercise goes great, partial and missed in the zigzag, then in the solid, then in the
- * hatch; a food is eaten or not, so it goes great in each drawing.
+ * The marks a press steps through in the squiggles, after an empty day and back to it (DayMark
+ * card, K17, K141), drawing first: an exercise goes great, partial and missed in the zigzag, then
+ * in the hatch; a food is eaten or not, so it goes great in each drawing.
  */
-export const EXERCISE_CYCLE: readonly Mark[] = MARKS
-export const FOOD_CYCLE: readonly Mark[] = MARKS.filter((m) => markKind(m) === 'great')
+export const EXERCISE_CYCLE: readonly Mark[] = MARKS.filter((m) => markDrawing(m) !== 'solid')
+export const FOOD_CYCLE: readonly Mark[] = EXERCISE_CYCLE.filter((m) => markKind(m) === 'great')
+
+/** The Filled in set's (K141): the solid fill alone, great, partial and missed, or great for a food. */
+export const EXERCISE_FILLED_CYCLE: readonly Mark[] = MARKS.filter(
+  (m) => markDrawing(m) === 'solid',
+)
+export const FOOD_FILLED_CYCLE: readonly Mark[] = ['great-solid']
+
+/** The cycle a set gives an exercise (strength, cardio, mobility) or a food. */
+function exerciseCycle(set: MarkSet): readonly Mark[] {
+  if (set === 'squiggles') return EXERCISE_CYCLE
+  return set === 'filled' ? EXERCISE_FILLED_CYCLE : EXERCISE_KIND_CYCLE
+}
+function foodCycle(set: MarkSet): readonly Mark[] {
+  if (set === 'squiggles') return FOOD_CYCLE
+  return set === 'filled' ? FOOD_FILLED_CYCLE : FOOD_KIND_CYCLE
+}
 
 /**
  * The cycles for a tick or face set (K21): one symbol per kind, so a press steps through the plain
@@ -138,7 +155,7 @@ export const TRACKER_TYPES: Readonly<Record<TrackerTypeId, TrackerType>> = {
     addLabel: 'Add exercise',
     plan: 'exercise',
     weighted: true,
-    cycle: (set) => (set === 'squiggles' ? EXERCISE_CYCLE : EXERCISE_KIND_CYCLE),
+    cycle: exerciseCycle,
     // An exercise section holds only exercises.
     details: (item) => exerciseDetails(item as Exercise),
     fields: [
@@ -161,7 +178,7 @@ export const TRACKER_TYPES: Readonly<Record<TrackerTypeId, TrackerType>> = {
     plan: 'cardio',
     weighted: false,
     // Marked like an exercise: done well, in part, or too difficult (K90).
-    cycle: (set) => (set === 'squiggles' ? EXERCISE_CYCLE : EXERCISE_KIND_CYCLE),
+    cycle: exerciseCycle,
     details: (item) => cardioDetails(item as Cardio),
     fields: [
       { key: 'route', label: 'Route' },
@@ -181,7 +198,7 @@ export const TRACKER_TYPES: Readonly<Record<TrackerTypeId, TrackerType>> = {
     addLabel: 'Add food',
     plan: 'food',
     weighted: false,
-    cycle: (set) => (set === 'squiggles' ? FOOD_CYCLE : FOOD_KIND_CYCLE),
+    cycle: foodCycle,
     details: () => [],
     fields: [
       { key: 'serving', label: 'A serving' },
@@ -200,10 +217,10 @@ export const TRACKER_TYPES: Readonly<Record<TrackerTypeId, TrackerType>> = {
     settings: 'Log sets, reps or hold time, each side.',
     itemLabel: 'Exercise',
     itemsLabel: 'Exercises',
-    addLabel: 'Add mobility',
+    addLabel: 'Add exercise',
     plan: 'exercise',
     weighted: false,
-    cycle: (set) => (set === 'squiggles' ? EXERCISE_CYCLE : EXERCISE_KIND_CYCLE),
+    cycle: exerciseCycle,
     details: (item) => exerciseDetails(item as Exercise),
     fields: [
       { key: 'equipment', label: 'Equipment' },

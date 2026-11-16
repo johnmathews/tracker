@@ -44,7 +44,7 @@ const repsCount = ref('each-side')
       <SegmentedControl
         id="sg-segmented-control-reps-default"
         v-model="repsCount"
-        label="Reps count"
+        label="Sides"
         :options="REPS_COUNT"
       />
     </StateExample>
@@ -52,7 +52,7 @@ const repsCount = ref('each-side')
       <SegmentedControl
         id="sg-segmented-control-reps-disabled"
         model-value="per-set"
-        label="Reps count"
+        label="Sides"
         :options="REPS_COUNT"
         disabled
       />

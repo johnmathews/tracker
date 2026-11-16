@@ -69,7 +69,7 @@ async function submit(): Promise<void> {
 
 <template>
   <AuthCard title="Create an account">
-    <p class="body mb-6 text-ink-secondary">Keep your plans and log on any device.</p>
+    <p class="body mb-6 text-ink-secondary">Keep your plans and mark days on any device.</p>
     <form class="flex flex-col gap-4" @submit.prevent="submit">
       <!-- `username` rather than `email`, so password managers save the new password against it:
            the email is the name this account signs in with. -->

@@ -71,7 +71,7 @@ export function useExerciseForm() {
   function onMeasure(value: string): void {
     measureChoice.value = value
   }
-  /** The Reps count toggle: each side, or per set. */
+  /** The Sides toggle: each side, or per set. */
   function onPerSide(value: boolean): void {
     perSide.value = value
   }

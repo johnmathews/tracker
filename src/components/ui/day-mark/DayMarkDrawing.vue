@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { cn } from '@/lib/utils'
-import { markDrawing, markKind, type Mark, type MarkSet } from '@/lib/storage'
+import { markKind, type Mark, type MarkSet } from '@/lib/storage'
 import { BOX_PATH, FACE_EYES, MARK_DRAWINGS, MARK_PENS, markLook } from '.'
 
 const STAMP_PATH = MARK_DRAWINGS.solid
@@ -22,7 +22,8 @@ const look = computed(() => (props.mark ? markLook(props.set, props.mark) : null
 <!--
   A day's mark as a picture (brand/design-system/project/components/DayMark): the hand-drawn box,
   60px on a 36-unit square, and the mark in its pen as the mark set says. The squiggles fill the
-  box with the marker drawing the mark names (zigzag, solid or hatch); a tick or face set strokes
+  box with the marker drawing the mark names (zigzag or hatch; a solid one as the zigzag), Filled
+  in with the solid fill (K141); a tick or face set strokes
   its symbol (tick, wave, wave; happy, so-so, so-so), or stamps it, the box filled solid with the
   symbol in paper. The ink runs a little past the box, and the box is drawn over it, as a pen line
   shows through marker. Not pressable: DayMark puts it in its button, and the Marks setting shows
@@ -44,7 +45,7 @@ const look = computed(() => (props.mark ? markLook(props.set, props.mark) : null
         v-if="look.type === 'drawing'"
         :d="look.path"
         data-slot="day-mark-stroke"
-        :data-drawing="markDrawing(mark)"
+        :data-drawing="look.drawing"
         fill="currentColor"
         fill-rule="evenodd"
         stroke="none"

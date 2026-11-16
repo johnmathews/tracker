@@ -153,8 +153,7 @@ onMounted(load)
   <AuthCard :title="title" data-testid="connect-page">
     <template v-if="phase === 'ready' && request">
       <InlineMessage tone="caution" data-testid="connect-warning">
-        Only continue if you just asked {{ app }} to connect to your tracker. If you didn’t, choose
-        Cancel.
+        Choose Connect only if you just asked {{ app }} to connect. If you didn’t, choose Cancel.
       </InlineMessage>
       <form class="mt-4 flex flex-col gap-4" @submit.prevent="approve">
         <dl
@@ -188,11 +187,7 @@ onMounted(load)
           type="password"
           autocomplete="current-password"
           required
-          :hint="
-            signedIn
-              ? 'You’re signed in, but connecting an app asks for your password again.'
-              : undefined
-          "
+          :hint="signedIn ? `Enter your password again to connect ${app}.` : undefined"
           :invalid="wrong"
           :aria-describedby="describedBy"
         />

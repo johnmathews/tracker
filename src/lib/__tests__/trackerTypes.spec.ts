@@ -11,8 +11,10 @@ import {
 } from '@/lib/storage'
 import {
   EXERCISE_CYCLE,
+  EXERCISE_FILLED_CYCLE,
   EXERCISE_KIND_CYCLE,
   FOOD_CYCLE,
+  FOOD_FILLED_CYCLE,
   FOOD_KIND_CYCLE,
   cycleFor,
 } from '@/lib/tracker'
@@ -109,7 +111,10 @@ describe('the tracker-type registry', () => {
     expect(TRACKER_TYPES.food.cycle('squiggles')).toBe(FOOD_CYCLE)
     // Cardio is marked like an exercise (K90).
     expect(TRACKER_TYPES.cardio.cycle('squiggles')).toBe(EXERCISE_CYCLE)
-    for (const set of MARK_SETS.filter((s) => s !== 'squiggles')) {
+    expect(TRACKER_TYPES.strength.cycle('filled')).toBe(EXERCISE_FILLED_CYCLE)
+    expect(TRACKER_TYPES.cardio.cycle('filled')).toBe(EXERCISE_FILLED_CYCLE)
+    expect(TRACKER_TYPES.food.cycle('filled')).toBe(FOOD_FILLED_CYCLE)
+    for (const set of MARK_SETS.filter((s) => s !== 'squiggles' && s !== 'filled')) {
       expect(TRACKER_TYPES.strength.cycle(set)).toBe(EXERCISE_KIND_CYCLE)
       expect(TRACKER_TYPES.cardio.cycle(set)).toBe(EXERCISE_KIND_CYCLE)
       expect(TRACKER_TYPES.food.cycle(set)).toBe(FOOD_KIND_CYCLE)
@@ -174,7 +179,7 @@ describe('the tracker-type registry', () => {
       'Mobility',
       'Exercise',
       'Exercises',
-      'Add mobility',
+      'Add exercise',
     ])
     expect(m.settings).toBe('Log sets, reps or hold time, each side.')
     expect([m.plan, m.weighted]).toEqual(['exercise', false])

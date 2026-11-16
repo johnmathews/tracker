@@ -34,6 +34,7 @@ const THEME_NAMES: Record<Theme, string> = { system: 'System', light: 'Light', d
 const THEME_OPTIONS = THEMES.map((t) => ({ value: t, label: THEME_NAMES[t] }))
 const MARK_SET_NAMES: Record<MarkSet, string> = {
   squiggles: 'Squiggles',
+  filled: 'Filled in',
   ticks: 'Ticks',
   'stamped-ticks': 'Stamped ticks',
   faces: 'Faces',
@@ -42,7 +43,7 @@ const MARK_SET_NAMES: Record<MarkSet, string> = {
 const MARK_SET_OPTIONS = MARK_SETS.map((m) => ({ value: m, label: MARK_SET_NAMES[m] }))
 
 const IMPORT_ERRORS: Record<ParseError | 'read', string> = {
-  json: 'That file isn’t valid JSON.',
+  json: `That file isn’t a ${APP_NAME} export.`,
   format: `That file isn’t a ${APP_NAME} export.`,
   version: 'That export comes from a newer version of the app.',
   read: 'That file couldn’t be read.',
@@ -53,7 +54,7 @@ const IMPORT_FAILED: Record<'offline' | 'server' | 'auth' | 'quota' | 'error', s
   server: 'The server had a problem, so nothing was imported. Try again in a while.',
   auth: 'Your session has ended. Sign in again, then import the file.',
   quota: 'Your account is full, so nothing was imported.',
-  error: 'The server refused the import, so nothing changed.',
+  error: 'The server refused the import, so nothing changed. Try again, or export a new file.',
 }
 
 const EXPORT_WITHOUT_HISTORY =
@@ -288,8 +289,7 @@ async function confirmImport(data: ExportData): Promise<void> {
               :id="dailyGoalHint"
               class="caption max-w-[60ch] text-(length:--set-caption) leading-[1.35] text-ink-secondary"
             >
-              A number of exercises and of foods to reach each day, set in Edit plan. A day that
-              reaches it turns green.
+              How many exercises and foods to mark each day. A day that reaches it turns green.
             </p>
           </div>
         </section>
@@ -309,8 +309,7 @@ async function confirmImport(data: ExportData): Promise<void> {
               <p
                 class="body max-w-[34ch] text-(length:--set-text) leading-normal text-ink-secondary"
               >
-                Export saves everything to a file. Import adds a file’s plans and marks to yours and
-                never deletes anything.
+                Export saves everything to a file. Import adds a file’s plans and marks to yours.
               </p>
               <div role="group" :aria-labelledby="ids.data" class="flex flex-wrap gap-3">
                 <Button @click="exportData"><Download :stroke-width="1.5" />Export</Button>

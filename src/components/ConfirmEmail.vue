@@ -32,9 +32,7 @@ const goneText = computed(
   () =>
     `This link has expired or was already used. ${session.status === 'signed-in' ? 'Choose' : 'Sign in and choose'} “Send it again” for a new one.`,
 )
-const onward = computed(() =>
-  session.status === 'signed-in' ? 'Go to the planner' : 'Go to sign in',
-)
+const onward = computed(() => (session.status === 'signed-in' ? 'Go to the week' : 'Go to sign in'))
 
 async function check(): Promise<void> {
   busy.value = true

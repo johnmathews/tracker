@@ -5,9 +5,9 @@ The screen Claude sends you to when it asks to connect to your tracker: the sign
 - **Where:** `#/connect/<id>`, the address the API's `/api/oauth/authorize` sends the browser to. It is a link route, like a confirm or reset link: it shows signed in or signed out, nothing else on screen, and signing out in another tab doesn't drop it. The id is the pending request's; it lives ten minutes and works once.
 - **Layout:** the sign-in card exactly (AuthCard: the Panel on `canvas`, at most 384px wide, the wordmark at 32px, the `title-1` heading), in this order:
   1. **Title:** "Connect Claude", with the app's own name from its metadata ("Connect Claude Code").
-  2. **The warning first,** an InlineMessage in the caution tone: "Only continue if you just asked Claude to connect to your tracker. If you didn’t, choose Cancel."
+  2. **The warning first,** an InlineMessage in the caution tone: "Choose Connect only if you just asked Claude to connect. If you didn’t, choose Cancel."
   3. **Who is asking,** a two-line `dl` between two `line` rules, the terms in `ink-secondary` and the values in weight 600: **Asking** "Claude, from claude.ai" (the app's name and the host of its `client_id`), **Then back to** "claude.ai" (the redirect's host; a loopback redirect, as Claude Code's, reads "this computer (localhost)").
-  4. **Email** (a TextField, filled with the signed-in account's email) and **Password**, empty. Signed in, the password's hint says why it is asked: "You’re signed in, but connecting an app asks for your password again."
+  4. **Email** (a TextField, filled with the signed-in account's email) and **Password**, empty. Signed in, the password's hint says what to do: "Enter your password again to connect Claude."
   5. **What Claude can do,** a RadioCard with a line each: "Read only" ("See your plans, marks and notes.") and "Read and change" ("Also mark days, and add and edit items."). Read only is chosen every time the screen opens, whatever the app asked for.
   6. **Cancel** (secondary) and **Connect** (primary), side by side, each half the width.
   7. A `caption` footnote in `ink-secondary`: "The connection lasts 90 days. You can remove it sooner in Settings › Connections."

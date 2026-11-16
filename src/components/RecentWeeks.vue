@@ -58,7 +58,7 @@ function count(week: RecentWeek): string {
       class="body text-(length:--set-text) leading-normal text-ink-secondary"
       data-testid="recent-weeks-line"
     >
-      The goal was met in <span class="text-ink">{{ phrase }}</span
+      You met the goal in <span class="text-ink">{{ phrase }}</span
       >.
     </p>
     <ol

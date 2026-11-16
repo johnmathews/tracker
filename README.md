@@ -18,8 +18,8 @@
   account holds up to 100 trackers.
 - **Strength.** Each day, pick a few exercises (default three) and mark their cells. A press steps
   a day through green (done well), yellow (partly done) and red (too difficult), first in a
-  zigzag, then a solid fill, then a hatch, and back to empty: the colour says how it went, and the
-  marker drawing is yours to choose. **Marks** in Settings swaps the squiggles for ticks (a tick, a
+  zigzag, then a hatch, and back to empty: the colour says how it went, and the marker drawing is
+  yours to choose. **Marks** in Settings swaps the squiggles for a solid fill, ticks (a tick, a
   wave, a wave) or faces (happy, so-so, so-so), drawn in marker or stamped on a coloured box; a
   press then steps green, yellow, red and back to empty. Each exercise has a weekly goal of 0–7 days, set
   on its page. A day whose marked exercises reach **Exercises a day** turns green: its
@@ -47,7 +47,7 @@
     since the bar shows it;
   - each tracker's title has a pen: it turns the name into a field, where Enter or **Done** saves
     and Escape puts the old name back;
-  - **Add exercise**, **Add cardio**, **Add food** and **Add mobility**, at the end of each
+  - **Add exercise** (strength and mobility), **Add cardio** and **Add food**, at the end of each
     tracker's title line before **Delete tracker**, open a new item page: a
     name, then this week's plan, notes and details. An exercise starts at one set of one rep, and
     takes sets, reps or a time in seconds (a plank), "Per set" or "Each side" and an optional
@@ -91,7 +91,7 @@
   screens wrap round: scrolling on past the last brings the first up from below, and scrolling up
   past the first brings the last down from above. Held upright, a phone or an iPad folds the week: each row's name
   above its seven boxes. A day that reaches its daily target turns green (while Daily goal is on).
-- **Settings** is a page of its own. It sets how marks are drawn (Squiggles, Ticks, Stamped ticks,
+- **Settings** is a page of its own. It sets how marks are drawn (Squiggles, Filled in, Ticks, Stamped ticks,
   Faces or Stamped faces) and the theme (System, Light or Dark). It has the **Daily goal** switch,
   which turns the daily targets and green days on or off on every device. It also holds export and
   import, and the Claude connections. Each has a tab of its own, with its own address:

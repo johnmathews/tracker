@@ -89,10 +89,10 @@ describe('the Profile page (K106)', () => {
     await openProfile()
     const [goals, limits] = page().findAll('[data-slot="text-area"]')
     expect(goals!.get('label').text()).toBe('What you’re working towards')
-    expect(goals!.text()).toContain('Ask and your Claude connections read this. Nothing else does.')
+    expect(goals!.text()).toContain('Ask and your connected apps read this. Nothing else does.')
     expect(limits!.get('label').text()).toBe('What you have to work around')
     expect(limits!.text()).toContain(
-      'Injuries, equipment, time and food. Ask and your Claude connections read this too.',
+      'Injuries, equipment, time and food. Ask and your connected apps read this too.',
     )
     expect(goalsBox().element.value).toBe('Ten pull-ups by March.')
     expect(limitsBox().element.value).toBe('Left knee: no jumping.')

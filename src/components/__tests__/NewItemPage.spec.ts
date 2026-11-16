@@ -71,10 +71,8 @@ describe('the new item page (K104)', () => {
     expect(field('reps').element.value).toBe('1')
     expect(wrapper!.get('[role="spinbutton"]').attributes('aria-valuenow')).toBe('3')
     // The plan first; Recent weeks has nothing yet, so it isn't there.
-    expect(headings()).toEqual(['Goals', 'Notes', 'Details'])
-    expect(wrapper!.get('[data-testid="item-plan-line"]').text()).toBe(
-      'Adds it to this week’s plan, and the weeks after it that have no plan of their own.',
-    )
+    expect(headings()).toEqual(['This week’s plan', 'Notes', 'Details'])
+    expect(wrapper!.find('[data-testid="item-plan-line"]').exists()).toBe(false)
   })
 
   it('reads a field the control clears to nothing as empty', async () => {
@@ -100,16 +98,13 @@ describe('the new item page (K104)', () => {
       hidden: ['notes', 'plan'],
     })
     mountPage()
-    expect(headings()).toEqual(['Details', 'Goals'])
+    expect(headings()).toEqual(['Details', 'This week’s plan'])
   })
 
-  it('names another week in its plan heading and line', () => {
+  it('names another week in its plan heading', () => {
     usePlannerStore().nextWeek()
     mountPage()
-    expect(headings()[0]).toBe('Goals for the week of 26 October')
-    expect(wrapper!.get('[data-testid="item-plan-line"]').text()).toBe(
-      'Adds it to the plan for the week of 26 October, and the weeks after it that have no plan of their own.',
-    )
+    expect(headings()[0]).toBe('Plan for the week of 26 October')
   })
 
   it('adds an exercise with its plan, notes and details, then goes back to the week', async () => {
@@ -168,7 +163,7 @@ describe('the new item page (K104)', () => {
     const trackers = useTrackersStore()
     const id = trackers.createTracker({ name: 'Mobility', kind: 'mobility' })!
     wrapper = mount(NewItemPage, { props: { section: id }, attachTo: document.body })
-    expect(wrapper.get('[data-testid="new-add"]').text()).toBe('Add mobility')
+    expect(wrapper.get('[data-testid="new-add"]').text()).toBe('Add exercise')
     expect(wrapper.get('[data-testid="item-type"]').text()).toBe('New exercise')
     expect(wrapper.find('input[data-field="weight"]').exists()).toBe(false)
     expect(wrapper.find('input[data-field="sets"]').exists()).toBe(true)
@@ -214,7 +209,7 @@ describe('the new item page (K104)', () => {
     await field('sets').setValue('25')
     await add()
     expect(trackerView('exercise').items).toHaveLength(1)
-    expect(wrapper!.text()).toContain('This is 25 sets. Enter 20 or fewer to change the plan.')
+    expect(wrapper!.text()).toContain('This is 25 sets. Enter 20 or fewer.')
     expect(document.activeElement).toBe(field('sets').element)
     await field('sets').setValue('2')
     expect(field('sets').attributes('aria-invalid')).toBeUndefined()
@@ -272,7 +267,7 @@ describe('the new item page (K104)', () => {
     await field('distance').setValue('2000')
     await add()
     expect(trackerView('cardio').items).toEqual([])
-    expect(wrapper!.text()).toContain('Enter 1,000 or fewer to change the plan.')
+    expect(wrapper!.text()).toContain('Enter 1,000 or fewer.')
   })
 
   it('adds a food with its goal and nothing else in its plan', async () => {

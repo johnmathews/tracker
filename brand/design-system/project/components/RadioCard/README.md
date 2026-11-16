@@ -8,7 +8,7 @@ A list of choices, exactly one chosen, each a bordered row with a radio dot, its
 - **Chosen:** a 2px `ink` outline and dot ring, and a 10px `ink` dot in the ring. Never `pen`: pen means done.
 - **With a line each:** in place of a picture, a `caption` line in `ink-secondary` under the name, which takes weight 600; the row's padding is `space-3` all round and the dot sits beside the name, not the middle of the row. Real use: **What Claude can do** on the connect screen, "Read only" ("See your plans, marks and notes.", chosen by default) and "Read and change" ("Also mark days, and add and edit items.").
 - **Phone:** below 640px the picture moves under the name, lined up with it, so the row never squeezes the marks or their ink.
-- Real use: **Marks** in Settings, Appearance: Squiggles, Ticks, Stamped ticks, Faces, Stamped faces (K20). Names in sentence case, short enough for one line.
+- Real use: **Marks** in Settings, Appearance: Squiggles, Filled in, Ticks, Stamped ticks, Faces, Stamped faces (K20, K141). Names in sentence case, short enough for one line.
 
 ## States
 

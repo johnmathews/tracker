@@ -230,7 +230,7 @@ describe('confirming an email', () => {
       'Password resets for sam@example.com will reach you there.',
     )
     expect(location.hash).toBe('')
-    await link('Go to the planner')!.trigger('click')
+    await link('Go to the week')!.trigger('click')
     await flushPromises()
     expect(heading()).toBe('19–25 October')
     expect(wrapper.find('[data-testid="email-status"]').exists()).toBe(false)
@@ -274,7 +274,7 @@ describe('confirming an email', () => {
     expect(wrapper.get('[role="alert"]').text()).toBe(
       'This link has expired or was already used. Choose “Send it again” for a new one.',
     )
-    await link('Go to the planner')!.trigger('click')
+    await link('Go to the week')!.trigger('click')
     await flushPromises()
     expect(heading()).toBe('19–25 October')
   })

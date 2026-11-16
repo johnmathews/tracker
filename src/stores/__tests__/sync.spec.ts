@@ -691,7 +691,8 @@ describe('sync', () => {
   it('ignores a tab still open on the code from before the solid and hatch drawings', async () => {
     api.accounts.get(USER)!.plans.exercise[WEEK] = { items: [SQUATS], rev: 1 }
     const { sync, trackers } = await start(emptyState())
-    for (let i = 0; i < 4; i++) trackers.toggle('exercise', 'sq', 0) // great, partial, missed, great-solid
+    usePlannerStore().markSet = 'filled'
+    trackers.toggle('exercise', 'sq', 0) // great-solid (K141)
     await settle()
     expect(trackers.markOf('exercise', 'sq', 0)).toBe('great-solid')
     // That tab reads 'great-solid' as an empty day and writes its copy back under the -v2 names.

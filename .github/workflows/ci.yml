@@ -34,6 +34,10 @@ jobs:
       # `npm run tokens`, fails here.
       - name: tokens.css is current
         run: npm run tokens && git diff --exit-code src/styles/tokens.css
+      # The icons are drawn from the DayMark's paths and the tokens (K139); a change to either
+      # without `python3 scripts/app_icon.py` fails here.
+      - name: App icon is current
+        run: python3 scripts/app_icon.py --check
 
   # The browser checks (e2e/): axe in both themes and every ink, no sideways scroll at 375px, the
   # focus ring, and focus clear of the sticky name column, against the dev server with /api mocked.

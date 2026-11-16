@@ -90,7 +90,7 @@
     const isMet = (w) => w[2] > 0 && done(w) >= w[2]
     const met = weeks.filter(isMet).length
     const lede = met > 0 && weeks.length > 1
-      ? `<p class="lede">The goal was met in <strong>${WORDS[met]} of the last ${WORDS[weeks.length]} weeks</strong>.</p>`
+      ? `<p class="lede">You met the goal in <strong>${WORDS[met]} of the last ${WORDS[weeks.length]} weeks</strong>.</p>`
       : ''
     const rows = weeks.map((w, i) => {
       const n = done(w)

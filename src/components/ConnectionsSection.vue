@@ -189,7 +189,7 @@ let removedAt = 0
 const removeTitle = computed(() => {
   const p = pending.value
   if (!p) return ''
-  return p.kind === 'token' ? `Remove ${p.item.name}?` : `Disconnect ${p.item.clientName}?`
+  return p.kind === 'token' ? `Remove ${p.item.name}?` : `Remove ${p.item.clientName}?`
 })
 const removeMessage = computed(() => {
   const p = pending.value
@@ -198,7 +198,7 @@ const removeMessage = computed(() => {
     return 'Anything using this token stops working at once. You can create a new one.'
   }
   const app = p.item.clientName
-  return `${app} can’t reach your tracker any more, from now on. You can connect it again from ${app}.`
+  return `${app} can’t reach your tracker any more. You can connect it again from ${app}.`
 })
 
 function ask(p: Pending): void {
@@ -340,9 +340,6 @@ async function confirmRemove(): Promise<void> {
       >
         Apps
       </h3>
-      <p class="max-w-[62ch] text-(length:--set-text) leading-[1.45] text-ink-secondary">
-        Connected by signing in from Claude or ChatGPT. Each lasts 90 days.
-      </p>
       <template v-if="connections">
         <ul
           v-if="connections.length"
@@ -520,7 +517,7 @@ async function confirmRemove(): Promise<void> {
       v-model:open="askRemove"
       :title="removeTitle"
       :message="removeMessage"
-      :confirm-label="pending?.kind === 'app' ? 'Disconnect' : 'Remove'"
+      confirm-label="Remove"
       :busy="removing"
       :error="removeError"
       :return-focus="afterRemoval"

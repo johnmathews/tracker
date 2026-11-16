@@ -129,13 +129,14 @@ Labels are sentence case, never uppercase with letter-spacing.
 
 A marked box is filled with one of three marker drawings, each the outline of the owner's own
 marker ink traced from a photo (K17): an open zigzag, a solid fill and a dense hatch. The drawing
-carries no meaning; the person chooses it by pressing, and it is saved with the day. A press steps
-an exercise's day drawing first: great, partial and missed in the zigzag, then in the solid, then in
-the hatch, then back to empty. A food has one kind, so it steps through great in each drawing, then
-empty. The box is drawn over the fill, and the ink runs a little past the box, as a quick hand does. Every mark counts towards the week and the day's count against the daily pick.
+carries no meaning; the person chooses it by pressing, and it is saved with the day. In the squiggles a
+press steps an exercise's day drawing first: great, partial and missed in the zigzag, then in the
+hatch, then back to empty. A food has one kind, so it steps through great in each, then empty. The
+solid fill has a set of its own (K141). The box is drawn over the fill, and the ink runs a little past the box, as a quick hand does. Every mark counts towards the week and the day's count against the daily pick.
 
 **Mark sets** (K20, K21). Settings' **Marks** chooses how marked days are drawn on this device:
-Squiggles (the drawings above, the default), Ticks (a tick, then a wave in yellow or red), Stamped ticks,
+Squiggles (the zigzag and the hatch, the default; a day saved with the solid fill shows as the
+zigzag), Filled in (the solid fill alone, K141), Ticks (a tick, then a wave in yellow or red), Stamped ticks,
 Faces (happy, then so-so in yellow or red) and Stamped faces. Ticks and faces are a marker stroke in the pen with
 the box drawn over it; a stamped set colours the box solid in the pen and leaves the symbol in
 paper (`canvas`, the light canvas in print). In light, paper on `pen-partial` is 1.8:1, below 3:1,
@@ -144,6 +145,12 @@ mark stays, so a squiggle drawing comes back on switching back. In a tick or fac
 an exercise great, partial, missed, then empty, and a food great, then empty. Great has its own shape
 in both. Partial and too difficult share the wave or the so-so face and differ by pen alone, by
 the owner's choice (K135, K137).
+
+**The app icon** (K139) is a stamped tick: the icon in `pen` green, the box and tick in paper.
+It is the favicon (which follows the browser's light or dark theme), the iPhone home-screen icon and
+the manifest's icons. `scripts/app_icon.py` draws them all from the DayMark's paths and the tokens,
+and CI fails when they are stale. It is the one place `pen` stands outside a day: it still stamps a
+day done well. `assets/AppIcon` in the system has the README.
 
 Print is the light theme on white paper, from either theme (K16): words, boxes and marks keep their
 light colours, the surfaces go transparent and chips are outlined. Icons are Lucide outline at 1.5px stroke, never Unicode glyphs or emoji. Colour transitions

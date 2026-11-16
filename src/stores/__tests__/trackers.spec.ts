@@ -247,9 +247,9 @@ describe('the exercise tracker', () => {
     expect(localStorage.getItem(DATA_KEY)).toBe(v2)
   })
 
-  it('steps a cell through every kind in every drawing, each counting, then back to empty', () => {
+  it('steps a cell through every kind in each squiggle, each counting, then back to empty', () => {
     const t = store()
-    for (const mark of MARKS) {
+    for (const mark of MARKS.filter((m) => !m.endsWith('-solid'))) {
       t.toggle(EX, 'pu', 0)
       expect(t.markOf(EX, 'pu', 0)).toBe(mark)
       expect(t.isDone(EX, 'pu', 0)).toBe(true)
@@ -259,6 +259,15 @@ describe('the exercise tracker', () => {
     expect(t.markOf(EX, 'pu', 0)).toBeNull()
     expect(t.isDone(EX, 'pu', 0)).toBe(false)
     expect(t.logOf(EX)[WEEK]!.pu).toEqual([null, null, null, null, null, null, null])
+  })
+
+  it('steps a cell through the solid fill’s three kinds once in Filled in (K141)', () => {
+    const t = store()
+    usePlannerStore().markSet = 'filled'
+    for (const mark of ['great-solid', 'partial-solid', 'missed-solid', null]) {
+      t.toggle(EX, 'pu', 0)
+      expect(t.markOf(EX, 'pu', 0)).toBe(mark)
+    }
   })
 
   it('steps a cell through the three kinds once in a tick or face set (K21)', () => {
@@ -624,8 +633,6 @@ describe('the food tracker', () => {
     expect(t.totalFor(D, 'fish')).toBe(2)
     expect(t.dayCounts(D)).toEqual([1, 0, 0, 2, 0, 0, 0])
     expect(t.goalsMet(D)).toBe(1)
-    t.toggle(D, 'fish', 3)
-    expect(t.markOf(D, 'fish', 3)).toBe('great-solid')
     t.toggle(D, 'fish', 3)
     expect(t.markOf(D, 'fish', 3)).toBe('great-hatch')
     t.toggle(D, 'fish', 3)

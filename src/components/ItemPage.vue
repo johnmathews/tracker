@@ -58,15 +58,9 @@ const props = defineProps<{
 /** The notes' hint (ItemPage card). */
 const NOTES_HINT = 'Markdown works: **bold**, *italic*, lists, links.'
 /** Notes within 20,000 characters that the API still can't store (32 KB), as the dialogs say. */
-const NOTES_TOO_BIG = 'These notes are too long to save. Shorten them, then save again.'
+const NOTES_TOO_BIG = 'These notes are too long to save. Shorten them.'
 /** A field within 500 characters whose document the API can't store, beside long notes. */
-const DETAILS_TOO_BIG =
-  'These details are too long to save. Shorten them or the notes, then save again.'
-const LINES = {
-  same: 'Changes this week’s plan, and the weeks after it that have no plan of their own.',
-  other: (week: string) =>
-    `Changes the plan for the week of ${week}, and the weeks after it that have no plan of their own.`,
-}
+const DETAILS_TOO_BIG = 'These details are too long to save. Shorten them or the notes.'
 
 const planner = usePlannerStore()
 const trackers = useTrackersStore()
@@ -115,8 +109,9 @@ const planHeading = computed(() => {
   if (!inWeek.value) return 'Latest plan'
   return isCurrent.value ? 'This week’s plan' : `Plan for the week of ${weekName.value}`
 })
+/** Only an item missing from the week says more than its heading: whose plan it is showing. */
 const planLine = computed(() => {
-  if (inWeek.value) return isCurrent.value ? LINES.same : LINES.other(weekName.value)
+  if (inWeek.value) return null
   const where = isCurrent.value ? 'this week’s plan' : `the plan for the week of ${weekName.value}`
   const from = dayMonth(weekMonday(latest.value!.week))
   return `${shown.value!.name} isn’t in ${where}. This is its plan from the week of ${from}.`
@@ -190,7 +185,7 @@ const latestRows = computed<[string, string][]>(() => {
     if (e.duration) rows.push(['Seconds', String(e.duration)])
     else if (e.reps) rows.push(['Reps', String(e.reps)])
     if (type.value.weighted) rows.push(['Weight in kg', e.weight ? String(e.weight) : 'Bodyweight'])
-    rows.push([e.duration ? 'Timed' : 'Reps count', e.perSide ? 'Each side' : 'Per set'])
+    rows.push(['Sides', e.perSide ? 'Each side' : 'Per set'])
   }
   if (isCardio.value) {
     const c = item as Cardio
@@ -276,10 +271,6 @@ function cancelName(ev: KeyboardEvent): void {
 }
 
 const { confirm } = useConfirm()
-const removeLine = computed(
-  () =>
-    `Remove ‘${shown.value!.name}’ from the ${trackers.get(props.section)?.name ?? type.value.label} tracker for this week and future weeks. Existing data is not removed.`,
-)
 
 /**
  * Remove asks first, then takes the item off the week the page shows and every week after it
@@ -291,7 +282,8 @@ async function remove(ev: MouseEvent): Promise<void> {
   const week = planner.weekKey
   const yes = await confirm({
     title: `Remove ${shown.value!.name}?`,
-    message: `Remove ‘${shown.value!.name}’ from this week’s plan and also future weeks. History is unchanged and existing data is not removed.`,
+    message:
+      'It comes off this week and the weeks after. Earlier weeks keep it, with its marks and notes.',
     confirmLabel: 'Remove',
     returnFocus: () => (button.isConnected ? button : null),
   })
@@ -434,7 +426,7 @@ const TEST_IDS: Record<SectionKey, string> = {
 }
 const arrangeLine = computed(
   () =>
-    `Choose which sections every ${type.value.itemLabel.toLowerCase()} page shows, and their order. Changes apply at once.`,
+    `Choose which sections every ${type.value.itemLabel.toLowerCase()} page shows, and their order.`,
 )
 
 function focusArrange(): void {
@@ -764,7 +756,7 @@ const filled = computed(() =>
       >
         <h2 :id="ids.plan" :class="H2">{{ planHeading }}</h2>
         <div :class="BODY">
-          <p :class="LEDE" data-testid="item-plan-line">{{ planLine }}</p>
+          <p v-if="planLine" :class="LEDE" data-testid="item-plan-line">{{ planLine }}</p>
           <PlanFields
             v-if="inWeek"
             :kind="planKind"
@@ -810,7 +802,6 @@ const filled = computed(() =>
     >
       <h2 :id="ids.remove" :class="H2">Remove</h2>
       <div :class="BODY">
-        <p :class="LEDE">{{ removeLine }}</p>
         <Button class="self-start" data-testid="item-remove-button" @click="remove"
           ><Trash2 :stroke-width="1.5" />Remove from this week on</Button
         >

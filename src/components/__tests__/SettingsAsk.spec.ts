@@ -228,7 +228,9 @@ describe('Daily goal in Settings (K85)', () => {
     expect(dailyGoal().text()).toBe('Daily goal')
     expect(dailyGoal().attributes('aria-checked')).toBe('true')
     const hint = document.getElementById(dailyGoal().attributes('aria-describedby')!)!
-    expect(hint.textContent).toContain('set in Edit plan. A day that reaches it turns green.')
+    expect(hint.textContent).toContain(
+      'How many exercises and foods to mark each day. A day that reaches it turns green.',
+    )
     // Unknown until the server says or the person sets it: nothing is sent for it (K85).
     expect(usePlannerStore().dailyGoalKnown).toBe(false)
   })

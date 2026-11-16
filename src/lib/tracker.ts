@@ -52,8 +52,10 @@ export function metDays(counts: number[], target: number): boolean[] {
 // The cycles live with their types; they are named here too, where the week's logic reads them.
 export {
   EXERCISE_CYCLE,
+  EXERCISE_FILLED_CYCLE,
   EXERCISE_KIND_CYCLE,
   FOOD_CYCLE,
+  FOOD_FILLED_CYCLE,
   FOOD_KIND_CYCLE,
 } from '@/lib/trackerTypes'
 
@@ -64,13 +66,14 @@ export function cycleFor(type: TrackerTypeId, set: MarkSet): readonly Mark[] {
 
 /**
  * The mark after `mark` in `cycle`, and empty after the last. A mark the cycle doesn't hold (a
- * squiggle drawing, in a symbol set) steps on from its kind, so `great-solid` goes to `partial`;
- * one whose kind isn't there either goes to empty.
+ * drawing another set chose) steps on from the first of its kind there, so in the ticks
+ * `great-solid` goes to `partial`, and in Filled in `partial` goes to `missed-solid`; one whose
+ * kind isn't there either goes to empty.
  */
 export function nextMark(mark: Mark | null, cycle: readonly Mark[]): Mark | null {
   if (mark === null) return cycle[0]!
   const at = cycle.indexOf(mark)
-  const i = at >= 0 ? at : cycle.indexOf(markKind(mark))
+  const i = at >= 0 ? at : cycle.findIndex((m) => markKind(m) === markKind(mark))
   return i >= 0 && i < cycle.length - 1 ? cycle[i + 1]! : null
 }
 

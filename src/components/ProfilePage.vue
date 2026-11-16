@@ -107,7 +107,7 @@ function signOutTarget(): HTMLElement | null {
       <TextArea
         v-model="goals.draft.value"
         label="What you’re working towards"
-        hint="Ask and your Claude connections read this. Nothing else does."
+        hint="Ask and your connected apps read this. Nothing else does."
         rows="4"
         :maxlength="MAX_GOALS"
         :disabled="!goals.editable.value"
@@ -128,7 +128,7 @@ function signOutTarget(): HTMLElement | null {
       <TextArea
         v-model="limits.draft.value"
         label="What you have to work around"
-        hint="Injuries, equipment, time and food. Ask and your Claude connections read this too."
+        hint="Injuries, equipment, time and food. Ask and your connected apps read this too."
         rows="4"
         :maxlength="MAX_LIMITS"
         :disabled="!limits.editable.value"

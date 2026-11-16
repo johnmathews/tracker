@@ -56,7 +56,7 @@ function onPerSide(value: boolean): void {
 </script>
 
 <!-- This week's plan's controls (ItemPage card), as the item's page and the new item page show
-     them (K104): an exercise's Sets, Measure, the amount, Weight, Reps count and Times a week, a
+     them (K104): an exercise's Sets, Measure, the amount, Weight, Sides and Times a week, a
      mobility item's the same without Weight; a cardio item's Minutes, Distance and Times a week (K90); a food's Times a week. -->
 <template>
   <div :class="FIELDS">
@@ -101,11 +101,7 @@ function onPerSide(value: boolean): void {
         data-field="weight"
         @input="onInput(form.onWeightInput, $event)"
       />
-      <PerSideToggle
-        :model-value="form.perSide.value"
-        :timed="form.measure.value === 'time'"
-        @update:model-value="onPerSide"
-      />
+      <PerSideToggle :model-value="form.perSide.value" @update:model-value="onPerSide" />
     </template>
     <!-- A cardio item's time and distance (K90): either may stay blank. -->
     <template v-else-if="kind === 'cardio'">

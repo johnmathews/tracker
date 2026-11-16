@@ -82,11 +82,19 @@ export function markDrawing(mark: Mark): Drawing {
 }
 
 /**
- * How the marks are drawn (DayMark card, K20): the squiggles (each mark's own drawing), or one
- * symbol per kind, stroked or stamped: a tick, a wave and a wave, or a happy, so-so and so-so
- * face. The device's choice, like the theme; it never changes a stored mark (K21).
+ * How the marks are drawn (DayMark card, K20): the squiggles (the zigzag or the hatch), the solid
+ * fill (`filled`, K141), or one symbol per kind, stroked or stamped: a tick, a wave and a wave, or
+ * a happy, so-so and so-so face. The device's choice, like the theme; it never changes a stored
+ * mark (K21).
  */
-export const MARK_SETS = ['squiggles', 'ticks', 'stamped-ticks', 'faces', 'stamped-faces'] as const
+export const MARK_SETS = [
+  'squiggles',
+  'filled',
+  'ticks',
+  'stamped-ticks',
+  'faces',
+  'stamped-faces',
+] as const
 export type MarkSet = (typeof MARK_SETS)[number]
 
 export function isMarkSet(value: unknown): value is MarkSet {

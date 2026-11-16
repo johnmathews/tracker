@@ -5,7 +5,7 @@ A row of two or three toggle buttons, exactly one chosen, for a setting whose op
 - The canonical drawing, wherever a SegmentedControl appears (the Settings page, the exercise's Dialog): On the Settings page and in dialogs it takes the page's `--set-*` size instead, 60u tall (48px folded), its type at 19u (K51, K55). At the system's size: a 1px `control-border` outline with `radius-md`, 44px tall overall, no inset between the outline and the segments; each segment 42px tall, padding `space-4`, `radius-sm`, in `label` style (16px/22px, weight 600) in `ink`. Chosen and unchosen segments use the same type, so the width never jumps when the choice changes.
 - **Single choice.** The chosen segment is filled `ink` with `on-ink` text (the same "act" colour as the primary Button), and carries `aria-pressed="true"`; the others `aria-pressed="false"`. Pressing the chosen segment keeps it chosen: a segment never un-presses itself, so there is always exactly one choice. Never `pen`: pen means done.
 - **Label:** the `role="group"` has a visible label above it in `label` style, tied with `aria-labelledby`. The one exception: when the segment words name the choice by themselves, the visible label may be left out, and the group then takes an `aria-label` instead.
-- Real uses: **Theme** (System, Light, Dark; System first, as the default), **Measure** (Reps, Time) and **Reps count** (Per set, Each side; labelled **Timed** once Measure is Time).
+- Real uses: **Theme** (System, Light, Dark; System first, as the default), **Measure** (Reps, Time) and **Sides** (Per set, Each side; K140).
 - At most three short options. Four or more, long labels, or options best told apart by a picture, take a RadioCard. A single on/off choice is a Switch.
 
 ## States

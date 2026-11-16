@@ -48,10 +48,12 @@ describe('DayMark', () => {
     expect(stroke().exists()).toBe(false)
     for (const mark of MARKS) {
       await wrapper.setProps({ mark })
-      // The mark names both: its kind picks the pen, its drawing the path.
+      // The mark names both: its kind picks the pen, its drawing the path. The squiggles draw a
+      // solid fill as the zigzag (K141).
+      const drawing = markDrawing(mark) === 'solid' ? 'zigzag' : markDrawing(mark)
       expect(box().attributes('data-mark')).toBe(markKind(mark))
-      expect(stroke().attributes('data-drawing')).toBe(markDrawing(mark))
-      expect(stroke().attributes('d')).toBe(MARK_DRAWINGS[markDrawing(mark)])
+      expect(stroke().attributes('data-drawing')).toBe(drawing)
+      expect(stroke().attributes('d')).toBe(MARK_DRAWINGS[drawing])
       expect(stroke().classes()).toContain(MARK_PENS[markKind(mark)])
       expect(stroke().attributes('fill')).toBe('currentColor')
       expect(stroke().attributes('fill-rule')).toBe('evenodd')
@@ -65,6 +67,17 @@ describe('DayMark', () => {
       'day-mark-stroke',
       'day-mark-outline',
     ])
+  })
+
+  it('draws every mark with the solid fill in Filled in, in its pen (K141)', async () => {
+    const wrapper = mount(DayMark, { props: { ...PROPS, set: 'filled' } })
+    const stroke = () => wrapper.get('[data-slot="day-mark-stroke"]')
+    for (const mark of MARKS) {
+      await wrapper.setProps({ mark })
+      expect(stroke().attributes('data-drawing')).toBe('solid')
+      expect(stroke().attributes('d')).toBe(MARK_DRAWINGS.solid)
+      expect(stroke().classes()).toContain(MARK_PENS[markKind(mark)])
+    }
   })
 
   it('has three different drawings, each traced as a filled outline', () => {

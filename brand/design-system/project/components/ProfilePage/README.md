@@ -6,8 +6,8 @@ The Profile page, at `#/profile`: a link back to the week, the heading, then Acc
 - **Layout:** the SettingsPage's frame, exactly: full width on the page's own 48u margins, every size from the PlannerScreen's `u` (main.css's `--set-*` sizes); a TextLink "Back to the week", the `<h1>` "Profile" in the `title-1` serif at 40u, then a row per section, its `<h2>` in the 320u left column and its content to the right, a 1px `line` rule above each. **Folded**, the heading sits over its content in one column at the system's sizes on `n`.
 - **Contents, in order:**
   1. **Account:** "Signed in as" and the email in `body` `ink-secondary` (the email in 600 `ink`), and beside it a secondary Button "Sign out" (`log-out`), wrapping under the words when the row is narrow (K53). Sign out with unsent changes asks first with a ConfirmDialog; a refusal shows as an InlineMessage under the row.
-  2. **Your goals:** a TextArea, "What you’re working towards", hint "Ask and your Claude connections read this. Nothing else does." (F1).
-  3. **Your limits:** a TextArea, "What you have to work around", hint "Injuries, equipment, time and food. Ask and your Claude connections read this too."
+  2. **Your goals:** a TextArea, "What you’re working towards", hint "Ask and your connected apps read this. Nothing else does." (F1).
+  3. **Your limits:** a TextArea, "What you have to work around", hint "Injuries, equipment, time and food. Ask and your connected apps read this too."
 - Both TextAreas are at most 900u wide, four rows tall, hold up to 1,000 characters each, have no placeholder, and save when typing pauses (600ms) or when the box loses focus. There is no Save.
 - A box takes typing only once its note is known (read from the server or a cache that carried it, or a new account with nothing saved), so a stand-in never writes over a saved note (F1).
 - Doesn't print.

@@ -90,7 +90,7 @@ test('a mobility tracker takes an item by hold time; deleted, it leaves this wee
 
   // Add mobility: an exercise's plan without Weight.
   await page.getByTestId(`add-${id}`).click()
-  await expect(page.getByTestId('new-add')).toHaveText('Add mobility')
+  await expect(page.getByTestId('new-add')).toHaveText('Add exercise')
   await expect(page.locator('input[data-field="weight"]')).toHaveCount(0)
   await page.getByTestId('new-name-field').fill('Hip hold')
   await page.getByRole('button', { name: 'Time', exact: true }).click()
@@ -115,7 +115,7 @@ test('a mobility tracker takes an item by hold time; deleted, it leaves this wee
   const screens = await page.locator('[data-planner-screen]').count()
   await page.getByTestId(`delete-${id}`).click()
   const dialog = page.getByRole('alertdialog', { name: 'Delete Mobility?' })
-  await expect(dialog).toContainText('History is not deleted.')
+  await expect(dialog).toContainText('Earlier weeks keep it.')
   await dialog.getByRole('button', { name: 'Delete', exact: true }).click()
   await expect(page.locator('[data-planner-screen]')).toHaveCount(screens - 1)
   await expect(page.locator(`[data-tracker="${id}"]`)).toHaveCount(0)

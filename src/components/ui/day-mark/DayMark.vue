@@ -38,7 +38,8 @@ const label = computed(() => dayMarkLabel(props))
   One day of one row (brand/design-system/project/components/DayMark): a 64px button centred in a
   76px square cell, drawing a hand-drawn box about 45px across in control-border. A marked day is
   drawn in its pen (green great, yellow partial, red missed) as the device's mark set says: the
-  squiggles fill it with the marker drawing its mark names (zigzag, solid or hatch); a tick or face
+  squiggles fill it with the marker drawing its mark names (zigzag or hatch), Filled in with the
+  solid fill (K141); a tick or face
   set strokes its symbol (tick, wave, wave; happy, so-so, so-so), or stamps it, the box filled
   solid with the symbol in paper. The ink runs a little past the box, and the box is drawn over it,
   as a pen line shows through marker. The rest of the cell is quiet space, so the 2px focus ring at 2px

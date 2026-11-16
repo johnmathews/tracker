@@ -3,7 +3,7 @@ A link in `ink` with a visible underline, for going somewhere rather than doing 
 ## Use
 
 - `ink` text, a 1px underline at 3px offset, in the size of the text around it (`body` or `caption`). Inside an `ink-secondary` caption the link stays `ink`, so it reads as the one thing to press.
-- For navigation and help: "Go to sign in" on its own line under "This link has expired or was already used. Ask for a new one." and at the foot of the create-an-account and reset-your-password cards; "Forgot your password?" on its own line under the sign-in form (only where the planner sends email); "Create an account" after "New here?" at the foot of the sign-in card; "Go to the planner" (or "Go to sign in", signed out) under "Email confirmed" and under an expired confirm link; a link to the privacy page. Actions that change data are Buttons.
+- For navigation and help: "Go to sign in" on its own line under "This link has expired or was already used. Ask for a new one." and at the foot of the create-an-account and reset-your-password cards; "Forgot your password?" on its own line under the sign-in form (only where the planner sends email); "Create an account" after "New here?" at the foot of the sign-in card; "Go to the week" (or "Go to sign in", signed out) under "Email confirmed" and under an expired confirm link; a link to the privacy page. Actions that change data are Buttons.
 - The underline is the cue, not the colour: never remove it, never colour a link `pen` or `focus`.
 - Write the destination as words ("Go to sign in"), never "click here" or a bare URL.
 
