@@ -227,9 +227,9 @@
   ],
   "lastChange": {
     "by": "John Mathews",
-    "at": "2026-11-16T08:56:00Z",
+    "at": "2026-11-16T23:38:00Z",
     "via": "Claude Code",
-    "note": "K138-K141: a new AppIcon asset group, the app icon and favicon as a stamped tick, paper on pen green. Marks gains Filled in (the solid fill), after Squiggles, which keeps the zigzag and the hatch (DayMark, RadioCard, SettingsPage, foundations). A copy review against voice.md: no line under an item page's plan or Remove, 'Remove Claude?' for an app, 'Sides' for the reps-count control, 'connected apps' in Profile, and shorter hints and errors across ConfirmDialog, ConnectPage, ConnectionsSection, Dialog, InlineMessage, ItemPage, RecentWeeks, SectionHeader, SegmentedControl, SettingsPage, Tabs and TextLink."
+    "note": "K139: the app icon's green ground joins pen's uses in the README's Never list and the pen row in foundations."
   },
 
   "layout": "files",
