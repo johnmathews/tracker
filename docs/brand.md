@@ -34,7 +34,7 @@ Its source lives in this repository, at the same paths the artifact uses:
 | `brand/design-system/project/tokens.json`        | Every colour, type style, space, radius and shadow                           |
 | `brand/design-system/project/*.md`               | The brand book: README, `foundations.md`, `voice.md`                         |
 | `brand/design-system/project/components/<Name>/` | Each component's `README.md` and `preview.html`                              |
-| `brand/design-system/project/assets/`, `fonts/`  | The wordmark and icon SVGs (uploaded), and the self-hosted fonts             |
+| `brand/design-system/project/assets/`, `fonts/`  | The wordmark, app icon and icon SVGs (uploaded), and the self-hosted fonts   |
 
 `scripts/check_design_system.py` is the gate. It measures every contrast pair in both themes, checks
 the token shapes and the banned words, and with `--complete` fails when a required component has no

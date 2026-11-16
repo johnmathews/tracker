@@ -848,7 +848,8 @@ the others (K17); `markKind` and `markDrawing` read them back. For a marked day 
 mark's drawing (`MARK_DRAWINGS`, traced outlines filled with `fill-rule: evenodd`) in its kind's pen
 (`MARK_PENS` in `src/components/ui/day-mark`), then draws the box over it. The ink runs a little
 past the box. The device's mark set (`markSet` in the planner store, passed to DayMark as `set`)
-changes only the drawing (K20, K21): `markLook` gives the squiggle drawing, or a tick or face
+changes only the drawing (K20, K21): `markLook` gives the zigzag or hatch drawing (squiggles, which
+draw a stored solid fill as the zigzag), the solid drawing (Filled in, K141), or a tick or face
 symbol (`MARK_SYMBOLS`) stroked in the pen, or stamped: the solid drawing in the pen with the
 symbol in `canvas` (in print, the light canvas). A press emits `toggle`; the stores step the day
 with `cycleDay` and `nextMark` (`src/lib/tracker.ts`) over `cycleFor(type, markSet)`, which reads

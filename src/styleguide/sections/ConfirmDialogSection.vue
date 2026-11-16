@@ -15,7 +15,7 @@ const CASES: readonly { id: string; state: string; trigger: string; ask: Confirm
     ask: {
       title: 'Remove Push-ups?',
       message:
-        'Remove ‘Push-ups’ from this week’s plan and also future weeks. History is unchanged and existing data is not removed.',
+        'It comes off this week and the weeks after. Earlier weeks keep it, with its marks and notes.',
       confirmLabel: 'Remove',
     },
   },

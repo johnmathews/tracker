@@ -17,7 +17,9 @@
 - The UI layer: shadcn-vue components on Reka UI 2 (owned source in `src/components/ui/`),
   Lucide icons (`@lucide/vue`), and the Source Serif 4 and Source Sans 3 Fontsource variable
   packages. The design system's scripts (`scripts/check_design_system.py`,
-  `scripts/design_preview.py`) need only Python 3's standard library.
+  `scripts/design_preview.py`) need only Python 3's standard library. So does
+  `python3 scripts/app_icon.py --check`. Writing the icons' PNGs and `favicon.ico` also needs
+  `rsvg-convert` and ImageMagick (`brew install librsvg imagemagick`).
 - Running the app needs the API: the README's Getting started shows how. `npm run dev` forwards
   `/api` and the three OAuth discovery paths to `http://127.0.0.1:8000` (`API_URL` overrides it), so the browser sees one origin as it
   does behind nginx. `scripts/compose-smoke.sh` runs both images together and checks them through
@@ -105,7 +107,9 @@ python3 scripts/check_design_system.py brand/design-system --complete
 It checks contrast in both themes for every role pair, the three pens included, the token shapes, the banned words,
 and that every required component has a card. After a change to `tokens.json`, regenerate the app's
 tokens with `npm run tokens` and commit `src/styles/tokens.css` with it. Never edit that file by
-hand.
+hand. After a change to the DayMark's box or tick paths, or to `pen` or `on-ink`, redraw the app
+icon and favicon with `python3 scripts/app_icon.py` and commit what it writes in `public/` and
+`brand/design-system/project/assets/AppIcon/` (K139).
 
 ### 3.3 Lint rules, e2e suite and CI checks
 
@@ -204,7 +208,8 @@ mark and details writes, so a later read returns what the app wrote.
 CI (`.github/workflows/ci.yml`) runs three jobs on every pull request and every push to `main`.
 `check` runs lint, format, types, unit tests with coverage, the build, the design gate and
 "tokens.css is current" (`npm run tokens` followed by
-`git diff --exit-code src/styles/tokens.css`). `e2e` installs Chromium and runs `npm run test:e2e`,
+`git diff --exit-code src/styles/tokens.css`), and "App icon is current"
+(`python3 scripts/app_icon.py --check`). `e2e` installs Chromium and runs `npm run test:e2e`,
 keeping traces of a failure. `api` checks the Python service. One convention has no check yet: unit
 tests should not query styling classes.
 

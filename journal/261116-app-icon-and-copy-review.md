@@ -31,3 +31,26 @@
 - The home-screen icon keeps the light colours. A web clip has no dark variant on iOS.
 - The manifest has no `display`, so the app doesn't install as a standalone window. That would
   be a behaviour change of its own.
+
+## 3. Shipped, then the wrap-up (2026-11-17)
+
+- Confirmed: CI run 43835050725 on 5606b2d passed `api`, `check` and `e2e`. Docker run
+  43835861288 on fbf968b published `tracker` and `tracker-api`. John checked the live site:
+  "it works".
+- A docs audit against the shipped code found gaps, and the wrap-up fixed them:
+  - The new CI step "App icon is current" was missing from `docs/deployment.md` and
+    `docs/development.md`.
+  - The development guide didn't cover `scripts/app_icon.py`: when to rerun it, and that the PNGs
+    need rsvg-convert and ImageMagick.
+  - The design system's README and `foundations.md` didn't list the app icon as a use of `pen`,
+    which `docs/brand.md` already did.
+  - `docs/architecture.md` described `markLook` from before Filled in.
+  - The styleguide's ConfirmDialog still showed the old Remove copy.
+- Filed #75: a touch fling e2e test failed once and passed on retry on 2026-11-16. Today's
+  local run passed 132 of 132.
+
+## What is deliberately not done
+
+- No index of the mockups, and no link to this entry from the README. The README links the
+  `journal/` folder, and `docs/decisions.md` links the mockup.
+- The manifest gets no `display: standalone` (see §2).
