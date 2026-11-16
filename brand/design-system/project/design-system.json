@@ -156,6 +156,35 @@
       ],
       "tile": "xs"
     },
+    "AppIcon": {
+      "files": {
+        "tracker-icon.svg": {
+          "blob": "ceaadd2c59a1e653d5c69e7e3d5f2b22",
+          "name": "tracker-icon.svg",
+          "size": 687,
+          "type": "image/svg+xml"
+        },
+        "tracker-icon-maskable.svg": {
+          "blob": "93901ba88f528f625ba2251e21f629de",
+          "name": "tracker-icon-maskable.svg",
+          "size": 686,
+          "type": "image/svg+xml"
+        },
+        "tracker-favicon.svg": {
+          "blob": "ba4d7446cf6550cbefb661dee18e0e76",
+          "name": "tracker-favicon.svg",
+          "size": 692,
+          "type": "image/svg+xml"
+        }
+      },
+      "name": "AppIcon",
+      "order": [
+        "tracker-icon.svg",
+        "tracker-favicon.svg",
+        "tracker-icon-maskable.svg"
+      ],
+      "tile": "l"
+    },
     "Wordmark": {
       "files": {
         "tracker-wordmark-ink.svg": {
@@ -193,13 +222,14 @@
   },
   "groups": [
     "Wordmark",
+    "AppIcon",
     "Icons"
   ],
   "lastChange": {
     "by": "John Mathews",
-    "at": "2026-11-15T21:28:00Z",
+    "at": "2026-11-16T08:56:00Z",
     "via": "Claude Code",
-    "note": "K134-K137: a red day is 'too difficult'. In Ticks and Stamped ticks partial and too difficult are a hand-drawn wave in their pens (the circle and the cross are gone); in Faces and Stamped faces too difficult is the so-so face in red (the sad face is gone); the accessible names say 'too difficult'. SettingsPage's Appearance runs Week title, Marks, Theme."
+    "note": "K138-K141: a new AppIcon asset group, the app icon and favicon as a stamped tick, paper on pen green. Marks gains Filled in (the solid fill), after Squiggles, which keeps the zigzag and the hatch (DayMark, RadioCard, SettingsPage, foundations). A copy review against voice.md: no line under an item page's plan or Remove, 'Remove Claude?' for an app, 'Sides' for the reps-count control, 'connected apps' in Profile, and shorter hints and errors across ConfirmDialog, ConnectPage, ConnectionsSection, Dialog, InlineMessage, ItemPage, RecentWeeks, SectionHeader, SegmentedControl, SettingsPage, Tabs and TextLink."
   },
 
   "layout": "files",
