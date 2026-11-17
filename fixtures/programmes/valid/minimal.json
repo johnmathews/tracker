@@ -1,0 +1,14 @@
+{
+  "format": "tracker-programme/1",
+  "name": "Push-ups",
+  "kind": "strength",
+  "weeks": 1,
+  "activities": [
+    {
+      "key": "push-ups",
+      "name": "Push-ups",
+      "sets": 3,
+      "reps": 12
+    }
+  ]
+}

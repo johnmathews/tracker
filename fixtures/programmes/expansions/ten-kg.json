@@ -1,0 +1,68 @@
+{
+  "name": "ten-kg",
+  "note": "The spec's §7.1 table, the Before row: 10 kg at 10% a week, rounded to 0.5 kg.",
+  "programme": "valid/ten-kg.json",
+  "params": {},
+  "weeks": [
+    {
+      "programmeWeek": 1,
+      "label": null,
+      "activities": {
+        "lift": {
+          "target": 3,
+          "sets": 3,
+          "reps": 8,
+          "weight": 10
+        }
+      }
+    },
+    {
+      "programmeWeek": 2,
+      "label": null,
+      "activities": {
+        "lift": {
+          "target": 3,
+          "sets": 3,
+          "reps": 8,
+          "weight": 11
+        }
+      }
+    },
+    {
+      "programmeWeek": 3,
+      "label": null,
+      "activities": {
+        "lift": {
+          "target": 3,
+          "sets": 3,
+          "reps": 8,
+          "weight": 12
+        }
+      }
+    },
+    {
+      "programmeWeek": 4,
+      "label": null,
+      "activities": {
+        "lift": {
+          "target": 3,
+          "sets": 3,
+          "reps": 8,
+          "weight": 13.5
+        }
+      }
+    },
+    {
+      "programmeWeek": 5,
+      "label": null,
+      "activities": {
+        "lift": {
+          "target": 3,
+          "sets": 3,
+          "reps": 8,
+          "weight": 14.5
+        }
+      }
+    }
+  ]
+}

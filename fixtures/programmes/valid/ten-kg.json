@@ -1,0 +1,20 @@
+{
+  "format": "tracker-programme/1",
+  "name": "Ten kilos at ten per cent",
+  "description": "The worked example in the spec's §7.1, before the change.",
+  "kind": "strength",
+  "weeks": 5,
+  "activities": [
+    {
+      "key": "lift",
+      "name": "Lift",
+      "sets": 3,
+      "reps": 8,
+      "weight": {
+        "start": 10,
+        "rate": 10,
+        "step": 0.5
+      }
+    }
+  ]
+}

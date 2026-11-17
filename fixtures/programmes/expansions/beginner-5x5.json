@@ -1,0 +1,291 @@
+{
+  "name": "beginner-5x5",
+  "note": "The mockup's programme as started, before its changes. The deadlift keeps 1 set on deloads (its own override) and still takes the weight × 0.9 from \"*\".",
+  "programme": "valid/beginner-5x5.json",
+  "params": {
+    "squat": 40,
+    "rate": 5
+  },
+  "weeks": [
+    {
+      "programmeWeek": 1,
+      "label": null,
+      "activities": {
+        "squat": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 40
+        },
+        "bench": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 30
+        },
+        "row": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 30
+        },
+        "deadlift": {
+          "target": 3,
+          "sets": 1,
+          "reps": 5,
+          "weight": 60
+        },
+        "plank": {
+          "target": 3,
+          "sets": 3,
+          "duration": 30
+        }
+      }
+    },
+    {
+      "programmeWeek": 2,
+      "label": null,
+      "activities": {
+        "squat": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 42.5
+        },
+        "bench": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 32.5
+        },
+        "row": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 32.5
+        },
+        "deadlift": {
+          "target": 3,
+          "sets": 1,
+          "reps": 5,
+          "weight": 65
+        },
+        "plank": {
+          "target": 3,
+          "sets": 3,
+          "duration": 30
+        }
+      }
+    },
+    {
+      "programmeWeek": 3,
+      "label": null,
+      "activities": {
+        "squat": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 45
+        },
+        "bench": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 35
+        },
+        "row": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 35
+        },
+        "deadlift": {
+          "target": 3,
+          "sets": 1,
+          "reps": 5,
+          "weight": 70
+        },
+        "plank": {
+          "target": 3,
+          "sets": 3,
+          "duration": 35
+        }
+      }
+    },
+    {
+      "programmeWeek": 4,
+      "label": "Deload",
+      "activities": {
+        "squat": {
+          "target": 3,
+          "sets": 3,
+          "reps": 5,
+          "weight": 42.5
+        },
+        "bench": {
+          "target": 3,
+          "sets": 3,
+          "reps": 5,
+          "weight": 35
+        },
+        "row": {
+          "target": 3,
+          "sets": 3,
+          "reps": 5,
+          "weight": 35
+        },
+        "deadlift": {
+          "target": 3,
+          "sets": 1,
+          "reps": 5,
+          "weight": 67.5
+        },
+        "plank": {
+          "target": 3,
+          "sets": 3,
+          "duration": 35
+        }
+      }
+    },
+    {
+      "programmeWeek": 5,
+      "label": null,
+      "activities": {
+        "squat": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 47.5
+        },
+        "bench": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 40
+        },
+        "row": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 40
+        },
+        "deadlift": {
+          "target": 3,
+          "sets": 1,
+          "reps": 5,
+          "weight": 80
+        },
+        "plank": {
+          "target": 3,
+          "sets": 3,
+          "duration": 40
+        }
+      }
+    },
+    {
+      "programmeWeek": 6,
+      "label": null,
+      "activities": {
+        "squat": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 50
+        },
+        "bench": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 42.5
+        },
+        "row": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 42.5
+        },
+        "deadlift": {
+          "target": 3,
+          "sets": 1,
+          "reps": 5,
+          "weight": 85
+        },
+        "plank": {
+          "target": 3,
+          "sets": 3,
+          "duration": 40
+        }
+      }
+    },
+    {
+      "programmeWeek": 7,
+      "label": null,
+      "activities": {
+        "squat": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 52.5
+        },
+        "bench": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 45
+        },
+        "row": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 45
+        },
+        "deadlift": {
+          "target": 3,
+          "sets": 1,
+          "reps": 5,
+          "weight": 90
+        },
+        "plank": {
+          "target": 3,
+          "sets": 3,
+          "duration": 45
+        }
+      }
+    },
+    {
+      "programmeWeek": 8,
+      "label": "Deload",
+      "activities": {
+        "squat": {
+          "target": 3,
+          "sets": 3,
+          "reps": 5,
+          "weight": 50
+        },
+        "bench": {
+          "target": 3,
+          "sets": 3,
+          "reps": 5,
+          "weight": 42.5
+        },
+        "row": {
+          "target": 3,
+          "sets": 3,
+          "reps": 5,
+          "weight": 42.5
+        },
+        "deadlift": {
+          "target": 3,
+          "sets": 1,
+          "reps": 5,
+          "weight": 85
+        },
+        "plank": {
+          "target": 3,
+          "sets": 3,
+          "duration": 45
+        }
+      }
+    }
+  ]
+}

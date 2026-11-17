@@ -1,0 +1,1553 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tracker.itsa-pizza.com/api/programme.schema.json",
+  "title": "Tracker programme",
+  "description": "A multi-week exercise programme in the tracker-programme/1 format. The server's validator also checks what a schema can't: unique activity keys, parameter references, each week's value against the item's limits, and overrides against the activities.",
+  "type": "object",
+  "required": [
+    "format",
+    "name",
+    "kind",
+    "weeks",
+    "activities"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "const": "tracker-programme/1"
+    },
+    "name": {
+      "type": "string",
+      "maxLength": 60,
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "kind": {
+      "enum": [
+        "strength",
+        "mobility",
+        "cardio"
+      ]
+    },
+    "weeks": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 52
+    },
+    "dailyTarget": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 8
+    },
+    "params": {
+      "type": "object",
+      "maxProperties": 20,
+      "propertyNames": {
+        "pattern": "^[a-z0-9-]{1,40}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/param"
+      }
+    },
+    "activities": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 30
+    },
+    "overrides": {
+      "type": "array"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "strength"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "activities": {
+            "items": {
+              "$ref": "#/$defs/strength.activity"
+            }
+          },
+          "overrides": {
+            "items": {
+              "$ref": "#/$defs/strength.override"
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "mobility"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "activities": {
+            "items": {
+              "$ref": "#/$defs/mobility.activity"
+            }
+          },
+          "overrides": {
+            "items": {
+              "$ref": "#/$defs/mobility.override"
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "cardio"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "activities": {
+            "items": {
+              "$ref": "#/$defs/cardio.activity"
+            }
+          },
+          "overrides": {
+            "items": {
+              "$ref": "#/$defs/cardio.override"
+            }
+          }
+        },
+        "not": {
+          "required": [
+            "dailyTarget"
+          ]
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "reference": {
+      "description": "A parameter, by its key: \"$squat\".",
+      "type": "string",
+      "pattern": "^\\$[a-z0-9-]{1,40}$"
+    },
+    "scale": {
+      "description": "Scales the computed value before it is rounded.",
+      "type": "object",
+      "required": [
+        "scale"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "scale": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "param": {
+      "type": "object",
+      "required": [
+        "label",
+        "unit",
+        "default"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "type": "string",
+          "maxLength": 60,
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "unit": {
+          "type": "string",
+          "maxLength": 20,
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "default": {
+          "type": "number"
+        },
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        }
+      }
+    },
+    "strength.target.literal": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 7
+    },
+    "strength.target.progression": {
+      "type": "object",
+      "required": [
+        "start"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/strength.target.literal"
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "add": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -7,
+              "maximum": 7
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "rate": {
+          "anyOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": -100,
+              "maximum": 1000
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "every": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 52,
+          "default": 1
+        },
+        "max": {
+          "$ref": "#/$defs/strength.target.literal"
+        },
+        "step": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        }
+      },
+      "not": {
+        "required": [
+          "add",
+          "rate"
+        ]
+      }
+    },
+    "strength.target.value": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/strength.target.literal"
+        },
+        {
+          "$ref": "#/$defs/reference"
+        },
+        {
+          "$ref": "#/$defs/strength.target.progression"
+        }
+      ]
+    },
+    "strength.sets.literal": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 20
+    },
+    "strength.sets.progression": {
+      "type": "object",
+      "required": [
+        "start"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/strength.sets.literal"
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "add": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -20,
+              "maximum": 20
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "rate": {
+          "anyOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": -100,
+              "maximum": 1000
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "every": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 52,
+          "default": 1
+        },
+        "max": {
+          "$ref": "#/$defs/strength.sets.literal"
+        },
+        "step": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        }
+      },
+      "not": {
+        "required": [
+          "add",
+          "rate"
+        ]
+      }
+    },
+    "strength.sets.value": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/strength.sets.literal"
+        },
+        {
+          "$ref": "#/$defs/reference"
+        },
+        {
+          "$ref": "#/$defs/strength.sets.progression"
+        }
+      ]
+    },
+    "strength.reps.literal": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000
+    },
+    "strength.reps.progression": {
+      "type": "object",
+      "required": [
+        "start"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/strength.reps.literal"
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "add": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -1000,
+              "maximum": 1000
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "rate": {
+          "anyOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": -100,
+              "maximum": 1000
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "every": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 52,
+          "default": 1
+        },
+        "max": {
+          "$ref": "#/$defs/strength.reps.literal"
+        },
+        "step": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        }
+      },
+      "not": {
+        "required": [
+          "add",
+          "rate"
+        ]
+      }
+    },
+    "strength.reps.value": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/strength.reps.literal"
+        },
+        {
+          "$ref": "#/$defs/reference"
+        },
+        {
+          "$ref": "#/$defs/strength.reps.progression"
+        }
+      ]
+    },
+    "strength.duration.literal": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3600
+    },
+    "strength.duration.progression": {
+      "type": "object",
+      "required": [
+        "start"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/strength.duration.literal"
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "add": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -3600,
+              "maximum": 3600
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "rate": {
+          "anyOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": -100,
+              "maximum": 1000
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "every": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 52,
+          "default": 1
+        },
+        "max": {
+          "$ref": "#/$defs/strength.duration.literal"
+        },
+        "step": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 5
+        }
+      },
+      "not": {
+        "required": [
+          "add",
+          "rate"
+        ]
+      }
+    },
+    "strength.duration.value": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/strength.duration.literal"
+        },
+        {
+          "$ref": "#/$defs/reference"
+        },
+        {
+          "$ref": "#/$defs/strength.duration.progression"
+        }
+      ]
+    },
+    "strength.weight.literal": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 500
+    },
+    "strength.weight.progression": {
+      "type": "object",
+      "required": [
+        "start"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/strength.weight.literal"
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "add": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": -500,
+              "maximum": 500
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "rate": {
+          "anyOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": -100,
+              "maximum": 1000
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "every": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 52,
+          "default": 1
+        },
+        "max": {
+          "$ref": "#/$defs/strength.weight.literal"
+        },
+        "step": {
+          "type": "number",
+          "minimum": 0.01,
+          "default": 0.5
+        }
+      },
+      "not": {
+        "required": [
+          "add",
+          "rate"
+        ]
+      }
+    },
+    "strength.weight.value": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/strength.weight.literal"
+        },
+        {
+          "$ref": "#/$defs/reference"
+        },
+        {
+          "$ref": "#/$defs/strength.weight.progression"
+        }
+      ]
+    },
+    "strength.activity": {
+      "type": "object",
+      "required": [
+        "key",
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,40}$"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 80,
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "link": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "perSide": {
+          "type": "boolean"
+        },
+        "target": {
+          "$ref": "#/$defs/strength.target.value"
+        },
+        "sets": {
+          "$ref": "#/$defs/strength.sets.value"
+        },
+        "reps": {
+          "$ref": "#/$defs/strength.reps.value"
+        },
+        "duration": {
+          "$ref": "#/$defs/strength.duration.value"
+        },
+        "weight": {
+          "$ref": "#/$defs/strength.weight.value"
+        }
+      },
+      "not": {
+        "required": [
+          "reps",
+          "duration"
+        ]
+      }
+    },
+    "strength.override": {
+      "type": "object",
+      "required": [
+        "weeks",
+        "activities"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "weeks": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 52
+          }
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 40,
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "activities": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^(\\*|[a-z0-9-]{1,40})$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": false,
+            "properties": {
+              "target": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/strength.target.literal"
+                  },
+                  {
+                    "$ref": "#/$defs/scale"
+                  }
+                ]
+              },
+              "sets": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/strength.sets.literal"
+                  },
+                  {
+                    "$ref": "#/$defs/scale"
+                  }
+                ]
+              },
+              "reps": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/strength.reps.literal"
+                  },
+                  {
+                    "$ref": "#/$defs/scale"
+                  }
+                ]
+              },
+              "duration": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/strength.duration.literal"
+                  },
+                  {
+                    "$ref": "#/$defs/scale"
+                  }
+                ]
+              },
+              "weight": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/strength.weight.literal"
+                  },
+                  {
+                    "$ref": "#/$defs/scale"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "mobility.target.literal": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 7
+    },
+    "mobility.target.progression": {
+      "type": "object",
+      "required": [
+        "start"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/mobility.target.literal"
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "add": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -7,
+              "maximum": 7
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "rate": {
+          "anyOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": -100,
+              "maximum": 1000
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "every": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 52,
+          "default": 1
+        },
+        "max": {
+          "$ref": "#/$defs/mobility.target.literal"
+        },
+        "step": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        }
+      },
+      "not": {
+        "required": [
+          "add",
+          "rate"
+        ]
+      }
+    },
+    "mobility.target.value": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/mobility.target.literal"
+        },
+        {
+          "$ref": "#/$defs/reference"
+        },
+        {
+          "$ref": "#/$defs/mobility.target.progression"
+        }
+      ]
+    },
+    "mobility.sets.literal": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 20
+    },
+    "mobility.sets.progression": {
+      "type": "object",
+      "required": [
+        "start"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/mobility.sets.literal"
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "add": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -20,
+              "maximum": 20
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "rate": {
+          "anyOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": -100,
+              "maximum": 1000
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "every": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 52,
+          "default": 1
+        },
+        "max": {
+          "$ref": "#/$defs/mobility.sets.literal"
+        },
+        "step": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        }
+      },
+      "not": {
+        "required": [
+          "add",
+          "rate"
+        ]
+      }
+    },
+    "mobility.sets.value": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/mobility.sets.literal"
+        },
+        {
+          "$ref": "#/$defs/reference"
+        },
+        {
+          "$ref": "#/$defs/mobility.sets.progression"
+        }
+      ]
+    },
+    "mobility.reps.literal": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000
+    },
+    "mobility.reps.progression": {
+      "type": "object",
+      "required": [
+        "start"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/mobility.reps.literal"
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "add": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -1000,
+              "maximum": 1000
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "rate": {
+          "anyOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": -100,
+              "maximum": 1000
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "every": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 52,
+          "default": 1
+        },
+        "max": {
+          "$ref": "#/$defs/mobility.reps.literal"
+        },
+        "step": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        }
+      },
+      "not": {
+        "required": [
+          "add",
+          "rate"
+        ]
+      }
+    },
+    "mobility.reps.value": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/mobility.reps.literal"
+        },
+        {
+          "$ref": "#/$defs/reference"
+        },
+        {
+          "$ref": "#/$defs/mobility.reps.progression"
+        }
+      ]
+    },
+    "mobility.duration.literal": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3600
+    },
+    "mobility.duration.progression": {
+      "type": "object",
+      "required": [
+        "start"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/mobility.duration.literal"
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "add": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -3600,
+              "maximum": 3600
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "rate": {
+          "anyOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": -100,
+              "maximum": 1000
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "every": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 52,
+          "default": 1
+        },
+        "max": {
+          "$ref": "#/$defs/mobility.duration.literal"
+        },
+        "step": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 5
+        }
+      },
+      "not": {
+        "required": [
+          "add",
+          "rate"
+        ]
+      }
+    },
+    "mobility.duration.value": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/mobility.duration.literal"
+        },
+        {
+          "$ref": "#/$defs/reference"
+        },
+        {
+          "$ref": "#/$defs/mobility.duration.progression"
+        }
+      ]
+    },
+    "mobility.activity": {
+      "type": "object",
+      "required": [
+        "key",
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,40}$"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 80,
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "link": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "perSide": {
+          "type": "boolean"
+        },
+        "target": {
+          "$ref": "#/$defs/mobility.target.value"
+        },
+        "sets": {
+          "$ref": "#/$defs/mobility.sets.value"
+        },
+        "reps": {
+          "$ref": "#/$defs/mobility.reps.value"
+        },
+        "duration": {
+          "$ref": "#/$defs/mobility.duration.value"
+        }
+      },
+      "not": {
+        "required": [
+          "reps",
+          "duration"
+        ]
+      }
+    },
+    "mobility.override": {
+      "type": "object",
+      "required": [
+        "weeks",
+        "activities"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "weeks": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 52
+          }
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 40,
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "activities": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^(\\*|[a-z0-9-]{1,40})$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": false,
+            "properties": {
+              "target": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/mobility.target.literal"
+                  },
+                  {
+                    "$ref": "#/$defs/scale"
+                  }
+                ]
+              },
+              "sets": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/mobility.sets.literal"
+                  },
+                  {
+                    "$ref": "#/$defs/scale"
+                  }
+                ]
+              },
+              "reps": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/mobility.reps.literal"
+                  },
+                  {
+                    "$ref": "#/$defs/scale"
+                  }
+                ]
+              },
+              "duration": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/mobility.duration.literal"
+                  },
+                  {
+                    "$ref": "#/$defs/scale"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "cardio.target.literal": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 7
+    },
+    "cardio.target.progression": {
+      "type": "object",
+      "required": [
+        "start"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/cardio.target.literal"
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "add": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -7,
+              "maximum": 7
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "rate": {
+          "anyOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": -100,
+              "maximum": 1000
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "every": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 52,
+          "default": 1
+        },
+        "max": {
+          "$ref": "#/$defs/cardio.target.literal"
+        },
+        "step": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        }
+      },
+      "not": {
+        "required": [
+          "add",
+          "rate"
+        ]
+      }
+    },
+    "cardio.target.value": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/cardio.target.literal"
+        },
+        {
+          "$ref": "#/$defs/reference"
+        },
+        {
+          "$ref": "#/$defs/cardio.target.progression"
+        }
+      ]
+    },
+    "cardio.duration.literal": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 86400
+    },
+    "cardio.duration.progression": {
+      "type": "object",
+      "required": [
+        "start"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/cardio.duration.literal"
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "add": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -86400,
+              "maximum": 86400
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "rate": {
+          "anyOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": -100,
+              "maximum": 1000
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "every": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 52,
+          "default": 1
+        },
+        "max": {
+          "$ref": "#/$defs/cardio.duration.literal"
+        },
+        "step": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 5
+        }
+      },
+      "not": {
+        "required": [
+          "add",
+          "rate"
+        ]
+      }
+    },
+    "cardio.duration.value": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/cardio.duration.literal"
+        },
+        {
+          "$ref": "#/$defs/reference"
+        },
+        {
+          "$ref": "#/$defs/cardio.duration.progression"
+        }
+      ]
+    },
+    "cardio.distance.literal": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 1000
+    },
+    "cardio.distance.progression": {
+      "type": "object",
+      "required": [
+        "start"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/cardio.distance.literal"
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "add": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": -1000,
+              "maximum": 1000
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "rate": {
+          "anyOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": -100,
+              "maximum": 1000
+            },
+            {
+              "$ref": "#/$defs/reference"
+            }
+          ]
+        },
+        "every": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 52,
+          "default": 1
+        },
+        "max": {
+          "$ref": "#/$defs/cardio.distance.literal"
+        },
+        "step": {
+          "type": "number",
+          "minimum": 0.01,
+          "default": 0.1
+        }
+      },
+      "not": {
+        "required": [
+          "add",
+          "rate"
+        ]
+      }
+    },
+    "cardio.distance.value": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/cardio.distance.literal"
+        },
+        {
+          "$ref": "#/$defs/reference"
+        },
+        {
+          "$ref": "#/$defs/cardio.distance.progression"
+        }
+      ]
+    },
+    "cardio.activity": {
+      "type": "object",
+      "required": [
+        "key",
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,40}$"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 80,
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "link": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "target": {
+          "$ref": "#/$defs/cardio.target.value"
+        },
+        "duration": {
+          "$ref": "#/$defs/cardio.duration.value"
+        },
+        "distance": {
+          "$ref": "#/$defs/cardio.distance.value"
+        }
+      }
+    },
+    "cardio.override": {
+      "type": "object",
+      "required": [
+        "weeks",
+        "activities"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "weeks": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 52
+          }
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 40,
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "activities": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^(\\*|[a-z0-9-]{1,40})$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": false,
+            "properties": {
+              "target": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/cardio.target.literal"
+                  },
+                  {
+                    "$ref": "#/$defs/scale"
+                  }
+                ]
+              },
+              "duration": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/cardio.duration.literal"
+                  },
+                  {
+                    "$ref": "#/$defs/scale"
+                  }
+                ]
+              },
+              "distance": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/cardio.distance.literal"
+                  },
+                  {
+                    "$ref": "#/$defs/scale"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

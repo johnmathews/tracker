@@ -1,0 +1,63 @@
+{
+  "format": "tracker-programme/1",
+  "name": "Base miles",
+  "description": "Two runs and a long ride, with an easy week.",
+  "kind": "cardio",
+  "weeks": 6,
+  "params": {
+    "ride": {
+      "label": "Long ride",
+      "unit": "km",
+      "default": 20,
+      "min": 5
+    }
+  },
+  "activities": [
+    {
+      "key": "run",
+      "name": "Easy run",
+      "target": 2,
+      "duration": {
+        "start": 1200,
+        "rate": 10,
+        "step": 60,
+        "max": 1800
+      },
+      "distance": {
+        "start": 3,
+        "add": 0.5,
+        "max": 6
+      }
+    },
+    {
+      "key": "long-ride",
+      "name": "Long ride",
+      "target": 1,
+      "duration": {
+        "start": 3600,
+        "add": 600,
+        "every": 2
+      },
+      "distance": {
+        "start": "$ride",
+        "rate": 10
+      }
+    }
+  ],
+  "overrides": [
+    {
+      "weeks": [4],
+      "label": "Easy week",
+      "activities": {
+        "*": {
+          "duration": {
+            "scale": 0.8
+          }
+        },
+        "long-ride": {
+          "distance": 15
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,144 @@
+{
+  "name": "spec-example",
+  "note": "The spec's §3.1 example with its default parameters: squat 40 kg at 5% a week, rounded to 2.5 kg, with deloads in weeks 4 and 8 (3 sets, weight × 0.9). The plank adds 5 s every second week and has no weight for the deload to scale.",
+  "programme": "valid/spec-example.json",
+  "params": {},
+  "weeks": [
+    {
+      "programmeWeek": 1,
+      "label": null,
+      "activities": {
+        "squat": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 40
+        },
+        "plank": {
+          "target": 3,
+          "sets": 3,
+          "duration": 30
+        }
+      }
+    },
+    {
+      "programmeWeek": 2,
+      "label": null,
+      "activities": {
+        "squat": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 42.5
+        },
+        "plank": {
+          "target": 3,
+          "sets": 3,
+          "duration": 30
+        }
+      }
+    },
+    {
+      "programmeWeek": 3,
+      "label": null,
+      "activities": {
+        "squat": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 45
+        },
+        "plank": {
+          "target": 3,
+          "sets": 3,
+          "duration": 35
+        }
+      }
+    },
+    {
+      "programmeWeek": 4,
+      "label": "Deload",
+      "activities": {
+        "squat": {
+          "target": 3,
+          "sets": 3,
+          "reps": 5,
+          "weight": 42.5
+        },
+        "plank": {
+          "target": 3,
+          "sets": 3,
+          "duration": 35
+        }
+      }
+    },
+    {
+      "programmeWeek": 5,
+      "label": null,
+      "activities": {
+        "squat": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 47.5
+        },
+        "plank": {
+          "target": 3,
+          "sets": 3,
+          "duration": 40
+        }
+      }
+    },
+    {
+      "programmeWeek": 6,
+      "label": null,
+      "activities": {
+        "squat": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 50
+        },
+        "plank": {
+          "target": 3,
+          "sets": 3,
+          "duration": 40
+        }
+      }
+    },
+    {
+      "programmeWeek": 7,
+      "label": null,
+      "activities": {
+        "squat": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 52.5
+        },
+        "plank": {
+          "target": 3,
+          "sets": 3,
+          "duration": 45
+        }
+      }
+    },
+    {
+      "programmeWeek": 8,
+      "label": "Deload",
+      "activities": {
+        "squat": {
+          "target": 3,
+          "sets": 3,
+          "reps": 5,
+          "weight": 50
+        },
+        "plank": {
+          "target": 3,
+          "sets": 3,
+          "duration": 45
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,110 @@
+{
+  "name": "mobility",
+  "note": "Holds that add 5 s every second week up to a 40 s max (step 5 s), and reps that add 2 every third week up to 16.",
+  "programme": "valid/mobility.json",
+  "params": {},
+  "weeks": [
+    {
+      "programmeWeek": 1,
+      "label": null,
+      "activities": {
+        "hip-flexor": {
+          "target": 5,
+          "sets": 2,
+          "perSide": true,
+          "duration": 30
+        },
+        "cat-cow": {
+          "target": 5,
+          "sets": 2,
+          "reps": 10
+        }
+      }
+    },
+    {
+      "programmeWeek": 2,
+      "label": null,
+      "activities": {
+        "hip-flexor": {
+          "target": 5,
+          "sets": 2,
+          "perSide": true,
+          "duration": 30
+        },
+        "cat-cow": {
+          "target": 5,
+          "sets": 2,
+          "reps": 10
+        }
+      }
+    },
+    {
+      "programmeWeek": 3,
+      "label": null,
+      "activities": {
+        "hip-flexor": {
+          "target": 5,
+          "sets": 2,
+          "perSide": true,
+          "duration": 35
+        },
+        "cat-cow": {
+          "target": 5,
+          "sets": 2,
+          "reps": 10
+        }
+      }
+    },
+    {
+      "programmeWeek": 4,
+      "label": null,
+      "activities": {
+        "hip-flexor": {
+          "target": 5,
+          "sets": 2,
+          "perSide": true,
+          "duration": 35
+        },
+        "cat-cow": {
+          "target": 5,
+          "sets": 2,
+          "reps": 12
+        }
+      }
+    },
+    {
+      "programmeWeek": 5,
+      "label": null,
+      "activities": {
+        "hip-flexor": {
+          "target": 5,
+          "sets": 2,
+          "perSide": true,
+          "duration": 40
+        },
+        "cat-cow": {
+          "target": 5,
+          "sets": 2,
+          "reps": 12
+        }
+      }
+    },
+    {
+      "programmeWeek": 6,
+      "label": null,
+      "activities": {
+        "hip-flexor": {
+          "target": 5,
+          "sets": 2,
+          "perSide": true,
+          "duration": 40
+        },
+        "cat-cow": {
+          "target": 5,
+          "sets": 2,
+          "reps": 12
+        }
+      }
+    }
+  ]
+}

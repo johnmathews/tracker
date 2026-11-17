@@ -1,0 +1,104 @@
+{
+  "name": "cardio",
+  "note": "Run time at 10% a week rounded to whole minutes and capped at 30 min; distances rounded to 0.1 km. Week 4 is an easy week: every duration × 0.8, and the long ride set to 15 km.",
+  "programme": "valid/cardio.json",
+  "params": {},
+  "weeks": [
+    {
+      "programmeWeek": 1,
+      "label": null,
+      "activities": {
+        "run": {
+          "target": 2,
+          "duration": 1200,
+          "distance": 3
+        },
+        "long-ride": {
+          "target": 1,
+          "duration": 3600,
+          "distance": 20
+        }
+      }
+    },
+    {
+      "programmeWeek": 2,
+      "label": null,
+      "activities": {
+        "run": {
+          "target": 2,
+          "duration": 1320,
+          "distance": 3.5
+        },
+        "long-ride": {
+          "target": 1,
+          "duration": 3600,
+          "distance": 22
+        }
+      }
+    },
+    {
+      "programmeWeek": 3,
+      "label": null,
+      "activities": {
+        "run": {
+          "target": 2,
+          "duration": 1440,
+          "distance": 4
+        },
+        "long-ride": {
+          "target": 1,
+          "duration": 4200,
+          "distance": 24.2
+        }
+      }
+    },
+    {
+      "programmeWeek": 4,
+      "label": "Easy week",
+      "activities": {
+        "run": {
+          "target": 2,
+          "duration": 1260,
+          "distance": 4.5
+        },
+        "long-ride": {
+          "target": 1,
+          "duration": 3360,
+          "distance": 15
+        }
+      }
+    },
+    {
+      "programmeWeek": 5,
+      "label": null,
+      "activities": {
+        "run": {
+          "target": 2,
+          "duration": 1740,
+          "distance": 5
+        },
+        "long-ride": {
+          "target": 1,
+          "duration": 4800,
+          "distance": 29.3
+        }
+      }
+    },
+    {
+      "programmeWeek": 6,
+      "label": null,
+      "activities": {
+        "run": {
+          "target": 2,
+          "duration": 1800,
+          "distance": 5.5
+        },
+        "long-ride": {
+          "target": 1,
+          "duration": 4800,
+          "distance": 32.2
+        }
+      }
+    }
+  ]
+}

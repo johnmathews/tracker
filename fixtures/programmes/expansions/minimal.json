@@ -1,0 +1,19 @@
+{
+  "name": "minimal",
+  "note": "Bare values only, and the kind's default target of 3 a week.",
+  "programme": "valid/minimal.json",
+  "params": {},
+  "weeks": [
+    {
+      "programmeWeek": 1,
+      "label": null,
+      "activities": {
+        "push-ups": {
+          "target": 3,
+          "sets": 3,
+          "reps": 12
+        }
+      }
+    }
+  ]
+}

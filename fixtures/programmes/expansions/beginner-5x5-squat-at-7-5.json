@@ -1,0 +1,101 @@
+{
+  "name": "beginner-5x5-squat-at-7-5",
+  "note": "The mockup's squat after its increase went to 7.5% from week 3: the series continues from week 2's shown 42.5 kg, so this is a programme whose squat starts at 42.5 kg at 7.5%, with its activity week 1 at programme week 2. The replay (W2) builds this segment from the change; the numbers are the mockup's: 45, 45, 52.5, 57.5, 60, 60.",
+  "programme": "valid/beginner-5x5.json",
+  "params": {
+    "squat": 42.5,
+    "rate": 7.5
+  },
+  "weeks": [
+    {
+      "programmeWeek": 3,
+      "label": null,
+      "activityWeeks": {
+        "squat": 2
+      },
+      "activities": {
+        "squat": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 45
+        }
+      }
+    },
+    {
+      "programmeWeek": 4,
+      "label": "Deload",
+      "activityWeeks": {
+        "squat": 3
+      },
+      "activities": {
+        "squat": {
+          "target": 3,
+          "sets": 3,
+          "reps": 5,
+          "weight": 45
+        }
+      }
+    },
+    {
+      "programmeWeek": 5,
+      "label": null,
+      "activityWeeks": {
+        "squat": 4
+      },
+      "activities": {
+        "squat": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 52.5
+        }
+      }
+    },
+    {
+      "programmeWeek": 6,
+      "label": null,
+      "activityWeeks": {
+        "squat": 5
+      },
+      "activities": {
+        "squat": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 57.5
+        }
+      }
+    },
+    {
+      "programmeWeek": 7,
+      "label": null,
+      "activityWeeks": {
+        "squat": 6
+      },
+      "activities": {
+        "squat": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 60
+        }
+      }
+    },
+    {
+      "programmeWeek": 8,
+      "label": "Deload",
+      "activityWeeks": {
+        "squat": 7
+      },
+      "activities": {
+        "squat": {
+          "target": 3,
+          "sets": 3,
+          "reps": 5,
+          "weight": 60
+        }
+      }
+    }
+  ]
+}

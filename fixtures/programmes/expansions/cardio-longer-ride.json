@@ -1,0 +1,76 @@
+{
+  "name": "cardio-longer-ride",
+  "note": "The cardio programme started with a 30 km long ride: 30, 33, 36.3, 15 (the easy week's number), 43.9, 48.3.",
+  "programme": "valid/cardio.json",
+  "params": {
+    "ride": 30
+  },
+  "weeks": [
+    {
+      "programmeWeek": 1,
+      "label": null,
+      "activities": {
+        "long-ride": {
+          "target": 1,
+          "duration": 3600,
+          "distance": 30
+        }
+      }
+    },
+    {
+      "programmeWeek": 2,
+      "label": null,
+      "activities": {
+        "long-ride": {
+          "target": 1,
+          "duration": 3600,
+          "distance": 33
+        }
+      }
+    },
+    {
+      "programmeWeek": 3,
+      "label": null,
+      "activities": {
+        "long-ride": {
+          "target": 1,
+          "duration": 4200,
+          "distance": 36.3
+        }
+      }
+    },
+    {
+      "programmeWeek": 4,
+      "label": "Easy week",
+      "activities": {
+        "long-ride": {
+          "target": 1,
+          "duration": 3360,
+          "distance": 15
+        }
+      }
+    },
+    {
+      "programmeWeek": 5,
+      "label": null,
+      "activities": {
+        "long-ride": {
+          "target": 1,
+          "duration": 4800,
+          "distance": 43.9
+        }
+      }
+    },
+    {
+      "programmeWeek": 6,
+      "label": null,
+      "activities": {
+        "long-ride": {
+          "target": 1,
+          "duration": 4800,
+          "distance": 48.3
+        }
+      }
+    }
+  ]
+}

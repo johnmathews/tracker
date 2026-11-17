@@ -1,0 +1,61 @@
+{
+  "format": "tracker-programme/1",
+  "name": "Beginner 5×5",
+  "description": "Three full-body sessions a week, adding weight each week.",
+  "kind": "strength",
+  "weeks": 8,
+  "dailyTarget": 2,
+  "params": {
+    "squat": {
+      "label": "Squat start",
+      "unit": "kg",
+      "default": 40
+    },
+    "rate": {
+      "label": "Weekly increase",
+      "unit": "%",
+      "default": 5
+    }
+  },
+  "activities": [
+    {
+      "key": "squat",
+      "name": "Back squat",
+      "notes": "Belt from week 5.",
+      "target": 3,
+      "sets": 5,
+      "reps": 5,
+      "weight": {
+        "start": "$squat",
+        "rate": "$rate",
+        "step": 2.5
+      }
+    },
+    {
+      "key": "plank",
+      "name": "Plank",
+      "target": 3,
+      "sets": 3,
+      "duration": {
+        "start": 30,
+        "add": 5,
+        "every": 2,
+        "max": 90
+      }
+    }
+  ],
+  "overrides": [
+    {
+      "weeks": [4, 8],
+      "label": "Deload",
+      "activities": {
+        "*": {
+          "sets": 3,
+          "weight": {
+            "scale": 0.9
+          }
+        }
+      }
+    }
+  ]
+}

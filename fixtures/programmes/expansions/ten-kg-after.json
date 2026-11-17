@@ -1,0 +1,72 @@
+{
+  "name": "ten-kg-after",
+  "note": "The spec's §7.1 table, the After row from week 3: the rate changed to 15% continues from week 3's shown 12 kg, so a series at 12 kg and 15% with its week 1 at programme week 3.",
+  "document": {
+    "format": "tracker-programme/1",
+    "name": "Ten kilos at ten per cent",
+    "description": "The worked example in the spec's §7.1, before the change.",
+    "kind": "strength",
+    "weeks": 5,
+    "activities": [
+      {
+        "key": "lift",
+        "name": "Lift",
+        "sets": 3,
+        "reps": 8,
+        "weight": {
+          "start": 12,
+          "rate": 15,
+          "step": 0.5
+        }
+      }
+    ]
+  },
+  "params": {},
+  "weeks": [
+    {
+      "programmeWeek": 3,
+      "label": null,
+      "activityWeeks": {
+        "lift": 1
+      },
+      "activities": {
+        "lift": {
+          "target": 3,
+          "sets": 3,
+          "reps": 8,
+          "weight": 12
+        }
+      }
+    },
+    {
+      "programmeWeek": 4,
+      "label": null,
+      "activityWeeks": {
+        "lift": 2
+      },
+      "activities": {
+        "lift": {
+          "target": 3,
+          "sets": 3,
+          "reps": 8,
+          "weight": 14
+        }
+      }
+    },
+    {
+      "programmeWeek": 5,
+      "label": null,
+      "activityWeeks": {
+        "lift": 3
+      },
+      "activities": {
+        "lift": {
+          "target": 3,
+          "sets": 3,
+          "reps": 8,
+          "weight": 16
+        }
+      }
+    }
+  ]
+}

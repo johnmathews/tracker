@@ -1,0 +1,172 @@
+{
+  "name": "beginner-5x5-row-set-to-45",
+  "note": "The mockup's change example: the barbell row set to 45 kg from week 5, a new series with its week 1 at programme week 5. The mockup's after values: 45, 47.5, 50, 47.5 (deload). Week 6's hand-edit (35 kg) is the replay's (W2).",
+  "document": {
+    "format": "tracker-programme/1",
+    "name": "Beginner 5×5",
+    "description": "Three full-body sessions a week, adding weight each week, with a deload in weeks 4 and 8.",
+    "kind": "strength",
+    "weeks": 8,
+    "dailyTarget": 3,
+    "params": {
+      "squat": {
+        "label": "Squat start",
+        "unit": "kg",
+        "default": 40,
+        "min": 20,
+        "max": 200
+      },
+      "rate": {
+        "label": "Weekly increase",
+        "unit": "%",
+        "default": 5,
+        "min": 0,
+        "max": 20
+      }
+    },
+    "activities": [
+      {
+        "key": "squat",
+        "name": "Back squat",
+        "notes": "Belt from week 5.",
+        "target": 3,
+        "sets": 5,
+        "reps": 5,
+        "weight": {
+          "start": "$squat",
+          "rate": "$rate",
+          "step": 2.5
+        }
+      },
+      {
+        "key": "bench",
+        "name": "Bench press",
+        "target": 3,
+        "sets": 5,
+        "reps": 5,
+        "weight": {
+          "start": 30,
+          "add": 2.5,
+          "step": 2.5
+        }
+      },
+      {
+        "key": "row",
+        "name": "Barbell row",
+        "target": 3,
+        "sets": 5,
+        "reps": 5,
+        "weight": {
+          "start": 45,
+          "add": 2.5,
+          "step": 2.5
+        }
+      },
+      {
+        "key": "deadlift",
+        "name": "Deadlift",
+        "notes": "Hinge, don’t squat. Bar close to the shins.",
+        "target": 3,
+        "sets": 1,
+        "reps": 5,
+        "weight": {
+          "start": 60,
+          "add": 5,
+          "step": 2.5
+        }
+      },
+      {
+        "key": "plank",
+        "name": "Plank",
+        "target": 3,
+        "sets": 3,
+        "duration": {
+          "start": 30,
+          "add": 5,
+          "every": 2,
+          "max": 90
+        }
+      }
+    ],
+    "overrides": [
+      {
+        "weeks": [4, 8],
+        "label": "Deload",
+        "activities": {
+          "*": {
+            "sets": 3,
+            "weight": {
+              "scale": 0.9
+            }
+          },
+          "deadlift": {
+            "sets": 1
+          }
+        }
+      }
+    ]
+  },
+  "params": {},
+  "weeks": [
+    {
+      "programmeWeek": 5,
+      "label": null,
+      "activityWeeks": {
+        "row": 1
+      },
+      "activities": {
+        "row": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 45
+        }
+      }
+    },
+    {
+      "programmeWeek": 6,
+      "label": null,
+      "activityWeeks": {
+        "row": 2
+      },
+      "activities": {
+        "row": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 47.5
+        }
+      }
+    },
+    {
+      "programmeWeek": 7,
+      "label": null,
+      "activityWeeks": {
+        "row": 3
+      },
+      "activities": {
+        "row": {
+          "target": 3,
+          "sets": 5,
+          "reps": 5,
+          "weight": 50
+        }
+      }
+    },
+    {
+      "programmeWeek": 8,
+      "label": "Deload",
+      "activityWeeks": {
+        "row": 4
+      },
+      "activities": {
+        "row": {
+          "target": 3,
+          "sets": 3,
+          "reps": 5,
+          "weight": 47.5
+        }
+      }
+    }
+  ]
+}

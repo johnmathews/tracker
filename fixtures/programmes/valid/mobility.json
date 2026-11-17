@@ -1,0 +1,35 @@
+{
+  "format": "tracker-programme/1",
+  "name": "Hips and back",
+  "kind": "mobility",
+  "weeks": 6,
+  "dailyTarget": 2,
+  "activities": [
+    {
+      "key": "hip-flexor",
+      "name": "Hip flexor stretch",
+      "link": "https://example.com/hip-flexor",
+      "target": 5,
+      "sets": 2,
+      "perSide": true,
+      "duration": {
+        "start": 30,
+        "add": 5,
+        "every": 2,
+        "max": 40
+      }
+    },
+    {
+      "key": "cat-cow",
+      "name": "Cat-cow",
+      "target": 5,
+      "sets": 2,
+      "reps": {
+        "start": 10,
+        "add": 2,
+        "every": 3,
+        "max": 16
+      }
+    }
+  ]
+}
