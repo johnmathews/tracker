@@ -1,0 +1,344 @@
+/*
+  Programmes, as a prototype (proto.js draws into any element with PG.mount). One frame (.pg) is
+  one screen: a 1280×800 desktop or a 390×844 phone, real size, scaled on the mockup page.
+  Every size comes from the frame's own box (container units), as PlannerScreen does: u is 1 on a
+  1280×800 screen; folded (a phone held upright) the sizes are the system's n sizes (n = 1).
+  Colours, fonts and type are the system's tokens; the pages are ItemPage, Tabs, Dialog,
+  SegmentedControl, Button, Chip, RecentWeeks, InlineMessage and PlannerScreen as their cards draw
+  them. What is new is marked "new:" and is what the questions ask about.
+*/
+.pg { position: relative; overflow: hidden; box-sizing: border-box; container: pg / size;
+  background: var(--canvas); color: var(--ink); font-family: var(--font-sans); font-variant-numeric: tabular-nums;
+  -webkit-tap-highlight-color: transparent; }
+.pg *, .pg *::before, .pg *::after { box-sizing: border-box; }
+.pg button { font: inherit; color: inherit; }
+.pg .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.pg :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.pg svg.i { width: 1em; height: 1em; flex: none; }
+
+/* The sizes. Wide: ItemPage's (K51, K55) on u. Folded: the system's n sizes. Set on the page and the
+   dialog alike, so container units measure the frame. */
+.pg > * {
+  --u: clamp(0.75px, min(calc(100cqw / 1280), calc(100cqh / 800)), 1.6px);
+  --pad: calc(var(--u) * 48);
+  --fs-title: max(30px, calc(var(--u) * 40));
+  --fs-h2: max(22px, calc(var(--u) * 27));
+  --fs-text: max(18px, calc(var(--u) * 19));
+  --fs-label: max(16px, calc(var(--u) * 19));
+  --fs-cap: 16px;
+  --ctl: max(48px, calc(var(--u) * 60));
+  --icon: max(22px, calc(var(--u) * 26));
+  --name-col: calc(var(--u) * 320);
+  --sec-pad: calc(var(--u) * 32);
+}
+.pg .sc { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
+.pg[data-layout="narrow"] > * { --pad: 16px; --fs-title: 30px; --fs-h2: 22px; --fs-text: 18px; --fs-label: 16px;
+  --ctl: 48px; --icon: 22px; --sec-pad: 24px; }
+
+/* ---- The page (ItemPage's head, Settings-family: no bar) ---- */
+.pg .page { padding: calc(var(--u) * 28) var(--pad) calc(var(--u) * 64); display: flex; flex-direction: column; }
+.pg[data-layout="narrow"] .page { padding: 20px 16px 48px; }
+.pg .topline { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.pg .back { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; color: var(--ink);
+  font-size: var(--fs-text); line-height: 1.4; text-decoration: underline; text-underline-offset: 4px; }
+.pg .back svg { width: var(--icon); height: var(--icon); }
+.pg .type { margin: calc(var(--u) * 16) 0 0; color: var(--ink-secondary); font: 600 var(--fs-label) / 1.35 var(--font-sans); }
+.pg[data-layout="narrow"] .type { margin-top: 16px; }
+.pg .titleline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 4px 0 0; }
+.pg h1 { margin: 0; font: 600 var(--fs-title) / 1.15 var(--font-serif); }
+.pg .meta { margin: 6px 0 0; color: var(--ink-secondary); font-size: var(--fs-text); line-height: 1.45; }
+.pg .meta b { color: var(--ink); font-weight: 600; }
+.pg .chip { display: inline-block; font: 600 var(--fs-label) / 1.35 var(--font-sans); background: var(--tile); color: var(--ink-secondary);
+  border-radius: var(--radius-sm); padding: 1px var(--space-2); white-space: nowrap; }
+.pg .chip.s { font-size: 16px; }
+
+/* Tabs, as the card: names only, the open one in ink with a 3px ink rule. */
+.pg .tabs { display: flex; flex-wrap: wrap; column-gap: calc(var(--u) * 32); margin-top: calc(var(--u) * 24); border-bottom: 1px solid var(--line); }
+.pg[data-layout="narrow"] .tabs { column-gap: 32px; margin-top: 20px; }
+.pg .tabs button { display: inline-flex; align-items: center; min-height: 44px; padding: var(--space-2) 0; border: 0; background: transparent;
+  color: var(--ink-secondary); font: 600 var(--fs-text) / 1.4 var(--font-sans); cursor: pointer; }
+.pg .tabs button:hover { color: var(--ink); }
+.pg .tabs button[aria-selected="true"] { color: var(--ink); box-shadow: inset 0 -3px 0 var(--ink); }
+
+/* Button, at the page's control size (K55): secondary, quiet, primary. */
+.pg .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: var(--ctl); padding: 0 calc(var(--u) * 22);
+  border: 1px solid var(--control-border); border-radius: var(--radius-md); background: transparent; color: var(--ink);
+  font: 600 var(--fs-label) / 1.3 var(--font-sans); cursor: pointer; white-space: nowrap; }
+.pg[data-layout="narrow"] .btn { padding: 0 16px; }
+.pg .btn svg { width: var(--icon); height: var(--icon); }
+.pg .btn:hover { background: var(--tile); }
+.pg .btn.quiet { border-color: transparent; }
+.pg .btn.primary { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+.pg .btn.primary:hover { background: color-mix(in srgb, var(--ink) 82%, var(--canvas)); }
+.pg .btn.sm { height: 44px; padding: 0 12px; font-size: 16px; }
+.pg .btn.sm svg { width: 20px; height: 20px; }
+.pg .acts { display: flex; flex-wrap: wrap; gap: 12px; }
+.pg .tlink { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+
+/* Rows like Settings (ItemPage, Layout A, K65). */
+.pg .sec { display: grid; grid-template-columns: var(--name-col) minmax(0, 1fr); align-items: start; padding: var(--sec-pad) 0; border-top: 1px solid var(--line); }
+.pg .sec > .content { display: flex; flex-direction: column; gap: calc(var(--u) * 20); min-width: 0; }
+.pg .sec h2 { margin: 0; font: 600 var(--fs-h2) / 1.26 var(--font-sans); }
+.pg[data-layout="narrow"] .sec { display: flex; flex-direction: column; gap: 16px; }
+.pg[data-layout="narrow"] .sec > .content { gap: 16px; }
+.pg .lede { margin: 0; max-width: 60ch; color: var(--ink-secondary); font-size: var(--fs-text); line-height: 1.47; }
+.pg .lede b { color: var(--ink); font-weight: 600; }
+.pg .note-body { margin: 0; max-width: 66ch; font: italic 400 var(--fs-text) / 1.5 var(--font-serif); }
+
+/* InlineMessage, info tone: an icon and words, no box. */
+.pg .im { display: flex; align-items: flex-start; gap: var(--space-2); margin: 0; color: var(--ink-secondary); font-size: var(--fs-cap); line-height: 22px; }
+.pg .im svg { width: 16px; height: 16px; margin-top: 3px; flex: none; }
+
+/* ---- new: the overview grid as a table (Q1 A, and C on a wide screen) ---- */
+.pg .grid-wrap { margin-top: calc(var(--u) * 20); overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
+.pg[data-layout="narrow"] .grid-wrap { margin: 16px -16px 0; }
+.pg table.og { border-collapse: separate; border-spacing: 0; width: 100%; font-size: var(--fs-text); }
+.pg .og th, .pg .og td { padding: calc(var(--u) * 12) calc(var(--u) * 8); border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; font-weight: 400; }
+.pg[data-layout="narrow"] .og th, .pg[data-layout="narrow"] .og td { padding: 10px 8px; }
+.pg .og thead th { border-bottom: 1px solid var(--ink); vertical-align: bottom; }
+.pg .og .act { position: sticky; left: 0; z-index: 2; background: var(--canvas); width: calc(var(--u) * 216); min-width: calc(var(--u) * 216); }
+.pg[data-layout="narrow"] .og .act { width: 132px; min-width: 132px; padding-left: 16px; box-shadow: 1px 0 0 var(--line); }
+.pg .og .wk { min-width: calc(var(--u) * 108); }
+.pg[data-layout="narrow"] .og .wk { min-width: 104px; }
+.pg[data-layout="narrow"] .og tr > :last-child { padding-right: 16px; }
+.pg .og .wn { display: flex; align-items: center; gap: 6px; font: 600 var(--fs-label) / 1.35 var(--font-sans); white-space: nowrap; }
+.pg .og .wn svg { width: 16px; height: 16px; color: var(--ink-secondary); }
+.pg .og .wd { display: block; color: var(--ink-secondary); font-size: var(--fs-cap); line-height: 22px; white-space: nowrap; }
+.pg .og .wt { display: block; font: 600 var(--fs-cap) / 22px var(--font-sans); white-space: nowrap; }
+.pg .og .an { display: block; font: 600 max(18px, calc(var(--u) * 22)) / 1.3 var(--font-sans); overflow-wrap: anywhere; }
+.pg .og .ac { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 4px; align-items: center; }
+.pg .og .ac .t { color: var(--ink-secondary); font-size: var(--fs-cap); line-height: 22px; }
+.pg .og .act a { color: inherit; text-decoration: none; }
+.pg .og .act a:hover .an { text-decoration: underline; text-underline-offset: 4px; }
+/* A cell: the value (or the result), then the line under it. */
+.pg .cv { display: flex; align-items: center; gap: 6px; font: 600 max(18px, calc(var(--u) * 21)) / 1.3 var(--font-sans); white-space: nowrap; }
+.pg .cv svg { width: 16px; height: 16px; color: var(--ink-secondary); }
+.pg .cs { display: block; color: var(--ink-secondary); font-size: var(--fs-cap); line-height: 22px; }
+.pg .cs.nw { white-space: nowrap; }
+/* A result, as RecentWeeks draws its count: met in pen, 600, underlined; not met in ink-secondary. */
+.pg .res { color: var(--ink-secondary); font-weight: 400; }
+.pg .res.met { color: var(--pen); font-weight: 600; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 0.22em; }
+.pg .paused .cv { color: var(--ink-secondary); }
+/* new: pen as text on a tile measures 4.49:1 in light, under 4.5:1, so a met count on a tile is ink,
+   with the underline in pen (a mark, 3:1). */
+.pg .og .cur .res.met, .pg[data-cells="c"] .og .past .res.met, .pg .tw.cur .res.met, .pg[data-cells="c"] .tw.past .res.met, .pg .pl li.cur .res.met { color: var(--ink); text-decoration-color: var(--pen); }
+.pg td.tap { cursor: pointer; }
+.pg td.tap:hover { background: var(--tile); }
+/* new: this week, a tile fill down its column (cell states A and B). */
+.pg .og .cur { background: var(--tile); }
+.pg .og td.cur.tap:hover { background: color-mix(in srgb, var(--tile) 70%, var(--control-border)); }
+/* new, cell states C: past weeks on tile, this week framed in ink, a corner for a hand-edit. */
+.pg[data-cells="c"] .og .cur { background: transparent; box-shadow: inset 2px 0 0 var(--ink), inset -2px 0 0 var(--ink); }
+.pg[data-cells="c"] .og thead .cur { box-shadow: inset 2px 0 0 var(--ink), inset -2px 0 0 var(--ink), inset 0 2px 0 var(--ink); }
+.pg[data-cells="c"] .og tbody tr:last-child .cur { box-shadow: inset 2px 0 0 var(--ink), inset -2px 0 0 var(--ink), inset 0 -2px 0 var(--ink); }
+.pg[data-cells="c"] .og .past { background: var(--tile); }
+.pg .corner { position: relative; }
+.pg .corner::after { content: ""; position: absolute; top: 0; right: 0; width: 10px; height: 10px; background: var(--ink-secondary); clip-path: polygon(0 0, 100% 0, 100% 100%); }
+.pg .ends { margin-top: calc(var(--u) * 16); }
+.pg[data-layout="narrow"] .ends { margin-top: 16px; }
+
+/* The before → after of a change preview (the same grid, §9.3). */
+.pg .chg { font-weight: 600; }
+.pg .chg .was { color: var(--ink-secondary); font-weight: 400; }
+
+/* Under the grid: the programme's controls. */
+.pg .controls { margin-top: calc(var(--u) * 28); }
+.pg[data-layout="narrow"] .controls { margin-top: 24px; display: grid; grid-template-columns: 1fr 1fr; }
+.pg[data-layout="narrow"] .controls .btn { padding: 0 10px; }
+.pg .sec .controls { margin-top: 0; }
+
+/* ---- new: the overview as a timeline of weeks (Q1 B, and C on a phone) ---- */
+.pg .tl { list-style: none; margin: calc(var(--u) * 20) 0 0; padding: 0; max-width: calc(var(--u) * 820); }
+.pg[data-layout="narrow"] .tl { margin-top: 12px; max-width: none; }
+.pg .tw { border-bottom: 1px solid var(--line); }
+.pg .tw.cur { background: var(--tile); border-radius: var(--radius-lg); border-bottom-color: transparent; margin: 4px calc(var(--u) * -16); padding: 0 calc(var(--u) * 16); }
+.pg[data-layout="narrow"] .tw.cur { margin: 4px -12px; padding: 0 12px; }
+.pg[data-cells="c"] .tw.cur { background: transparent; box-shadow: inset 0 0 0 2px var(--ink); }
+.pg[data-cells="c"] .tw.past { background: var(--tile); }
+.pg .th { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 12px; width: 100%; padding: 12px 0; border: 0; background: transparent; text-align: left; }
+.pg .th .tm { grid-column: 1; display: flex; flex-wrap: wrap; gap: 0 10px; }
+.pg button.th { cursor: pointer; }
+.pg button.th:hover .tn { text-decoration: underline; text-underline-offset: 4px; }
+.pg .th .tn { grid-column: 1; display: inline-flex; align-items: center; gap: 6px; font: 600 max(20px, calc(var(--u) * 22)) / 1.3 var(--font-sans); }
+.pg .th .tn svg { width: 16px; height: 16px; color: var(--ink-secondary); align-self: center; }
+.pg .th .td { color: var(--ink-secondary); font-size: var(--fs-cap); line-height: 22px; }
+.pg .th .tt { font: 600 var(--fs-cap) / 22px var(--font-sans); }
+.pg .th .sum { grid-column: 2; grid-row: 1 / span 2; display: inline-flex; align-items: center; gap: 6px; color: var(--ink-secondary); font-size: var(--fs-cap); line-height: 22px; }
+.pg .th .sum svg { width: 20px; height: 20px; }
+.pg .th[aria-expanded="true"] .sum svg { transform: rotate(180deg); }
+.pg .tr { list-style: none; margin: 0; padding: 0 0 12px; }
+.pg .tr li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 2px 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+.pg .tw.cur .tr li { border-top-color: color-mix(in srgb, var(--line) 60%, var(--control-border)); }
+.pg .tr .n { font: 600 var(--fs-text) / 1.4 var(--font-sans); }
+.pg .tr .v { display: inline-flex; align-items: center; gap: 6px; justify-self: end; text-align: right; font-size: var(--fs-text); line-height: 1.4; white-space: nowrap; }
+.pg .tr .v svg { width: 16px; height: 16px; color: var(--ink-secondary); }
+.pg .tr .v .x { color: var(--ink-secondary); }
+.pg .tr .sub { grid-column: 1 / -1; color: var(--ink-secondary); font-size: var(--fs-cap); line-height: 22px; }
+.pg .tr .r { grid-column: 2; justify-self: end; font-size: var(--fs-cap); line-height: 22px; }
+.pg .tr li.corner::after { top: 0; right: -4px; }
+
+/* ---- The Changes tab: the log, newest first ---- */
+.pg .log { list-style: none; margin: calc(var(--u) * 12) 0 0; padding: 0; max-width: calc(var(--u) * 820); }
+.pg .log li { display: grid; grid-template-columns: calc(var(--u) * 130) minmax(0, 1fr) auto; gap: 4px 20px; align-items: start; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.pg[data-layout="narrow"] .log li { grid-template-columns: minmax(0, 1fr) auto; }
+.pg .log .when { color: var(--ink-secondary); font-size: var(--fs-cap); line-height: 26px; white-space: nowrap; }
+.pg[data-layout="narrow"] .log .when { grid-column: 1 / -1; line-height: 22px; }
+.pg .log .what { margin: 0; font-size: var(--fs-text); line-height: 1.45; }
+.pg .log .why { margin: 2px 0 0; font: italic 400 var(--fs-text) / 1.45 var(--font-serif); }
+.pg .log .src { margin: 2px 0 0; color: var(--ink-secondary); font-size: var(--fs-cap); line-height: 22px; }
+
+/* ---- Dialog, at the page's size (K55), over a scrim; a phone keeps 16px round it ---- */
+.pg .scrim { position: absolute; inset: 0; z-index: 30; background: var(--scrim); opacity: 0.4; }
+.pg .dlg { position: absolute; z-index: 31; top: calc(var(--u) * 56); left: 50%; translate: -50% 0; width: min(calc(var(--u) * 720), calc(100% - 32px));
+  max-height: calc(100% - var(--u) * 80); display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-overlay);
+  --pad: max(24px, calc(var(--u) * 32)); --fs-text: max(18px, calc(var(--u) * 19)); --fs-label: max(16px, calc(var(--u) * 19)); --ctl: max(48px, calc(var(--u) * 60)); }
+.pg[data-layout="narrow"] .dlg { top: 48px; max-height: calc(100% - 64px); --pad: 16px; --fs-text: 18px; --fs-label: 16px; --ctl: 48px; }
+.pg .dlg-body { overflow-y: auto; padding: var(--pad); display: flex; flex-direction: column; gap: max(16px, calc(var(--u) * 20)); }
+.pg .dlg-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin: -12px -12px 0 0; }
+.pg .dlg-head h2 { margin: 12px 0 0; font: 600 var(--fs-h2) / 1.26 var(--font-sans); }
+.pg .dlg-head p { margin: 4px 0 0; color: var(--ink-secondary); font-size: var(--fs-text); line-height: 1.45; }
+.pg .ib { display: inline-flex; align-items: center; justify-content: center; flex: none; width: max(44px, calc(var(--u) * 52)); height: max(44px, calc(var(--u) * 52));
+  padding: 0; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); cursor: pointer; }
+.pg .ib svg { width: max(24px, calc(var(--u) * 28)); height: max(24px, calc(var(--u) * 28)); }
+.pg .ib:hover { background: var(--tile); }
+.pg .field { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.pg .field > .label { font: 600 var(--fs-label) / 1.3 var(--font-sans); }
+.pg .field .hint { margin: 0; color: var(--ink-secondary); font-size: var(--fs-cap); line-height: 22px; }
+.pg .row2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 20px 24px; align-items: start; }
+.pg input.tf, .pg .pick { height: var(--ctl); width: 100%; padding: 0 15px; border: 1px solid var(--control-border); border-radius: var(--radius-sm);
+  background: var(--panel); color: var(--ink); font: 400 var(--fs-text) / 1.3 var(--font-sans); font-variant-numeric: tabular-nums; }
+.pg input.tf:hover, .pg .pick:hover { border-color: var(--ink); }
+.pg input.tf.num { max-width: 170px; }
+/* A Menu's trigger and the date picker's: a field-shaped button, its value and an icon at the end. */
+.pg .pick { display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; cursor: pointer; }
+.pg .pick svg { width: 22px; height: 22px; color: var(--ink-secondary); }
+/* SegmentedControl at the page's size. */
+.pg .seg { display: inline-flex; flex-wrap: wrap; align-self: flex-start; max-width: 100%; border: 1px solid var(--control-border); border-radius: var(--radius-md); }
+.pg .seg button { height: calc(var(--ctl) - 2px); padding: 0 calc(var(--u) * 22); border: 0; border-radius: var(--radius-sm); background: transparent;
+  color: var(--ink); font: 600 var(--fs-label) / 1.3 var(--font-sans); cursor: pointer; white-space: nowrap; }
+.pg[data-layout="narrow"] .seg button { padding: 0 16px; }
+.pg .seg button:hover { background: var(--tile); }
+.pg .seg button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
+.pg .dlg .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; padding-top: 4px; }
+.pg[data-layout="narrow"] .dlg .actions .btn { flex: 1 1 auto; }
+
+/* new: the preview, in the sheet. */
+.pg .pv { display: flex; flex-direction: column; gap: 8px; padding-top: max(16px, calc(var(--u) * 20)); border-top: 1px solid var(--line); }
+.pg .pv h3 { margin: 0; font: 600 var(--fs-label) / 1.3 var(--font-sans); }
+.pg .pv ol { list-style: none; margin: 0; padding: 0; }
+.pg .pv li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: baseline; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: var(--fs-text); line-height: 1.4; }
+.pg .pv li:first-child { border-top: 1px solid var(--line); }
+.pg .pv li .w { font-weight: 600; }
+.pg .pv li .w .d { display: block; color: var(--ink-secondary); font-weight: 400; font-size: var(--fs-cap); line-height: 22px; }
+.pg .pv li .chg { white-space: nowrap; }
+.pg .pv li.keep .chg { color: var(--ink-secondary); font-weight: 400; }
+.pg .pv .block { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px 0 4px; }
+.pg .pv .block p { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: var(--fs-text); line-height: 1.45; }
+.pg .pv .block p svg { width: 18px; height: 18px; margin-top: 4px; color: var(--ink-secondary); }
+.pg .pv .calm { margin: 0; color: var(--ink-secondary); font-size: var(--fs-cap); line-height: 22px; }
+.pg .steps { margin: 0; color: var(--ink-secondary); font: 600 var(--fs-cap) / 22px var(--font-sans); }
+.pg .summary { margin: 0; padding: 12px 14px; background: var(--tile); border-radius: var(--radius-sm); font-size: var(--fs-text); line-height: 1.45; }
+
+/* ---- new: the activity page's Programme row (Q4) ---- */
+.pg .chart { position: relative; width: 100%; }
+.pg .chart svg { display: block; width: 100%; height: auto; overflow: visible; font-family: var(--font-sans); }
+.pg .chart .grid-l { stroke: var(--line); stroke-width: 1; }
+.pg .chart .axis-t { fill: var(--ink-secondary); font-size: 16px; }
+.pg .chart .axis-t.cur { fill: var(--ink); font-weight: 600; }
+.pg .chart .band { fill: var(--tile); }
+.pg .chart .plan { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.pg .chart .plan.ahead { stroke: var(--ink-secondary); stroke-dasharray: 6 5; }
+.pg .chart .met { fill: var(--pen); stroke: var(--canvas); stroke-width: 2; }
+.pg .chart .unmet { fill: var(--canvas); stroke: var(--ink-secondary); stroke-width: 2; }
+.pg .chart .cp { stroke: var(--control-border); stroke-width: 1; stroke-dasharray: 3 3; }
+.pg .chart .cpl { fill: var(--ink); font-size: 16px; font-weight: 600; }
+.pg .chart .lbl { fill: var(--ink-secondary); font-size: 16px; }
+.pg .chart .val { fill: var(--ink); font-size: 16px; font-weight: 600; }
+.pg .chart .hit { fill: transparent; cursor: default; }
+.pg .chart .hit:hover { fill: color-mix(in srgb, var(--ink) 6%, transparent); }
+.pg .legend { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0; padding: 0; list-style: none; color: var(--ink-secondary); font-size: var(--fs-cap); line-height: 22px; }
+.pg .legend li { display: inline-flex; align-items: center; gap: 8px; }
+.pg .legend svg { width: 22px; height: 12px; overflow: visible; }
+.pg .tip { position: absolute; z-index: 5; pointer-events: none; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-overlay); font-size: 16px; line-height: 22px; white-space: nowrap; }
+.pg .tip b { font-weight: 600; }
+.pg .tip span { display: block; color: var(--ink-secondary); }
+/* Q4 B: a week a line, as RecentWeeks draws its lines. */
+.pg .pl { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content; column-gap: 14px; font-size: var(--fs-text); line-height: 1.45; }
+.pg .pl li { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: baseline; padding: 8px 0; border-top: 1px solid var(--line); }
+.pg .pl li:last-child { border-bottom: 1px solid var(--line); }
+.pg .pl .w { white-space: nowrap; }
+.pg .pl .w .d { color: var(--ink-secondary); font-size: var(--fs-cap); }
+.pg .pl li.cur { background: var(--tile); margin: 0 -8px; padding: 8px; }
+.pg .pl li.cur .w { font-weight: 600; }
+.pg .pl .p { white-space: nowrap; }
+.pg .pl .p .x { color: var(--ink-secondary); }
+.pg .pl .o { justify-self: end; white-space: nowrap; }
+.pg .pl li.cp { grid-template-columns: 1fr; padding: 6px 0; }
+.pg .pl li.cp > span { grid-column: 1 / -1; display: inline-flex; align-items: center; gap: 8px; color: var(--ink); font: 600 var(--fs-cap) / 22px var(--font-sans); }
+.pg .pl li.cp svg { width: 16px; height: 16px; color: var(--ink-secondary); }
+.pg .pl li.paused .p { color: var(--ink-secondary); }
+.pg[data-layout="narrow"] .pl { column-gap: 10px; }
+.pg[data-layout="narrow"] .pl .w .d { display: block; }
+
+/* ---- The week (PlannerScreen, WeekGrid, SectionHeader), for Q5 ---- */
+.pg .wkband { position: sticky; top: 0; z-index: 3; background: var(--canvas); text-align: center;
+  padding: calc(var(--u) * 28) var(--pad) calc(var(--u) * 12); font: 600 var(--fs-title) / 1.15 var(--font-serif); margin: 0; }
+.pg[data-layout="narrow"] .wkband { padding: 34px 16px 8px; border-bottom: 1px solid var(--line); }
+.pg .screen { padding: calc(var(--u) * 12) var(--pad) calc(var(--u) * 20); }
+.pg[data-layout="narrow"] .screen { padding: 10px 16px 12px; }
+.pg .sh { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 20px; padding-bottom: calc(var(--u) * 20); }
+.pg[data-layout="narrow"] .sh { padding-bottom: 12px; }
+.pg .sh h2 { margin: 0; font: 600 max(26px, calc(var(--u) * 32)) / 1.15 var(--font-serif); }
+.pg[data-layout="narrow"] .sh h2 { font-size: 24px; }
+/* new, Q5 A: "Week 4 of 8" as a link at the end of the title line. */
+.pg .sh .prog { display: inline-flex; align-items: center; gap: 4px; color: var(--ink); font: 600 var(--fs-text) / 1.4 var(--font-sans);
+  text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 1px; white-space: nowrap; }
+.pg .sh .prog svg { width: 20px; height: 20px; }
+/* new, Q5 B: a line under the title. */
+.pg .sh.b { display: block; }
+.pg .sh .under { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 6px 0 0; color: var(--ink-secondary); font-size: var(--fs-text); line-height: 1.4; }
+.pg .wg { display: grid; grid-template-columns: calc(var(--u) * 280) repeat(7, minmax(0, 1fr)); }
+.pg .wg > * { min-width: 0; }
+.pg .wg .hd { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding: calc(var(--u) * 12) 0; border-bottom: 1px solid var(--ink); }
+.pg .wg .hd .dn { display: inline-flex; align-items: center; gap: 4px; font: 600 max(20px, calc(var(--u) * 27)) / 1.25 var(--font-sans); }
+.pg .wg .hd .dn svg { width: 16px; height: 16px; color: var(--ink-secondary); }
+.pg .wg .hd.met .dn span { color: var(--pen); text-decoration: underline; text-decoration-thickness: max(2px, calc(var(--u) * 3)); text-underline-offset: 0.22em; }
+.pg .wg .nm { display: flex; flex-direction: column; justify-content: center; gap: 6px; padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line); }
+.pg .wg .nm .n { font: 600 max(18px, calc(var(--u) * 24)) / 1.25 var(--font-sans); }
+.pg .wg .nm .chips { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+.pg .wg .nm .chip { font-size: max(16px, calc(var(--u) * 17)); }
+.pg .wg .d { container-type: size; display: grid; place-items: center; height: max(56px, calc(var(--u) * 82)); border-bottom: 1px solid var(--line); }
+.pg .wg .d.locked { cursor: default; }
+.pg .dm { display: block; width: min(76cqw, 76cqh, 128px); aspect-ratio: 1; padding: 0; border: 0; background: transparent; border-radius: var(--radius-md); cursor: pointer; }
+.pg .dm:not([data-mark]):hover::before { background: var(--ink); }
+.pg .locked .dm { cursor: default; }
+.pg .locked .dm:hover::before { background: var(--control-border); }
+.pg .dm[data-mark="great"]::after { background: var(--pen); }
+/* new, Q5 A: a paused row says so across its seven days. */
+.pg .wg .pz { grid-column: span 7; display: flex; align-items: center; justify-content: center; gap: 8px; border-bottom: 1px solid var(--line);
+  color: var(--ink-secondary); font-size: var(--fs-text); line-height: 1.4; text-align: center; padding: 0 8px; min-height: max(56px, calc(var(--u) * 82)); }
+.pg .wg .pz svg { width: 18px; height: 18px; flex: none; }
+/* new, Q5 B: locked days on a tile, paused boxes drawn dashed. */
+.pg[data-week="b"] .wg .locked { background: var(--tile); }
+.pg .dash { display: block; width: min(76cqw, 76cqh, 128px); aspect-ratio: 1; }
+.pg .dash svg { display: block; width: 118.8%; height: 118.8%; margin: -9.4%; overflow: visible; }
+.pg .dash path { fill: none; stroke: var(--control-border); stroke-width: 1.75; stroke-dasharray: 3 3.5; }
+/* Folded: a row's name line spans the days; its seven boxes beneath (PlannerScreen P2). */
+.pg[data-layout="narrow"] .wg { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.pg[data-layout="narrow"] .wg .corner-h { display: none; }
+.pg[data-layout="narrow"] .wg .hd { padding: 6px 0; }
+.pg[data-layout="narrow"] .wg .hd .dn { font-size: 20px; }
+.pg[data-layout="narrow"] .wg .hd .dn svg { width: 14px; height: 14px; }
+.pg[data-layout="narrow"] .wg .nm { grid-column: 1 / -1; flex-direction: row; justify-content: flex-start; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; padding: 10px 0 2px; border-bottom: 0; }
+.pg[data-layout="narrow"] .wg .nm .n { font-size: 18px; line-height: 1.45; }
+.pg[data-layout="narrow"] .wg .nm .chip { font-size: 16px; }
+.pg[data-layout="narrow"] .wg .d { height: clamp(48px, min(19cqw, 7.5cqh), 110px); }
+.pg[data-layout="narrow"] .wg .pz { grid-column: 1 / -1; min-height: 48px; font-size: 16px; }
+.pg .cue { display: flex; justify-content: center; margin-top: 10px; color: var(--ink-secondary); }
+.pg .cue svg { width: 24px; height: 24px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .pg .btn, .pg .seg button, .pg .tabs button, .pg td.tap, .pg .ib { transition: background-color 120ms, color 120ms, border-color 120ms; }
+}

@@ -1,0 +1,302 @@
+<title>How a programme looks</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="marks.css">
+<link rel="stylesheet" href="proto.css">
+<!--
+  A mockup (design-system skill, references/mockups.md): five questions for the programmes spec
+  (docs/specs/2026-11-17-programmes.md §10). The screens are live: proto.js draws them into each
+  .device at its real pixel size, scaled to the space it has (proto.css sizes everything from the
+  frame, as PlannerScreen does). try.html draws the same screens full size, with a switch.
+  Built from the cards ItemPage, Tabs, Dialog, SegmentedControl, Button, Chip, RecentWeeks,
+  InlineMessage, NoteMark, DayMark, SectionHeader and PlannerScreen; what is new is the questions.
+-->
+<style>
+  body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font-sans); }
+  .mockup-page {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: var(--space-8, 32px) var(--space-16, 64px);
+    max-width: 1200px; margin: 0 auto; display: grid; gap: var(--space-12, 48px);
+  }
+  .mockup-head { display: grid; gap: var(--space-2, 8px); max-width: 70ch; }
+  .mockup-head h1, .option h2, .option h3 { margin: 0; text-wrap: balance; }
+  .mockup-head p, .option p { margin: 0; }
+  .mockup-meta { color: var(--ink-secondary); }
+  .option { display: grid; gap: var(--space-4, 16px); min-width: 0; }
+  .option-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2, 8px) var(--space-3, 12px); }
+  .option-tag { color: var(--ink-secondary); }
+  .option[data-recommended] .option-tag::after { content: " · Recommended"; color: var(--ink); }
+  .panes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--space-4, 16px); }
+  .pane { min-width: 0; background: var(--canvas); color: var(--ink); border: 1px solid var(--line);
+          border-radius: var(--radius-lg, 10px); padding: var(--space-4, 16px); overflow-x: auto; }
+  .pane-label { color: var(--ink-secondary); margin: 0 0 var(--space-3, 12px); }
+  .measures { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); }
+  .measures li { border: 1px solid var(--line); border-radius: var(--radius-sm, 4px); padding: 2px var(--space-2, 8px); font-variant-numeric: tabular-nums; }
+  .measures li[data-pass="no"] { border-color: currentColor; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  a.go, .mockup-head a { color: var(--ink); font-weight: 600; text-underline-offset: 3px; }
+  .question { display: grid; gap: var(--space-8, 32px); padding-top: var(--space-8, 32px); border-top: 1px solid var(--line); }
+  .question > header { display: grid; gap: var(--space-2, 8px); max-width: 72ch; }
+  .question > header h2, .question > header p { margin: 0; }
+  .notes { margin: 0; padding-left: 1.2em; display: grid; gap: var(--space-1, 4px); }
+  .one .panes { grid-template-columns: minmax(0, 1fr); }
+
+  /* A device: the screen at its real size in pixels, scaled down to fit (the script sets the scale). */
+  .devices { display: flex; flex-wrap: wrap; gap: var(--space-4, 16px); align-items: flex-start; }
+  .device { position: relative; flex: 1 1 560px; min-width: 0; }
+  .device.phone { flex: 0 1 390px; }
+  .device > .pg { position: absolute; top: 0; left: 0; transform-origin: 0 0; border: 1px solid var(--line); border-radius: var(--radius-lg); }
+  .device.phone > .pg { border-radius: 28px; border-width: 2px; }
+  .cap { margin: 0 0 var(--space-2, 8px); color: var(--ink-secondary); }
+  /* In a one-column pane the desktop takes the whole width, and the phones sit side by side under it. */
+  .one .device:not(.phone) { flex-basis: 100%; }
+</style>
+
+<main class="mockup-page">
+  <header class="mockup-head">
+    <p class="caption mockup-meta">Mockup · 2026-11-17 · Tracker · Round 1</p>
+    <h1 class="title-1">How a programme looks</h1>
+    <p class="body">Five questions about how a programme shows up in the app (spec §10). The data is the same everywhere: <strong>Beginner 5×5</strong>, eight weeks from Mon 23 Nov; today is Wed 16 Dec, in week 4, a deload week. Deadlift is paused for two weeks (knee), Barbell row has a hand-edit in week 6, and Bench press was lowered on Wed 9 Dec, which split week 3.</p>
+    <p class="body">What stays as it is: the week view outside its header, a paused row and a locked day; an item page's other rows; the Dialog, the buttons, the chips and the marks. Every screen is live: press, scroll and unfold. <a href="try.html">Try it full size</a>, on your phone too.</p>
+    <ul class="notes body">
+      <li><a class="go" href="#q1">1. The overview at phone width</a> (the biggest question)</li>
+      <li><a class="go" href="#q2">2. Locked, hand-edited and paused cells</a></li>
+      <li><a class="go" href="#q3">3. The change sheet and its preview</a></li>
+      <li><a class="go" href="#q4">4. The activity page’s Programme row</a></li>
+      <li><a class="go" href="#q5">5. The week view’s programme header</a></li>
+    </ul>
+  </header>
+
+  <!-- ===== Question 1 ===== -->
+  <section class="question" id="q1" aria-labelledby="q1-h">
+    <header>
+      <h2 class="title-1" id="q1-h">1. The overview at phone width</h2>
+      <p class="body">The programme’s own page: every activity against every week. Eight weeks don’t fit across a 390px phone. Which shape does the plan take there, and on a desktop? The cells use question 2’s option A here.</p>
+    </header>
+
+    <section class="option" id="q1a" aria-labelledby="q1a-h">
+      <div class="option-head"><h3 class="title-2" id="q1a-h">A. A table that scrolls sideways</h3><span class="label option-tag">Option A</span></div>
+      <p class="body">One column per week, the activity column fixed at the left. On a phone two and a half weeks show, and the table opens on this week. Every week reads the same way, at the cost of a sideways swipe. <a class="go" href="try.html#overview-a">Try A full size</a></p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · desktop 1280 × 800, phone 390 × 844</p><div class="devices"><div class="device" data-w="1280" data-h="800" data-screen="overview" data-q1="a"></div><div class="device phone" data-w="390" data-h="844" data-screen="overview" data-q1="a"></div></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · the same</p><div class="devices"><div class="device" data-w="1280" data-h="800" data-screen="overview" data-q1="a"></div><div class="device phone" data-w="390" data-h="844" data-screen="overview" data-q1="a"></div></div></div>
+      </div>
+    </section>
+
+    <section class="option" id="q1b" aria-labelledby="q1b-h">
+      <div class="option-head"><h3 class="title-2" id="q1b-h">B. A timeline of weeks, down the page</h3><span class="label option-tag">Option B</span></div>
+      <p class="body">A week a block, read top to bottom. Past weeks fold to one line (“All five goals met”) and open on a press; this week sits on a tile; later weeks show what to lift. No sideways swipe, but no view of one activity across the weeks. The desktop shows the same column. <a class="go" href="try.html#overview-b">Try B full size</a></p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · desktop, phone</p><div class="devices"><div class="device" data-w="1280" data-h="800" data-screen="overview" data-q1="b"></div><div class="device phone" data-w="390" data-h="844" data-screen="overview" data-q1="b"></div></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · the same</p><div class="devices"><div class="device" data-w="1280" data-h="800" data-screen="overview" data-q1="b"></div><div class="device phone" data-w="390" data-h="844" data-screen="overview" data-q1="b"></div></div></div>
+      </div>
+    </section>
+
+    <section class="option" id="q1c" data-recommended aria-labelledby="q1c-h">
+      <div class="option-head"><h3 class="title-2" id="q1c-h">C. Both: the table on a wide screen, the timeline on a phone</h3><span class="label option-tag">Option C</span></div>
+      <p class="body">The table where all eight weeks fit (the week’s own rule: a phone or an iPad held upright folds, K26), the timeline where they don’t. Recommended: each screen gets the shape it reads best in, and the phone, where you use it, never scrolls sideways. The cost is two layouts to build and test. <a class="go" href="try.html#overview-c">Try C full size</a></p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · desktop, phone</p><div class="devices"><div class="device" data-w="1280" data-h="800" data-screen="overview" data-q1="c"></div><div class="device phone" data-w="390" data-h="844" data-screen="overview" data-q1="c"></div></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · the same</p><div class="devices"><div class="device" data-w="1280" data-h="800" data-screen="overview" data-q1="c"></div><div class="device phone" data-w="390" data-h="844" data-screen="overview" data-q1="c"></div></div></div>
+      </div>
+      <ul class="measures caption">
+        <li data-fg="var(--ink)" data-bg="var(--tile)" data-min="4.5">This week’s values on its tile</li>
+        <li data-fg="var(--ink-secondary)" data-bg="var(--tile)" data-min="4.5">This week’s second line on its tile</li>
+        <li data-fg="var(--pen)" data-bg="var(--tile)" data-min="4.5">Pen as text on this week’s tile (so a met count there is ink)</li>
+        <li data-fg="var(--pen)" data-bg="var(--tile)" data-min="3">A met count’s pen underline on a tile</li>
+      </ul>
+    </section>
+  </section>
+
+  <!-- ===== Question 2 ===== -->
+  <section class="question one" id="q2" aria-labelledby="q2-h">
+    <header>
+      <h2 class="title-1" id="q2-h">2. Locked, hand-edited and paused cells</h2>
+      <p class="body">The same in every option: a past week shows how it went (“3 of 3”, in pen and underlined when the goal was met, as Recent weeks does) over what was planned; this week shows what to lift and how many so far; a later week shows what to lift; a deload week says “Deload” under its dates; a split week reads “35 → 32.5 kg from Wed”. On a tile a met count is ink with its pen underline, because pen text measures 4.49:1 on the light tile, just under 4.5:1. What differs is how a locked week, a hand-edited value and a paused activity look. Press Barbell row’s later weeks to open the change sheet.</p>
+    </header>
+
+    <section class="option" id="q2a" data-recommended aria-labelledby="q2a-h">
+      <div class="option-head"><h3 class="title-2" id="q2a-h">A. Icons</h3><span class="label option-tag">Option A</span></div>
+      <p class="body">A <strong>lock</strong> beside each past week’s name, once per week rather than in every cell; a <strong>pen</strong> after a value set by hand (the app’s pencil already means “changed by you”); a <strong>pause</strong> sign with “Paused” and the reason. This week on a tile. Recommended: the smallest marks, the same in the table and the timeline, and each one named for a screen reader (“set by hand on 12 Dec”).</p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · desktop; phone at the top, with week 3 open, and scrolled to week 5</p><div class="devices"><div class="device" data-w="1280" data-h="800" data-screen="overview" data-q1="c" data-cells="a"></div><div class="device phone" data-w="390" data-h="844" data-screen="overview" data-q1="c" data-cells="a" data-unfold="3"></div><div class="device phone" data-w="390" data-h="844" data-screen="overview" data-q1="c" data-cells="a" data-scroll-to="5"></div></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · the same</p><div class="devices"><div class="device" data-w="1280" data-h="800" data-screen="overview" data-q1="c" data-cells="a"></div><div class="device phone" data-w="390" data-h="844" data-screen="overview" data-q1="c" data-cells="a" data-unfold="3"></div><div class="device phone" data-w="390" data-h="844" data-screen="overview" data-q1="c" data-cells="a" data-scroll-to="5"></div></div></div>
+      </div>
+    </section>
+
+    <section class="option" id="q2b" aria-labelledby="q2b-h">
+      <div class="option-head"><h3 class="title-2" id="q2b-h">B. Words</h3><span class="label option-tag">Option B</span></div>
+      <p class="body">“Locked” under each past week’s dates, “By hand, 12 Dec” under a hand-edited value, and “Paused” over the reason. No icons to learn, at the cost of a line in every cell that has one.</p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · desktop; phone, week 3 open, and scrolled to week 5</p><div class="devices"><div class="device" data-w="1280" data-h="800" data-screen="overview" data-q1="c" data-cells="b"></div><div class="device phone" data-w="390" data-h="844" data-screen="overview" data-q1="c" data-cells="b" data-unfold="3"></div><div class="device phone" data-w="390" data-h="844" data-screen="overview" data-q1="c" data-cells="b" data-scroll-to="5"></div></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · the same</p><div class="devices"><div class="device" data-w="1280" data-h="800" data-screen="overview" data-q1="c" data-cells="b"></div><div class="device phone" data-w="390" data-h="844" data-screen="overview" data-q1="c" data-cells="b" data-unfold="3"></div><div class="device phone" data-w="390" data-h="844" data-screen="overview" data-q1="c" data-cells="b" data-scroll-to="5"></div></div></div>
+      </div>
+    </section>
+
+    <section class="option" id="q2c" aria-labelledby="q2c-h">
+      <div class="option-head"><h3 class="title-2" id="q2c-h">C. Fill and corner</h3><span class="label option-tag">Option C</span></div>
+      <p class="body">Locked weeks on a <strong>tile</strong> fill, this week framed by a 2px ink line, and a hand-edit marked by a folded corner, the NoteMark’s shape. Paused stays in words. The cost: the corner already means “has a note” on the week, so it would mean two things; and every past week sits on the tile, where pen text measures 4.49:1, so its met counts turn ink with a pen underline.</p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · desktop; phone, week 3 open, and scrolled to week 5</p><div class="devices"><div class="device" data-w="1280" data-h="800" data-screen="overview" data-q1="c" data-cells="c"></div><div class="device phone" data-w="390" data-h="844" data-screen="overview" data-q1="c" data-cells="c" data-unfold="3"></div><div class="device phone" data-w="390" data-h="844" data-screen="overview" data-q1="c" data-cells="c" data-scroll-to="5"></div></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · the same</p><div class="devices"><div class="device" data-w="1280" data-h="800" data-screen="overview" data-q1="c" data-cells="c"></div><div class="device phone" data-w="390" data-h="844" data-screen="overview" data-q1="c" data-cells="c" data-unfold="3"></div><div class="device phone" data-w="390" data-h="844" data-screen="overview" data-q1="c" data-cells="c" data-scroll-to="5"></div></div></div>
+      </div>
+      <ul class="measures caption">
+        <li data-fg="var(--pen)" data-bg="var(--tile)" data-min="4.5">Pen as text on a locked week’s tile (so a met count there is ink)</li>
+        <li data-fg="var(--ink)" data-bg="var(--tile)" data-min="4.5">A met count in ink on a locked week’s tile, its underline in pen</li>
+        <li data-fg="var(--ink-secondary)" data-bg="var(--tile)" data-min="4.5">A planned weight on a locked week’s tile</li>
+        <li data-fg="var(--ink)" data-bg="var(--canvas)" data-min="3">This week’s frame</li>
+        <li data-fg="var(--ink-secondary)" data-bg="var(--canvas)" data-min="3">The hand-edit’s corner</li>
+      </ul>
+    </section>
+
+    <section class="option" id="q2open" aria-labelledby="q2open-h">
+      <div class="option-head"><h3 class="title-2" id="q2open-h">In every option: weeks after an open pause</h3></div>
+      <p class="body">If the programme were paused today with no end date, the weeks after this one have no dates yet: they read “When resumed”. This week says where it stopped.</p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · desktop, question 2 A</p><div class="devices"><div class="device" data-w="1280" data-h="800" data-screen="overview" data-q1="c" data-cells="a" data-open-pause="1"></div></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · phone, scrolled to week 4</p><div class="devices"><div class="device phone" data-w="390" data-h="844" data-screen="overview" data-q1="c" data-cells="a" data-open-pause="1" data-scroll-to="4"></div></div></div>
+      </div>
+    </section>
+  </section>
+
+  <!-- ===== Question 3 ===== -->
+  <section class="question one" id="q3" aria-labelledby="q3-h">
+    <header>
+      <h2 class="title-1" id="q3-h">3. The change sheet and its preview</h2>
+      <p class="body">Every change shows what it does before it happens (spec P2). The example: Barbell row set to 45 kg from Mon 21 Dec, from then on. Week 6 has a hand-edit (35 kg, set on 12 Dec), which a later change keeps unless you drop it. Press “Drop it too”, or switch to “That week only”, and the preview follows. The sheet is the Dialog card, nothing new; on a phone it keeps 16px round it.</p>
+    </header>
+
+    <section class="option" id="q3a" data-recommended aria-labelledby="q3a-h">
+      <div class="option-head"><h3 class="title-2" id="q3a-h">A. One sheet, the preview under the fields</h3><span class="label option-tag">Option A</span></div>
+      <p class="body">What to change, from when, for how long and why, then “What changes”, then Confirm. Recommended: the preview follows every choice as you make it, and Confirm sits straight after what it confirms. On a phone you scroll to it. <a class="go" href="try.html#change-a">Try A full size</a></p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · phone at the top, and scrolled to the preview; desktop</p><div class="devices"><div class="device phone" data-w="390" data-h="844" data-screen="change" data-sheet="a"></div><div class="device phone" data-w="390" data-h="844" data-screen="change" data-sheet="a" data-scroll="preview"></div><div class="device" data-w="1280" data-h="800" data-screen="change" data-sheet="a"></div></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · phone, scrolled to the preview, with the hand-edit dropped</p><div class="devices"><div class="device phone" data-w="390" data-h="844" data-screen="change" data-sheet="a" data-scroll="preview" data-dropped="1"></div></div></div>
+      </div>
+    </section>
+
+    <section class="option" id="q3b" aria-labelledby="q3b-h">
+      <div class="option-head"><h3 class="title-2" id="q3b-h">B. Two steps: the change, then its preview</h3><span class="label option-tag">Option B</span></div>
+      <p class="body">Step 1 asks for the change and ends in “Preview change”; step 2 shows it in a sentence and in weeks, with Back and Confirm. Each step fits a phone without scrolling, at the cost of a press and of not seeing the effect while you choose. <a class="go" href="try.html#change-b">Try B full size</a></p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · phone, step 1 and step 2</p><div class="devices"><div class="device phone" data-w="390" data-h="844" data-screen="change" data-sheet="b" data-step="1"></div><div class="device phone" data-w="390" data-h="844" data-screen="change" data-sheet="b" data-step="2"></div></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · phone, step 1 and step 2</p><div class="devices"><div class="device phone" data-w="390" data-h="844" data-screen="change" data-sheet="b" data-step="1"></div><div class="device phone" data-w="390" data-h="844" data-screen="change" data-sheet="b" data-step="2"></div></div></div>
+      </div>
+    </section>
+  </section>
+
+  <!-- ===== Question 4 ===== -->
+  <section class="question one" id="q4" aria-labelledby="q4-h">
+    <header>
+      <h2 class="title-1" id="q4-h">4. The activity page’s Programme row</h2>
+      <p class="body">An item in a programme gets a Programme row on its page, first, where “This week’s plan” would be: where it has been, where it goes, and its controls (Set weight, Set increase, Pause, End). Back squat shows a change of rate on Thu 3 Dec; Deadlift shows a pause. The Notes row under it is the ItemPage card’s, unchanged.</p>
+    </header>
+
+    <section class="option" id="q4a" data-recommended aria-labelledby="q4a-h">
+      <div class="option-head"><h3 class="title-2" id="q4a-h">A. A step chart</h3><span class="label option-tag">Option A</span></div>
+      <p class="body">The planned weight a step a week, solid to this week and dashed after it; a dot on each week done, filled in pen where the goal was met; a gap where it paused; a dashed line and a label where a change took effect. Hover a week for its numbers; a screen reader gets a table. Recommended: the shape of the plan (deloads, the steeper rate, the pause) reads at a glance, and the numbers are a press away. <a class="go" href="try.html#activity-a">Try A full size</a></p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · phone, Back squat; desktop, Deadlift</p><div class="devices"><div class="device phone" data-w="390" data-h="844" data-screen="activity" data-act="squat" data-prog="a"></div><div class="device" data-w="1280" data-h="800" data-screen="activity" data-act="deadlift" data-prog="a"></div></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · phone, Deadlift; desktop, Back squat</p><div class="devices"><div class="device phone" data-w="390" data-h="844" data-screen="activity" data-act="deadlift" data-prog="a"></div><div class="device" data-w="1280" data-h="800" data-screen="activity" data-act="squat" data-prog="a"></div></div></div>
+      </div>
+      <ul class="measures caption">
+        <li data-fg="var(--pen)" data-bg="var(--canvas)" data-min="3">A met week’s dot</li>
+        <li data-fg="var(--ink-secondary)" data-bg="var(--canvas)" data-min="3">An unmet week’s ring, the dashed weeks to come</li>
+        <li data-fg="var(--ink)" data-bg="var(--tile)" data-min="3">The line across this week’s band</li>
+        <li data-fg="var(--control-border)" data-bg="var(--canvas)" data-min="3">A change’s dashed line</li>
+      </ul>
+    </section>
+
+    <section class="option" id="q4b" aria-labelledby="q4b-h">
+      <div class="option-head"><h3 class="title-2" id="q4b-h">B. A week a line</h3><span class="label option-tag">Option B</span></div>
+      <p class="body">Recent weeks’ shape, for the whole programme: each week’s dates, what was planned and how it went, with each change as a line of its own between the weeks. Every number is on screen, but the shape takes reading. <a class="go" href="try.html#activity-b">Try B full size</a></p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · phone, Back squat; desktop, Deadlift</p><div class="devices"><div class="device phone" data-w="390" data-h="844" data-screen="activity" data-act="squat" data-prog="b"></div><div class="device" data-w="1280" data-h="800" data-screen="activity" data-act="deadlift" data-prog="b"></div></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · phone, Deadlift; desktop, Back squat</p><div class="devices"><div class="device phone" data-w="390" data-h="844" data-screen="activity" data-act="deadlift" data-prog="b"></div><div class="device" data-w="1280" data-h="800" data-screen="activity" data-act="squat" data-prog="b"></div></div></div>
+      </div>
+    </section>
+  </section>
+
+  <!-- ===== Question 5 ===== -->
+  <section class="question one" id="q5" aria-labelledby="q5-h">
+    <header>
+      <h2 class="title-1" id="q5-h">5. The week view’s programme header</h2>
+      <p class="body">A programme tracker on the week: its header says which programme week this is and leads to the overview; Monday is locked (marks stay open for one day, so Tuesday can still be marked); Deadlift is paused. Monday’s name is green and underlined because two were marked, as any day that meets the daily pick. The rest is the week as PlannerScreen draws it.</p>
+    </header>
+
+    <section class="option" id="q5a" data-recommended aria-labelledby="q5a-h">
+      <div class="option-head"><h3 class="title-2" id="q5a-h">A. “Week 4 of 8” as a link on the title’s line</h3><span class="label option-tag">Option A</span></div>
+      <p class="body">The link sits where Edit plan puts Add, at the end of the title’s line. A lock beside a locked day’s name; its boxes stay as they are, they just don’t press. A paused row says so in place of its boxes: “Paused until Mon 28 Dec. Knee.” Recommended: one line of header, and a paused row that can’t be mistaken for a week off. <a class="go" href="try.html#week-a">Try A full size</a></p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · phone, desktop</p><div class="devices"><div class="device phone" data-w="390" data-h="844" data-screen="week" data-week="a"></div><div class="device" data-w="1280" data-h="800" data-screen="week" data-week="a"></div></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · phone, desktop</p><div class="devices"><div class="device phone" data-w="390" data-h="844" data-screen="week" data-week="a"></div><div class="device" data-w="1280" data-h="800" data-screen="week" data-week="a"></div></div></div>
+      </div>
+    </section>
+
+    <section class="option" id="q5b" aria-labelledby="q5b-h">
+      <div class="option-head"><h3 class="title-2" id="q5b-h">B. A line under the title</h3><span class="label option-tag">Option B</span></div>
+      <p class="body">“Programme week 4 of 8, a deload.” and “Open the programme” under the title. A locked day sits on a tile; a paused row keeps its seven boxes, drawn dashed, with a “Paused” chip. Says more, takes a line more, and brings back a band on a day, which K36 took away for today. <a class="go" href="try.html#week-b">Try B full size</a></p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · phone, desktop</p><div class="devices"><div class="device phone" data-w="390" data-h="844" data-screen="week" data-week="b"></div><div class="device" data-w="1280" data-h="800" data-screen="week" data-week="b"></div></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · phone, desktop</p><div class="devices"><div class="device phone" data-w="390" data-h="844" data-screen="week" data-week="b"></div><div class="device" data-w="1280" data-h="800" data-screen="week" data-week="b"></div></div></div>
+      </div>
+      <ul class="measures caption">
+        <li data-fg="var(--control-border)" data-bg="var(--tile)" data-min="3">A box on a locked day’s tile</li>
+        <li data-fg="var(--pen)" data-bg="var(--tile)" data-min="3">A mark on a locked day’s tile</li>
+      </ul>
+    </section>
+  </section>
+</main>
+
+<script src="proto.js"></script>
+<script>
+  // Each .device gets a live screen at its real pixel size, scaled to the space it has.
+  for (const device of document.querySelectorAll('.device')) {
+    const w = Number(device.dataset.w), h = Number(device.dataset.h)
+    const screen = document.createElement('div')
+    screen.style.width = w + 'px'
+    screen.style.height = h + 'px'
+    device.append(screen)
+    const fit = () => {
+      const s = Math.min(1, device.clientWidth / w)
+      screen.style.transform = `scale(${s})`
+      device.style.height = Math.ceil(h * s) + 'px'
+    }
+    new ResizeObserver(fit).observe(device)
+    fit()
+    const d = device.dataset
+    PG.mount(screen, { screen: d.screen, q1: d.q1, cells: d.cells, sheet: d.sheet, step: d.step, scroll: d.scroll, scrollTo: d.scrollTo,
+      unfold: d.unfold, act: d.act, prog: d.prog, week: d.week, openPause: !!d.openPause, dropped: !!d.dropped })
+  }
+</script>
+<script>
+  // Measures: for each <li data-fg data-bg data-min>, the WCAG contrast of the two colours in each
+  // theme, resolved inside the option (so --candidate-* values apply), written after the label.
+  (() => {
+    const rgb = (value, scope, theme) => {
+      const probe = document.createElement('span')
+      probe.dataset.theme = theme
+      probe.style.color = value
+      scope.append(probe)
+      const parts = getComputedStyle(probe).color.match(/[\d.]+/g).map(Number)
+      probe.remove()
+      return parts.slice(0, 3)
+    }
+    const lum = ([r, g, b]) => [r, g, b]
+      .map((c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4 })
+      .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0)
+    const ratio = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05) }
+    for (const li of document.querySelectorAll('.measures li[data-fg]')) {
+      const scope = li.closest('.option') || document.body
+      const min = Number(li.dataset.min || 0)
+      const results = ['light', 'dark'].map((theme) => {
+        const r = ratio(rgb(li.dataset.fg, scope, theme), rgb(li.dataset.bg, scope, theme))
+        return { theme, r, ok: !min || r >= min }
+      })
+      li.dataset.pass = results.every((x) => x.ok) ? 'yes' : 'no'
+      li.append(`: ${results.map((x) => `${x.theme} ${x.r.toFixed(!x.ok && x.r > min - 0.05 ? 2 : 1)}:1${x.ok ? '' : ' (below ' + min + ':1)'}`).join(', ')}`)
+    }
+  })()
+</script>
