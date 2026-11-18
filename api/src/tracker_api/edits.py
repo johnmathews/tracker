@@ -21,6 +21,11 @@ src/stores/diet.ts:
   and its page in the app read it. `note` goes to `data.set_notes_locked`, in the same
   transaction as the plan write, so a refused note leaves the plan as it was. A note alone
   changes no plan, so it copies no week.
+- **A programme tracker's plan is its programme's** (programmes spec §11.1, §11.3). Adding,
+  changing or removing one of its items is refused with a pointer to `change_programme`; a note
+  alone still goes through, since it changes no plan. Its marks follow the lock (§8): today's and
+  yesterday's are open, yesterday's is recorded as late, an earlier day's is refused by date. Its
+  weeks are never owned here: the engine writes every one of them.
 
 Tools speak the app's words (`times_a_week`, `seconds`, `note` …); `WORDS` maps them to the stored
 keys, and results come back in the same words, the items with their notes, so an agent can undo a
@@ -35,15 +40,19 @@ import secrets
 import sqlite3
 import time
 from collections.abc import Callable, Container, Mapping
-from datetime import date
-from typing import Any, TypedDict
+from datetime import date, timedelta
+from typing import Any, NotRequired, TypedDict
 
 from . import data
 from .config import Config
 from .data import (
+    APP,
     DetailsTooLarge,
+    LockedDay,
     PlanSaved,
     QuotaExceeded,
+    When,
+    has_run,
     load_settings,
     load_tracked,
     notes_of,
@@ -179,6 +188,8 @@ class MarkEdit(TypedDict):
     days: Days
     rev: int
     copied_from: str | None
+    #: A programme tracker's mark only: whether it was entered the day after the day it marks.
+    late: NotRequired[bool]
 
 
 class TargetChange(TypedDict):
@@ -327,6 +338,18 @@ def _changes(kind: TypeId, fields: Mapping[str, object]) -> Item:
         if out.get("reps", 0) > 0 and "duration" not in out:
             out["duration"] = 0
     return out
+
+
+def _not_programme(conn: sqlite3.Connection, user_id: int, tracker: Tracker) -> None:
+    """EditError naming `tracker` for a programme tracker, whose plan only its run writes."""
+    if has_run(conn, user_id, tracker["id"]):
+        raise EditError(
+            "tracker",
+            f"{tracker['name']} is a programme tracker: its plan comes from its programme, so "
+            "its items can't be added, changed or removed one week at a time. Use "
+            "change_programme instead (set-value, set-increase, pause-activity, add-activity, "
+            "end-activity, edit-week …); it previews the change before it applies it",
+        )
 
 
 def _strict(kind: TypeId, raw: Item) -> Item:
@@ -510,6 +533,7 @@ def add_item(
     `addCardio`, `addFood`.
     A `note` becomes the new item's notes, in its details."""
     found = find(conn, user_id, tracker)
+    _not_programme(conn, user_id, found)
     kind = found["kind"]
     changes = _changes(kind, fields)
     note = changes.pop("notes", None)
@@ -541,6 +565,8 @@ def update_item(
     note = changes.pop("notes", None)
     if not changes and note is None:
         raise EditError("item", f"nothing to change; give one of {', '.join(TYPE_WORDS[kind])}")
+    if changes:
+        _not_programme(conn, user_id, found)
     item_id = _item_id(item_id)
 
     def update(items: list[Item], _: Tracked) -> tuple[list[Item], Item]:
@@ -563,6 +589,7 @@ def remove_item(
 ) -> PlanEdit:
     """Take one item out of the week; its marks stay in the log, uncounted, as in the app."""
     found = find(conn, user_id, tracker)
+    _not_programme(conn, user_id, found)
     item_id = _item_id(item_id)
 
     def remove(items: list[Item], _: Tracked) -> tuple[list[Item], Item]:
@@ -580,10 +607,16 @@ def mark_day(
     day: date,
     item_id: str,
     mark: Mark | None,
+    *,
+    source: str = APP,
 ) -> MarkEdit:
     """Set one item's mark on one date, or clear it with None: the stores' `toggle`, landing on
     a chosen mark. The week is the date's Monday, and must show the tracker. It is owned first,
-    as a tick on the device is, and an item the week does not show is refused."""
+    as a tick on the device is, and an item the week does not show is refused.
+
+    On a programme tracker the lock decides (spec §8): a day before yesterday is refused, naming
+    the date; yesterday's mark is stored as late. The week is the engine's, so it is never owned
+    here. Each mark there is evidence, recorded with `source`, the connection that made it."""
     found = find(conn, user_id, tracker)
     tracker_id, item_id = found["id"], _item_id(item_id)
     if mark is not None and not is_mark(mark):
@@ -598,15 +631,36 @@ def mark_day(
     weekday = day.weekday()
     tracked = load_tracked(conn, user_id, tracker_id)
     _find(week_items(tracker_id, tracked["plans"], week), item_id, week)
-    owned = _own(conn, config, user_id, found, week)
+    programme = has_run(conn, user_id, tracker_id)
+    owned = (
+        _shown(conn, user_id, found, week)[0]
+        if programme
+        else _own(conn, config, user_id, found, week)
+    )
     before = tracked["log"].get(week, {}).get(item_id, [None] * 7)[weekday]
+    when = When(config.clock(), config.timezone)
     try:
         days = data.set_tick(
-            conn, user_id, tracker_id, week, item_id, weekday, mark, quota=config.user_quota_bytes
+            conn,
+            user_id,
+            tracker_id,
+            week,
+            item_id,
+            weekday,
+            mark,
+            quota=config.user_quota_bytes,
+            when=when,
+            source=source,
         )
     except QuotaExceeded:
         raise EditError("quota", "the account is full, so nothing was changed") from None
-    return {
+    except LockedDay as e:
+        raise EditError(
+            "date",
+            f"{e.day.isoformat()} is locked. A programme tracker's days are a record: today's "
+            "and yesterday's marks can be set or cleared, and an earlier day's can't",
+        ) from None
+    edit: MarkEdit = {
         "tracker": tracker_id,
         "date": day.isoformat(),
         "week": week,
@@ -618,6 +672,9 @@ def mark_day(
         "rev": owned["rev"],
         "copied_from": owned["copied_from"],
     }
+    if programme:
+        edit["late"] = day == when.today - timedelta(days=1)
+    return edit
 
 
 def _daily(name: str, value: object) -> int:

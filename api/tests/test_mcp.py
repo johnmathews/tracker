@@ -2,32 +2,56 @@
 every refusal. Each refusal that differs from REST is checked against a REST route as well, so a
 guard exemption that widened past /api/mcp fails here (docs/api.md §3.1)."""
 
+import copy
 import json
 import sqlite3
 from collections.abc import Iterator
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
 
-from tracker_api import auth
+from tracker_api import auth, data, mcp_server, oauth
 from tracker_api.app import MAX_BODY, create_app
 from tracker_api.config import Config
 from tracker_api.data import create_tracker, end_tracker, put_settings
 from tracker_api.mcp_server import MCP_PATH, OUT_OF_RANGE, caller
+from tracker_api.programme import FORMAT, check_programme, programme_schema
+from tracker_api.programme_replay import CHANGE_KEYS, CHANGE_TYPES
 
-from .conftest import ORIGIN, Clock
+from .conftest import ORIGIN, START, Clock
 from .test_insights import CASES
 from .test_insights import load as load_tracked
+from .test_oauth import StubFetch, approve
+from .test_programmes_api import doc
 
 EMAIL = "alice@example.com"
 PASSWORD = "correct horse battery"
 ACCEPT = "application/json, text/event-stream"
-READ_TOOLS = ["list_trackers", "week_summary", "weeks", "item_history", "goals", "consistency"]
-WRITE_TOOLS = ["add_item", "update_item", "remove_item", "mark_day", "set_daily_targets"]
+READ_TOOLS = [
+    "list_trackers",
+    "week_summary",
+    "weeks",
+    "item_history",
+    "goals",
+    "consistency",
+    "programme_format",
+    "list_programmes",
+    "get_programme",
+]
+WRITE_TOOLS = [
+    "add_item",
+    "update_item",
+    "remove_item",
+    "mark_day",
+    "set_daily_targets",
+    "save_programme",
+    "start_programme",
+    "change_programme",
+]
 INITIALIZE = {
     "protocolVersion": "2025-11-25",
     "capabilities": {},
@@ -668,6 +692,10 @@ WRITE_HINTS = {
     "remove_item": {"destructiveHint": True, "idempotentHint": False},
     "mark_day": {"destructiveHint": False, "idempotentHint": True},
     "set_daily_targets": {"destructiveHint": False, "idempotentHint": True},
+    "save_programme": {"destructiveHint": False, "idempotentHint": False},
+    "start_programme": {"destructiveHint": False, "idempotentHint": False},
+    # A confirm moves the log's rev on, so the same confirm again only previews.
+    "change_programme": {"destructiveHint": False, "idempotentHint": True},
 }
 WRITE_CALLS: dict[str, dict[str, Any]] = {
     "add_item": {"name": "Dips"},
@@ -675,6 +703,9 @@ WRITE_CALLS: dict[str, dict[str, Any]] = {
     "remove_item": {"item_id": "sq"},
     "mark_day": {"item_id": "sq", "mark": "great"},
     "set_daily_targets": {"exercises_a_day": 4},
+    "save_programme": {"doc": {"format": "tracker-programme/1"}},
+    "start_programme": {"programme": "x1"},
+    "change_programme": {"tracker": "exercise", "change": {"type": "go-to-week", "week": 2}},
 }
 
 
@@ -1089,3 +1120,517 @@ def test_the_resource_metadata_url_answers_the_protected_resource_document(
         "scopes_supported": ["read", "write"],
         "bearer_methods_supported": ["header"],
     }
+
+
+# --- programmes (docs/specs/2026-11-17-programmes.md §11.3) ---------------------------------------
+
+NEXT_MONDAY = "2026-10-26"
+YESTERDAY = "2026-10-22"
+#: The worked example `programme_format` gives: the spec's §3.1 document, from the fixtures.
+EXAMPLE = doc("spec-example")
+NAME = EXAMPLE["name"]
+PAUSE_SQUAT = {"type": "pause-activity", "activity": "squat", "weeks": 2}
+LONGER_PLANK = {"type": "set-value", "activity": "plank", "field": "duration", "value": 45}
+
+
+def refused(client: TestClient, token: str, tool_name: str, arguments: dict[str, Any]) -> str:
+    """`write_error` without the SDK's prefix: the refusal as the tool words it."""
+    text = write_error(client, token, tool_name, arguments)
+    prefix = f"Error executing tool {tool_name}: "
+    assert text.startswith(prefix), text
+    return text.removeprefix(prefix)
+
+
+def go_to(clock: Clock, day: str) -> None:
+    """Move the clock to the same time of day on `day`."""
+    clock.now = START + (date.fromisoformat(day) - date.fromisoformat(TODAY)).days * 86_400
+
+
+def save(client: TestClient, token: str, document: object = None) -> dict[str, Any]:
+    """`save_programme` for a document it takes: the stored programme."""
+    out = write(client, token, "save_programme", {"doc": EXAMPLE if document is None else document})
+    return out["programme"]  # type: ignore[no-any-return]
+
+
+def running(client: TestClient, token: str, **start: Any) -> dict[str, Any]:
+    """The example saved and started (today, unless `start` says): `start_programme`'s result."""
+    programme_id = save(client, token)["id"]
+    return write(client, token, "start_programme", {"programme": programme_id, **start})  # type: ignore[no-any-return]
+
+
+def change(client: TestClient, token: str, tracker: str, body: Any, **extra: Any) -> Any:
+    return write(client, token, "change_programme", {"tracker": tracker, "change": body, **extra})
+
+
+def confirmed(client: TestClient, token: str, tracker: str, body: Any, **extra: Any) -> Any:
+    """Preview a change, then confirm it with the preview's rev."""
+    preview = change(client, token, tracker, body, **extra)
+    return change(client, token, tracker, body, confirm=True, rev=preview["rev"], **extra)
+
+
+def targets(summary: dict[str, Any]) -> dict[str, int]:
+    return {it["id"]: it["target"] for it in summary["items"]}
+
+
+def test_an_agent_saves_starts_and_changes_a_programme_through_mcp_alone(
+    agent: TestClient, uid: int, writer: str
+) -> None:
+    """The plan's W5 acceptance: the whole loop through MCP calls and nothing else."""
+    fmt = tool(agent, writer, "programme_format")
+    document = copy.deepcopy(fmt["example"])
+    broken = copy.deepcopy(document)
+    broken["weeks"] = 0
+    broken["activities"][0]["weight"]["add"] = 2.5
+    text = refused(agent, writer, "save_programme", {"doc": broken})
+    assert text.startswith("doc: the programme has 2 problems, so nothing was saved.")
+    assert "\n- weeks: give a whole number from 1 to 52." in text
+    assert "\n- activities[0].weight.rate: a progression has add or rate, not both." in text
+    assert tool(agent, writer, "list_programmes")["programmes"] == []
+
+    saved = save(agent, writer, document)
+    assert (saved["name"], saved["rev"], saved["weeks"]) == (NAME, 1, 8)
+    started = write(agent, writer, "start_programme", {"programme": saved["id"]})
+    tracker = started["tracker"]["id"]
+    assert (started["tracker"]["name"], started["tracker"]["kind"]) == (NAME, "strength")
+    assert (started["run"]["status"], started["run"]["week"], started["run"]["start"]) == (
+        "running",
+        1,
+        TODAY,
+    )
+
+    preview = change(agent, writer, tracker, PAUSE_SQUAT, from_date=NEXT_MONDAY, reason="Knee.")
+    assert (preview["preview"], preview["stale"]) == (True, False)
+    assert "confirm" in preview["message"]
+    assert {(c["key"], c["monday"]) for c in preview["cells"]} >= {("squat", NEXT_MONDAY)}
+    assert targets(tool(agent, writer, "week_summary", tracker=tracker, week=NEXT_MONDAY)) == {
+        "squat": 3,
+        "plank": 3,
+    }
+    applied = change(
+        agent,
+        writer,
+        tracker,
+        PAUSE_SQUAT,
+        from_date=NEXT_MONDAY,
+        reason="Knee.",
+        confirm=True,
+        rev=preview["rev"],
+    )
+    assert (applied["preview"], applied["stale"]) == (False, False)
+    entry = applied["change"]
+    assert (entry["from"], entry["change"], entry["reason"], entry["source"]) == (
+        NEXT_MONDAY,
+        PAUSE_SQUAT,
+        "Knee.",
+        "agent",
+    )
+
+    week = tool(agent, writer, "week_summary", tracker=tracker, week=NEXT_MONDAY)
+    assert week["tracker"] == tracker
+    assert targets(week) == {"squat": 0, "plank": 3}
+    # This week, before the change's from day, is as it was.
+    assert targets(tool(agent, writer, "week_summary", tracker=tracker)) == {"squat": 3, "plank": 3}
+
+
+def test_programme_format_gives_the_schema_a_worked_example_and_the_changes(
+    agent: TestClient, token: str
+) -> None:
+    """A read token may read the format; the example is the spec's, kept in the package."""
+    out = tool(agent, token, "programme_format")
+    assert out["format"] == FORMAT
+    assert out["schema"] == programme_schema()
+    assert out["example"] == EXAMPLE == mcp_server.EXAMPLE
+    assert check_programme(out["example"]) == []
+    assert [c["type"] for c in out["changes"]] == list(CHANGE_TYPES)
+    for c in out["changes"]:
+        assert c["keys"] == list(CHANGE_KEYS[c["type"]]), c["type"]
+        assert len(c["does"]) > 20, c["type"]
+    notes = " ".join(out["notes"])
+    for words in ("save_programme", "start_programme", "change_programme", "today or later"):
+        assert words in notes, words
+
+
+def test_save_programme_takes_the_document_as_json_text(
+    agent: TestClient, uid: int, writer: str
+) -> None:
+    """Some agents send a nested object as a string: the tool reads it as the JSON it holds."""
+    assert save(agent, writer, json.dumps(EXAMPLE))["name"] == NAME
+    text = refused(agent, writer, "save_programme", {"doc": "{not json"})
+    assert text == "doc: is not a JSON object; send the object itself"
+
+
+def test_save_programme_replaces_a_programme_with_its_rev(
+    agent: TestClient, uid: int, writer: str
+) -> None:
+    first = save(agent, writer)
+    slower = {**EXAMPLE, "name": f"{NAME}, slower"}
+    out = write(
+        agent, writer, "save_programme", {"programme": first["id"], "rev": 1, "doc": slower}
+    )
+    assert (out["programme"]["id"], out["programme"]["rev"]) == (first["id"], 2)
+    assert out["programme"]["name"] == slower["name"]
+    stale = refused(
+        agent, writer, "save_programme", {"programme": first["id"], "rev": 1, "doc": EXAMPLE}
+    )
+    assert stale.startswith("rev: the programme changed since rev 1; it is at rev 2 now.")
+    missing = refused(agent, writer, "save_programme", {"programme": first["id"], "doc": EXAMPLE})
+    assert missing.startswith("rev: give the programme's rev")
+    unknown = refused(
+        agent, writer, "save_programme", {"programme": "nope", "rev": 1, "doc": EXAMPLE}
+    )
+    assert unknown.startswith("programme: no programme nope in the library")
+    assert [p["rev"] for p in tool(agent, writer, "list_programmes")["programmes"]] == [2]
+
+
+def test_save_programme_refuses_past_the_library_and_size_caps(
+    agent: TestClient, uid: int, writer: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(data, "MAX_PROGRAMME_BYTES", 100)
+    text = refused(agent, writer, "save_programme", {"doc": EXAMPLE})
+    assert text.startswith("doc: the programme has 1 problem, so nothing was saved.")
+    assert "\n- doc: the programme is over 100 bytes as stored." in text
+    monkeypatch.undo()
+    monkeypatch.setattr(data, "MAX_PROGRAMMES", 1)
+    save(agent, writer)
+    text = refused(agent, writer, "save_programme", {"doc": EXAMPLE})
+    assert text.startswith("doc: the library holds 1 programme")
+    assert len(tool(agent, writer, "list_programmes")["programmes"]) == 1
+
+
+@pytest.fixture
+def full(config: Config, conn: sqlite3.Connection, uid: int) -> Iterator[tuple[TestClient, str]]:
+    """An agent on a server whose quota a fresh account already fills, with its write token."""
+    token = auth.create_token(conn, config, EMAIL, "agent", "write")
+    small = replace(config, user_quota_bytes=1)
+    with TestClient(create_app(small, run_backups=False), base_url=ORIGIN) as c:
+        yield c, token
+
+
+def test_a_full_account_saves_and_starts_nothing(
+    full: tuple[TestClient, str], conn: sqlite3.Connection, uid: int
+) -> None:
+    client, token = full
+    assert refused(client, token, "save_programme", {"doc": EXAMPLE}).startswith(
+        "quota: the account is full"
+    )
+    stored = data.add_programme(conn, uid, EXAMPLE, START, quota=10**9, make_id=lambda _: "p1")
+    text = refused(client, token, "start_programme", {"programme": stored["id"]})
+    assert text.startswith("quota: the account is full")
+    assert [t["id"] for t in data.load_trackers(conn, uid)] == ["exercise", "cardio", "diet"]
+
+
+def test_a_full_account_previews_a_change_but_applies_nothing(
+    full: tuple[TestClient, str], conn: sqlite3.Connection, config: Config, uid: int
+) -> None:
+    """A change that would store more (an activity with its notes) past the quota."""
+    client, token = full
+    stored = data.add_programme(conn, uid, EXAMPLE, START, quota=10**9, make_id=lambda _: "p1")
+    when = data.When(START, config.timezone)
+    started = data.start_programme(
+        conn, uid, stored["id"], when=when, quota=10**9, make_id=lambda _: "x1"
+    )
+    assert started is not None
+    lunge = {"key": "lunge", "name": "Lunge", "notes": "Slow. " * 200, "target": 2, "reps": 10}
+    body = {"type": "add-activity", "activity": lunge}
+    preview = change(client, token, "x1", body)
+    arguments = {"tracker": "x1", "change": body, "confirm": True, "rev": preview["rev"]}
+    text = refused(client, token, "change_programme", arguments)
+    assert text == "quota: the account is full, so nothing was changed"
+    run = data.read_run(conn, uid, "x1", when)
+    assert run is not None
+    assert run["log"] == []
+
+
+def test_list_programmes_gives_the_library_and_the_runs(
+    agent: TestClient, uid: int, writer: str, token: str
+) -> None:
+    started = running(agent, writer, name="Autumn squats")
+    out = tool(agent, token, "list_programmes")
+    (listed,) = out["programmes"]
+    assert (listed["name"], listed["kind"], listed["weeks"], listed["activities"]) == (
+        NAME,
+        "strength",
+        8,
+        2,
+    )
+    assert "doc" not in listed
+    (run,) = out["runs"]
+    assert run == {
+        "tracker": started["tracker"]["id"],
+        "trackerName": "Autumn squats",
+        "programmeId": listed["id"],
+        "name": NAME,
+        "status": "running",
+        "week": 1,
+        "weeks": 8,
+        "start": TODAY,
+        "end": started["run"]["end"],
+        "pausedUntil": None,
+        "rev": started["run"]["rev"],
+    }
+    assert (out["today"], out["this_week"]) == (TODAY, THIS_WEEK)
+
+
+def test_get_programme_reads_a_library_programme_or_a_run(
+    agent: TestClient, uid: int, writer: str, clock: Clock
+) -> None:
+    started = running(agent, writer)
+    tracker = started["tracker"]["id"]
+    programme_id = started["run"]["programmeId"]
+    out = tool(agent, writer, "get_programme", programme=programme_id)
+    assert (out["programme"]["doc"], out["programme"]["rev"], out["run"]) == (EXAMPLE, 1, None)
+    confirmed(agent, writer, tracker, PAUSE_SQUAT, from_date=NEXT_MONDAY, reason="Knee.")
+    go_to(clock, "2026-10-28")
+    out = tool(agent, writer, "get_programme", tracker=NAME.upper())
+    run = out["run"]
+    assert out["programme"] is None
+    assert (run["tracker"], run["status"], run["week"], run["today"]) == (
+        tracker,
+        "running",
+        2,
+        "2026-10-28",
+    )
+    assert run["clock"]["activities"]["squat"]["state"] == "paused"
+    (entry,) = run["log"]
+    assert (entry["from"], entry["reason"], entry["source"]) == (NEXT_MONDAY, "Knee.", "agent")
+    # The upcoming weeks, from this one: the weeks before are in `weeks` and `week_summary`.
+    mondays = [w["monday"] for w in run["grid"]["weeks"]]
+    assert mondays[0] == NEXT_MONDAY
+    assert len(mondays) == 7
+
+
+@pytest.mark.parametrize(
+    ("arguments", "words"),
+    [
+        ({}, "programme: give programme (a library id) or tracker (a running one), not both"),
+        (
+            {"programme": "p1", "tracker": "exercise"},
+            "programme: give programme (a library id) or tracker (a running one), not both",
+        ),
+        ({"programme": "nope"}, "programme: no programme nope in the library"),
+        ({"tracker": "Strength"}, "tracker: Strength is not a programme tracker"),
+        ({"tracker": "sleep"}, "tracker: no tracker"),
+    ],
+)
+def test_get_programme_refusals(
+    agent: TestClient, uid: int, token: str, arguments: dict[str, Any], words: str
+) -> None:
+    assert refused(agent, token, "get_programme", arguments).startswith(words)
+
+
+def test_start_programme_lists_every_problem_and_starts_nothing(
+    agent: TestClient, conn: sqlite3.Connection, uid: int, writer: str
+) -> None:
+    programme_id = save(agent, writer)["id"]
+    text = refused(
+        agent,
+        writer,
+        "start_programme",
+        {
+            "programme": programme_id,
+            "start": YESTERDAY,
+            "params": {"squat": "heavy", "nope": 3},
+            "name": " ",
+        },
+    )
+    assert text.startswith("programme: the start has 4 problems, so nothing was started.")
+    for line in (
+        "- start: a programme starts today or later.",
+        "- name: give a name of 1 to 60 characters.",
+        "- params.squat: give a number.",
+        "- params.nope: the programme has no parameter called nope.",
+    ):
+        assert f"\n{line}" in text, line
+    unknown = refused(agent, writer, "start_programme", {"programme": "nope"})
+    assert unknown.startswith("programme: no programme nope in the library")
+    assert [t["id"] for t in data.load_trackers(conn, uid)] == ["exercise", "cardio", "diet"]
+
+
+def test_start_programme_takes_a_date_parameters_and_a_name(
+    agent: TestClient, uid: int, writer: str
+) -> None:
+    out = running(agent, writer, start=NEXT_MONDAY, params={"squat": 50}, name="Squats")
+    run = out["run"]
+    assert (out["tracker"]["name"], out["tracker"]["startWeek"]) == ("Squats", NEXT_MONDAY)
+    assert (run["status"], run["start"], run["params"]["squat"]) == ("upcoming", NEXT_MONDAY, 50)
+
+
+def test_start_programme_refuses_past_the_tracker_cap(
+    agent: TestClient, uid: int, writer: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    programme_id = save(agent, writer)["id"]
+    monkeypatch.setattr(data, "MAX_TRACKERS", 3)
+    text = refused(agent, writer, "start_programme", {"programme": programme_id})
+    assert text.startswith("tracker: the account has 3 trackers, the most it can hold")
+
+
+def test_a_stale_confirm_previews_the_change_again_and_says_so(
+    agent: TestClient, uid: int, writer: str
+) -> None:
+    tracker = running(agent, writer)["tracker"]["id"]
+    first = change(agent, writer, tracker, PAUSE_SQUAT, from_date=NEXT_MONDAY)
+    confirmed(agent, writer, tracker, LONGER_PLANK, from_date=NEXT_MONDAY)
+    out = change(
+        agent, writer, tracker, PAUSE_SQUAT, from_date=NEXT_MONDAY, confirm=True, rev=first["rev"]
+    )
+    assert (out["preview"], out["stale"]) == (True, True)
+    assert out["rev"] != first["rev"]
+    assert out["message"].startswith("The programme changed since that preview, so nothing was")
+    assert (
+        targets(tool(agent, writer, "week_summary", tracker=tracker, week=NEXT_MONDAY))["squat"]
+        == 3
+    )
+    out = change(
+        agent, writer, tracker, PAUSE_SQUAT, from_date=NEXT_MONDAY, confirm=True, rev=out["rev"]
+    )
+    assert (out["preview"], out["stale"]) == (False, False)
+    assert [e["seq"] for e in out["run"]["log"]] == [2, 1]
+
+
+def test_change_programme_defaults_to_today(agent: TestClient, uid: int, writer: str) -> None:
+    tracker = running(agent, writer)["tracker"]["id"]
+    out = confirmed(agent, writer, tracker, LONGER_PLANK)
+    assert out["change"]["from"] == TODAY
+    assert out["message"].startswith(f"Changed from {TODAY}.")
+
+
+@pytest.mark.parametrize(
+    ("arguments", "words"),
+    [
+        (
+            {"change": PAUSE_SQUAT, "from_date": YESTERDAY},
+            "change: the change has 2 problems, so nothing was changed. Fix each one and send it "
+            "again.\n"
+            "- from_date: a change starts today or later.\n"
+            "- from_date: the programme starts on Fri 23 Oct.",
+        ),
+        ({"change": PAUSE_SQUAT, "confirm": True}, "- rev: give the rev of the preview."),
+        ({"change": {"type": "stop"}}, "- change.type: give one of pause-programme"),
+        ({"change": PAUSE_SQUAT, "from_date": "next week"}, "- from_date: give a date"),
+        ({"change": PAUSE_SQUAT, "reason": "x" * 501}, "- reason: a reason is at most 500"),
+    ],
+)
+def test_a_refused_change_lists_its_problems_and_changes_nothing(
+    agent: TestClient, uid: int, writer: str, arguments: dict[str, Any], words: str
+) -> None:
+    started = running(agent, writer)
+    tracker = started["tracker"]["id"]
+    text = refused(agent, writer, "change_programme", {"tracker": tracker, **arguments})
+    assert words in text
+    assert tool(agent, writer, "get_programme", tracker=tracker)["run"]["log"] == []
+
+
+def test_change_programme_refuses_an_ordinary_or_an_ended_tracker(
+    agent: TestClient, conn: sqlite3.Connection, config: Config, uid: int, writer: str
+) -> None:
+    text = refused(
+        agent, writer, "change_programme", {"tracker": "exercise", "change": PAUSE_SQUAT}
+    )
+    assert text.startswith("tracker: Strength is not a programme tracker")
+    tracker = running(agent, writer)["tracker"]["id"]
+    data.end_run(conn, uid, tracker, when=data.When(START, config.timezone))
+    text = refused(agent, writer, "change_programme", {"tracker": tracker, "change": PAUSE_SQUAT})
+    assert text.startswith(f"tracker: {NAME} has ended, so its programme takes no more changes.")
+
+
+@pytest.mark.parametrize(
+    ("name", "arguments"),
+    [
+        ("add_item", {"name": "Dips"}),
+        ("update_item", {"item_id": "squat", "weight_kg": 50}),
+        ("update_item", {"item_id": "squat", "weight_kg": 50, "note": "Knees out."}),
+        ("remove_item", {"item_id": "squat"}),
+    ],
+)
+def test_the_item_tools_refuse_a_programme_tracker_and_name_change_programme(
+    agent: TestClient, uid: int, writer: str, name: str, arguments: dict[str, Any]
+) -> None:
+    tracker = running(agent, writer)["tracker"]["id"]
+    before = tool(agent, writer, "week_summary", tracker=tracker)
+    text = refused(agent, writer, name, {"tracker": tracker, **arguments})
+    assert text.startswith(f"tracker: {NAME} is a programme tracker: its plan comes from")
+    assert "change_programme" in text
+    assert tool(agent, writer, "week_summary", tracker=tracker) == before
+
+
+def test_a_note_alone_on_a_programme_item_changes_no_plan(
+    agent: TestClient, uid: int, writer: str
+) -> None:
+    """An item's note is the item's, not the plan's (D3), so it is open as in the app."""
+    tracker = running(agent, writer)["tracker"]["id"]
+    out = write(
+        agent, writer, "update_item", {"tracker": tracker, "item_id": "plank", "note": "Flat back."}
+    )
+    assert out["item"]["note"] == "Flat back."
+
+    def plan(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return [{k: v for k, v in it.items() if k != "note"} for it in items]
+
+    assert plan(out["after"]) == plan(out["before"])
+    assert out["copied_from"] is None
+    summary = tool(agent, writer, "week_summary", tracker=tracker)
+    assert {it["id"]: it["notes"] for it in summary["items"]}["plank"] == "Flat back."
+
+
+def mark_events(conn: sqlite3.Connection) -> list[tuple[Any, ...]]:
+    return [
+        tuple(r)
+        for r in conn.execute(
+            "SELECT date, item_id, mark, source, late FROM mark_events ORDER BY rowid"
+        )
+    ]
+
+
+def test_mark_day_on_a_programme_tracker_follows_the_lock(
+    agent: TestClient, conn: sqlite3.Connection, uid: int, writer: str, clock: Clock
+) -> None:
+    """Spec §8, S6: today and yesterday are open, yesterday's mark is late, and an earlier day
+    is refused by its date. Each mark is evidence, with the connection as its source."""
+    go_to(clock, THIS_WEEK)
+    tracker = running(agent, writer)["tracker"]["id"]
+    go_to(clock, TODAY)
+    out = tool(agent, writer, "mark_day", tracker=tracker, item_id="squat", mark="great")
+    assert (out["date"], out["after"], out["late"]) == (TODAY, "great", False)
+    out = tool(
+        agent, writer, "mark_day", tracker=tracker, item_id="squat", mark="partial", date=YESTERDAY
+    )
+    assert (out["date"], out["after"], out["late"]) == (YESTERDAY, "partial", True)
+    text = refused(
+        agent,
+        writer,
+        "mark_day",
+        {"tracker": tracker, "item_id": "squat", "mark": "great", "date": "2026-10-21"},
+    )
+    assert text.startswith("date: 2026-10-21 is locked.")
+    assert "today's and yesterday's" in text
+    assert mark_events(conn) == [
+        (TODAY, "squat", "great", "agent", 0),
+        (YESTERDAY, "squat", "partial", "agent", 1),
+    ]
+    # An ordinary tracker keeps no lock and no evidence.
+    out = tool(agent, writer, "mark_day", item_id="sq", mark="great", date="2026-10-19")
+    assert out["after"] == "great"
+    assert "late" not in out
+    assert len(mark_events(conn)) == 2
+
+
+def test_an_oauth_connection_is_the_source_by_its_apps_name(
+    agent: TestClient, conn: sqlite3.Connection, config: Config, uid: int, writer: str
+) -> None:
+    tracker = running(agent, writer)["tracker"]["id"]
+    resolver = oauth.ClientResolver(config.oauth_client_hosts, config.clock, StubFetch())
+    claude = approve(conn, config, resolver, uid, write=True).redeem(conn, config).access_token
+    confirmed(agent, claude, tracker, LONGER_PLANK, reason="Stronger core.")
+    tool(agent, claude, "mark_day", tracker=tracker, item_id="plank", mark="great")
+    log = tool(agent, writer, "get_programme", tracker=tracker)["run"]["log"]
+    assert [e["source"] for e in log] == ["Claude"]
+    assert mark_events(conn) == [(TODAY, "plank", "great", "Claude", 0)]
+
+
+def test_the_instructions_tell_an_agent_how_to_add_a_programme(
+    agent: TestClient, token: str
+) -> None:
+    text = result(call(agent, "initialize", INITIALIZE, token=token))["instructions"]
+    for words in ("programme_format", "save_programme", "start_programme", "change_programme"):
+        assert words in text, words
+    assert "add_item, update_item or remove_item" in text.replace("`", "")

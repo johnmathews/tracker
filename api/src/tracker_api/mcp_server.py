@@ -3,16 +3,21 @@
 `build_mcp` returns the server and the ASGI app that `app.py` routes the exact path to. Every
 request is stateless: one JSON-RPC message in, one JSON response out, with the token checked
 again each time. Tools are registered in `_add_tools`. A tool finds its account with `caller()`,
-and opens the database with `connection(config)`."""
+the connection's name with `source()`, and opens the database with `connection(config)`.
+
+The programme tools (docs/specs/2026-11-17-programmes.md §11.3) let an agent write a programme
+in the `tracker-programme/1` format, save it to the library, start it and change it. A change
+previews first and applies only when it comes back with `confirm` and the preview's `rev` (P2).
+Every change and every mark on a programme tracker records the connection as its source (P5)."""
 
 import json
 import logging
 import sqlite3
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Annotated, TypedDict
+from typing import Annotated, Any, NotRequired, TypedDict
 from urllib.parse import urlsplit
 
 import anyio.to_thread
@@ -27,10 +32,12 @@ from pydantic import Field
 from starlette.applications import Starlette
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from . import auth, edits, insights, oauth
+from . import auth, data, edits, insights, oauth
 from .config import Config
 from .db import connect
-from .validate import Mark, Section
+from .programme import FORMAT, ProgrammeError, ProgrammeInvalid, programme_schema
+from .programme_replay import CHANGE_KEYS, CHANGE_TYPES
+from .validate import Mark, Section, Tracker
 
 MCP_PATH = "/api/mcp"
 
@@ -65,6 +72,9 @@ class TrackerAccess(AccessToken):
     """A verified token, personal or OAuth, carrying the account it acts as."""
 
     user: auth.TokenUser
+    #: The connection's name, as Settings › Connections lists it: a personal token's own name,  # noqa: RUF003
+    #: or the app an OAuth connection was given to ("Claude"). The source of what it changes.
+    source: str
 
 
 class VerifierUnavailable(Exception):
@@ -134,17 +144,25 @@ class Tokens(TokenVerifier):
         self.config = config
         self.resource = resource
 
-    def _lookup(self, token: str) -> tuple[auth.TokenUser, str] | None:
+    def _lookup(self, token: str) -> tuple[auth.TokenUser, str, str] | None:
         with connection(self.config) as conn:
             if token.startswith(auth.TOKEN_PREFIX):
                 user = auth.token_user(conn, self.config, token)
-                return None if user is None else (user, self.resource)
+                if user is None:
+                    return None
+                row = conn.execute(
+                    "SELECT name FROM api_tokens WHERE token_hash = ?", (auth.token_hash(token),)
+                ).fetchone()
+                return user, self.resource, _named(row)
             if token.startswith(oauth.ACCESS_PREFIX):
                 access = oauth.access_user(conn, self.config, token)
                 if access is None:
                     return None
                 user = auth.TokenUser(access.user_id, access.username, access.scope)
-                return user, access.resource
+                row = conn.execute(
+                    "SELECT client_name FROM oauth_grants WHERE id = ?", (access.grant_id,)
+                ).fetchone()
+                return user, access.resource, _named(row)
             return None
 
     async def verify_token(self, token: str) -> TrackerAccess | None:
@@ -155,7 +173,7 @@ class Tokens(TokenVerifier):
             raise VerifierUnavailable from e
         if found is None:
             return None
-        user, resource = found
+        user, resource, name = found
         # The hash stands in for the token, so no repr of this object can leak it.
         return TrackerAccess(
             token=auth.token_hash(token),
@@ -165,7 +183,15 @@ class Tokens(TokenVerifier):
             expires_at=None,
             resource=resource,
             user=user,
+            source=name,
         )
+
+
+def _named(row: sqlite3.Row | None) -> str:
+    """A connection's name from its row, read just after the token was checked."""
+    if row is None:  # pragma: no cover (removed between the two reads: still a connection)
+        return "a connection"
+    return str(row[0])
 
 
 def caller() -> auth.TokenUser:
@@ -174,10 +200,19 @@ def caller() -> auth.TokenUser:
     The SDK verifies the token on every HTTP request, and in stateless mode each request is one
     call, so this is never older than the call. PermissionError outside an authenticated request,
     which the SDK's 401 means a tool never sees."""
+    return _access().user
+
+
+def source() -> str:
+    """The current request's connection by name: what a programme change or mark records."""
+    return _access().source
+
+
+def _access() -> TrackerAccess:
     access = get_access_token()
     if not isinstance(access, TrackerAccess):
         raise PermissionError("no API token for this request")
-    return access.user
+    return access
 
 
 @dataclass(frozen=True)
@@ -194,7 +229,7 @@ def build_mcp(config: Config, max_body: int) -> McpEndpoint:
         "tracker",
         instructions="A weekly training tracker: the person's own trackers, each a weekly plan "
         "of items and the days marked against them. " + TRACKERS_HELP + " The other tools take a "
-        "tracker's id or name.",
+        "tracker's id or name. " + PROGRAMMES_HELP,
         token_verifier=Tokens(config, resource),
         # Strings, not AnyHttpUrl(...): that adds a slash to a bare origin, and the issuer must
         # match the authorization server's metadata exactly (F8). The 401's `resource_metadata`
@@ -266,6 +301,84 @@ class ConsistencyResult(insights.Consistency):
     """`today` is already in insights' result."""
 
     this_week: str
+
+
+class ChangeType(TypedDict):
+    type: str
+    #: The keys the change takes besides `type`.
+    keys: list[str]
+    does: str
+
+
+class ProgrammeFormat(TypedDict):
+    format: str
+    #: The format's JSON Schema (draft 2020-12), as `GET /api/programme.schema.json` serves it.
+    schema: dict[str, Any]
+    example: dict[str, Any]
+    changes: list[ChangeType]
+    notes: list[str]
+
+
+class RunListed(TypedDict):
+    """A run as the state lists it, with its tracker's id and name."""
+
+    tracker: str
+    trackerName: str
+    programmeId: str | None
+    #: The programme's name.
+    name: str
+    status: str
+    week: int | None
+    weeks: int
+    start: str
+    end: str | None
+    pausedUntil: str | None
+    rev: str
+
+
+class ProgrammeList(TypedDict):
+    programmes: list[data.ProgrammeSummary]
+    runs: list[RunListed]
+    this_week: str
+    today: str
+
+
+class ProgrammeRead(TypedDict):
+    """One of the two, the other None."""
+
+    programme: data.ProgrammeRecord | None
+    #: As `GET /api/runs/{tracker}` gives it, its grid from this week on.
+    run: dict[str, Any] | None
+
+
+class ProgrammeSaved(TypedDict):
+    programme: data.ProgrammeRecord
+
+
+class ProgrammeStarted(TypedDict):
+    tracker: Tracker
+    run: dict[str, Any]
+
+
+class ProgrammeChange(TypedDict):
+    """A preview (`preview` true), or the change applied. `stale` says a confirm came with an
+    old rev, so this is a fresh preview and nothing changed. `message` says what to do next."""
+
+    preview: bool
+    stale: bool
+    message: str
+    #: The log entry: a preview's as it would be, or the applied one.
+    change: dict[str, Any]
+    #: A preview's: the rev to confirm with, each cell before and after, the hand-edits that
+    #: block it, the activities that end short, and the change it undoes or item it deletes.
+    rev: NotRequired[str]
+    cells: NotRequired[list[dict[str, Any]]]
+    blocking: NotRequired[list[dict[str, Any]]]
+    endsShort: NotRequired[list[dict[str, Any]]]
+    undoes: NotRequired[int | None]
+    deletes: NotRequired[str | None]
+    #: An applied change's run, as `get_programme` gives it.
+    run: NotRequired[dict[str, Any]]
 
 
 #: The tracker a tool acts on when it is given none: the account's first strength tracker, the
@@ -371,6 +484,105 @@ TRACKERS_HELP = (
     "distance, and no daily target), `food` (foods eaten) or `mobility` (stretches and holds "
     "with sets, reps or seconds, and no weight). Call `list_trackers` to see them."
 )
+#: What the instructions say about programmes (programmes spec §11.3).
+PROGRAMMES_HELP = (
+    "A programme is a plan of several weeks, written as a JSON document: call "
+    "`programme_format` for its schema and a worked example, write the document, and send it to "
+    "`save_programme`, which checks it, lists every problem to fix, and adds it to the person's "
+    "library. `start_programme` starts it as a tracker of its own. A programme tracker's plan "
+    "comes from its programme: change it with `change_programme`, which shows a preview before "
+    "anything changes, never with `add_item`, `update_item` or `remove_item`. Its days before "
+    "today are locked, and its marks stay open for today and yesterday."
+)
+PROGRAMME_TRACKER_HELP = (
+    "A programme tracker's items are refused: its plan comes from its programme, so change it "
+    "with `change_programme`."
+)
+
+#: The worked example `programme_format` gives: the spec's §3.1 document, the same as
+#: fixtures/programmes/valid/spec-example.json, kept here so the package needs no repo file.
+EXAMPLE: dict[str, Any] = {
+    "format": FORMAT,
+    "name": "Beginner 5\u00d75",
+    "description": "Three full-body sessions a week, adding weight each week.",
+    "kind": "strength",
+    "weeks": 8,
+    "dailyTarget": 2,
+    "params": {
+        "squat": {"label": "Squat start", "unit": "kg", "default": 40},
+        "rate": {"label": "Weekly increase", "unit": "%", "default": 5},
+    },
+    "activities": [
+        {
+            "key": "squat",
+            "name": "Back squat",
+            "notes": "Belt from week 5.",
+            "target": 3,
+            "sets": 5,
+            "reps": 5,
+            "weight": {"start": "$squat", "rate": "$rate", "step": 2.5},
+        },
+        {
+            "key": "plank",
+            "name": "Plank",
+            "target": 3,
+            "sets": 3,
+            "duration": {"start": 30, "add": 5, "every": 2, "max": 90},
+        },
+    ],
+    "overrides": [
+        {
+            "weeks": [4, 8],
+            "label": "Deload",
+            "activities": {"*": {"sets": 3, "weight": {"scale": 0.9}}},
+        }
+    ],
+}
+#: What each type of change does (programmes spec §7; `programme_replay`'s docstring).
+CHANGES_DO: dict[str, str] = {
+    "pause-programme": "Pauses the whole programme from the day: for `weeks` weeks (1 to 52), or "
+    "until a resume-programme when `weeks` is left out.",
+    "resume-programme": "Restarts a paused programme at the week it paused on (`at`: "
+    '"paused", the default) or the week after ("next").',
+    "go-to-week": "Moves the programme to programme week `week` from the day: back, to repeat "
+    "weeks, or on, to skip them. A paused activity stays where it is.",
+    "pause-activity": "Pauses one activity (`activity`, its key) for `weeks` weeks, or until "
+    "resumed. The others carry on, and it resumes where it stopped.",
+    "resume-activity": "Restarts a paused activity where it stopped. `values`, such as "
+    '{"weight": 70}, sets new values as it comes back.',
+    "add-activity": "Adds an activity (`activity`), written as the format writes one, with a key "
+    "the programme doesn't have. It starts at its own week 1.",
+    "end-activity": "Ends one activity from the day. Past days keep it; one with no past days is "
+    "deleted outright.",
+    "set-value": "Sets one field (`field`: target, sets, reps, duration, weight or distance) to "
+    "`value` from the day on, keeping its increase: from 10 kg to 12.5 kg. The weeks after "
+    "continue from the new value.",
+    "set-increase": "Sets a progression's increase from the next programme week: `add`, a fixed "
+    "amount, or `rate`, a percent a week. It continues from the value shown this week.",
+    "set-parameter": "Sets a parameter (`param`, its key) to `value` for every field that uses "
+    "it, as set-value or set-increase would.",
+    "edit-week": "Sets one field for one programme week only (`week`): a hand-edit. Later "
+    "changes keep it, and their previews say so.",
+    "undo": "Reverses an earlier change (`change`, its `seq` in the log) whose effect starts "
+    "today or later.",
+}
+assert list(CHANGES_DO) == list(CHANGE_TYPES)
+#: How a programme is written, saved, started and changed, for `programme_format`.
+FORMAT_NOTES = [
+    "Write a document that follows `schema`; `example` is a valid one. Each numeric field is a "
+    'number, a parameter ("$squat"), or a progression with `start` and `add` or `rate`.',
+    "save_programme checks a document and gives every problem with its path; fix them all and "
+    "send the whole document again. With `programme` and `rev` it replaces that programme.",
+    "start_programme starts a library programme as a new tracker, from a date today or later, "
+    "with values for its parameters. The run keeps its own copy of the document.",
+    "change_programme takes one change, below, from a day today or later. It previews first: "
+    "show the person what the change does, then send the same change with confirm true and "
+    "the preview's rev.",
+    "set-value, set-increase, set-parameter and resume-activity also take `dropHandEdits`: the "
+    "seqs of the hand-edits a preview says block it, dropped with the change.",
+    "Days before today are locked: no change reaches them. Marks stay open for today and "
+    "yesterday, and yesterday's is recorded as late.",
+]
 
 
 def _ref(tracker: str | None, section: Section | None) -> str:
@@ -409,6 +621,67 @@ def _reading[T](config: Config, read: Callable[[sqlite3.Connection, int, date], 
         raise ToolError(str(e)) from e
     except OverflowError as e:
         raise ToolError(OUT_OF_RANGE) from e
+
+
+def _when(config: Config) -> data.When:
+    """Now and the server's time zone: today, the lock and sealing follow them (spec §2)."""
+    return data.When(config.clock(), config.timezone)
+
+
+def _count(n: int, noun: str) -> str:
+    return f"{n} {noun}" if n == 1 else f"{n} {noun}s"
+
+
+def _problems(
+    field: str,
+    what: str,
+    verb: str,
+    errors: Sequence[ProgrammeError],
+    paths: Mapping[str, str] | None = None,
+) -> ToolError:
+    """Every problem, one a line as `path: sentence`, after a line that says nothing was done.
+    A path names the argument (`paths` renames the API's), and the document's root is `field`."""
+
+    def where(path: str) -> str:
+        return (paths or {}).get(path, path) or field
+
+    lines = "\n".join(f"- {where(e.path)}: {e.message}" for e in errors)
+    return ToolError(
+        f"{field}: the {what} has {_count(len(errors), 'problem')}, so nothing was {verb}. "
+        f"Fix each one and send it again.\n{lines}"
+    )
+
+
+def _json_object(field: str, value: dict[str, Any] | str) -> dict[str, Any]:
+    """An argument that is a JSON object. Some agents send one as JSON text: the SDK reads text
+    that holds JSON as the object it holds before the tool runs, so text that gets here is none."""
+    if isinstance(value, str):
+        raise ToolError(f"{field}: is not a JSON object; send the object itself")
+    return value
+
+
+def _upcoming(run: dict[str, Any], today: date) -> dict[str, Any]:
+    """A run with its grid's weeks from this one on. The weeks before are history, which
+    `weeks` and `week_summary` read."""
+    this_week = insights.monday_of(today).isoformat()
+    grid = run["grid"]
+    weeks = [w for w in grid["weeks"] if w["monday"] >= this_week]
+    return {**run, "grid": {**grid, "weeks": weeks}}
+
+
+def _no_programme(programme_id: str) -> ToolError:
+    return ToolError(
+        f"programme: no programme {programme_id} in the library; list_programmes lists them"
+    )
+
+
+def _not_a_run(tracker: Tracker) -> ToolError:
+    return ToolError(
+        f"tracker: {tracker['name']} is not a programme tracker; list_programmes lists the runs"
+    )
+
+
+QUOTA = "quota: the account is full, so nothing was {}"
 
 
 def _add_tools(server: MCPServer, config: Config) -> None:
@@ -577,6 +850,96 @@ def _add_tools(server: MCPServer, config: Config) -> None:
         )
         return {**out, "this_week": config.this_week()}
 
+    # --- programmes: the format, the library and the runs (programmes spec §11.3) ---
+
+    @server.tool(
+        title="Programme format",
+        description="How to write a programme: a plan of several weeks as a JSON document in the "
+        f"`{FORMAT}` format. Gives the format's JSON Schema (`schema`), a worked example "
+        "(`example`), each type of change `change_programme` takes (`changes`, with the keys "
+        "each takes and what it does), and short `notes` on saving, starting and changing one. "
+        "Call it before writing a programme for `save_programme`.",
+        annotations=READ_ONLY,
+    )
+    def programme_format() -> ProgrammeFormat:
+        return {
+            "format": FORMAT,
+            "schema": programme_schema(),
+            "example": EXAMPLE,
+            "changes": [
+                {"type": kind, "keys": list(CHANGE_KEYS[kind]), "does": CHANGES_DO[kind]}
+                for kind in CHANGE_TYPES
+            ],
+            "notes": FORMAT_NOTES,
+        }
+
+    @server.tool(
+        title="List programmes",
+        description="The person's programme library (`programmes`: each one's `id`, `name`, "
+        "`kind`, `weeks`, number of `activities` and `rev`, without the document) and every run "
+        "(`runs`: each programme tracker's id and name, the programme, its `status` (upcoming, "
+        "running, paused or ended), this programme `week` of `weeks`, its `start` and `end`, "
+        "and `pausedUntil`). The result also has `this_week` and `today`.",
+        annotations=READ_ONLY,
+    )
+    def list_programmes() -> ProgrammeList:
+        def read(c: sqlite3.Connection, uid: int, today: date) -> ProgrammeList:
+            summaries = data.run_summaries(c, uid, _when(config))
+            runs: list[RunListed] = [
+                {"tracker": t["id"], "trackerName": t["name"], **summaries[t["id"]]}  # type: ignore[typeddict-item]
+                for t in data.load_trackers(c, uid)
+                if t["id"] in summaries
+            ]
+            return {
+                "programmes": data.list_programmes(c, uid),
+                "runs": runs,
+                "this_week": insights.monday_of(today).isoformat(),
+                "today": today.isoformat(),
+            }
+
+        return _reading(config, read)
+
+    @server.tool(
+        title="Get programme",
+        description="One programme: give `programme`, a library programme's id, for its "
+        "document (`doc`) and `rev`; or `tracker`, a programme tracker's id or name, for its "
+        "run: the programme's copy (`doc`), the `params` in force, its `status`, this "
+        "programme `week` of `weeks`, `clock` (today's programme week and each activity's "
+        "state and activity week), `log` (every change, newest first: when it was made, the "
+        "day it took effect, the change, the reason and who made it), `endsShort`, and `grid`, "
+        "the weeks from this one on with each activity's values. Read a run before changing "
+        "it, and its log to explain why a value changed.",
+        annotations=READ_ONLY,
+    )
+    def get_programme(
+        programme: Annotated[
+            str | None, Field(description="A library programme's id, from list_programmes.")
+        ] = None,
+        tracker: Annotated[
+            str | None,
+            Field(description="A programme tracker's id, or its name in any case."),
+        ] = None,
+    ) -> ProgrammeRead:
+        if (programme is None) == (tracker is None):
+            raise ToolError(
+                "programme: give programme (a library id) or tracker (a running one), not both"
+            )
+
+        def read(c: sqlite3.Connection, uid: int, today: date) -> ProgrammeRead:
+            if programme is not None:
+                record = data.load_programme(c, uid, programme)
+                if record is None:
+                    raise _no_programme(programme)
+                return {"programme": record, "run": None}
+            found = insights.tracker_of(c, uid, tracker)
+            when = _when(config)
+            run = data.read_run(c, uid, found["id"], when)
+            if run is None:
+                raise _not_a_run(found)
+            return {"programme": None, "run": _upcoming(run, when.today)}
+
+        return _reading(config, read)
+
     # --- writes: each needs a write token, and changes one thing as the app would ---
 
     @server.tool(
@@ -587,7 +950,7 @@ def _add_tools(server: MCPServer, config: Config) -> None:
         "weight. A cardio item has `seconds` (the whole "
         "session), `distance_km`, either, both or neither. A new item's goal is 3 times a week "
         f"unless `times_a_week` is given. {SHOWN_HELP} {CARRIED_HELP} {NOTE_HELP} {UNDO_HELP} "
-        "Needs a write token.",
+        f"{PROGRAMME_TRACKER_HELP} Needs a write token.",
         annotations=ADDING,
     )
     def add_item(
@@ -624,7 +987,8 @@ def _add_tools(server: MCPServer, config: Config) -> None:
         "item keeps its id and its marks. Use it to rename an item, change its goal "
         "(`times_a_week`), an exercise's sets, reps or weight, a cardio item's seconds or "
         f"distance, or its note. {SHOWN_HELP} {CARRIED_HELP} "
-        f"{NOTE_HELP} A note alone copies no week. {UNDO_HELP} Needs a write token.",
+        f"{NOTE_HELP} A note alone copies no week. {UNDO_HELP} {PROGRAMME_TRACKER_HELP} A note "
+        "alone is still taken there, since it changes no plan. Needs a write token.",
         annotations=SETTING,
     )
     def update_item(
@@ -663,7 +1027,8 @@ def _add_tools(server: MCPServer, config: Config) -> None:
         title="Remove item",
         description="Take one item out of a week's plan. Its marks stay stored but no longer "
         f"count, as in the app; adding it back gives it a new id. {SHOWN_HELP} {CARRIED_HELP} "
-        "`item` in the result is the removed item. Needs a write token.",
+        f"`item` in the result is the removed item. {PROGRAMME_TRACKER_HELP} Needs a write "
+        "token.",
         annotations=REMOVING,
     )
     def remove_item(
@@ -683,7 +1048,9 @@ def _add_tools(server: MCPServer, config: Config) -> None:
         "that date's week, and the week must show the tracker. Marking a week with no plan of "
         "its own first gives it a copy of the plan it shows, as a tick in the app does, so "
         "later edits to the earlier week no longer reach it; later weeks that carry it forward "
-        "follow it. The result has the day's mark `before` and `after`. Needs a write token.",
+        "follow it. The result has the day's mark `before` and `after`. On a programme tracker "
+        "only today and yesterday can be marked: an earlier day is locked, and yesterday's mark "
+        "is recorded as late (`late`, in the result only there). Needs a write token.",
         annotations=SETTING,
     )
     def mark_day(
@@ -699,7 +1066,9 @@ def _add_tools(server: MCPServer, config: Config) -> None:
 
         def write(c: sqlite3.Connection, uid: int) -> edits.MarkEdit:
             day = config.today() if date is None else edits.parse_date(date)
-            return edits.mark_day(c, config, uid, ref, day, item_id, mark)
+            return edits.mark_day(c, config, uid, ref, day, item_id, mark, source=who)
+
+        who = source()
 
         return _writing(config, write)
 
@@ -746,3 +1115,245 @@ def _add_tools(server: MCPServer, config: Config) -> None:
                 foods_a_day=foods_a_day,
             ),
         )
+
+    @server.tool(
+        title="Save programme",
+        description="Check a programme document and add it to the person's library, or, with "
+        "`programme` and its `rev`, replace that one. Write the document with "
+        "`programme_format`'s schema and example. A document with any problem is never stored: "
+        "the error lists every problem, one a line, each with its path in the document and a "
+        "sentence, so fix them all and send the whole document again. The result is the stored "
+        "programme with its `id` and `rev`; `start_programme` starts it. Runs already started "
+        "keep their own copy. Needs a write token.",
+        annotations=ADDING,
+    )
+    def save_programme(
+        doc: Annotated[
+            dict[str, Any] | str,
+            Field(description=f"The programme: a `{FORMAT}` document, as an object."),
+        ],
+        programme: Annotated[
+            str | None,
+            Field(description="To replace a library programme: its id. Left out, it is added."),
+        ] = None,
+        rev: Annotated[
+            int | None,
+            Field(description="With `programme`: its rev, from list_programmes or get_programme."),
+        ] = None,
+    ) -> ProgrammeSaved:
+        def write(c: sqlite3.Connection, uid: int) -> ProgrammeSaved:
+            document = _json_object("doc", doc)
+            problems = data.programme_problems(document)
+            if problems:
+                raise _problems("doc", "programme", "saved", problems)
+            try:
+                if programme is None:
+                    record = data.add_programme(
+                        c,
+                        uid,
+                        document,
+                        config.clock(),
+                        quota=config.user_quota_bytes,
+                        make_id=edits.new_id,
+                    )
+                    return {"programme": record}
+                if rev is None:
+                    raise ToolError(
+                        "rev: give the programme's rev, from list_programmes or get_programme, "
+                        "to replace it"
+                    )
+                result = data.replace_programme(
+                    c, uid, programme, document, rev, config.clock(), quota=config.user_quota_bytes
+                )
+            except data.TooManyProgrammes:
+                held = _count(data.MAX_PROGRAMMES, "programme")
+                raise ToolError(
+                    f"doc: the library holds {held}, the most it can; delete one in the app first"
+                ) from None
+            except data.QuotaExceeded:
+                raise ToolError(QUOTA.format("saved")) from None
+            if result is None:
+                raise _no_programme(programme)
+            if isinstance(result, data.ProgrammeConflict):
+                raise ToolError(
+                    f"rev: the programme changed since rev {rev}; it is at rev "
+                    f"{result.programme['rev']} now. Read it with get_programme, then send the "
+                    "document again with that rev"
+                )
+            return {"programme": result.programme}
+
+        return _writing(config, write)
+
+    @server.tool(
+        title="Start programme",
+        description="Start a library programme as a new tracker of its kind: a run. It starts "
+        "on `start`, today or later (today when left out), with `params`, values for the "
+        "programme's parameters (each defaults to the programme's), and the tracker's `name` "
+        "(the programme's when left out). Every week of the run is written as the tracker's "
+        "plans, so the read tools show them. Problems are listed one a line, each with its "
+        "path, and nothing is started. The result is the new tracker and its run, as "
+        "`get_programme` gives it. Needs a write token.",
+        annotations=ADDING,
+    )
+    def start_programme(
+        programme: Annotated[
+            str, Field(description="The library programme's id, from list_programmes.")
+        ],
+        start: Annotated[
+            str | None,
+            Field(description="The first day, YYYY-MM-DD, today or later. Defaults to today."),
+        ] = None,
+        params: Annotated[
+            dict[str, Any] | None,
+            Field(
+                description="A value for each parameter to set, by its key, such as "
+                '{"squat": 50}. The others take their defaults.'
+            ),
+        ] = None,
+        name: Annotated[
+            str | None,
+            Field(
+                description="The tracker's name, up to 60 characters. Defaults to the programme's."
+            ),
+        ] = None,
+    ) -> ProgrammeStarted:
+        def write(c: sqlite3.Connection, uid: int) -> ProgrammeStarted:
+            when = _when(config)
+            try:
+                started = data.start_programme(
+                    c,
+                    uid,
+                    programme,
+                    start=start,
+                    params=params,
+                    name=name,
+                    when=when,
+                    quota=config.user_quota_bytes,
+                    make_id=edits.new_id,
+                )
+            except ProgrammeInvalid as e:
+                raise _problems("programme", "start", "started", e.errors) from None
+            except data.TooManyTrackers:
+                held = len(data.load_trackers(c, uid))
+                raise ToolError(
+                    f"tracker: the account has {held} trackers, the most it can hold; delete one "
+                    "in the app first"
+                ) from None
+            except data.QuotaExceeded:
+                raise ToolError(QUOTA.format("started")) from None
+            if started is None:
+                raise _no_programme(programme)
+            return {"tracker": started.tracker, "run": _upcoming(started.run, when.today)}
+
+        return _writing(config, write)
+
+    @server.tool(
+        title="Change programme",
+        description="Change a running programme from a day, today or later: pause or resume "
+        "it, go to a week, pause, resume, add or end an activity, set a value or an increase, "
+        "set a parameter, edit one week, or undo a change. `programme_format` lists each type "
+        "of change and its keys. Days before today never change. It previews first: the "
+        "result's `cells` give each changed value before and after, `blocking` the hand-edits "
+        "that keep their value (send their seqs in `dropHandEdits` to drop them), and "
+        "`endsShort` the activities that end before their last week. Show the person the "
+        "preview; nothing changes until the same call comes back with `confirm` true and the "
+        "preview's `rev`. If the programme changed since, the result is a fresh preview with "
+        "`stale` true, and nothing changed. Problems are listed one a line, each with its "
+        "path. Needs a write token.",
+        annotations=SETTING,
+    )
+    def change_programme(
+        tracker: Annotated[
+            str, Field(description="The programme tracker's id, or its name in any case.")
+        ],
+        change: Annotated[
+            dict[str, Any] | str,
+            Field(
+                description="The change, tagged by `type`, such as "
+                '{"type": "pause-activity", "activity": "squat", "weeks": 2}.'
+            ),
+        ],
+        from_date: Annotated[
+            str | None,
+            Field(
+                description="The first day it applies, YYYY-MM-DD, today or later. Defaults "
+                "to today."
+            ),
+        ] = None,
+        reason: Annotated[
+            str | None,
+            Field(description="Why, in the person's words, up to 500 characters. Kept in the log."),
+        ] = None,
+        confirm: Annotated[
+            bool, Field(description="True to apply the change previewed with `rev`.")
+        ] = False,
+        rev: Annotated[
+            str | None, Field(description="With `confirm`: the preview's `rev`.")
+        ] = None,
+    ) -> ProgrammeChange:
+        who = source()
+
+        def write(c: sqlite3.Connection, uid: int) -> ProgrammeChange:
+            found = edits.find(c, uid, tracker)
+            body = _json_object("change", change)
+            when = _when(config)
+            on = from_date if from_date is not None else when.today.isoformat()
+            try:
+                out = data.change_run(
+                    c,
+                    uid,
+                    found["id"],
+                    body,
+                    on,
+                    reason=reason,
+                    confirm=confirm,
+                    rev=rev,
+                    when=when,
+                    quota=config.user_quota_bytes,
+                    source=who,
+                )
+            except ProgrammeInvalid as e:
+                raise _problems(
+                    "change", "change", "changed", e.errors, {"from": "from_date"}
+                ) from None
+            except data.RunEnded:
+                raise ToolError(
+                    f"tracker: {found['name']} has ended, so its programme takes no more "
+                    "changes. start_programme starts it again as a new run"
+                ) from None
+            except data.StaleRun as e:
+                return _previewed(
+                    e.preview,
+                    stale=True,
+                    message="The programme changed since that preview, so nothing was changed. "
+                    "This is the same change previewed again on the programme as it is now: "
+                    "show it, then confirm with this rev.",
+                )
+            except data.QuotaExceeded:
+                raise ToolError(QUOTA.format("changed")) from None
+            if out is None:
+                raise _not_a_run(found)
+            if out["preview"]:
+                return _previewed(
+                    out,
+                    stale=False,
+                    message="Nothing has changed yet. Show the person this preview; to apply "
+                    "it, call change_programme again with the same arguments, confirm true and "
+                    f"rev {out['rev']}.",
+                )
+            return {
+                "preview": False,
+                "stale": False,
+                "message": f"Changed from {out['change']['from']}.",
+                "change": out["change"],
+                "run": _upcoming(out["run"], when.today),
+            }
+
+        return _writing(config, write)
+
+
+def _previewed(preview: dict[str, Any], *, stale: bool, message: str) -> ProgrammeChange:
+    """A change's preview without its grid, which is for the app's overview: `cells` says what
+    changes."""
+    kept = {k: v for k, v in preview.items() if k != "grid"}
+    return {**kept, "stale": stale, "message": message}  # type: ignore[typeddict-item]

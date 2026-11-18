@@ -849,7 +849,12 @@ def create_app(
             client,
             config.ask_model,
             ask.messages(
-                question, turns, goals, limits, ask.shown_trackers(conn, user.id, question.today)
+                question,
+                turns,
+                goals,
+                limits,
+                ask.shown_trackers(conn, user.id, question.today),
+                ask.programme_runs(conn, user.id, now()),
             ),
             ask.tools_for(config.db_path, user.id, question.today),
             save,
