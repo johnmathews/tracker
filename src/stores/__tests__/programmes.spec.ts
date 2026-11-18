@@ -1,3 +1,4 @@
+import { readProgrammeFixture } from '@/lib/__tests__/fixtures'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useProgrammesStore } from '@/stores/programmes'
@@ -8,11 +9,11 @@ import RUN_JSON from '@/lib/__tests__/programmes/run.json'
 import PREVIEW_JSON from '@/lib/__tests__/programmes/change-preview.json'
 import START_JSON from '@/lib/__tests__/programmes/start-preview.json'
 import LIBRARY_JSON from '@/lib/__tests__/programmes/library.json'
-import BEGINNER from '../../../fixtures/programmes/valid/beginner-5x5.json'
 
 const RUN = RUN_JSON as unknown as Run
 const PREVIEW = PREVIEW_JSON as unknown as ChangePreview
 const PID = LIBRARY_JSON.programmes[0]!.id
+const BEGINNER = readProgrammeFixture('valid/beginner-5x5.json')
 const RECORD = { ...LIBRARY_JSON.programmes[0]!, doc: BEGINNER }
 const SUMMARY = {
   programmeId: PID,

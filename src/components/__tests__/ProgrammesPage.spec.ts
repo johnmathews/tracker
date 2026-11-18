@@ -1,3 +1,4 @@
+import { readProgrammeFixture } from '@/lib/__tests__/fixtures'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
@@ -7,11 +8,11 @@ import { withProgrammes, type Call, type Route } from './programmesApi'
 import LIBRARY_JSON from '@/lib/__tests__/programmes/library.json'
 import START_JSON from '@/lib/__tests__/programmes/start-preview.json'
 import RUN_JSON from '@/lib/__tests__/programmes/run.json'
-import BEGINNER from '../../../fixtures/programmes/valid/beginner-5x5.json'
-import MINIMAL_DOC from '../../../fixtures/programmes/valid/minimal.json'
 import { START_PREVIEW_DELAY } from '@/lib/programmes'
 
 const PID = LIBRARY_JSON.programmes[0]!.id
+const BEGINNER = readProgrammeFixture('valid/beginner-5x5.json')
+const MINIMAL_DOC = readProgrammeFixture('valid/minimal.json')
 const RECORD = { ...LIBRARY_JSON.programmes[0]!, doc: BEGINNER }
 const RUNNING = {
   programmeId: PID,
