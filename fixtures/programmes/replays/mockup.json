@@ -1,0 +1,615 @@
+{
+  "name": "mockup",
+  "note": "The mockup page's run (brand/design-system/mockups/261117-programmes/README.md, Data): Beginner 5×5 from Mon 23 Nov 2026, with today on Wed 16 Dec, in week 4. Each week's values are its Sunday's. The deadlift's activity week while paused is the one it comes back at.",
+  "programme": "valid/beginner-5x5.json",
+  "params": {
+    "squat": 40,
+    "rate": 5
+  },
+  "start": "2026-11-23",
+  "today": "2026-12-16",
+  "changes": [
+    {
+      "seq": 1,
+      "from": "2026-12-03",
+      "madeAt": "2026-12-03T18:05:00",
+      "reason": "Too easy",
+      "change": {
+        "type": "set-increase",
+        "activity": "squat",
+        "field": "weight",
+        "rate": 7.5
+      }
+    },
+    {
+      "seq": 2,
+      "from": "2026-12-09",
+      "madeAt": "2026-12-09T07:40:00",
+      "reason": "Shoulder",
+      "change": {
+        "type": "set-value",
+        "activity": "bench",
+        "field": "weight",
+        "value": 32.5
+      }
+    },
+    {
+      "seq": 3,
+      "from": "2026-12-12",
+      "madeAt": "2026-12-12T09:15:00",
+      "reason": "Hotel gym over New Year",
+      "change": {
+        "type": "edit-week",
+        "activity": "row",
+        "week": 6,
+        "field": "weight",
+        "value": 35
+      }
+    },
+    {
+      "seq": 4,
+      "from": "2026-12-14",
+      "madeAt": "2026-12-14T07:50:00",
+      "reason": "Knee",
+      "change": {
+        "type": "pause-activity",
+        "activity": "deadlift",
+        "weeks": 2
+      }
+    }
+  ],
+  "end": "2027-01-17",
+  "weeks": [
+    {
+      "monday": "2026-11-23",
+      "programmeWeeks": [1],
+      "label": null,
+      "activities": {
+        "squat": {
+          "state": "running",
+          "activityWeek": 1,
+          "values": {
+            "target": 3,
+            "sets": 5,
+            "reps": 5,
+            "weight": 40
+          }
+        },
+        "bench": {
+          "state": "running",
+          "activityWeek": 1,
+          "values": {
+            "target": 3,
+            "sets": 5,
+            "reps": 5,
+            "weight": 30
+          }
+        },
+        "row": {
+          "state": "running",
+          "activityWeek": 1,
+          "values": {
+            "target": 3,
+            "sets": 5,
+            "reps": 5,
+            "weight": 30
+          }
+        },
+        "plank": {
+          "state": "running",
+          "activityWeek": 1,
+          "values": {
+            "target": 3,
+            "sets": 3,
+            "duration": 30
+          }
+        },
+        "deadlift": {
+          "state": "running",
+          "activityWeek": 1,
+          "values": {
+            "target": 3,
+            "sets": 1,
+            "reps": 5,
+            "weight": 60
+          }
+        }
+      }
+    },
+    {
+      "monday": "2026-11-30",
+      "programmeWeeks": [2],
+      "label": null,
+      "activities": {
+        "squat": {
+          "state": "running",
+          "activityWeek": 2,
+          "values": {
+            "target": 3,
+            "sets": 5,
+            "reps": 5,
+            "weight": 42.5
+          }
+        },
+        "bench": {
+          "state": "running",
+          "activityWeek": 2,
+          "values": {
+            "target": 3,
+            "sets": 5,
+            "reps": 5,
+            "weight": 32.5
+          }
+        },
+        "row": {
+          "state": "running",
+          "activityWeek": 2,
+          "values": {
+            "target": 3,
+            "sets": 5,
+            "reps": 5,
+            "weight": 32.5
+          }
+        },
+        "plank": {
+          "state": "running",
+          "activityWeek": 2,
+          "values": {
+            "target": 3,
+            "sets": 3,
+            "duration": 30
+          }
+        },
+        "deadlift": {
+          "state": "running",
+          "activityWeek": 2,
+          "values": {
+            "target": 3,
+            "sets": 1,
+            "reps": 5,
+            "weight": 65
+          }
+        }
+      }
+    },
+    {
+      "monday": "2026-12-07",
+      "programmeWeeks": [3],
+      "label": null,
+      "activities": {
+        "squat": {
+          "state": "running",
+          "activityWeek": 3,
+          "values": {
+            "target": 3,
+            "sets": 5,
+            "reps": 5,
+            "weight": 45
+          }
+        },
+        "bench": {
+          "state": "running",
+          "activityWeek": 3,
+          "values": {
+            "target": 3,
+            "sets": 5,
+            "reps": 5,
+            "weight": 32.5
+          }
+        },
+        "row": {
+          "state": "running",
+          "activityWeek": 3,
+          "values": {
+            "target": 3,
+            "sets": 5,
+            "reps": 5,
+            "weight": 35
+          }
+        },
+        "plank": {
+          "state": "running",
+          "activityWeek": 3,
+          "values": {
+            "target": 3,
+            "sets": 3,
+            "duration": 35
+          }
+        },
+        "deadlift": {
+          "state": "running",
+          "activityWeek": 3,
+          "values": {
+            "target": 3,
+            "sets": 1,
+            "reps": 5,
+            "weight": 70
+          }
+        }
+      }
+    },
+    {
+      "monday": "2026-12-14",
+      "programmeWeeks": [4],
+      "label": "Deload",
+      "activities": {
+        "squat": {
+          "state": "running",
+          "activityWeek": 4,
+          "values": {
+            "target": 3,
+            "sets": 3,
+            "reps": 5,
+            "weight": 45
+          }
+        },
+        "bench": {
+          "state": "running",
+          "activityWeek": 4,
+          "values": {
+            "target": 3,
+            "sets": 3,
+            "reps": 5,
+            "weight": 32.5
+          }
+        },
+        "row": {
+          "state": "running",
+          "activityWeek": 4,
+          "values": {
+            "target": 3,
+            "sets": 3,
+            "reps": 5,
+            "weight": 35
+          }
+        },
+        "plank": {
+          "state": "running",
+          "activityWeek": 4,
+          "values": {
+            "target": 3,
+            "sets": 3,
+            "duration": 35
+          }
+        },
+        "deadlift": {
+          "state": "paused",
+          "activityWeek": 4,
+          "until": "2026-12-28",
+          "reason": "Knee"
+        }
+      }
+    },
+    {
+      "monday": "2026-12-21",
+      "programmeWeeks": [5],
+      "label": null,
+      "activities": {
+        "squat": {
+          "state": "running",
+          "activityWeek": 5,
+          "values": {
+            "target": 3,
+            "sets": 5,
+            "reps": 5,
+            "weight": 52.5
+          }
+        },
+        "bench": {
+          "state": "running",
+          "activityWeek": 5,
+          "values": {
+            "target": 3,
+            "sets": 5,
+            "reps": 5,
+            "weight": 37.5
+          }
+        },
+        "row": {
+          "state": "running",
+          "activityWeek": 5,
+          "values": {
+            "target": 3,
+            "sets": 5,
+            "reps": 5,
+            "weight": 40
+          }
+        },
+        "plank": {
+          "state": "running",
+          "activityWeek": 5,
+          "values": {
+            "target": 3,
+            "sets": 3,
+            "duration": 40
+          }
+        },
+        "deadlift": {
+          "state": "paused",
+          "activityWeek": 4,
+          "until": "2026-12-28",
+          "reason": "Knee"
+        }
+      }
+    },
+    {
+      "monday": "2026-12-28",
+      "programmeWeeks": [6],
+      "label": null,
+      "activities": {
+        "squat": {
+          "state": "running",
+          "activityWeek": 6,
+          "values": {
+            "target": 3,
+            "sets": 5,
+            "reps": 5,
+            "weight": 57.5
+          }
+        },
+        "bench": {
+          "state": "running",
+          "activityWeek": 6,
+          "values": {
+            "target": 3,
+            "sets": 5,
+            "reps": 5,
+            "weight": 40
+          }
+        },
+        "row": {
+          "state": "running",
+          "activityWeek": 6,
+          "values": {
+            "target": 3,
+            "sets": 5,
+            "reps": 5,
+            "weight": 35
+          },
+          "hand": {
+            "weight": {
+              "change": 3,
+              "madeOn": "2026-12-12",
+              "rule": 42.5
+            }
+          }
+        },
+        "plank": {
+          "state": "running",
+          "activityWeek": 6,
+          "values": {
+            "target": 3,
+            "sets": 3,
+            "duration": 40
+          }
+        },
+        "deadlift": {
+          "state": "running",
+          "activityWeek": 4,
+          "values": {
+            "target": 3,
+            "sets": 1,
+            "reps": 5,
+            "weight": 75
+          }
+        }
+      }
+    },
+    {
+      "monday": "2027-01-04",
+      "programmeWeeks": [7],
+      "label": null,
+      "activities": {
+        "squat": {
+          "state": "running",
+          "activityWeek": 7,
+          "values": {
+            "target": 3,
+            "sets": 5,
+            "reps": 5,
+            "weight": 60
+          }
+        },
+        "bench": {
+          "state": "running",
+          "activityWeek": 7,
+          "values": {
+            "target": 3,
+            "sets": 5,
+            "reps": 5,
+            "weight": 42.5
+          }
+        },
+        "row": {
+          "state": "running",
+          "activityWeek": 7,
+          "values": {
+            "target": 3,
+            "sets": 5,
+            "reps": 5,
+            "weight": 45
+          }
+        },
+        "plank": {
+          "state": "running",
+          "activityWeek": 7,
+          "values": {
+            "target": 3,
+            "sets": 3,
+            "duration": 45
+          }
+        },
+        "deadlift": {
+          "state": "running",
+          "activityWeek": 5,
+          "values": {
+            "target": 3,
+            "sets": 1,
+            "reps": 5,
+            "weight": 80
+          }
+        }
+      }
+    },
+    {
+      "monday": "2027-01-11",
+      "programmeWeeks": [8],
+      "label": "Deload",
+      "activities": {
+        "squat": {
+          "state": "running",
+          "activityWeek": 8,
+          "values": {
+            "target": 3,
+            "sets": 3,
+            "reps": 5,
+            "weight": 60
+          }
+        },
+        "bench": {
+          "state": "running",
+          "activityWeek": 8,
+          "values": {
+            "target": 3,
+            "sets": 3,
+            "reps": 5,
+            "weight": 40
+          }
+        },
+        "row": {
+          "state": "running",
+          "activityWeek": 8,
+          "values": {
+            "target": 3,
+            "sets": 3,
+            "reps": 5,
+            "weight": 42.5
+          }
+        },
+        "plank": {
+          "state": "running",
+          "activityWeek": 8,
+          "values": {
+            "target": 3,
+            "sets": 3,
+            "duration": 45
+          }
+        },
+        "deadlift": {
+          "state": "running",
+          "activityWeek": 6,
+          "values": {
+            "target": 3,
+            "sets": 1,
+            "reps": 5,
+            "weight": 77.5
+          }
+        }
+      }
+    }
+  ],
+  "splits": [
+    {
+      "monday": "2026-12-07",
+      "activity": "bench",
+      "field": "weight",
+      "runs": [
+        ["2026-12-07", 35],
+        ["2026-12-09", 32.5]
+      ]
+    }
+  ],
+  "endsShort": [
+    {
+      "activity": "deadlift",
+      "week": 6,
+      "of": 8
+    }
+  ],
+  "previews": [
+    {
+      "note": "Barbell row set to 45 kg from Mon 21 Dec; week 6 keeps its hand-edit.",
+      "from": "2026-12-21",
+      "change": {
+        "type": "set-value",
+        "activity": "row",
+        "field": "weight",
+        "value": 45
+      },
+      "cells": [
+        {
+          "monday": "2026-12-21",
+          "activity": "row",
+          "field": "weight",
+          "before": 40,
+          "after": 45
+        },
+        {
+          "monday": "2027-01-04",
+          "activity": "row",
+          "field": "weight",
+          "before": 45,
+          "after": 50
+        },
+        {
+          "monday": "2027-01-11",
+          "activity": "row",
+          "field": "weight",
+          "before": 42.5,
+          "after": 47.5
+        }
+      ],
+      "blocking": [
+        {
+          "change": 3,
+          "activity": "row",
+          "field": "weight",
+          "week": 6,
+          "message": "Week 6 keeps the 35 kg set on 12 Dec."
+        }
+      ]
+    },
+    {
+      "note": "The same change, dropping the hand-edit too: week 6 goes 35 → 47.5.",
+      "from": "2026-12-21",
+      "change": {
+        "type": "set-value",
+        "activity": "row",
+        "field": "weight",
+        "value": 45,
+        "dropHandEdits": [3]
+      },
+      "cells": [
+        {
+          "monday": "2026-12-21",
+          "activity": "row",
+          "field": "weight",
+          "before": 40,
+          "after": 45
+        },
+        {
+          "monday": "2026-12-28",
+          "activity": "row",
+          "field": "weight",
+          "before": 35,
+          "after": 47.5
+        },
+        {
+          "monday": "2027-01-04",
+          "activity": "row",
+          "field": "weight",
+          "before": 45,
+          "after": 50
+        },
+        {
+          "monday": "2027-01-11",
+          "activity": "row",
+          "field": "weight",
+          "before": 42.5,
+          "after": 47.5
+        }
+      ],
+      "blocking": []
+    }
+  ]
+}

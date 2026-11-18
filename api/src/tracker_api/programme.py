@@ -22,7 +22,7 @@ week, overrides naming real activities, and overrides changing only fields the a
 import json
 import math
 import re
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from decimal import (
     ROUND_HALF_EVEN,
@@ -150,12 +150,12 @@ class FieldRule:
     @property
     def domain(self) -> str:
         if self.is_whole:
-            return f"a whole number from {_num(self.lo)} to {_num(self.hi)}"
-        return f"a number above 0 and at most {_num(self.hi)}"
+            return f"a whole number from {number_text(self.lo)} to {number_text(self.hi)}"
+        return f"a number above 0 and at most {number_text(self.hi)}"
 
     @property
     def add_range(self) -> str:
-        return f"from {_num(-self.hi)} to {_num(self.hi)}"
+        return f"from {number_text(-self.hi)} to {number_text(self.hi)}"
 
     @property
     def add_domain(self) -> str:
@@ -170,11 +170,11 @@ class FieldRule:
 
     def out_of_range(self, week: int, value: Decimal) -> str | None:
         """The sentence for a week whose value the item can't hold; None when it can."""
-        shown = f"week {week} comes to {_num(value)} {self.unit}."
+        shown = f"week {week} comes to {number_text(value)} {self.unit}."
         if value > self.hi:
-            return f"{shown} The most is {_num(self.hi)}."
+            return f"{shown} The most is {number_text(self.hi)}."
         if self.is_whole and value < self.lo:
-            return f"{shown} The least is {_num(self.lo)}."
+            return f"{shown} The least is {number_text(self.lo)}."
         if not self.is_whole and value <= 0:
             return f"{shown} It must be above 0."
         return None
@@ -365,6 +365,7 @@ class Series:
 
     `start` is the value in activity week `origin` (1 for a document's own series). The replay
     starts a new series at a later activity week when a value or an increase changes (§7.1).
+    Increases stay on the activity's own weeks (1, 1 + every, ...), whatever the origin.
     """
 
     start: Decimal
@@ -381,7 +382,9 @@ class Series:
             raise ValueError(
                 f"activity week {activity_week} is before its origin, week {self.origin}"
             )
-        steps = (activity_week - self.origin) // self.every
+        # Increases fall on activity weeks 1 + m * every, whatever the origin (plan §8.1): a
+        # segment counts the increase weeks after its origin, it doesn't restart the count.
+        steps = (activity_week - 1) // self.every - (self.origin - 1) // self.every
         with localcontext(_CTX):
             value = self.start
             if self.add is not None:
@@ -418,7 +421,7 @@ type PlanValues = dict[str, int | float | bool]
 # ---- Helpers ----
 
 
-def _num(n: Decimal | int) -> str:
+def number_text(n: Decimal | int) -> str:
     """A number for a sentence: 2,000, 512.5, -501."""
     return f"{Decimal(n).normalize():,f}"
 
@@ -427,7 +430,7 @@ def _is_whole(n: Decimal) -> bool:
     return n == n.to_integral_value()
 
 
-def _number(v: object) -> Decimal | None:
+def as_decimal(v: object) -> Decimal | None:
     """A JSON number as a decimal; None for anything else (`true` is not a number)."""
     if isinstance(v, bool):
         return None
@@ -447,12 +450,12 @@ def _number(v: object) -> Decimal | None:
     return n if abs(n) < _HUGE else None
 
 
-def _whole_in(v: object, lo: int, hi: int) -> int | None:
-    n = _number(v)
+def whole_in(v: object, lo: int, hi: int) -> int | None:
+    n = as_decimal(v)
     return int(n) if n is not None and _is_whole(n) and lo <= n <= hi else None
 
 
-def _key(base: str, key: object) -> str:
+def json_path(base: str, key: object) -> str:
     """The path to `key` inside `base`: `params.squat`, `params["Squat start"]`."""
     text = str(key)
     if _PLAIN_RE.fullmatch(text):
@@ -460,7 +463,7 @@ def _key(base: str, key: object) -> str:
     return f"{base}[{json.dumps(text, ensure_ascii=False)}]"
 
 
-def _text(v: object, lo: int, hi: int) -> str | None:
+def text_in(v: object, lo: int, hi: int) -> str | None:
     """Text of `lo` to `hi` characters; with `lo` 1, it may not be blank. Kept trimmed."""
     if not isinstance(v, str) or len(v) > hi:
         return None
@@ -477,7 +480,8 @@ class _Draft:
     """An activity as far as it parsed: enough for the overrides' and the weeks' checks, and
     the `Activity` when nothing is wrong."""
 
-    index: int
+    #: Where it is in the document: `activities[2]`.
+    path: str
     key: str | None
     name: str | None
     #: The plan fields the document gives it, whether or not they parsed, and `target`.
@@ -513,7 +517,7 @@ class _Checker:
     def unknown_keys(self, raw: Mapping[Any, Any], allowed: Sequence[str], path: str) -> None:
         for key in raw:
             if key not in allowed:
-                self.error(_key(path, key), UNKNOWN)
+                self.error(json_path(path, key), UNKNOWN)
 
     def operand(
         self, raw: object, path: str, fits: Callable[[Decimal], bool], message: str
@@ -525,7 +529,7 @@ class _Checker:
                 self.error(path, f"there is no parameter called {key}.")
                 return None
             return key
-        n = _number(raw)
+        n = as_decimal(raw)
         if n is None or not fits(n):
             self.error(path, message)
             return None
@@ -540,19 +544,19 @@ class _Checker:
         self.unknown_keys(doc, _TOP_KEYS, "")
         if doc.get("format") != FORMAT:
             self.error("format", f'give "{FORMAT}".')
-        name = _text(doc.get("name"), 1, MAX_TRACKER_NAME)
+        name = text_in(doc.get("name"), 1, MAX_TRACKER_NAME)
         if name is None:
             self.error("name", f"give a name of 1 to {MAX_TRACKER_NAME} characters.")
         description = None
         if "description" in doc:
-            description = _text(doc["description"], 0, MAX_DESCRIPTION)
+            description = text_in(doc["description"], 0, MAX_DESCRIPTION)
             if description is None:
                 self.error("description", f"give text of up to {MAX_DESCRIPTION:,} characters.")
         raw_kind = doc.get("kind")
         kind: Kind | None = next((k for k in KINDS if k == raw_kind), None)
         if kind is None:
             self.error("kind", "give strength, mobility or cardio.")
-        weeks = _whole_in(doc.get("weeks"), 1, MAX_WEEKS)
+        weeks = whole_in(doc.get("weeks"), 1, MAX_WEEKS)
         if weeks is None:
             self.error("weeks", f"give a whole number from 1 to {MAX_WEEKS}.")
         daily_target = self.daily_target(doc, kind)
@@ -561,7 +565,7 @@ class _Checker:
         overrides = self.overrides(doc, kind, weeks or MAX_WEEKS, drafts)
         if kind is not None and weeks is not None:
             defaults = {key: p.default for key, p in params.items()}
-            fields = [(d.index, d.key, d.values) for d in drafts]
+            fields = [(d.path, d.key, d.values) for d in drafts]
             _resolve_series(self, kind, weeks, fields, overrides, defaults)
         if self.errors:
             return None
@@ -585,7 +589,7 @@ class _Checker:
             return None
         if "dailyTarget" not in doc:
             return TYPES[kind].daily_target if kind is not None else None
-        target = _whole_in(doc["dailyTarget"], MIN_DAILY_PICK, MAX_DAILY_PICK)
+        target = whole_in(doc["dailyTarget"], MIN_DAILY_PICK, MAX_DAILY_PICK)
         if target is None:
             self.error(
                 "dailyTarget", f"give a whole number from {MIN_DAILY_PICK} to {MAX_DAILY_PICK}."
@@ -607,7 +611,7 @@ class _Checker:
         if len(raw) > MAX_PARAMS:
             self.error("params", f"a programme has at most {MAX_PARAMS} parameters.")
         for key, value in raw.items():
-            path = _key("params", key)
+            path = json_path("params", key)
             if not isinstance(key, str) or not KEY_RE.fullmatch(key):
                 self.error(
                     path, f"a parameter's name is 1 to {MAX_KEY} characters of a-z, 0-9 and -."
@@ -625,15 +629,15 @@ class _Checker:
             return None
         before = len(self.errors)
         self.unknown_keys(raw, _PARAM_KEYS, path)
-        label = _text(raw.get("label"), 1, MAX_PARAM_LABEL)
+        label = text_in(raw.get("label"), 1, MAX_PARAM_LABEL)
         if label is None:
             self.error(f"{path}.label", f"give a label of 1 to {MAX_PARAM_LABEL} characters.")
-        unit = _text(raw.get("unit"), 1, MAX_UNIT)
+        unit = text_in(raw.get("unit"), 1, MAX_UNIT)
         if unit is None:
             self.error(f"{path}.unit", f"give a unit of 1 to {MAX_UNIT} characters.")
         bounds: dict[str, Decimal | None] = {}
         for name in ("default", "min", "max"):
-            bounds[name] = _number(raw.get(name))
+            bounds[name] = as_decimal(raw.get(name))
             if bounds[name] is None and (name == "default" or name in raw):
                 self.error(f"{path}.{name}", "give a number.")
         default, lo, hi = bounds["default"], bounds["min"], bounds["max"]
@@ -659,7 +663,7 @@ class _Checker:
         drafts: list[_Draft] = []
         first: dict[str, int] = {}
         for i, item in enumerate(raw):
-            draft = self.activity(item, i, kind)
+            draft = self.activity(item, f"activities[{i}]", kind)
             if draft is None:
                 continue
             if draft.key is not None:
@@ -673,8 +677,7 @@ class _Checker:
             drafts.append(draft)
         return drafts
 
-    def activity(self, raw: object, index: int, kind: Kind | None) -> _Draft | None:
-        path = f"activities[{index}]"
+    def activity(self, raw: object, path: str, kind: Kind | None) -> _Draft | None:
         if not isinstance(raw, Mapping):
             self.error(path, "give an activity as an object.")
             return None
@@ -685,22 +688,22 @@ class _Checker:
             if name == "perSide" and (kind is None or kind in PER_SIDE_KINDS):
                 continue
             if kind is not None and (name in FIELDS or name == "perSide"):
-                self.error(_key(path, name), f"a {kind} activity has no {name}.")
+                self.error(json_path(path, name), f"a {kind} activity has no {name}.")
             elif name not in FIELDS and name != "perSide":
-                self.error(_key(path, name), UNKNOWN)
+                self.error(json_path(path, name), UNKNOWN)
         key = raw.get("key")
         if not isinstance(key, str) or not KEY_RE.fullmatch(key):
             self.error(f"{path}.key", f"give a key of 1 to {MAX_KEY} characters of a-z, 0-9 and -.")
             key = None
-        draft = _Draft(index, key, _text(raw.get("name"), 1, MAX_NAME), {"target"}, {})
+        draft = _Draft(path, key, text_in(raw.get("name"), 1, MAX_NAME), {"target"}, {})
         if draft.name is None:
             self.error(f"{path}.name", f"give a name of 1 to {MAX_NAME} characters.")
         if "notes" in raw:
-            draft.notes = _text(raw["notes"], 0, MAX_DETAILS_NOTES)
+            draft.notes = text_in(raw["notes"], 0, MAX_DETAILS_NOTES)
             if draft.notes is None:
                 self.error(f"{path}.notes", f"give text of up to {MAX_DETAILS_NOTES:,} characters.")
         if "link" in raw:
-            draft.link = _text(raw["link"], 0, MAX_FIELD)
+            draft.link = text_in(raw["link"], 0, MAX_FIELD)
             if draft.link is None:
                 self.error(f"{path}.link", f"give text of up to {MAX_FIELD:,} characters.")
         if "perSide" in raw and kind in PER_SIDE_KINDS:
@@ -746,23 +749,23 @@ class _Checker:
             )
         if "rate" in raw:
             rate = self.operand(
-                raw["rate"], f"{path}.rate", _fits_rate, f"give {RATE_DOMAIN}, or a parameter."
+                raw["rate"], f"{path}.rate", fits_rate, f"give {RATE_DOMAIN}, or a parameter."
             )
             if "add" in raw:
                 self.error(f"{path}.rate", "a progression has add or rate, not both.")
         every = 1
         if "every" in raw:
-            every = _whole_in(raw["every"], 1, MAX_WEEKS) or 0
+            every = whole_in(raw["every"], 1, MAX_WEEKS) or 0
             if not every:
                 self.error(f"{path}.every", f"give a whole number of weeks from 1 to {MAX_WEEKS}.")
         top = None
         if "max" in raw:
-            top = _number(raw["max"])
+            top = as_decimal(raw["max"])
             if top is None or not rule.fits(top):
                 self.error(f"{path}.max", f"give {rule.domain}.")
         step = rule.step
         if "step" in raw:
-            given = _number(raw["step"])
+            given = as_decimal(raw["step"])
             if given is None or not rule.fits_step(given):
                 self.error(f"{path}.step", rule.step_message)
             else:
@@ -797,7 +800,7 @@ class _Checker:
             weeks = self.override_weeks(item.get("weeks"), path, i, last, owner)
             label = None
             if "label" in item:
-                label = _text(item["label"], 1, MAX_OVERRIDE_LABEL)
+                label = text_in(item["label"], 1, MAX_OVERRIDE_LABEL)
                 if label is None:
                     self.error(
                         f"{path}.label", f"give a label of 1 to {MAX_OVERRIDE_LABEL} characters."
@@ -817,7 +820,7 @@ class _Checker:
             return []
         weeks: list[int] = []
         for j, value in enumerate(raw):
-            week = _whole_in(value, 1, last)
+            week = whole_in(value, 1, last)
             where = f"{path}.weeks[{j}]"
             if week is None:
                 self.error(where, f"give a week from 1 to {last}.")
@@ -846,7 +849,7 @@ class _Checker:
             self.error(path, f'give the activities it changes, by key or "{ALL}".')
             return changes
         for key, fields in raw.items():
-            where = _key(path, key)
+            where = json_path(path, key)
             if key != ALL and check_keys and key not in acts:
                 self.error(where, f"there is no activity called {key}.")
                 continue
@@ -858,7 +861,7 @@ class _Checker:
             draft = acts.get(key)
             changes[key] = {}
             for name, value in fields.items():
-                parsed = self.override_value(value, _key(where, name), name, kind, key, draft)
+                parsed = self.override_value(value, json_path(where, name), name, kind, key, draft)
                 if parsed is not None:
                     changes[key][parsed[0]] = parsed[1]
         return changes
@@ -880,19 +883,19 @@ class _Checker:
             return None
         if isinstance(raw, Mapping):
             self.unknown_keys(raw, ("scale",), path)
-            factor = _number(raw.get("scale"))
+            factor = as_decimal(raw.get("scale"))
             if factor is None or factor <= 0:
                 self.error(f"{path}.scale", "give a number above 0.")
                 return None
             return rule.name, Scale(factor)
-        n = _number(raw)
+        n = as_decimal(raw)
         if n is None or not rule.fits(n):
             self.error(path, f"give {rule.domain}, or a scale.")
             return None
         return rule.name, n
 
 
-def _fits_rate(n: Decimal) -> bool:
+def fits_rate(n: Decimal) -> bool:
     return MIN_RATE < n <= MAX_RATE
 
 
@@ -915,7 +918,7 @@ def _resolve_ref(
         return False, None
     value = params[ref]
     if not fits(value):
-        checker.error(path, f"${ref} is {_num(value)}. {what}.")
+        checker.error(path, f"${ref} is {number_text(value)}. {what}.")
         return False, None
     return True, value
 
@@ -933,7 +936,7 @@ def _series(
         f"An add is {rule.add_range}",
     )
     ok_rate, rate = _resolve_ref(
-        checker, value.rate, f"{path}.rate", params, _fits_rate, f"A rate is {RATE_RANGE}"
+        checker, value.rate, f"{path}.rate", params, fits_rate, f"A rate is {RATE_RANGE}"
     )
     if not (ok_start and ok_add and ok_rate) or start is None:
         return None
@@ -950,23 +953,23 @@ def _resolve_series(
     checker: _Checker,
     kind: Kind,
     weeks: int,
-    activities: Sequence[tuple[int, str | None, Mapping[Field, Value]]],
+    activities: Sequence[tuple[str, str | None, Mapping[Field, Value]]],
     overrides: Sequence[Override],
     params: Mapping[str, Decimal],
 ) -> dict[str, dict[Field, Series]]:
     """Each activity's series by field, and an error for each field whose value the item can't
-    hold in some week (the first such week). `activities` holds each one's index, key and parsed
-    values. Fields that use a parameter with no usable value are left out.
+    hold in some week (the first such week). `activities` holds each one's path (`activities[2]`),
+    key and parsed values. Fields that use a parameter with no usable value are left out.
 
     The check runs each programme week with its override at the same activity week, as a run
     with no pauses would."""
     out: dict[str, dict[Field, Series]] = {}
     rules = KIND_FIELDS[kind]
-    for index, activity_key, values in activities:
+    for base, activity_key, values in activities:
         key = activity_key if activity_key is not None else ALL
         fields: dict[Field, Series] = {}
         for name, value in values.items():
-            path = f"activities[{index}].{name}"
+            path = f"{base}.{name}"
             rule = rules[name]
             series = _series(checker, value, path, rule, params)
             if series is None:
@@ -984,6 +987,32 @@ def _resolve_series(
 
 
 # ---- Public API ----
+
+
+def parse_activity(
+    raw: object, kind: Kind, params: Collection[str], path: str
+) -> tuple[Activity | None, list[ProgrammeError]]:
+    """One activity written as the format's, outside a document (the replay's Add activity):
+    the activity, or every problem with paths under `path`. References may name `params`."""
+    checker = _Checker(known=set(params))
+    draft = checker.activity(raw, path, kind)
+    if draft is None or checker.errors:
+        return None, checker.errors
+    return draft.activity(), []
+
+
+def resolve_activity(
+    activity: Activity, kind: Kind, params: Mapping[str, Decimal], path: str
+) -> tuple[dict[Field, Series], list[ProgrammeError]]:
+    """Each of an activity's fields as a series with `params`' values, or the problems: a
+    parameter whose value doesn't fit where the activity uses it."""
+    checker = _Checker()
+    fields: dict[Field, Series] = {}
+    for name, value in activity.values.items():
+        series = _series(checker, value, f"{path}.{name}", KIND_FIELDS[kind][name], params)
+        if series is not None:
+            fields[name] = series
+    return fields, checker.errors
 
 
 def check_programme(doc: object) -> list[ProgrammeError]:
@@ -1015,13 +1044,13 @@ def resolve(programme: Programme, given: Mapping[str, object] | None = None) -> 
         checker.error("params", "give the parameter values as an object.")
         raise ProgrammeInvalid(checker.errors)
     for key, raw in (given or {}).items():
-        path = _key("params", key)
+        path = json_path("params", key)
         param = programme.params.get(key) if isinstance(key, str) else None
         if param is None:
             checker.error(path, f"the programme has no parameter called {key}.")
             continue
-        n = _number(raw)
-        problem = _param_problem(param, n)
+        n = as_decimal(raw)
+        problem = param_problem(param, n)
         if problem is not None:
             checker.error(path, problem)
             # The fields that use it go unchecked, rather than checked with the default.
@@ -1029,7 +1058,7 @@ def resolve(programme: Programme, given: Mapping[str, object] | None = None) -> 
             continue
         assert n is not None
         values[key] = n
-    activities = [(i, a.key, a.values) for i, a in enumerate(programme.activities)]
+    activities = [(f"activities[{i}]", a.key, a.values) for i, a in enumerate(programme.activities)]
     series = _resolve_series(
         checker, programme.kind, programme.weeks, activities, programme.overrides, values
     )
@@ -1038,13 +1067,13 @@ def resolve(programme: Programme, given: Mapping[str, object] | None = None) -> 
     return Resolved(programme=programme, params=values, series=series)
 
 
-def _param_problem(param: Param, n: Decimal | None) -> str | None:
+def param_problem(param: Param, n: Decimal | None) -> str | None:
     if n is None:
         return "give a number."
     if param.min is not None and n < param.min:
-        return f"the least it can be is {_num(param.min)}."
+        return f"the least it can be is {number_text(param.min)}."
     if param.max is not None and n > param.max:
-        return f"the most it can be is {_num(param.max)}."
+        return f"the most it can be is {number_text(param.max)}."
     return None
 
 
