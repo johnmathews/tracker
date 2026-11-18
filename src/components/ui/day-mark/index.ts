@@ -113,12 +113,14 @@ export interface DayMarkDay {
   date: string
   today?: boolean
   note?: boolean
+  /** A programme tracker's day before yesterday (programmes spec §8): its marks are evidence. */
+  locked?: boolean
   mark?: Mark | null
 }
 
 /**
  * The mark's accessible name (brand/design-system/project/components/DayMark): which row and
- * which day, then "today" and "has a note" when they apply. Whether the day is marked is
+ * which day, then "today", "locked" and "has a note" when they apply. Whether the day is marked is
  * aria-pressed's to say; the name adds only a partial or missed day's kind:
  * "Squats, Thursday 22 October, today, partly done".
  */
@@ -127,11 +129,13 @@ export function dayMarkLabel({
   date,
   today = false,
   note = false,
+  locked = false,
   mark = null,
 }: DayMarkDay): string {
   return [
     `${name}, ${date}`,
     today && 'today',
+    locked && 'locked',
     note && 'has a note',
     mark && MARK_WORDS[markKind(mark)],
   ]

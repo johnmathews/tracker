@@ -31,7 +31,9 @@ const PAUSED = {
   week: 3,
   weeks: 9,
   end: null,
-  pausedUntil: '2026-11-26',
+  pausedUntil: null,
+  pausedSince: '2026-12-07',
+  pauseReason: 'A cold',
 }
 
 let wrapper: VueWrapper
@@ -117,7 +119,7 @@ describe('the Programmes page (K147)', () => {
     expect(runs[0]!.get('a').attributes('href')).toBe('#/programme/t1')
     expect(runs[0]!.text()).toContain('Beginner 5×5')
     expect(runs[0]!.text()).toContain('Week 4 of 8. Running. Ends Sun 13 Dec.')
-    expect(runs[1]!.text()).toContain('Week 3 of 9. Paused until Thu 26 Nov.')
+    expect(runs[1]!.text()).toContain('Week 3 of 9. Paused since Mon 7 Dec. A cold.')
   })
 
   it('says when nothing is running, and leaves ended runs out', async () => {

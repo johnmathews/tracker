@@ -11,6 +11,7 @@ export const CELL = {
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { Pause } from '@lucide/vue'
 import type { Day } from '@/stores/planner'
 import type { Mark, MarkSet } from '@/lib/storage'
 import type { Tracked } from '@/lib/tracker'
@@ -34,6 +35,10 @@ const props = defineProps<{
   marks: (Mark | null)[]
   /** How the marks are drawn: the device's mark set. The squiggles when not given. */
   markSet?: MarkSet
+  /** Which days are locked (a programme tracker's, programmes spec §8): they don't press. */
+  locked?: boolean[]
+  /** A paused activity's sentence (spec §9.5), read in place of its seven boxes. */
+  paused?: string | null
 }>()
 const emit = defineEmits<{
   toggle: [day: number]
@@ -120,8 +125,20 @@ const lines = computed(() => ({
         </div>
       </div>
     </th>
+    <!-- A paused activity says so across its seven days (PlannerScreen card, K146). -->
     <td
-      v-for="(d, i) in days"
+      v-if="paused"
+      role="gridcell"
+      colspan="7"
+      class="px-2 text-center align-middle text-[max(18px,calc(var(--u)*19))] leading-[1.4] text-ink-secondary screen:col-span-7 screen:flex screen:items-center screen:justify-center screen:gap-2 folded:col-[1/-1] folded:row-(--box-row) folded:min-h-12 folded:text-[16px]"
+      :class="CELL.rule"
+      data-testid="paused-row"
+    >
+      <Pause :stroke-width="1.5" aria-hidden="true" class="inline size-[18px] flex-none" />
+      {{ paused }}
+    </td>
+    <td
+      v-for="(d, i) in paused ? [] : days"
       :key="d.key"
       role="gridcell"
       class="p-0 align-middle screen:[container-type:size] folded:row-(--box-row) folded:h-(--grid-box-h)"
@@ -133,6 +150,7 @@ const lines = computed(() => ({
         :today="d.isToday"
         :mark="marks[i] ?? null"
         :set="markSet"
+        :locked="locked?.[i] ?? false"
         fill
         @toggle="emit('toggle', i)"
       />

@@ -97,6 +97,13 @@ export type ExportData = {
   settings: PortableSettings | null
   /** Present only when the file carries a list of them (the API's export does). */
   conversations?: Conversation[]
+  /**
+   * The programme library and the runs (programmes spec §11.2), present only when the file
+   * carries a list of each. Passed through as the file has them: the server checks them on
+   * import, and the app never reads them.
+   */
+  programmes?: unknown[]
+  runs?: unknown[]
 }
 
 export type ExportFile = {
@@ -228,6 +235,9 @@ export function parseExport(text: string): ParseResult {
   if (Array.isArray(parsed.conversations)) {
     data.conversations = normaliseConversations(parsed.conversations)
   }
+  // The library and the runs likewise, kept as they are: the server's import checks them.
+  if (Array.isArray(parsed.programmes)) data.programmes = parsed.programmes
+  if (Array.isArray(parsed.runs)) data.runs = parsed.runs
   return { ok: true, data }
 }
 

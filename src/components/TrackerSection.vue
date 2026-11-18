@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useId, useTemplateRef, watch } from 'vue'
-import { Check, ChevronDown, ChevronUp, Pencil, Plus, Trash2 } from '@lucide/vue'
+import { Check, ChevronDown, ChevronRight, ChevronUp, Pencil, Plus, Trash2 } from '@lucide/vue'
 import { usePlannerStore } from '@/stores/planner'
 import { useTrackersStore } from '@/stores/trackers'
 import { useDetailsStore } from '@/stores/details'
+import { useProgrammesStore } from '@/stores/programmes'
+import { useSyncStore } from '@/stores/sync'
 import { useConfirm } from '@/composables/useConfirm'
 import { focusOnScreen, sprintToScreen } from '@/composables/screenSprint'
 import { dayMonth } from '@/lib/dates'
@@ -12,7 +14,9 @@ import { MAX_DAILY_PICK, MIN_DAILY_PICK, type Mark } from '@/lib/storage'
 import { MAX_TRACKER_NAME, type TrackerInfo } from '@/lib/trackers'
 import { TRACKER_TYPES } from '@/lib/trackerTypes'
 import { SCREEN, SCREEN_GRID } from '@/lib/screens'
-import { newItemHref } from '@/lib/routes'
+import { newItemHref, programmeHref } from '@/lib/routes'
+import { dayText, reasonText, weekName, weekOf } from '@/lib/programmes'
+import type { Tracked } from '@/lib/tracker'
 import { SectionHeader } from '@/components/ui/section-header'
 import { IconButton } from '@/components/ui/icon-button'
 import { InlineMessage } from '@/components/ui/inline-message'
@@ -32,6 +36,8 @@ const props = defineProps<{
 const planner = usePlannerStore()
 const trackers = useTrackersStore()
 const details = useDetailsStore()
+const sync = useSyncStore()
+const programmes = useProgrammesStore()
 
 const id = computed(() => props.tracker.id)
 /** The tracker's kind: its words, chips and marks (src/lib/trackerTypes.ts). */
@@ -72,6 +78,48 @@ function toggle(item: string, day: number): void {
 /** An item's notes, from its details: one copy for every week (D2). */
 function noteFor(item: { id: string }): string {
   return details.notesOf(id.value, item.id)
+}
+
+/* ---- A programme tracker (PlannerScreen card's programme screen, K146, spec §9.5). ---- */
+
+/** The run as `/api/state` lists it, or null on an ordinary tracker. */
+const summary = computed(() => sync.runs[id.value] ?? null)
+// The run's grid holds each week's paused activities and programme weeks (P4): read it, and again
+// whenever the state lists a newer run.
+watch(
+  () => summary.value?.rev,
+  (rev) => {
+    if (rev !== undefined) void programmes.ensureRun(id.value)
+  },
+  { immediate: true },
+)
+/** The week on screen in the run's grid, once it has loaded. */
+const runWeek = computed(() => {
+  const run = programmes.byTracker[id.value]
+  return run && summary.value ? weekOf(run.grid, planner.weekKey) : null
+})
+/** "Week 4 of 8" at the end of the title line: the week on screen's, or the state's until the
+ * run has loaded. */
+const weekLink = computed(() => {
+  const run = summary.value
+  if (!run) return null
+  const week = runWeek.value
+  if (week?.programmeWeeks.length) return `${weekName(week)} of ${run.weeks}`
+  if (run.status === 'upcoming') return `Starts ${dayText(run.start)}`
+  return run.week === null ? 'The programme' : `Week ${run.week} of ${run.weeks}`
+})
+/** The days locked by the server's today (spec §8); none on an ordinary tracker. */
+const lockedDays = computed(() =>
+  summary.value ? planner.days.map((d) => sync.locked(id.value, d.key)) : undefined,
+)
+
+/** A paused activity's sentence for the week on screen: "Paused until Mon 28 Dec. Knee." */
+function pausedFor(item: Tracked): string | null {
+  const cell = runWeek.value?.cells[item.id]
+  if (cell?.state !== 'paused') return null
+  const until = cell.until ? ` until ${dayText(cell.until)}` : ''
+  const why = reasonText(cell.reason)
+  return `Paused${until}.${why ? ` ${why}` : ''}`
 }
 
 /** Edit plan's Add opens the new item page (K104), not a dialog. */
@@ -318,9 +366,22 @@ async function remove(ev: MouseEvent): Promise<void> {
         </template>
         <!-- Add, at the end of the title line (K113), opens the new item page (K104); Delete
              tracker, bordered like it, follows (K122). Both at the page's control size. -->
-        <template v-if="planner.configMode" #end>
-          <div class="flex flex-wrap items-center justify-end gap-[calc(var(--u)*12)]">
+        <template v-if="planner.configMode || weekLink" #end>
+          <!-- A programme tracker's week, a link to its overview, where Edit plan puts Add
+               (K146). -->
+          <a
+            v-if="!planner.configMode"
+            :href="programmeHref(tracker.id)"
+            :aria-label="`${weekLink}. Open the programme`"
+            class="body inline-flex items-center gap-1 rounded-[2px] text-[max(18px,calc(var(--u)*19))] leading-[1.4] font-semibold whitespace-nowrap text-ink underline decoration-1 underline-offset-4 hover:decoration-2"
+            data-testid="programme-week-link"
+            >{{ weekLink
+            }}<ChevronRight :stroke-width="1.5" aria-hidden="true" class="size-5 flex-none"
+          /></a>
+          <div v-else class="flex flex-wrap items-center justify-end gap-[calc(var(--u)*12)]">
+            <!-- A programme's items change through its own controls (spec §9.5): no Add. -->
             <Button
+              v-if="!summary"
               class="h-(--set-control) px-(--set-control-pad) text-(length:--set-label) [&_svg]:size-(--set-icon)"
               data-add
               aria-keyshortcuts="A"
@@ -349,6 +410,8 @@ async function remove(ev: MouseEvent): Promise<void> {
         :details-for="type.details"
         :note-for="noteFor"
         :met-days="metDays"
+        :locked-days="lockedDays"
+        :paused-for="summary ? pausedFor : undefined"
         :data-testid="`${tracker.id}-grid`"
         @toggle="toggle"
       >

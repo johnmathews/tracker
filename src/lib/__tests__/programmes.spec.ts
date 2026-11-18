@@ -20,6 +20,7 @@ import {
   primaryField,
   problemsLine,
   programmeWeekOn,
+  reasonText,
   runLine,
   runMeta,
   runsFromState,
@@ -150,6 +151,37 @@ describe('a run in a line', () => {
 
   it('says the week, and running and when it ends', () => {
     expect(runLine(summary)).toEqual({ lead: 'Week 4 of 8.', rest: 'Running. Ends Sun 17 Jan.' })
+  })
+
+  it('says since when a run is paused, and why, as the Running list reads (§8.8)', () => {
+    const paused = { ...summary, status: 'paused' as const, end: null }
+    expect(runLine({ ...paused, pausedSince: '2026-12-07', pauseReason: 'A cold' })).toEqual({
+      lead: 'Week 4 of 8.',
+      rest: 'Paused since Mon 7 Dec. A cold.',
+    })
+    expect(
+      runLine({
+        ...paused,
+        pausedSince: '2026-12-07',
+        pausedUntil: '2026-12-21',
+        pauseReason: 'away for work!',
+      }),
+    ).toEqual({
+      lead: 'Week 4 of 8.',
+      rest: 'Paused since Mon 7 Dec until Mon 21 Dec. Away for work!',
+    })
+    expect(runLine({ ...paused, pausedSince: '2026-12-07', pauseReason: null })).toEqual({
+      lead: 'Week 4 of 8.',
+      rest: 'Paused since Mon 7 Dec.',
+    })
+  })
+
+  it('words a reason as a sentence of its own', () => {
+    expect(reasonText('knee')).toBe('Knee.')
+    expect(reasonText(' A cold. ')).toBe('A cold.')
+    expect(reasonText('Away?')).toBe('Away?')
+    expect(reasonText('  ')).toBe('')
+    expect(reasonText(null)).toBe('')
   })
 
   it('says paused, and until when', () => {

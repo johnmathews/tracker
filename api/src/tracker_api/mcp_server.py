@@ -333,6 +333,9 @@ class RunListed(TypedDict):
     start: str
     end: str | None
     pausedUntil: str | None
+    #: A paused run's first paused day and its reason.
+    pausedSince: str | None
+    pauseReason: str | None
     rev: str
 
 
@@ -879,7 +882,8 @@ def _add_tools(server: MCPServer, config: Config) -> None:
         "`kind`, `weeks`, number of `activities` and `rev`, without the document) and every run "
         "(`runs`: each programme tracker's id and name, the programme, its `status` (upcoming, "
         "running, paused or ended), this programme `week` of `weeks`, its `start` and `end`, "
-        "and `pausedUntil`). The result also has `this_week` and `today`.",
+        "and, while paused, `pausedSince`, `pausedUntil` and `pauseReason`). The result also has "
+        "`this_week` and `today`.",
         annotations=READ_ONLY,
     )
     def list_programmes() -> ProgrammeList:

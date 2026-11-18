@@ -4,6 +4,7 @@ import type { Mark, MarkSet } from '@/lib/storage'
 import type { Tracked } from '@/lib/tracker'
 import { useGridNav } from '@/composables/gridNav'
 import { ref } from 'vue'
+import { Lock } from '@lucide/vue'
 import TrackerRow from '@/components/TrackerRow.vue'
 import { itemHref } from '@/lib/routes'
 
@@ -27,6 +28,13 @@ defineProps<{
    * underlined (K60).
    */
   metDays?: boolean[]
+  /**
+   * A programme tracker's locked days (programmes spec §8, PlannerScreen card): a lock by the
+   * day's name, and boxes that don't press. None on an ordinary tracker.
+   */
+  lockedDays?: boolean[]
+  /** A programme tracker's paused activity's sentence, read in place of its boxes; else null. */
+  pausedFor?: (item: Tracked) => string | null
 }>()
 
 defineEmits<{
@@ -103,22 +111,31 @@ useGridNav(table, {
           :aria-current="d.isToday ? 'date' : undefined"
           :data-today="d.isToday"
           :data-met="metDays?.[i] ? 'true' : undefined"
+          :data-locked="lockedDays?.[i] ? '' : undefined"
           data-testid="day-head"
         >
-          <!-- A met day: the name in pen, underlined (K60). -->
+          <!-- A met day: the name in pen, underlined (K60). A locked day: a lock 4px after it,
+               which an underline doesn't reach (PlannerScreen card, K146). -->
           <span
-            class="label text-(length:--fs-day) leading-tight"
+            class="label text-(length:--fs-day) leading-tight whitespace-nowrap"
             :class="
               metDays?.[i]
                 ? 'text-pen underline decoration-[max(2px,calc(var(--u)*3))] underline-offset-[0.22em]'
                 : 'text-ink'
             "
-            >{{ d.name }}</span
-          >
+            >{{ d.name
+            }}<Lock
+              v-if="lockedDays?.[i]"
+              :stroke-width="1.5"
+              aria-hidden="true"
+              data-slot="lock"
+              class="ml-1 inline size-4 align-[-0.125em] text-ink-secondary folded:size-3.5"
+          /></span>
           <!-- The day's name alone on screen (the owner's call, K29); the date stays for a screen
                reader, and the DayMarks' names carry the full date. -->
           <span class="sr-only">{{ ' ' + d.date }}</span>
           <span v-if="d.isToday" class="sr-only">, today</span>
+          <span v-if="lockedDays?.[i]" class="sr-only">, locked</span>
           <span v-if="metDays?.[i]" class="sr-only">, daily goal met</span>
         </th>
       </tr>
@@ -136,6 +153,8 @@ useGridNav(table, {
         :days="days"
         :marks="marksFor(it.id)"
         :mark-set="markSet"
+        :locked="lockedDays"
+        :paused="pausedFor?.(it) ?? null"
         @toggle="$emit('toggle', it.id, $event)"
       />
     </tbody>

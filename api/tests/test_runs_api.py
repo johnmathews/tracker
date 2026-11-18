@@ -627,11 +627,58 @@ def test_a_pause_moves_the_end_and_the_state_says_paused(
             "start": TODAY,
             "end": "2026-12-27",
             "pausedUntil": "2026-11-06",
+            "pausedSince": TODAY,
+            "pauseReason": "Flu",
             "rev": run["rev"],
         }
     }
     # Paused weeks are written as paused: each item's goal is 0.
     assert {i["target"] for i in plans(client, tracker)[NEXT_MONDAY]} == {0}
+
+
+def test_the_state_says_since_when_and_why_a_run_is_paused(
+    client: TestClient, config: Config, clock: Clock
+) -> None:
+    """The Running list reads "Paused since Mon 7 Dec. A cold." (§8.8): the summary carries the
+    day the pause began and its reason, and neither while the run is running."""
+    made = started(client, config, on=TODAY)
+    tracker = made["tracker"]["id"]
+    summary = client.get("/api/state").json()["runs"][tracker]
+    assert (summary["pausedSince"], summary["pauseReason"]) == (None, None)
+    apply(client, tracker, {"type": "pause-programme"}, NEXT_MONDAY, reason="A cold")
+    # Paused from Monday: not yet on Friday.
+    summary = client.get("/api/state").json()["runs"][tracker]
+    assert (summary["status"], summary["pausedSince"], summary["pauseReason"]) == (
+        "running",
+        None,
+        None,
+    )
+    # Days later, the pause still began on Monday.
+    go_to(clock, "2026-10-28")
+    summary = client.get("/api/state").json()["runs"][tracker]
+    assert (summary["status"], summary["pausedSince"], summary["pauseReason"]) == (
+        "paused",
+        NEXT_MONDAY,
+        "A cold",
+    )
+    # A pause with no reason says none.
+    other = started_again(client)
+    apply(client, other, {"type": "pause-programme", "weeks": 1}, "2026-10-28")
+    summary = client.get("/api/state").json()["runs"][other]
+    assert (summary["pausedSince"], summary["pauseReason"], summary["pausedUntil"]) == (
+        "2026-10-28",
+        None,
+        "2026-11-04",
+    )
+
+
+def started_again(client: TestClient) -> str:
+    """A second run of the beginner programme for the signed-in account, started today."""
+    programme_id = client.get("/api/programmes").json()["programmes"][0]["id"]
+    r = start(client, programme_id, start=client.get("/api/state").json()["today"])
+    assert r.status_code == 201, r.text
+    tracker: str = r.json()["tracker"]["id"]
+    return tracker
 
 
 def test_an_open_ended_pause_leaves_the_tracker_open(client: TestClient, config: Config) -> None:

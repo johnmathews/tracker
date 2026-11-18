@@ -303,6 +303,22 @@ describe('buildExport', () => {
   })
 })
 
+describe('a file’s programmes and runs (programmes spec §11.2)', () => {
+  const file = { format: EXPORT_FORMAT, version: 6, trackers: [], sections: {}, details: {} }
+
+  it('passes the library and the runs through as the file has them, for the server to check', () => {
+    const programmes = [{ id: 'p1', doc: { name: 'Beginner 5×5' }, rev: 2 }, 'not one']
+    const runs = [{ tracker: 't1', log: [{ seq: 1 }], days: [], marks: [] }]
+    const parsed = parseExport(JSON.stringify({ ...file, programmes, runs }))
+    expect(parsed).toMatchObject({ ok: true, data: { programmes, runs } })
+  })
+
+  it('reads anything but a list as none, as a file from before them', () => {
+    const parsed = parseExport(JSON.stringify({ ...file, programmes: {}, runs: 'x' }))
+    expect(parsed.ok && ('programmes' in parsed.data || 'runs' in parsed.data)).toBe(false)
+  })
+})
+
 describe('exportFilename', () => {
   it('names the file by the local date', () => {
     expect(exportFilename(new Date(2026, 9, 24, 23, 59))).toBe('tracker-2026-10-24.json')

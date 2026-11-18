@@ -17,6 +17,11 @@ const props = withDefaults(
     today?: boolean
     /** Draws the folded corner and adds "has a note" to the name. Only where a note exists. */
     note?: boolean
+    /**
+     * A locked day (programmes spec §8, PlannerScreen card): the mark stays as it is, the name
+     * adds "locked", and a press does nothing. `aria-disabled` keeps it reachable and readable.
+     */
+    locked?: boolean
     /** How the mark is drawn: the device's mark set (K20). The squiggles by default. */
     set?: MarkSet
     /**
@@ -26,7 +31,7 @@ const props = withDefaults(
     fill?: boolean
     class?: HTMLAttributes['class']
   }>(),
-  { today: false, note: false, set: 'squiggles', fill: false, class: undefined },
+  { today: false, note: false, locked: false, set: 'squiggles', fill: false, class: undefined },
 )
 
 defineEmits<{ toggle: [] }>()
@@ -50,6 +55,7 @@ const label = computed(() => dayMarkLabel(props))
   <div
     data-slot="day-mark"
     :data-today="today"
+    :data-locked="locked ? '' : undefined"
     :class="
       cn(
         'relative mx-auto grid size-19 place-items-center',
@@ -61,12 +67,13 @@ const label = computed(() => dayMarkLabel(props))
     <button
       type="button"
       data-slot="day-mark-button"
-      class="group grid size-16 place-items-center rounded-md"
-      :class="fill && 'screen:size-[min(86cqw,86cqh,128px)]'"
+      class="grid size-16 place-items-center rounded-md"
+      :class="[fill && 'screen:size-[min(86cqw,86cqh,128px)]', locked ? 'cursor-default' : 'group']"
       :aria-pressed="mark !== null"
       :aria-label="label"
       :aria-current="today ? 'date' : undefined"
-      @click="$emit('toggle')"
+      :aria-disabled="locked ? 'true' : undefined"
+      @click="locked || $emit('toggle')"
     >
       <DayMarkDrawing :mark="mark" :set="set" :class="fill && 'screen:size-[94%]'" />
     </button>

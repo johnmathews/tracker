@@ -136,11 +136,27 @@ export const useTrackersStore = defineStore('trackers', () => {
   const list = ref<TrackerInfo[]>([])
   /** Each tracker's plans and log by tracker id; a tracker with neither may have no entry. */
   const data = ref<Record<string, TrackerData>>({})
+  /**
+   * The programme trackers' ids (docs/specs/2026-11-17-programmes.md §4), from the runs the sync
+   * store reads: their plans are the server's engine's alone (spec §11.1), so nothing here edits
+   * them.
+   */
+  const programmes = ref<string[]>([])
 
   /** Every tracker in the week's order: by position, then by id. */
   const ordered = computed(() => inOrder(list.value))
   /** The trackers the visible week shows (spec §2), in the week's order. */
   const shown = computed(() => ordered.value.filter((t) => showsIn(t, planner.weekKey)))
+
+  /** Whether the tracker is a programme tracker, whose plan only its programme changes. */
+  function isProgramme(id: string): boolean {
+    return programmes.value.includes(id)
+  }
+
+  /** The programme trackers, as the sync store last read the runs. */
+  function setProgrammes(ids: string[]): void {
+    programmes.value = ids
+  }
 
   function get(id: string): TrackerInfo | undefined {
     return list.value.find((t) => t.id === id)
@@ -241,22 +257,25 @@ export const useTrackersStore = defineStore('trackers', () => {
    * the kinds once (K21).
    */
   function toggle(id: string, item: string, day: number): void {
-    own(id)
+    // A programme's week is written by the server already, and is never this device's to copy.
+    if (!isProgramme(id)) own(id)
     const cycle = tracker.cycleFor(kindOf(id), planner.markSet)
     tracker.cycleDay(ensure(id).log, planner.weekKey, item, day, cycle)
   }
 
   function changeTarget(id: string, item: string, delta: number): void {
+    if (isProgramme(id)) return
     const it = own(id).find((x) => x.id === item)
     if (it) it.target = clamp(it.target + delta, MIN_TARGET, MAX_TARGET)
   }
 
   /**
    * Adds an item to the tracker this week, cleaned for its kind; returns its id, or null (and adds
-   * nothing) when the trimmed name is empty. Its notes are its details (the details store), not
-   * the week's.
+   * nothing) when the trimmed name is empty or the tracker is a programme's. Its notes are its
+   * details (the details store), not the week's.
    */
   function addItem(id: string, input: NewItem): string | null {
+    if (isProgramme(id)) return null
     const itemId = tracker.newId()
     const it = buildItem(kindOf(id), itemId, input, input.target ?? typeOf(id).newTarget)
     if (!it) return null
@@ -266,9 +285,11 @@ export const useTrackersStore = defineStore('trackers', () => {
 
   /**
    * Replaces the item's fields this week, keeping its id and history; the goal stays as it is
-   * when the input leaves it out. False for an empty name or an item not in the week.
+   * when the input leaves it out. False for an empty name, an item not in the week or a
+   * programme tracker.
    */
   function updateItem(id: string, item: string, input: NewItem): boolean {
+    if (isProgramme(id)) return false
     const current = itemsOf(id).find((it) => it.id === item)
     if (!current) return false
     const next = buildItem(kindOf(id), item, input, input.target ?? current.target)
@@ -283,6 +304,7 @@ export const useTrackersStore = defineStore('trackers', () => {
    * Earlier weeks keep it, and its marks and details stay in storage.
    */
   function removeItem(id: string, item: string): void {
+    if (isProgramme(id)) return
     const kept = own(id).filter((it) => it.id !== item)
     ensure(id).plans[planner.weekKey] = kept
   }
@@ -372,10 +394,13 @@ export const useTrackersStore = defineStore('trackers', () => {
   return {
     list,
     data,
+    programmes,
     ordered,
     shown,
     get,
     has,
+    isProgramme,
+    setProgrammes,
     kindOf,
     typeOf,
     plansOf,

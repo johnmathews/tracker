@@ -335,3 +335,31 @@ describe('a running programme', () => {
     expect(await store.endRun('t1')).toMatchObject({ ok: false })
   })
 })
+
+describe('each programme tracker’s run (the week view and the item page)', () => {
+  it('reads a tracker’s run once, sharing one request, and again when the state lists a newer', async () => {
+    serve({ 'GET /runs/t1': { body: RUN } })
+    const store = useProgrammesStore()
+    const sync = useSyncStore()
+    const [a, b] = await Promise.all([store.ensureRun('t1'), store.ensureRun('t1')])
+    expect(a).toEqual({ ok: true, data: RUN })
+    expect(b).toBe(a)
+    expect(store.byTracker.t1).toEqual(RUN)
+    expect(calls.filter((c) => c.path === '/runs/t1')).toHaveLength(1)
+    // Held, and the state lists the same run (or none): nothing to read.
+    expect(await store.ensureRun('t1')).toBeNull()
+    sync.runs = { t1: { ...SUMMARY, status: 'running' as const } }
+    expect(await store.ensureRun('t1')).toBeNull()
+    sync.runs = { t1: { ...SUMMARY, status: 'running' as const, rev: 'newer' } }
+    await store.ensureRun('t1')
+    expect(calls.filter((c) => c.path === '/runs/t1')).toHaveLength(2)
+  })
+
+  it('keeps a confirmed change’s run under its tracker', async () => {
+    serve({ 'POST /runs/t1/changes': { body: { preview: false, change: {}, run: RUN } } })
+    const store = useProgrammesStore()
+    await store.confirmChange('t1', { change: { type: 'undo', change: 1 }, from: RUN.today }, 'r')
+    expect(store.byTracker.t1).toEqual(RUN)
+    expect(store.run).toEqual(RUN)
+  })
+})

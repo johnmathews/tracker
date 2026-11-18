@@ -31,6 +31,13 @@ function loadText(error: ApiError): string {
     : 'The server had a problem, so the programmes couldn’t load. Try again in a while.'
 }
 
+/** Why a run couldn't be read, for the item page's Programme row. */
+function runLoadText(error: ApiError): string {
+  return error.kind === 'offline'
+    ? 'Can’t reach the server, so the programme couldn’t load. Try again when you’re online.'
+    : 'The server had a problem, so the programme couldn’t load. Try again in a while.'
+}
+
 /** A failed request as an outcome: a refusal's problems when it lists them, else why. */
 function failed(error: ApiError): { ok: false; problems: Problem[]; message: string | null } {
   if (error.kind === 'refused' && error.errors?.length) {
@@ -63,6 +70,13 @@ export const useProgrammesStore = defineStore('programmes', () => {
   const loadFailure = ref<string | null>(null)
   /** The overview's run, as the server last sent it. */
   const run = ref<Run | null>(null)
+  /**
+   * Each programme tracker's run as the server last sent it, by tracker id: the week view's
+   * paused rows and programme week, and the item page's chart, read their grid (P4).
+   */
+  const byTracker = ref<Record<string, Run>>({})
+  /** The runs being read, so a second ask waits for the first. */
+  const reading = new Map<string, Promise<Outcome<Run>>>()
 
   // The browser's own word on the connection, and the sync's: either one offline turns the
   // controls off, as Ask's box does.
@@ -141,7 +155,7 @@ export const useProgrammesStore = defineStore('programmes', () => {
       await call<{ tracker: { id: string }; run: Run }>('POST', `/programmes/${id}/start`, body),
     )
     if (!res.ok) return res
-    run.value = res.data.run
+    keep(res.data.tracker.id, res.data.run)
     void sync.refresh()
     await loadPage()
     return res
@@ -154,8 +168,35 @@ export const useProgrammesStore = defineStore('programmes', () => {
       const gone = res.error.kind === 'refused' && res.error.status === 404
       return gone ? { ok: false, problems: [], message: null } : failed(res.error)
     }
-    run.value = res.data
+    keep(tracker, res.data)
     return { ok: true, data: res.data }
+  }
+
+  /** A run the server sent for `tracker`: the overview's, and the tracker's. */
+  function keep(tracker: string, next: Run): void {
+    run.value = next
+    byTracker.value = { ...byTracker.value, [tracker]: next }
+  }
+
+  /**
+   * The tracker's run, read when it isn't here or the state lists a newer one (its `rev`). Reads
+   * of one tracker at once share one request. A failure keeps what was here: the week view then
+   * shows the boxes, and the item page says why.
+   */
+  async function ensureRun(tracker: string): Promise<Outcome<Run> | null> {
+    const listed = sync.runs[tracker]
+    const have = byTracker.value[tracker]
+    if (have && (!listed || listed.rev === have.rev)) return null
+    const pending = reading.get(tracker)
+    if (pending) return pending
+    const read = (async (): Promise<Outcome<Run>> => {
+      const res = await call<Run>('GET', `/runs/${tracker}`)
+      if (!res.ok) return { ok: false, problems: [], message: runLoadText(res.error) }
+      byTracker.value = { ...byTracker.value, [tracker]: res.data }
+      return { ok: true, data: res.data }
+    })().finally(() => reading.delete(tracker))
+    reading.set(tracker, read)
+    return read
   }
 
   /** A change's preview (spec §7.3): the server writes nothing. */
@@ -188,7 +229,7 @@ export const useProgrammesStore = defineStore('programmes', () => {
       }
       return failed(res.error)
     }
-    run.value = res.data.run
+    keep(tracker, res.data.run)
     void sync.refresh()
     return { ok: true, data: res.data.run }
   }
@@ -197,7 +238,7 @@ export const useProgrammesStore = defineStore('programmes', () => {
   async function endRun(tracker: string): Promise<Outcome<Run>> {
     const res = await call<{ run: Run }>('POST', `/runs/${tracker}/end`, {})
     if (!res.ok) return failed(res.error)
-    run.value = res.data.run
+    keep(tracker, res.data.run)
     void sync.refresh()
     return { ok: true, data: res.data.run }
   }
@@ -208,6 +249,7 @@ export const useProgrammesStore = defineStore('programmes', () => {
     today,
     loadFailure,
     run,
+    byTracker,
     offline,
     loadPage,
     readProgramme,
@@ -217,6 +259,7 @@ export const useProgrammesStore = defineStore('programmes', () => {
     previewStart,
     start,
     loadRun,
+    ensureRun,
     previewChange,
     confirmChange,
     endRun,

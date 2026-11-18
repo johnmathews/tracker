@@ -23,6 +23,9 @@ import {
   type PortableSettings,
 } from '@/lib/storage'
 import type { Plans } from '@/lib/plans'
+import { addDays, dateKey } from '@/lib/dates'
+import { dayText, runsFromState, type RunSummary } from '@/lib/programmes'
+import { numberWord } from '@/lib/words'
 import { SECTIONS, SECTION_NAMES, TRACKER_TYPES, type Item } from '@/lib/trackerTypes'
 import {
   MAX_TRACKERS,
@@ -55,6 +58,13 @@ import { useTrackersStore } from '@/stores/trackers'
 
 export const CACHE_PREFIX = 'tracker-cache-v6:'
 export const OUTBOX_PREFIX = 'tracker-outbox-v6:'
+/**
+ * The server's today and the runs, as `/api/state` last gave them (programmes spec §8): kept
+ * apart from the cache, so its format stays as it is, and read at start so a device offline still
+ * knows which trackers are programmes. A stale today locks fewer days, never more: the server's
+ * lock still holds.
+ */
+export const RUNS_PREFIX = 'tracker-runs-v1:'
 /**
  * The names of earlier formats, newest first (K14): `-v5` from before trackers were the
  * account's own (K123), whose sections are the first three trackers' ids; `-v4` from before Cardio
@@ -176,6 +186,23 @@ export const TRACKER_FULL_NOTICE =
   'The account already holds 100 trackers, deleted ones included, so the new tracker was removed here.'
 export const REFUSED_NOTICE =
   'The server refused a change, so it was undone here. Reload to see what was saved.'
+/** What a programme's plan write refused (409 `programme-tracker`) says, naming the tracker. */
+export function programmeNotice(tracker: string): string {
+  return `Your change to ${tracker}’s plan wasn’t saved: a programme’s plan changes only through its own controls, so it was undone here.`
+}
+
+/**
+ * What marks refused as too late (409 `locked-day`, spec §8) say: the first by its item and day,
+ * and how many more. The app never drops a mark silently.
+ */
+export function lateNotice(marks: { name: string; day: string }[]): string {
+  const [first] = marks
+  if (marks.length === 1) {
+    return `Your mark for ${first!.name} on ${first!.day} reached the server too late: that day is locked, so it was undone here.`
+  }
+  return `Your marks for ${first!.name} on ${first!.day} and ${numberWord(marks.length - 1)} more reached the server too late: those days are locked, so they were undone here.`
+}
+
 const FIRST_RETRY = 5_000
 const MAX_RETRY = 60_000
 /**
@@ -493,6 +520,10 @@ export const useSyncStore = defineStore('sync', () => {
    * Profile page's boxes go on taking typing once one note is saved (K107).
    */
   const blank = ref(false)
+  /** The server's today (spec §8): what locks a programme's past days, never the device's clock. */
+  const today = ref<string | null>(null)
+  /** Each run's summary by its tracker's id, as `/api/state` last listed them. */
+  const runs = ref<Record<string, RunSummary>>({})
 
   let base: Snapshot | null = null
   /** Each tracker's plans' revisions by week, and its items' details' by item id. */
@@ -511,6 +542,10 @@ export const useSyncStore = defineStore('sync', () => {
   let readPending = false
   /** Bumped on every start and stop, so replies to an older session are ignored. */
   let generation = 0
+  /** The marks refused as too late in this flush, for one notice that names them. */
+  let late: { name: string; day: string }[] = []
+  /** A refusal undid a change here: read the server's state once the flush is done. */
+  let reread = false
   /** Bumped on every local change, so a read that raced one is discarded. */
   let changes = 0
   /** True while `adopt` replaces the stores' state, which is not a local change. */
@@ -519,6 +554,34 @@ export const useSyncStore = defineStore('sync', () => {
 
   const cacheKey = () => CACHE_PREFIX + user.value
   const outboxKey = () => OUTBOX_PREFIX + user.value
+  const runsKey = () => RUNS_PREFIX + user.value
+
+  /**
+   * Take the server's today and runs, and tell the trackers store which trackers are programmes.
+   * `persist` keeps them for the next start; an account with neither keeps nothing.
+   */
+  function adoptRuns(
+    read: { today: string | null; runs: Record<string, RunSummary> },
+    persist: boolean,
+  ) {
+    today.value = read.today
+    runs.value = read.runs
+    trackers.setProgrammes(Object.keys(read.runs))
+    if (!persist) return
+    if (read.today === null && !Object.keys(read.runs).length) removeKey(runsKey())
+    else writeKey(runsKey(), read)
+  }
+
+  /**
+   * Whether a day (`YYYY-MM-DD`) is locked on a tracker (spec §8): a programme tracker's days
+   * before yesterday, by the server's today. Yesterday stays open for one day, and an ordinary
+   * tracker is never locked. Nothing is locked before the server has said what today is.
+   */
+  function locked(tracker: string, day: string): boolean {
+    if (today.value === null || !Object.hasOwn(runs.value, tracker)) return false
+    const [y, m, d] = today.value.split('-').map(Number)
+    return day < dateKey(addDays(new Date(y!, m! - 1, d!), -1))
+  }
 
   /** One tracker's revisions in `map`, created on first use. */
   function revsFor(map: Revs, section: string): Record<string, number> {
@@ -969,6 +1032,22 @@ export const useSyncStore = defineStore('sync', () => {
       authLost?.()
       return 'stop'
     }
+    // A programme's lock (spec §8): a mark that arrives after its grace day, or a plan write to a
+    // programme tracker. Dropped like any refusal, named in the notice, then the state read
+    // again so the change is undone here.
+    if (error.kind === 'refused' && error.status === 409) {
+      if (error.code === 'locked-day' && op.kind === 'tick') {
+        late.push(lateMark(op))
+        notice.value = lateNotice(late)
+        reread = true
+        return 'done'
+      }
+      if (error.code === 'programme-tracker' && op.kind === 'plan') {
+        notice.value = programmeNotice(trackers.get(op.section)?.name ?? 'a programme')
+        reread = true
+        return 'done'
+      }
+    }
     // Refused for good (an invalid write, a misconfigured origin): retrying cannot help, and
     // keeping it would block every write behind it. Drop it, and say so: the next read will
     // show the server's state without this change.
@@ -986,6 +1065,14 @@ export const useSyncStore = defineStore('sync', () => {
     notice.value =
       error.kind === 'refused' && error.code === 'quota' ? QUOTA_NOTICE : REFUSED_NOTICE
     return 'done'
+  }
+
+  /** A refused mark's item, by its name in the week's plan, and its day: "Mon 9 Nov". */
+  function lateMark(op: Extract<Queued, { kind: 'tick' }>): { name: string; day: string } {
+    const item = trackers.plansOf(op.section)[op.week]?.find((it) => it.id === op.item)
+    const [y, m, d] = op.week.split('-').map(Number)
+    const day = dateKey(addDays(new Date(y!, m! - 1, d!), op.day))
+    return { name: item?.name ?? 'an item', day: dayText(day) }
   }
 
   /**
@@ -1013,6 +1100,12 @@ export const useSyncStore = defineStore('sync', () => {
       if (gen === generation) status.value = 'idle'
     })().finally(() => {
       flushing = null
+      late = []
+      // A refusal undid a change here: the server's state shows what it kept.
+      if (reread && gen === generation) {
+        reread = false
+        void refresh()
+      }
     })
     return flushing
   }
@@ -1041,6 +1134,8 @@ export const useSyncStore = defineStore('sync', () => {
       status.value = 'idle'
       retryDelay = FIRST_RETRY
       fresh.value = true
+      // The server's today and the runs are its own, whatever this device has queued.
+      adoptRuns(runsFromState(res.data), true)
       const state = stateFromApi(res.data)
       blank.value = state !== null && state.settings === null
       // A change made while the read was in flight is newer than the reply: keep it.
@@ -1087,6 +1182,10 @@ export const useSyncStore = defineStore('sync', () => {
       ...(data.settings ? { settings: data.settings } : {}),
       // Ask's history: the server adds the ones it has no id for, and never changes the rest.
       ...(data.conversations ? { conversations: data.conversations } : {}),
+      // The programme library and the runs, as the file has them: the server reads and checks
+      // them (§8.6), so a run imported here keeps its log and its locked days.
+      ...(data.programmes ? { programmes: data.programmes } : {}),
+      ...(data.runs ? { runs: data.runs } : {}),
     }
     const res = await call<ImportAdded>('POST', '/import', file)
     if (gen !== generation) return { ok: false, code: 'error' }
@@ -1180,6 +1279,7 @@ export const useSyncStore = defineStore('sync', () => {
     moveOldKeys(name)
     const cached = normaliseState(parseJson(readKey(cacheKey())))
     if (cached) adopt(cached)
+    adoptRuns(runsFromState(parseJson(readKey(runsKey()))), false)
     pending.value = readOutbox().length
     stopWatch = watch(
       () => [
@@ -1223,6 +1323,10 @@ export const useSyncStore = defineStore('sync', () => {
     status.value = 'idle'
     pending.value = 0
     notice.value = null
+    today.value = null
+    runs.value = {}
+    late = []
+    reread = false
   }
 
   /** Delete a user's cache and outbox: signing out on purpose leaves nothing behind. */
@@ -1230,6 +1334,7 @@ export const useSyncStore = defineStore('sync', () => {
     for (const prefix of [
       CACHE_PREFIX,
       OUTBOX_PREFIX,
+      RUNS_PREFIX,
       ...OLD_CACHE_PREFIXES,
       ...OLD_OUTBOX_PREFIXES,
     ]) {
@@ -1282,6 +1387,9 @@ export const useSyncStore = defineStore('sync', () => {
     notice,
     fresh,
     blank,
+    today,
+    runs,
+    locked,
     start,
     stop,
     forget,

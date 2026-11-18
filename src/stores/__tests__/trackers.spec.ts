@@ -679,3 +679,49 @@ describe('the food tracker', () => {
     expect(stored(DIET_KEY)).toBeNull()
   })
 })
+
+describe('a programme tracker (programmes spec §11.1)', () => {
+  const programme: TrackerInfo = {
+    id: 't1',
+    name: 'Beginner 5×5',
+    kind: 'strength',
+    position: 3,
+    dailyTarget: 2,
+    startWeek: '2026-10-12',
+    endWeek: null,
+  }
+  const squat = { id: 'squat', name: 'Back squat', sets: 5, reps: 5, weight: 40, target: 3 }
+
+  function withProgramme() {
+    const t = useTrackersStore()
+    t.adopt([...firstTrackers(null), programme], {
+      t1: { plans: { '2026-10-12': [{ ...squat }] }, log: {} },
+    })
+    t.setProgrammes(['t1'])
+    return t
+  }
+
+  it('knows which trackers are programmes', () => {
+    const t = withProgramme()
+    expect(t.isProgramme('t1')).toBe(true)
+    expect(t.isProgramme(EX)).toBe(false)
+    t.setProgrammes([])
+    expect(t.isProgramme('t1')).toBe(false)
+  })
+
+  it('marks a day without giving the week a plan of its own', () => {
+    const t = withProgramme()
+    t.toggle('t1', 'squat', 0)
+    expect(t.markOf('t1', 'squat', 0)).toBe('great')
+    expect(Object.keys(t.plansOf('t1'))).toEqual(['2026-10-12'])
+  })
+
+  it('never edits its plan: its programme alone changes it', () => {
+    const t = withProgramme()
+    expect(t.addItem('t1', { name: 'Dips' })).toBeNull()
+    expect(t.updateItem('t1', 'squat', { name: 'Front squat' })).toBe(false)
+    t.removeItem('t1', 'squat')
+    t.changeTarget('t1', 'squat', 1)
+    expect(t.plansOf('t1')).toEqual({ '2026-10-12': [squat] })
+  })
+})

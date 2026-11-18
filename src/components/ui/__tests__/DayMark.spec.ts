@@ -33,6 +33,22 @@ describe('DayMark', () => {
     expect(wrapper.classes()).not.toContain('bg-highlight')
   })
 
+  it('locked, keeps its mark, says so in its name and doesn’t press (programmes spec §8)', async () => {
+    const wrapper = mount(DayMark, { props: { ...PROPS, mark: 'partial-solid', locked: true } })
+    const button = wrapper.get('button')
+    expect(button.attributes('aria-disabled')).toBe('true')
+    expect(button.attributes('aria-label')).toBe('Squats, Thursday 22 October, locked, partly done')
+    expect(button.attributes('aria-pressed')).toBe('true')
+    expect(wrapper.attributes('data-locked')).toBe('')
+    await button.trigger('click')
+    expect(wrapper.emitted('toggle')).toBeUndefined()
+    // An open day presses as ever.
+    await wrapper.setProps({ locked: false })
+    expect(button.attributes('aria-disabled')).toBeUndefined()
+    await button.trigger('click')
+    expect(wrapper.emitted('toggle')).toHaveLength(1)
+  })
+
   it('draws an empty hand-drawn box, and fills a marked one in its pen under the box', async () => {
     const wrapper = mount(DayMark, { props: PROPS })
     const box = () => wrapper.get('[data-slot="day-mark-box"]')
@@ -207,5 +223,8 @@ describe('DayMark', () => {
     expect(dayMarkLabel({ name: 'Fish', date: 'Saturday 24 October', note: true })).toBe(
       'Fish, Saturday 24 October, has a note',
     )
+    expect(
+      dayMarkLabel({ name: 'Fish', date: 'Monday 19 October', today: true, locked: true }),
+    ).toBe('Fish, Monday 19 October, today, locked')
   })
 })

@@ -1752,10 +1752,21 @@ def _run_json(
     }
 
 
+def _paused_since(rp: Replay, today: date) -> date:
+    """The first day of the programme pause that holds `today`: the days before it, back to the
+    first one the programme ran (or the run's start), aren't paused."""
+    since = today
+    while (before := _day_of(rp, since - _DAY)) is not None and before.status == "paused":
+        since -= _DAY
+    return since
+
+
 def _summary_json(loaded: _Loaded, rp: Replay, today: date) -> dict[str, Any]:
-    """A run as the state lists it (§9.1): "Week 4 of 8", and paused or running."""
+    """A run as the state lists it (§9.1): "Week 4 of 8", and paused or running; paused, since
+    when, until when and why ("Paused since Mon 7 Dec. A cold.", §8.8)."""
     status = loaded.status(rp, today)
     day = _day_of(rp, today) if status in ("running", "paused") else None
+    paused = day if day is not None and status == "paused" else None
     return {
         "programmeId": loaded.programme_id,
         "name": loaded.run.programme.name,
@@ -1764,7 +1775,9 @@ def _summary_json(loaded: _Loaded, rp: Replay, today: date) -> dict[str, Any]:
         "weeks": loaded.run.programme.weeks,
         "start": loaded.run.start.isoformat(),
         "end": _iso(loaded.last_day(rp)),
-        "pausedUntil": _iso(day.until) if day is not None and status == "paused" else None,
+        "pausedUntil": None if paused is None else _iso(paused.until),
+        "pausedSince": None if paused is None else _paused_since(rp, today).isoformat(),
+        "pauseReason": None if paused is None else paused.reason,
         "rev": rp.rev,
     }
 

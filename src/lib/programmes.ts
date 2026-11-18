@@ -162,6 +162,9 @@ export type RunSummary = {
   start: string
   end: string | null
   pausedUntil: string | null
+  /** A paused run's first paused day and its reason (§8.8); absent from an older server. */
+  pausedSince?: string | null
+  pauseReason?: string | null
   rev: string
 }
 /** What starting a programme would write (`POST /api/programmes/{id}/preview`). */
@@ -383,9 +386,19 @@ export function runLine(run: RunSummary): { lead: string; rest: string } {
   if (run.status === 'upcoming') return { lead: `Starts ${dayText(run.start)}.`, rest: ends }
   const lead = `Week ${run.week} of ${run.weeks}.`
   if (run.status === 'paused') {
-    return { lead, rest: run.pausedUntil ? `Paused until ${dayText(run.pausedUntil)}.` : 'Paused.' }
+    const until = run.pausedUntil ? ` until ${dayText(run.pausedUntil)}` : ''
+    const since = run.pausedSince ? ` since ${dayText(run.pausedSince)}` : ''
+    const why = reasonText(run.pauseReason)
+    return { lead, rest: `Paused${since}${until}.${why ? ` ${why}` : ''}` }
   }
   return { lead, rest: `Running. ${ends}`.trim() }
+}
+
+/** A reason as a sentence of its own: "knee" reads "Knee."; none reads ''. */
+export function reasonText(reason: string | null | undefined): string {
+  const text = (reason ?? '').trim()
+  if (!text) return ''
+  return sentenceCase(/[.!?]$/.test(text) ? text : `${text}.`)
 }
 
 /** The line under the overview's title: where the run is, and when it started and ends. */

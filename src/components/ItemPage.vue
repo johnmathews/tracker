@@ -35,6 +35,7 @@ import {
 import type { Item } from '@/lib/trackerTypes'
 import { ARRANGE_ROW, BODY, FIELDS, H2, LEDE, MOVE, ROW } from '@/lib/itemPage'
 import { moveSection, showSection, shownSections, type SectionKey } from '@/lib/itemSections'
+import ItemProgramme from '@/components/ItemProgramme.vue'
 import PlanFields, { type PlanErrors } from '@/components/PlanFields.vue'
 import RecentWeeks from '@/components/RecentWeeks.vue'
 import { Button } from '@/components/ui/button'
@@ -84,8 +85,18 @@ const type = computed(() => trackers.typeOf(props.section))
 const isExercise = computed(() => type.value.plan === 'exercise')
 const isCardio = computed(() => type.value.plan === 'cardio')
 const src = computed(() => source(props.section))
-/** The item in the week the page was opened from (the week the planner shows), if it's there. */
-const inWeek = computed(() => src.value.items.find((it) => it.id === props.itemId) ?? null)
+/** An activity of a programme tracker: its plan is the programme's (spec §9.4). */
+const programme = computed(() => trackers.isProgramme(props.section))
+/**
+ * The item in the week the page was opened from (the week the planner shows), if it's there. A
+ * programme's item counts as not in the week: renaming and Remove would edit its plan, which only
+ * its programme changes (spec §9.5).
+ */
+const inWeek = computed(() =>
+  programme.value ? null : (src.value.items.find((it) => it.id === props.itemId) ?? null),
+)
+/** The item in the week, a programme's too: its name and chips. */
+const ownItem = computed(() => src.value.items.find((it) => it.id === props.itemId) ?? null)
 /** Its latest plan, shown read-only when it isn't in the week (an old address, or an item since
  * removed). */
 const latest = computed(() => latestPlanWith(src.value.plans, props.itemId))
@@ -93,7 +104,7 @@ const latest = computed(() => latestPlanWith(src.value.plans, props.itemId))
  * The item as the page shows it: its name and chips. Null once no plan holds it (another tab
  * removed it): App goes back to the week then, and until it does the page shows nothing.
  */
-const shown = computed(() => inWeek.value ?? latest.value?.item ?? null)
+const shown = computed(() => ownItem.value ?? latest.value?.item ?? null)
 const chips = computed(() => type.value.details(shown.value!))
 
 // Arriving here moves focus to the item's name, so a screen reader starts there (ItemPage card).
@@ -106,6 +117,7 @@ onMounted(() => {
 const isCurrent = computed(() => planner.weekKey === planner.currentWeekKey)
 const weekName = computed(() => dayMonth(planner.monday))
 const planHeading = computed(() => {
+  if (programme.value) return 'Programme'
   if (!inWeek.value) return 'Latest plan'
   return isCurrent.value ? 'This week’s plan' : `Plan for the week of ${weekName.value}`
 })
@@ -743,6 +755,21 @@ const filled = computed(() =>
               <dd class="body text-ink">{{ f.value }}</dd>
             </div>
           </dl>
+        </div>
+      </section>
+
+      <!-- A programme's activity: the Programme row in the plan's place (ProgrammeChart card,
+           K145). -->
+      <section
+        v-else-if="key === 'plan' && programme"
+        :aria-labelledby="ids.plan"
+        :class="ROW"
+        data-noprint
+        data-testid="programme-section"
+      >
+        <h2 :id="ids.plan" :class="H2">Programme</h2>
+        <div :class="BODY">
+          <ItemProgramme :tracker="section" :activity="itemId" />
         </div>
       </section>
 

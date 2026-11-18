@@ -1366,6 +1366,8 @@ def test_list_programmes_gives_the_library_and_the_runs(
         "start": TODAY,
         "end": started["run"]["end"],
         "pausedUntil": None,
+        "pausedSince": None,
+        "pauseReason": None,
         "rev": started["run"]["rev"],
     }
     assert (out["today"], out["this_week"]) == (TODAY, THIS_WEEK)
