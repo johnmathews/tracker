@@ -6,7 +6,7 @@ Five project roles each mean exactly one thing:
 
 | Role | Means | Never |
 | --- | --- | --- |
-| `pen` | Great: a day's fill, the year strip's dots, a day that met the daily pick (its name, underlined, K60), a week that met an item's goal (its count in RecentWeeks, underlined, K64), and the app icon's ground, under its stamped tick (K139) | Links, buttons, decoration |
+| `pen` | Great: a day's fill, the year strip's dots, a day that met the daily pick (its name, underlined, K60), a week that met an item's goal (its count in RecentWeeks, underlined, K64), the app icon's ground, under its stamped tick (K139), and on a programme a met week: the underline of its count in the ProgrammeGrid (the count itself in `ink`, K143) and its dot in the ProgrammeChart (K145) | Links, buttons, decoration |
 | `pen-partial` | Partly done: a day's fill | Over the pick, warnings |
 | `pen-missed` | Too difficult: a day's fill | Errors |
 | `caution-ink` | A caution, always with words; nothing on the planner uses it since the Picked row went (K28) | Errors |

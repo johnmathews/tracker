@@ -5,7 +5,8 @@
 > How to connect your own Claude or ChatGPT to the tracker's MCP server: what the server offers, how
 > to sign in from claude.ai, Claude Code and ChatGPT, how to create a token for clients that use
 > one, and what to do when a call fails. The endpoint's rules and every tool argument are in
-> [api.md](api.md) §3.1, and the sign-in's in §3.3.
+> [api.md](api.md) §3.1, and the sign-in's in §3.3. The programme tools' results and refusals are
+> in §1.1 below, and the programme format in [programmes.md](programmes.md).
 
 ## 1. What the server offers
 
@@ -71,6 +72,87 @@ there. `item_history` gives the whole note. A `note` sent to `add_item` or `upda
 the whole note, so read it with `item_history` before writing it back.
 
 [api.md](api.md) §3.1 lists the arguments and results of every tool.
+
+### 1.1 Programmes
+
+A programme is a plan of several weeks, written as one JSON document in the
+`tracker-programme/1` format ([programmes.md](programmes.md)). An agent can write one, save it to
+your library, start it and change it. A started programme is a tracker of its own, a **programme
+tracker**, whose weekly plans the server writes from the programme.
+
+| Tool               | Scope | Does                                                                                         |
+| ------------------ | ----- | -------------------------------------------------------------------------------------------- |
+| `programme_format` | read  | The format's JSON Schema, a worked example, each type of change, and how to use them.        |
+| `list_programmes`  | read  | Your library, and every run with its status and week.                                         |
+| `get_programme`    | read  | One library programme with its document, or one run with its clock, log and coming weeks.    |
+| `save_programme`   | write | Checks a document and adds it to the library, or replaces one. Lists every problem.          |
+| `start_programme`  | write | Starts a library programme as a new tracker, from today or a later day.                      |
+| `change_programme` | write | Previews one change to a run, then applies it when confirmed with the preview's `rev`.        |
+
+**What each returns:**
+
+- `programme_format()` returns `{format, schema, example, changes, notes}`. `schema` is the one
+  `GET /api/programme.schema.json` serves. `changes` lists each change type as
+  `{type, keys, does}`.
+- `list_programmes()` returns `{programmes, runs, this_week, today}`. Each programme is
+  `{id, name, description, kind, weeks, activities, rev, createdAt, updatedAt}`, without its
+  document. Each run is `{tracker, trackerName, programmeId, name, status, week, weeks, start, end,
+  pausedUntil, rev}`, ended runs included. `status` is `upcoming`, `running`, `paused` or
+  `ended`.
+- `get_programme(programme=…)` returns `{programme, run: null}`, the programme with its `doc`.
+  `get_programme(tracker=…)` returns `{programme: null, run}`, the run as
+  [api.md](api.md) §3.4 describes it, with the grid's weeks from this one on. `tracker` is the
+  programme tracker's id, or its name in any case.
+- `save_programme(doc, programme?, rev?)` returns `{programme}`, the stored programme with its `id`
+  and `rev`. Without `programme` it adds the document; with `programme` and its `rev` it replaces
+  that one. Runs already started keep their own copy.
+- `start_programme(programme, start?, params?, name?)` returns `{tracker, run}`. `start` is
+  `YYYY-MM-DD`, today or later, today by default. `params` sets parameters by key, such as
+  `{"squat": 50}`; the others keep their defaults. `name` is the tracker's, up to 60 characters.
+- `change_programme(tracker, change, from_date?, reason?, confirm?, rev?)` takes one change body
+  ([programmes.md](programmes.md) §8), such as
+  `{"type": "pause-activity", "activity": "squat", "weeks": 2}`, from `from_date` (today by
+  default) with an optional reason in the person's words. Without `confirm` it returns a preview:
+  `{preview: true, stale: false, message, rev, change, cells, blocking, endsShort, undoes,
+  deletes}`, and nothing changes. Show the person the preview, then send the same call with
+  `confirm: true` and the preview's `rev`. That returns `{preview: false, stale: false, message,
+  change, run}`, with `message` "Changed from 2026-11-18.". If the run changed since the preview,
+  the result is a fresh preview with `stale: true`, and nothing changed.
+
+**Refusals** come back as tool errors whose first word names the argument:
+
+| Refusal                                                                                                                                  | Means                                                                                             |
+| ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `doc: the programme has 3 problems, so nothing was saved. Fix each one and send it again.` then one line each, `- weeks: give a whole number from 1 to 52.` | The document has problems; each line has its JSON path. Nothing was stored.        |
+| `doc: is not a JSON object; send the object itself`                                                                                        | The document came as JSON text, not an object.                                                    |
+| `rev: give the programme's rev, from list_programmes or get_programme, to replace it`                                                     | A replace needs the programme's `rev`.                                                            |
+| `rev: the programme changed since rev 2; it is at rev 3 now. …`                                                                           | Someone saved it since. Read it again with `get_programme`, then send the document with that rev. |
+| `doc: the library holds 100 programmes, the most it can; delete one in the app first`                                                    | The library is full.                                                                              |
+| `programme: no programme x… in the library; list_programmes lists them`                                                                   | No library programme has that id.                                                                 |
+| `programme: give programme (a library id) or tracker (a running one), not both`                                                           | `get_programme` takes exactly one of the two.                                                     |
+| `programme: the start has 1 problem, so nothing was started. …` then `- start: a programme starts today or later.`                        | A start date, name or parameter that doesn't fit.                                                 |
+| `tracker: the account has 100 trackers, the most it can hold; delete one in the app first`                                                | A start would add a tracker past the cap.                                                         |
+| `tracker: Yoga is not a programme tracker; list_programmes lists the runs`                                                                | `get_programme` or `change_programme` named an ordinary tracker.                                  |
+| `change: the change has 1 problem, so nothing was changed. …` then `- change.activity: deadlift is already paused on Wed 7 Oct.`          | The change doesn't fit the run on its from day. A from day before today reads `from_date: a change starts today or later.` |
+| `tracker: Beginner 5×5 has ended, so its programme takes no more changes. start_programme starts it again as a new run`                   | The run was ended with End programme.                                                             |
+| `quota: the account is full, so nothing was saved` (or started, or changed)                                                              | The account's 5 MiB are used.                                                                     |
+
+**A programme tracker's own rules:**
+
+- `add_item`, `update_item` and `remove_item` refuse it and name `change_programme`, since its plan
+  comes from its programme: `tracker: Beginner 5×5 is a programme tracker: its plan comes from its
+  programme, so its items can't be added, changed or removed one week at a time. Use
+  change_programme instead …`. `update_item` still sets an item's note alone, since a note is no
+  part of a plan.
+- `mark_day` follows the lock. Days before today are a record: today's and yesterday's marks can
+  be set or cleared, and an earlier day's can't (`date: 2026-11-16 is locked. …`). A mark for
+  yesterday is recorded as late, and the result has `late`. A later day can be marked, as on any
+  tracker.
+- Every mark and change an agent makes records the connection as its source: the token's name, or
+  the app's name for an OAuth connection ("Claude"). The run's log keeps it with each change.
+- The read tools (`week_summary`, `weeks`, `item_history`, `goals`, `consistency`) read a programme
+  tracker as any other, since its weeks are ordinary plans.
+- **End programme has no tool yet** (follow-up F1). Ask the person to end a run in the app.
 
 ## 2. Two ways to connect
 
@@ -291,6 +373,9 @@ With a write token or a Read and change connection, ask for a change:
 - "Add a note to squats: knees out."
 - "Add a 5 km run to cardio, twice a week."
 - "Set my Snacks tracker to two a day."
+- "Write me an eight-week beginner strength programme and save it to my library."
+- "Start Beginner 5×5 next Monday with the squat at 50 kg."
+- "Pause the deadlift for two weeks: my back is sore." (The agent shows the preview first.)
 
 Every write tool returns what it changed as it was (`before`) and as it is now (`after`): a week's
 items with their notes, a day's mark, or each daily target it set. To undo a change, ask the agent
@@ -309,6 +394,9 @@ to restore the `before` values, or edit the plan in the app.
 | 400 "Invalid Content-Type header"                                                    | The `Content-Type` is not `application/json`. MCP clients send it; a hand-made `curl` must too.                                                                                                                                                                                                                           |
 | "doesn't show it" in a tool error                                                    | The tracker was deleted from that week on, or starts after it. Its earlier weeks still take reads and changes. `list_trackers` gives each tracker's `start_week` and `end_week`.                                                                                                                                          |
 | `tracker` in a tool error                                                            | No tracker has that id or name, or two trackers share the name. The error lists the ids; send one.                                                                                                                                                                                                                        |
+| "is locked" in a `mark_day` error                                                    | The tracker follows a programme, and its days before yesterday are a record. Only today's, yesterday's and later days take a mark.                                                                                         |
+| "is a programme tracker" in an item tool's error                                     | Its plan comes from its programme. Change it with `change_programme`, which previews the change first.                                                                                                                     |
+| `stale: true` from `change_programme`                                                | The programme changed since the preview, so nothing changed. Show the fresh preview, then confirm with its `rev`.                                                                                                         |
 | `quota` in a tool error                                                              | The account is full (5 MiB). Remove old plans or marks in the app, then retry.                                                                                                                                                                                                                                            |
 | 405                                                                                  | The client sent a GET or a `DELETE`. The server accepts POST only, so use a client that supports it.                                                                                                                                                                                                                      |
 | 503 `busy`                                                                           | The server could not check the token because its database was busy or failing. This is not a bad token. Retry in a few seconds; the API log has the error.                                                                                                                                                                |

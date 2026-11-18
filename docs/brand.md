@@ -54,7 +54,7 @@ Five project roles each mean one thing, and nothing else may use them:
 
 | Role          | Means                                                                                                                               | Never                      |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| `pen`         | Great: a day's mark, a day that met the daily pick (its name, underlined), and a met week's count in Recent weeks (underlined, K64) | Links, buttons, decoration |
+| `pen`         | Great: a day's mark, a day that met the daily pick (its name, underlined), a met week's count in Recent weeks (underlined, K64), the app icon's ground (K139), and on a programme a met week: the underline of its count in the overview (the count itself in `ink`, K143) and its dot on the activity's chart (K145) | Links, buttons, decoration |
 | `pen-partial` | Partly done: a day's mark                                                                                                           | Over the pick, warnings    |
 | `pen-missed`  | Too difficult: a day's mark                                                                                                         | Errors                     |
 | `caution-ink` | A caution, always with words; nothing on the planner uses it (K28). The consent screen's warning does (K73)                                                                  | Errors                     |
@@ -62,7 +62,7 @@ Five project roles each mean one thing, and nothing else may use them:
 
 The primary action is `ink`, not a brand colour (K8): one colour for "act", the pens for "done".
 Outside the day's mark, no meaning rests on colour alone: a met day's name and a met week's count
-are underlined as well as green (K60, K64), and today adds "today" to the name. The day's mark is the one exception, by the
+are underlined as well as green (K60, K64), a programme's met week is a count underlined in `pen` or a filled dot beside an empty ring (K143, K145), and today adds "today" to the name. The day's mark is the one exception, by the
 owner's choice (K15): its pen alone tells great, partial and missed apart on screen, and the
 accessible name says "partly done" or "too difficult".
 

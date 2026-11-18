@@ -135,7 +135,9 @@
 - **Ask an agent.** claude.ai, Claude Code and ChatGPT (on the web) connect to the API's MCP
   endpoint (`/api/mcp`) by URL and an OAuth sign-in. Claude Code, Claude Desktop and scripts can use a personal token
   instead, which you create in Settings › Connections. The agent reads how your weeks are going,
-  as the app shows them, and with write access it can edit plans and marks.
+  as the app shows them, and with write access it can edit plans and marks. It can also write a
+  programme in the `tracker-programme/1` format, save it to your library, start it and change it,
+  showing each change's preview first ([docs/programmes.md](docs/programmes.md)).
   [docs/mcp.md](docs/mcp.md) says how to connect.
 
 ## 2. Getting started
@@ -269,10 +271,12 @@ end to end.
 | [docs/deployment.md](docs/deployment.md)                                               | Docker images, nginx, CI, GHCR publishing, sign-up, turning on email, Cloudflare and the egress proxy for Claude and ChatGPT |
 | [docs/api.md](docs/api.md)                                                             | The API service: endpoints, accounts, email, CLI, backups                                                                    |
 | [docs/mcp.md](docs/mcp.md)                                                             | Connecting an agent over MCP: OAuth, tokens, clients, example questions                                                      |
+| [docs/programmes.md](docs/programmes.md)                                               | The `tracker-programme/1` format for people and agents: values, progressions, changes, the lock on past days                |
 | [docs/brand.md](docs/brand.md)                                                         | The brand, the design system and how to change them                                                                          |
 | [docs/decisions.md](docs/decisions.md)                                                 | Why accounts, sync and the design system are built the way they are                                                          |
 | [docs/specs/2026-10-24-brand-design.md](docs/specs/2026-10-24-brand-design.md)         | The approved brand spec (Notebook): intent, rules and calls K1–K8                                                            |
 | [docs/specs/2026-11-14-account-trackers.md](docs/specs/2026-11-14-account-trackers.md) | The account trackers spec: kinds, ids, the weeks a tracker shows in, state and export v6 (K122–K126)                         |
+| [docs/specs/2026-11-17-programmes.md](docs/specs/2026-11-17-programmes.md)             | The programmes spec: the format, runs, changes on any day, the lock and the views (K142–K159)                                |
 | [design_handoff_exercise_planner/](design_handoff_exercise_planner/README.md)          | The original design spec and HTML prototype                                                                                  |
 
 Development history lives in [`journal/`](journal/).

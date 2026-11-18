@@ -3,8 +3,8 @@
 > Purpose
 >
 > How the planner is put together: the component tree, the Pinia stores, how data syncs with the
-> API and what stays in `localStorage`, the decisions that depart from the design prototype, and
-> how the design system reaches the screen.
+> API and what stays in `localStorage`, the decisions that depart from the design prototype, how
+> the design system reaches the screen, and how programmes are built on trackers.
 
 ## 1. Overview
 
@@ -1305,3 +1305,96 @@ and reads a damaged v1 key as nothing rather than as the default exercises.
 - When a session ends by itself (expiry, a reset elsewhere), the device keeps that user's cache and
   outbox so unsent changes survive, and the sign-in form fills in their email. Only signing out
   on purpose clears the device.
+
+## 8. Programmes
+
+A programme is a plan of several weeks that the server writes into a tracker's weeks (the spec
+[specs/2026-11-17-programmes.md](specs/2026-11-17-programmes.md)). [programmes.md](programmes.md)
+documents the format and the changes, and [api.md](api.md) §3.4 the routes. This section is how
+it is built, on the API side.
+
+**A run is a tracker.** Starting a programme makes a tracker of its kind (strength, mobility or
+cardio) and a row in `programme_runs`: the run's own copy of the document, its parameters and its
+start date. The run's weeks are ordinary `plans` rows, one per calendar week, so every reader
+works unchanged: the week view, history, insights, Ask, the MCP read tools and the export. Each
+activity's item id is its key (K155), so a week's ticks stay on the same activity whatever the
+engine writes. Only the engine writes a programme tracker's plans: the generic plan write and the
+MCP's item tools refuse one.
+
+**The modules.**
+
+- `programme.py` is pure: no database, no clock. It parses a document and reports every problem
+  with its JSON path, resolves the parameters, and computes a field's value for an activity week
+  (`Series`) in decimals under one fixed context. It also builds the JSON Schema.
+- `programme_replay.py` is pure too, with today always an argument. `replay` steps day by day from
+  the run's first Monday and applies each change on its from day. `check_change` and
+  `preview_change` check and preview a change, `week_items` turns a calendar week into plan items,
+  and `day_to_json` and `day_from_json` store a day for sealing. Its docstring is the reference for
+  the change format.
+- `data.py` stores and loads runs, seals days, writes the weeks, holds the lock and builds the run
+  object and its grid. `app.py`, `mcp_server.py` and `ask.py` call it, each with a `data.When`: now
+  in Unix seconds and the server's `TIMEZONE`, from which today and the lock follow.
+
+**The five principles** (spec §1) and what holds each:
+
+- **P1, the past never changes.** A change takes effect today or later, and a write rewrites today's
+  calendar week and later ones only. Past days are sealed (below), and the replay reads a sealed day
+  from the record, never from its own output. A stored run loads without the week-by-week range
+  check (K158), so an engine change can't stop it loading.
+- **P2, no surprises.** A change is a preview until it comes back with the preview's `rev`, a hash
+  of the log. A different `rev` means the log moved, and the answer is a fresh preview.
+- **P3, no jumps.** A value change adds a segment to the field's series at the activity week in
+  force (`Series.origin`), so the weeks after continue from the value shown (K150). Increases keep
+  the activity's own weeks (K149).
+- **P4, one engine.** Only the server expands a programme. The run object carries the grid it
+  computed, and every client shows that grid rather than computing a week.
+- **P5, every change recorded.** `run_changes` keeps each change with when it was made, its from
+  day, the change, the reason, the source (`app`, or an MCP connection's name) and the undo that
+  reversed it. End programme is a row there too (K156), which the replay passes by.
+
+**The log is the source of truth.** The weeks are what the replay computes from the run's
+document, parameters, start date and log. Changes apply in from-day order, then by `seq`. An undo
+leaves its change out of the replay. The same log gives the same weeks on every machine, since the
+engine works in decimals and never reads the clock.
+
+**Writing the weeks.** A start writes every week of the run. A change writes today's calendar
+week and every later one from the new replay (`_write_weeks`), never an earlier one. A week whose
+items read as stored keeps its revision, and a later week the run no longer has is deleted. A
+week's row holds one value per item, so the current week carries Sunday's values and target; its
+days before today keep their own in the sealed record, which the grid reads (`splits`). The
+tracker's `endWeek` follows the run's last day: the Monday after it, or none while the programme is
+paused with no end date.
+
+**Sealing** (spec §8). Before every start, change and end, and on the first read each day, every
+unsealed day up to yesterday is copied into `programme_days`: the day's plan as the replay gives
+it, with its programme and activity weeks, as `day_to_json` writes it. Each day is read back as a
+later read will read it. A read takes the write lock only when it has a day to seal or a status to
+store, so only the first read each day writes. Sealing never checks the quota. A change that
+continues from a sealed day's value reads it from the record (`ActivityDay.base`), so a later
+engine fix can't move it. Days from End programme's day on are no longer the run's and are never
+sealed.
+
+**The lock.** A change's from day is today or later. `data.set_tick` on a programme tracker takes
+today, any later day (K159) and yesterday, which it records as late; it raises `LockedDay` for an
+earlier day, and for any day when the caller gives no `When`, so a path that forgets today fails
+closed. `/api/state` carries `today`, so a client can lock past days by the server's date rather
+than its own clock.
+
+**The evidence.** Every mark on a programme tracker, a cleared day included, also goes into
+`mark_events`: the day, the item, the mark, when it was entered, its source and whether it was
+late. The weekly bitmasks in `ticks` stay the fast path every reader uses.
+
+**Status.** A run reads as `upcoming` before its start, `running`, `paused` while the whole
+programme is paused, or `ended` (K157). `programme_runs.status` stores it as at the last write or
+seal, so a read can tell whether it has a status to store.
+
+**Stored runs always load.** A run's document was checked against each week's limits when it
+started, so loading it again skips that check (`check_ranges=False`). A run that still fails to
+load, seal or replay raises `RunUnreadable` and never takes another tracker down: `/api/state`
+leaves its summary out and logs it, `seal_runs` passes over it, and its own routes answer 500
+`run-unreadable`.
+
+**Export and import.** The export carries the library and each run whole: its copy, parameters,
+log, sealed days and mark events, with no new file version. An import adds a run only with a
+tracker it adds, and only when the run's document, parameters, sealed days and log all read; a
+programme tracker the account has takes nothing from a file.

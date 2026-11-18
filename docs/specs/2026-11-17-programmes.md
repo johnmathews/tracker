@@ -7,9 +7,11 @@
 > trust, and shown in overview views. It is the authority for the build that follows the
 > 2026-11-17 mockup round.
 
-**Status:** approved by John on 2026-11-17, with the defaults in §12. The views in §9 follow his
-picks in the mockup round `brand/design-system/mockups/261117-programmes/` (§10). Nothing is built
-yet.
+**Status:** implemented (API); views in progress. Approved by John on 2026-11-17, with the
+defaults in §12. Units W1 to W6 built the format, the replay, storage, runs and the lock, the MCP
+tools and the design-system cards (K142 to K159 in [decisions.md](../decisions.md) §4.32); W7 and
+W8 are building the views. [programmes.md](../programmes.md) documents the format. The views in §9
+follow John's picks in the mockup round `brand/design-system/mockups/261117-programmes/` (§10).
 
 ## 1. Principles
 

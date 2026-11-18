@@ -3,8 +3,8 @@
 > Purpose
 >
 > The API service in `api/`: accounts, sessions, invites, email, the synced data, the read-only
-> insights over it, Ask, the MCP endpoint, its API tokens and OAuth sign-in for Claude, the admin CLI
-> and backups. It is
+> insights over it, programmes, Ask, the MCP endpoint, its API tokens and OAuth sign-in for Claude,
+> the admin CLI and backups. It is
 > the reference for the endpoints the client calls and for running the service.
 
 ## 1. Overview
@@ -21,11 +21,13 @@ scoped by `user_id`, and no endpoint reads another user's data.
 | `types.py`         | the tracker-kind registry, the port of `src/lib/trackerTypes.ts`: kinds, their fields, the first three trackers' ids  |
 | `item_sections.py` | the item pages' arrangement per type (K66), the port of `src/lib/itemSections.ts`                                     |
 | `validate.py`      | the port of `src/lib/storage.ts` and `src/lib/transfer.ts`, and the write checks REST and MCP share                   |
+| `programme.py`     | the `tracker-programme/1` format: its check (every problem with its path), the parameters, each field's expansion, and the JSON Schema it writes to `programme.schema.json` ([programmes.md](programmes.md)) |
+| `programme_replay.py` | a run's change log and its replay into dated weeks: the clocks, each change type, hand-edits, the preview and its `rev`, and a sealed day's form (§3.4) |
 | `auth.py`          | password hashing, lockout, sessions, sign-up and its caps, invite, reset and confirmation tokens, personal API tokens, and the one helper that ends tokens and connections together |
 | `outbox.py`        | which emails go out and when: the limits (§4.1), the links, the message                                               |
 | `emails.py`        | the two emails, built to the EmailLayout card, and that card's preview                                                |
 | `mail.py`          | the Resend client, and sending after the response                                                                     |
-| `data.py`          | reading and writing trackers, plans, ticks, item details, settings and Ask's history; import, export; the quota       |
+| `data.py`          | reading and writing trackers, plans, ticks, item details, settings and Ask's history; the programme library and runs (start, change, end, sealing, the lock, §3.4); import, export; the quota |
 | `insights.py`      | read-only views of a user's weeks, counted as the screen counts them (§1.1)                                           |
 | `ask.py`           | Ask (§3.2): the question's checks, the daily caps, the history sent, the prompt, the tools, the Claude loop, saving   |
 | `edits.py`         | the MCP write tools' rules: one item, one mark, one item's notes or the daily targets at a time, as the app does      |
@@ -35,7 +37,7 @@ scoped by `user_id`, and no endpoint reads another user's data.
 | `oauth_api.py`     | OAuth's HTTP routes: discovery, authorize, the consent screen's calls, token, revoke, Connections (§3.3)               |
 | `backup.py`        | the daily `VACUUM INTO` copy                                                                                          |
 | `cli.py`           | `tracker-admin`                                                                                                       |
-| `seed.py`          | `tracker-admin seed-demo`: a demo account, three weeks of marks and two items' details, locally                       |
+| `seed.py`          | `tracker-admin seed-demo`: a demo account, three weeks of marks, three items' details and a running programme, locally |
 
 ### 1.1 Insights
 
@@ -128,6 +130,11 @@ Every reader keeps these rules:
 | `ask_turns`         | `(user_id, conversation_id, seq)`   | `question`, `answer`, `stop` (`end_turn`, `max_tokens`, `refused`, `error` or `cancelled`), `asked_at`: one question and its answer, text only. Only `end_turn` and `max_tokens` keep an answer; any other is `''` |
 | `item_details`      | `(user_id, section, item_id)`       | `details_json` (one document per item for every week: `{notes?, fields?}`), `rev`                                                                                                                                  |
 | `trackers`          | `(user_id, id)`                     | `kind`, `name`, `position`, `daily_target` (NULL for a kind without one), `start_week` and `end_week` (a Monday, `YYYY-MM-DD`, or NULL), `rev`: the account's trackers (K123, §3)                                  |
+| `programmes`        | `(user_id, id)`                     | `name` (the document's), `doc_json` (the document as sent, compact), `rev`, `created_at`, `updated_at`: the programme library (§3.4) |
+| `programme_runs`    | `(user_id, tracker_id)`             | `programme_id` (the library programme it started from, which may be gone), `doc_json` (the run's own copy), `params_json`, `start_date`, `status` (`upcoming`, `running`, `paused` or `ended`, as at the last write or seal), `rev`: one per programme tracker |
+| `run_changes`       | `(user_id, tracker_id, seq)`        | `made_at`, `from_date`, `change_json`, `reason` (`''` for none), `source` (`app`, or a connection's name), `undone_by` (the undo's `seq`, above `seq`): a run's log |
+| `programme_days`    | `(user_id, tracker_id, date)`       | `programme_week` (NULL before the start), `items_json` (the day's plan as sealed, with its activity weeks), `sealed_at`: a run's sealed days |
+| `mark_events`       | `id`                                | `user_id`, `tracker_id`, `date`, `item_id`, `mark` (NULL for a cleared day), `entered_at`, `source`, `late` (0 or 1): every mark on a programme tracker, indexed by user, tracker and date |
 
 `section` in `plans`, `ticks` and `item_details` holds a tracker id: `exercise`, `cardio` or
 `diet` for each account's first three trackers, or a random id for one the person made. No table
@@ -202,6 +209,15 @@ Version 17 adds the week title (K131): `settings.week_title`, `'dates'` or `'num
 default `'dates'`, so saved settings read as dates. It only adds a column, so rolling the code back
 leaves it unused.
 
+Version 18 adds the programme tables (§3.4): `programmes`, `programme_runs`, `run_changes`,
+`programme_days` and `mark_events`, each `STRICT`. It only adds tables, with `IF NOT EXISTS`, so it
+can run again, and rolling the code back leaves them unused: a programme tracker's written plans
+then read as ordinary plans. `programmes` cascades from its user. A run references its tracker,
+and its log, sealed days and mark events reference the run, each `ON DELETE CASCADE`, so deleting
+an account takes them all through its trackers. `programme_id` references nothing, since a
+library programme can be deleted while its runs go on. `status`, `source` and `mark` have no
+CHECK: the API checks them, so a new value needs no table rebuild.
+
 Version 12 adds OAuth's five tables: `oauth_requests`, `oauth_grants`, `oauth_retired`, `oauth_codes` and `oauth_access` (§3.3). It only adds, so it reshapes no data. Every code and token is stored as its SHA-256 only. `oauth_grants` cascades from its user, and the other three grant tables from the grant, so removing a grant removes its codes, access tokens and retired refresh tokens. Rolling the API back leaves the tables unused.
 
 Migrations are a list in `db.py`, and the version is its length. A step is appended, never
@@ -246,13 +262,25 @@ but the same `Content-Type` header.
 | `GET /trackers`                            | session | `{trackers: [...]}`, the account's trackers, ended ones included (below)                                              |
 | `POST /trackers`                           | session | `{name, kind, id?, week?}` → 201 the new tracker; 200 and the stored one for an id it has (below)                     |
 | `PATCH /trackers/{id}`                     | session | `{rev, name?, position?, dailyTarget?}` → the tracker; 409 `conflict` with the server copy                           |
-| `POST /trackers/{id}/end`                  | session | `{week?}` → the tracker, ended from that week (Delete tracker, K122)                                                  |
-| `PUT /plans/{section}/{week}`              | session | `{items, rev}` → `{rev}`; 409 `conflict` with the server copy. `section` is a tracker id                              |
-| `PUT /ticks/{section}/{week}/{item}/{day}` | session | `{mark}` → `{days}`, the week's seven marks for that item                                                             |
+| `POST /trackers/{id}/end`                  | session | `{week?}` → the tracker, ended from that week (Delete tracker, K122); a programme tracker's run ends (§3.4)            |
+| `PUT /plans/{section}/{week}`              | session | `{items, rev}` → `{rev}`; 409 `conflict` with the server copy. `section` is a tracker id; 409 `programme-tracker` for a programme tracker |
+| `PUT /ticks/{section}/{week}/{item}/{day}` | session | `{mark}` → `{days}`, the week's seven marks for that item; 409 `locked-day` for a programme tracker's day before yesterday |
 | `PUT /details/{section}/{item}`            | session | `{details, rev}` → `{rev}`; 409 `conflict` with the server copy (below)                                               |
 | `PUT /settings`                            | session | `{accent, dailyPick, foodPick, dailyGoal, weekTitle, goals, limits, itemSections}` → the stored settings; a missing key keeps the saved one (below) |
 | `GET /export`                              | session | the export file (`architecture.md` §4)                                                                                |
-| `POST /import`                             | session | an export file, merged in; → `{trackers, weeks, ticks, details, settings, conversations}` added                       |
+| `POST /import`                             | session | an export file, merged in; → `{trackers, weeks, ticks, details, settings, conversations}` added, and `programmes` and `runs` for a file with them |
+| `GET /programme.schema.json`               | no      | the programme format's JSON Schema (§3.4)                                                                             |
+| `GET /programmes`                          | session | `{programmes: [...]}`, the library without its documents, the one changed last first (§3.4)                          |
+| `POST /programmes`                         | session | `{doc}` → 201 the stored programme; 400 `invalid` with every problem in `errors`                                      |
+| `POST /programmes/validate`                | session | `{doc}` → `{errors}`, every problem an add would refuse it for; stores nothing                                        |
+| `GET /programmes/{id}`                     | session | one programme with its document                                                                                       |
+| `PUT /programmes/{id}`                     | session | `{doc, rev}` → the programme at its next rev; 409 `conflict` with the server copy                                     |
+| `DELETE /programmes/{id}`                  | session | deletes it; 204. Runs started from it keep their copy                                                                 |
+| `POST /programmes/{id}/preview`            | session | `{params?, start?}` → what a start would write; writes nothing                                                        |
+| `POST /programmes/{id}/start`              | session | `{params?, start?, name?}` → 201 `{tracker, run}`: a programme tracker and its run                                    |
+| `GET /runs/{tracker}`                      | session | the run: its state, clocks, log and overview grid                                                                     |
+| `POST /runs/{tracker}/changes`             | session | `{change, from, reason?, preview?, rev?}` → a change's preview, or the change applied with the preview's `rev`        |
+| `POST /runs/{tracker}/end`                 | session | `{from?, reason?}` → `{tracker, run}`: End programme                                                                  |
 | `GET /ask`                                 | session | `{remaining, limit}`: questions left today, and the per-account cap (§3.2)                                            |
 | `POST /ask`                                | session | `{question, conversation?, today}` → Claude's answer as a stream of events (§3.2)                                     |
 | `GET /ask/conversations`                   | session | `{conversations: [{id, title, updatedAt, turns}]}`, the one updated last first (§3.2)                                 |
@@ -277,8 +305,8 @@ tabs and clients work unchanged). While mail is on it also carries `confirmed`, 
 address is confirmed. A legacy account still named by a username (below), and every account while
 mail is off, has no such key.
 
-`GET /state` returns `{trackers, sections, details, detailRevs, settings}`, plus the keys of
-the version 5 state, below:
+`GET /state` returns `{trackers, sections, details, detailRevs, settings, today, runs}`, plus
+the keys of the version 5 state, below:
 
 - `trackers` is the account's trackers, ended ones included, in the week's order (§3, Trackers).
 - `sections` maps each tracker id to `{plans, log, revs}`. `plans` and `log` have the same shape
@@ -287,6 +315,14 @@ the version 5 state, below:
 - `details` maps each tracker id to its items' details: each item id to its `{notes?, fields?}`,
   leaving out items whose details were cleared.
 - `detailRevs` maps each tracker id to its details' revisions by item id, cleared ones included.
+- `today` is the date in `TIMEZONE` (§6), `YYYY-MM-DD`. The app locks a programme tracker's past
+  days by it, not by the device's clock.
+- `runs` maps each programme tracker's id to its run's summary: `{programmeId, name, status, week,
+  weeks, start, end, pausedUntil, rev}` (§3.4). `week` is today's programme week, null unless the
+  run is running or paused. `end` is the run's last day, null while it is paused with no end
+  date. `pausedUntil` is the day a paused programme resumes, null for none. Every run is sealed up
+  to yesterday first. A run that can't be read is left out and logged, so the state still
+  answers with every tracker.
 
 The first three trackers' data also goes under `exercise`, `cardio` and `diet`, each
 `{plans, log, details, revs, detailRevs}`, as the version 5 state sent it. A tab still running
@@ -338,7 +374,9 @@ gets 400 `invalid`.
 `POST /trackers/{id}/end` is Delete tracker (K122). It sets `endWeek` to the Monday of `week`,
 the week on screen, or of today's week without one, and returns the tracker. Its plans, marks and
 details stay, and earlier weeks still show it. An earlier end stays: ending never brings a week
-back. Nothing brings an ended tracker back yet.
+back. Nothing brings an ended tracker back yet. On a programme tracker it ends the run instead
+(End programme, §3.4), from that week's Monday or today, whichever is later, so the locked days
+stay in view.
 
 An unknown tracker id gets 404 `not-found` on these routes. A plan, tick or details write whose
 `section` is not one of the account's trackers gets 400 `invalid`, as a section outside the fixed
@@ -394,7 +432,9 @@ A matching `rev` stores the items and returns `rev + 1`. A stale `rev` gets 409 
 from the server, unless the stored items already equal the sent ones after validation. That
 happens when two devices tick the same carried-forward week and both create its plan from the same
 source. That write succeeds and returns the current `rev`. Items are validated with the same
-rules as stored data, so a bad item drops out rather than failing the write.
+rules as stored data, so a bad item drops out rather than failing the write. A programme
+tracker's plans are its run's: any write to one gets 409 `programme-tracker`, at any week and any
+`rev`, and changes nothing (§3.4).
 
 **Ticks** set or clear one day for one item (an item id of 1 to 128 characters), so two devices
 marking different days never collide. `day` is 0 (Monday) to 6. The body is `{"mark": m}`, where
@@ -404,6 +444,9 @@ tab or a queued write from before marks had kinds, still works: true is `great`,
 A `mark` key is read first; any other value of it, or a `done` that is not a boolean, gets 400
 `invalid`. The app sends both keys (`{"mark": m, "done": m !== null}`), so an API from
 before marks had kinds, still running during a deploy, saves the day as done rather than refusing it. The server stores any mark in either section; only the client keeps foods to `great`.
+On a programme tracker the lock applies (§3.4): a day before yesterday gets 409
+`{"error": "locked-day", "date": "2026-11-16"}`, yesterday's mark is recorded as late, and each
+mark also goes into `mark_events`.
 
 **Item details** are one document per item, the same for every week, keyed by section and item id
 (an id of 1 to 128 characters). The body of `PUT /details/{section}/{item}` is
@@ -439,13 +482,16 @@ rather than failing the write:
 
 The API stores the text as written and never renders it.
 
-**Quota.** Each user may store 5 MiB: the bytes of their plans' and item details' JSON plus 64 for
-each tick row, and for Ask's history the UTF-8 bytes of each title, question and answer plus 64
+**Quota.** Each user may store 5 MiB: the bytes of their plans', item details' and library
+programmes' JSON plus 64 for each tick row, and for Ask's history the UTF-8 bytes of each title, question and answer plus 64
 for each conversation and each turn. A plan or details write, a tick that would add a row, or an
 import that would take the account over it gets 413 `quota` and changes nothing. An Ask turn
 that would is not saved, and its answer says so (§3.2). Writes that keep usage level or shrink
 it always succeed, so a full account can still change existing ticks and trim its plans and
-details. Settings do not count and are never refused. The quota measures what the account holds, not the bytes on disk, which include keys and
+details. Settings do not count and are never refused. A run's copy of its document, its log,
+its sealed days and its mark events don't count either, and sealing and a mark's event never
+check the quota, so the record is never refused. A programme start or change counts the plans it
+writes, and one that would take the account over gets 413 `quota` and changes nothing. The quota measures what the account holds, not the bytes on disk, which include keys and
 indexes. The client drops a refused write with a notice that the account is full (`architecture.md`
 §7), and an import says the same.
 
@@ -459,6 +505,14 @@ also carries `conversations`, Ask's history, the one updated last first, in the 
 `GET /ask/conversations/{id}` returns; it took no new version either. The browser keeps no
 conversations, so Settings → Export writes the device's plans, marks and settings and takes
 `conversations` from this export (`architecture.md` §4); with none, the file has no such key.
+When the account has any, the export also carries `programmes`, the library, each
+`{id, doc, createdAt, updatedAt}`, and `runs`, each `{tracker, programmeId, doc, params, start,
+changes, days, marks}`: the run's copy and parameters, its log as
+`{seq, madeAt, from, change, reason, source, undoneBy}`, its sealed days as
+`{date, programmeWeek, plan, sealedAt}` and its mark events as
+`{date, item, mark, enteredAt, source, late}`. They took no new version either: a reader from
+before them drops the keys, and a run's tracker then reads as an ordinary one, with its plans and
+marks. `GET /export` seals every run up to yesterday first.
 Version 5 kept the first three trackers under fixed keys (`exercise`, `cardio`, `diet`), each
 `{plans, log, details}`. Its `cardio` section (K90) took no new version: a file without it has
 no cardio.
@@ -492,7 +546,15 @@ revision, so a device holding the cleared copy conflicts. It returns what it add
 counts the empty days that gained a mark, `details` the items that gained details; `settings` is true when the file changed the account's
 settings, its goals or limits alone included; `conversations` counts the conversations added), in one
 transaction. A file's conversation is added only when the account has none with its id, and one
-the account has is never changed. The file's conversations are read as `normalise_conversations`
+the account has is never changed. A file's library programmes are added where the account has
+no programme with the id, up to 100, each with its times; one the format refuses, or over
+128 KiB, is passed over, and `programmes` in the result counts those added. A run comes whole,
+with its log, sealed days and mark events, and only with a tracker this import adds. It is
+stored only when its document passes the format with the tracker's kind, its parameters fit, each
+sealed day reads and its log replays; otherwise its tracker comes in as an ordinary one. `runs`
+counts the runs added. A programme tracker the account already has takes nothing from a file,
+since its plans are its run's and its past days are locked. `programmes` and `runs` are in the
+result only when the file has the list. The file's conversations are read as `normalise_conversations`
 reads them (§9): an entry with a bad id, title, time or turns list is dropped, a bad turn drops
 out of its conversation, the first of each id is kept, and at most 500 conversations of 200
 turns each are read from a file. A file that fails to parse gets 400 with `json`, `format` or
@@ -552,7 +614,7 @@ the endpoint's rules. The tools are listed below.
 A token of either scope may call a `read` tool. Only a `write` token may call a write tool (below).
 
 **Read tools.** Each wraps the reader of the same name in `insights.py` (§1.1; `list_trackers`
-wraps `trackers`) and returns its result unchanged, with `this_week` (the Monday of today's week)
+wraps `trackers`; the programme tools are below) and returns its result unchanged, with `this_week` (the Monday of today's week)
 and `today` added, both in the account's timezone, so the agent knows "now". `week_summary` also
 adds `tracker`, the id it read. Every read tool has `readOnlyHint`. The server
 passes `today` to the reader, since `insights.py` never reads the clock. A week is a Monday
@@ -670,11 +732,38 @@ table):
 | Tool                 | Returns                                                                                                                                                                 |
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | the three item tools | `tracker`, `week`, `item` (the item added, updated or removed), `before` and `after` (the week's items, in the app's words, each with its `note`), `rev`, `copied_from` |
-| `mark_day`           | `tracker`, `date`, `week`, `day` (0 is Monday), `item_id`, `before` and `after` (the day's mark or null), `days` (the item's seven marks), `rev`, `copied_from`         |
+| `mark_day`           | `tracker`, `date`, `week`, `day` (0 is Monday), `item_id`, `before` and `after` (the day's mark or null), `days` (the item's seven marks), `rev`, `copied_from`; on a programme tracker also `late` |
 | `set_daily_targets`  | `targets`, each `{tracker, name, before, after}` in the order given, and `daily_goal`                                                                                   |
 
 `remove_item` leaves the item's marks in the log, uncounted, as the app does. Adding the item back
 gives it a new id, so those marks stay detached; `before` holds the item for reference.
+
+**A programme tracker** (§3.4) has a plan only its programme writes. `add_item` and
+`remove_item` refuse it, and so does `update_item` unless it changes the note alone, with
+`tracker: Beginner 5×5 is a programme tracker: its plan comes from its programme, so its items
+can't be added, changed or removed one week at a time. Use change_programme instead …`. `mark_day`
+follows the lock: a day before yesterday gets `date: 2026-11-16 is locked. …`, and yesterday's mark
+is recorded as late, with `late` in the result. Its week is never copied, since the engine writes
+every week. Every mark and change an agent makes records the connection's name as its `source`:
+the token's name, or the OAuth app's ("Claude").
+
+**Programme tools.** Six tools write, save, start and change programmes. [mcp.md](mcp.md) §1.1
+gives each one's results and refusals, and [programmes.md](programmes.md) §10 the loop an agent
+follows.
+
+| Tool               | Scope | Arguments (defaults)                                                                                           | Annotations      |
+| ------------------ | ----- | -------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `programme_format` | read  | none                                                                                                           | `readOnlyHint`   |
+| `list_programmes`  | read  | none                                                                                                           | `readOnlyHint`   |
+| `get_programme`    | read  | `programme` (a library id) or `tracker` (a programme tracker's id or name), one of the two                     | `readOnlyHint`   |
+| `save_programme`   | write | `doc`; `programme` and `rev` to replace one                                                                    | not idempotent   |
+| `start_programme`  | write | `programme`, `start` (today), `params` (the defaults), `name` (the programme's)                                | not idempotent   |
+| `change_programme` | write | `tracker`, `change`, `from_date` (today), `reason`, `confirm` (false), `rev`                                    | `idempotentHint` |
+
+The run objects they return keep REST's camelCase (§3.4), and `get_programme`'s, `start_programme`'s
+and `change_programme`'s carry the grid's weeks from this one on. A preview from
+`change_programme` leaves out the grid, since `cells` says what changes. End programme has no tool
+yet (follow-up F1): the person ends a run in the app.
 
 ### 3.2 Ask
 
@@ -750,7 +839,7 @@ no-store` and `X-Accel-Buffering: no`, so nginx passes each event on at once. Ea
   and one that would take the account over its quota is not saved.
 - Each question sends Claude the conversation's earlier turns from the database, oldest first,
   as alternating text-only user and assistant turns, then the new question. The context (today,
-  this week, the trackers, My goals, the limits note) opens the first user turn, as for a new conversation. A turn with an
+  this week, the trackers, My goals, the limits note, the programme runs) opens the first user turn, as for a new conversation. A turn with an
   empty answer is left out whole, since its question alone would put two user turns in a row.
   Only the newest turns go: at most 20, with at most 40,000 characters of questions and answers
   together; the first turn that doesn't fit, and every turn before it, stays out.
@@ -784,7 +873,13 @@ headings, tables or images, and the voice. It holds nothing that varies, so it c
 breakpoint is on it, and the tools render before it. Today, this week, the trackers today's week
 shows (`<trackers>`, one a line: `id | kind | name`, from `ask.shown_trackers`), the My goals note
 (`<my_goals>`) and the limits note (`<my_limits>`) open the first user turn instead, each named
-as data. A week with no tracker says so. The voice is John's ruling (K68, voice.md "Ask"): facts first and
+as data. A week with no tracker says so. Each programme tracker the week shows adds a
+`<programme>` block (`ask.programme_runs`): where its run is today, as JSON (its programme week of
+weeks, its dates, parameters, pause and each activity's state and activity week), then its log,
+newest first, one change a line as JSON with when it was made, its from day, the change, the
+reason and the source. Each run gives at most its 50 newest changes, and all the runs' log lines
+together at most 12,000 characters; a line says how many were left out. A reason is the person's
+words: data, not instructions. So Ask can say why a value changed. It never changes a programme. The voice is John's ruling (K68, voice.md "Ask"): facts first and
 no blame, exclamation marks or hype, and `VERDICT_RULE`, which lets an answer say plainly that
 something is too little or too much, count streaks and give scores or rankings when they help,
 and quote the person's goals and notes back as advice. `PLAIN_VERDICTS` (True) turns it on;
@@ -946,6 +1041,160 @@ refused: …`), a connection's end with its reason (`ended: expired`, `revoked b
 `used twice`, `ended in Settings`), and, at most once a minute per connection, a refresh with a
 wrong secret.
 
+### 3.4 Programmes
+
+[programmes.md](programmes.md) explains the `tracker-programme/1` format, the changes and the
+lock; the spec is [specs/2026-11-17-programmes.md](specs/2026-11-17-programmes.md). This section is
+the HTTP contract. Every route but the schema needs a session. A programme id or a tracker the
+account doesn't have, another account's included, gets 404 `not-found`, and so does a tracker
+that isn't a programme tracker on the run routes. JSON keys are camelCase, as elsewhere.
+
+| Status and code        | When                                                                                                                                   |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| 400 `invalid`          | A document, start, change or end with problems: `{"error": "invalid", "errors": [{path, message}]}`, every problem at once, in order |
+| 404 `not-found`        | No such programme, or no such programme tracker                                                                                        |
+| 409 `conflict`         | A stale `rev`: the library's `{programme, rev}` with the server's copy; a change's `{rev, preview}` with a fresh preview               |
+| 409 `too-many`         | An add past 100 library programmes, or a start past 100 trackers                                                                       |
+| 409 `ended`            | A change to a run End programme ended, or a second end                                                                                 |
+| 409 `programme-tracker` | A generic plan write (`PUT /plans`) to a programme tracker                                                                            |
+| 409 `locked-day`       | A mark on a programme tracker's day before yesterday: `{"error": "locked-day", "date": "2026-11-16"}`                                  |
+| 413 `too-large`        | A document over 128 KiB as stored (compact JSON, UTF-8)                                                                                |
+| 413 `quota`            | An add, replace, start or change that would take the account over its quota (§3)                                                       |
+| 500 `run-unreadable`   | A stored run fails to load, seal or replay: the server's fault, logged with its cause                                                  |
+
+**The library.** A programme's summary is `{id, name, description, kind, weeks, activities, rev,
+createdAt, updatedAt}`: `name`, `description` (or null), `kind` and `weeks` from its document,
+`activities` how many it has, and the times in Unix seconds. Its record is the summary plus `doc`,
+the document as it was sent.
+
+- `GET /programme.schema.json` serves the format's JSON Schema (draft 2020-12) as
+  `application/schema+json`, with no sign-in, so an agent can read it before it has a token. It is
+  the committed `programme.schema.json`, which `programme.py` builds from the same rules as the
+  check; a test keeps the two in step.
+- `GET /programmes` returns `{programmes: [summary]}`, the one changed last first.
+- `POST /programmes` takes `{doc}` and returns 201 with the record, under an id the server makes
+  (`edits.new_id`), at `rev` 1. A document with any problem is never stored.
+- `POST /programmes/validate` takes `{doc}` and returns `{errors}`, [] when an add would take it,
+  the size included. It stores nothing.
+- `GET /programmes/{id}` returns the record.
+- `PUT /programmes/{id}` takes `{doc, rev}` and returns the record at the next `rev`; the name
+  follows the document. The document's problems come before the revision. A stale `rev` gets 409
+  `{"error": "conflict", "programme": p, "rev": n}`, unless the programme already holds the
+  document sent, which returns it as it is. A `rev` that isn't a whole number from 0 gets 400.
+- `DELETE /programmes/{id}` returns 204. Runs started from it keep their copy, and their
+  `programmeId` then names nothing.
+
+At most 100 programmes fit in a library, and a document is at most 128 KiB as stored. Library
+documents count towards the quota (§3).
+
+**Starting.** `POST /programmes/{id}/start` takes `{params?, start?, name?}` and returns 201
+`{tracker, run}`: the new tracker (§3, Trackers) and its run (below).
+
+- `start` is a date, `YYYY-MM-DD`, today or later in `TIMEZONE`; today when left out. An earlier
+  one gets "a programme starts today or later." at `start`.
+- `params` maps parameter keys to numbers. Each must lie within its `min` and `max`, and fit every
+  field that uses it. A key the programme lacks gets "the programme has no parameter called x." at
+  `params.x`.
+- `name` is the tracker's, 1 to 60 characters, the programme's when left out.
+
+The start writes every week of the run into `plans`, gives each activity's notes and link to its
+item's details, sets the tracker's `startWeek` and `endWeek` to the run's, and seals the start
+week's days before today. `POST /programmes/{id}/preview` takes `{params?, start?}`, checks them as
+a start does, and returns what a start would write, writing nothing: `{start, end, weeks, params,
+endsShort, grid}`.
+
+**The run.** `GET /runs/{tracker}` returns the run object, sealed up to yesterday first:
+
+| Key            | Holds                                                                                                                               |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `tracker`      | The tracker's id                                                                                                                    |
+| `programmeId`  | The library programme it started from, which may be gone                                                                            |
+| `name`, `kind` | The programme's                                                                                                                     |
+| `doc`          | The run's own copy of the document                                                                                                  |
+| `params`       | The parameters in force, after any Set parameter                                                                                    |
+| `start`, `end` | The first day, and the last (null while the programme is paused with no end date)                                                   |
+| `status`       | `upcoming`, `running`, `paused` or `ended`                                                                                          |
+| `today`        | The date in `TIMEZONE`                                                                                                              |
+| `week`         | Today's programme week, null unless running or paused; `weeks` is the programme's                                                   |
+| `rev`          | The log's revision: the first 16 hex characters of a SHA-256 over the log                                                           |
+| `openPause`    | `{since, programmeWeek, reason}` while the programme is paused with no end date, else null                                          |
+| `endsShort`    | Each activity that ends before its last week: `{key, name, week, of, message}`                                                      |
+| `ended`        | `{from, reason, seq}` after End programme, else null                                                                                |
+| `clock`        | Today: `{programmeWeek, status, until, reason, activities}`, each activity `{state, activityWeek, until, reason}`                   |
+| `log`          | Every change, newest first: `{seq, madeAt, from, change, reason, source, undoneBy, undoable}`. `undoable` is true while Undo applies |
+| `grid`         | The overview: `{activities, weeks, whenResumed}`                                                                                    |
+
+A day's `status` is `before-start`, `running` or `paused`, and an activity's `state` is `running`,
+`paused`, `ended` or `not-started`. In `grid`:
+
+- `activities` lists each activity `{key, name, addedOn, addedBy, endedOn}`, `addedBy` being the
+  change that added it (null for the programme's own). One deleted outright is left out.
+- `weeks` holds a week per calendar week up to the run's last: `{monday, programmeWeeks, label,
+  current, locked, days, cells}`. `programmeWeeks` lists two weeks for a week split by a change.
+  `locked` is true once the week's Sunday is past. `days` holds its seven days as `{date, status,
+  programmeWeek, sealed}`.
+- `cells` maps each activity key to `{state, activityWeek, values, target, splits, hand, until,
+  reason, marks}`. `values` and `target` are what the week's plan holds: Sunday's, with a target
+  of 0 when the activity doesn't run on Sunday. `splits` maps a field whose value changes during
+  the week to its `[{from, value}]`. `hand` maps a hand-edited field to `{change, madeOn, rule}`,
+  `rule` being what the rule gives. `until` and `reason` describe a pause. `marks` is the item's
+  seven marks.
+- `whenResumed` holds the weeks after an open-ended pause, as they will run when resumed:
+  `{programmeWeek, label, cells}`, with no dates.
+
+**Changes.** `POST /runs/{tracker}/changes` takes `{change, from, reason?, preview?, rev?}`.
+`change` is one of the bodies in [programmes.md](programmes.md) §8. `from` is its first day,
+`YYYY-MM-DD`, today or later. `reason` is up to 500 characters. `preview` is a boolean, true when
+left out.
+
+- **A preview** writes nothing but the sealing, and returns `{preview: true, rev, change, cells,
+  blocking, endsShort, undoes, deletes, grid}`. `change` is the log entry it would add
+  (`{seq, from, change, reason}`). Each of `cells` is `{monday, key, field, before, after, starts,
+  programmeWeek}`; `field` is null for a change of state, such as running to paused. Each of
+  `blocking` is a hand-edit that keeps its value, `{change, key, field, programmeWeek, value,
+  madeOn, message}`, its message such as "Week 6 keeps the 35 kg set on 12 Dec.". `undoes` names
+  the change an undo reverses, `deletes` an activity ended before it had a day, and `grid` is the
+  overview as the change would leave it.
+- **An apply** is the same body with `preview: false` and the preview's `rev`. It returns
+  `{preview: false, change, run}`: the new log entry and the run. It appends the change, marks an
+  undone change's `undone_by`, deletes an activity ended before it had a day (and its details),
+  gives an added activity's notes and link to its item, rewrites today's calendar week and every
+  later one from the replay, and moves the tracker's `endWeek` to the run's end. A stale `rev`
+  gets 409 `{"error": "conflict", "rev": r, "preview": p}`, `p` being the same change previewed
+  on the log as it is now.
+
+Problems get 400 `invalid`: the change's own at `change.…` (`change.activity`: "deadlift is
+already paused on Wed 7 Oct."), a from day before today at `from` ("a change starts today or
+later."), a long reason at `reason`, a confirm without a `rev` at `rev`, and a `preview` that isn't
+a boolean at `preview`. A run End programme ended gets 409 `ended`.
+
+**End programme.** `POST /runs/{tracker}/end` takes `{from?, reason?}` and returns
+`{tracker, run}`. `from` is today, the default, or a later day. The tracker then shows in no week
+after the one holding the day before `from`, so the week holding `from` still shows unless it is a
+Monday; an end never brings a week back. The end goes into the log as `{"type": "end-programme"}`,
+which the replay passes by. No change follows it, Undo no longer shows, and days from it on are
+never sealed. A second end gets 409 `ended`. End programme is a route of its own, not a change type
+(K156). `POST /trackers/{id}/end` on a programme tracker ends the run this way, and on a run
+already ended returns the tracker as it is.
+
+**The lock and the evidence** (spec §8):
+
+- **Plans.** Only the engine writes a programme tracker's plans. `PUT /plans` to one gets 409
+  `programme-tracker`, whatever the week and `rev`, and so do the MCP's item tools (§3.1).
+- **Marks.** `PUT /ticks` on a programme tracker takes today, any later day, and yesterday, which
+  is recorded as late. An earlier day gets 409 `locked-day` with its `date`. Each mark, a cleared
+  day included, also goes into `mark_events` with when it was entered, its `source` (`app`, or the
+  MCP connection's name) and `late`. Ticks stay the fast path every reader uses.
+- **Sealing.** Before every start, change and end, and on the first read each day (`/state`,
+  `GET /runs/{tracker}`, `/export`, Ask's context, and the MCP's `list_programmes`, `get_programme`
+  and `change_programme`), every unsealed
+  day up to yesterday is copied into `programme_days`. A read with nothing to seal takes no write
+  lock. Sealing never checks the quota.
+- **Stored runs.** A stored run loads without checking each week's value against the item's
+  limits (K158). A run that still fails to load, seal or replay raises `RunUnreadable`: its own
+  routes answer 500 `run-unreadable` and log the cause, `/state` leaves its summary out and logs
+  it, and `/export` leaves it unsealed and exports its stored rows as they are.
+
 ## 4. Accounts and sessions
 
 - **Sign-up.** `POST /auth/signup` with `{email, password}` creates an account and signs it in.
@@ -1083,9 +1332,26 @@ ending today, on the first three trackers, through the same merge as Settings �
 the account has none, fills only empty days and gives details only to items that have none, so a
 second run adds nothing, and an existing account keeps its password and every mark and note it
 has. The demo uses the default plan's ids, and shows every kind in every drawing, met and unmet
-goals, and a day over the pick. Push-ups and Fish get notes and fields, so the item page has
-something to show. The command prints what it added ("Added 6 week plans, `<n>` marks and
-details for 2 items.", the marks depending on the day of the week), or "Nothing to add" when the account already has all of it.
+goals, and a day over the pick. Push-ups, Running and Fish get details, so the item page has
+something to show.
+
+It also adds a running programme, so the local stack shows one ([programmes.md](programmes.md)).
+The library gains the beginner programme of `fixtures/programmes/valid/beginner-5x5.json` under
+the id `beginner-5x5`, when it has no programme with that id. Then, when the account has no
+tracker `beginner-5x5-run`, it starts a run of it on the Monday three weeks before this week's, so
+today falls in programme week 4, a deload. A start and a change take effect today or later, so the
+run's past is lived through the same data functions as the API, each with `data.When` set to the
+moment it happened: the start at 07:00 on its Monday; the deadlift paused for a week on week 2's
+Wednesday ("Sore lower back after Monday."); the squat's increase set to 7.5% on week 3's Monday
+("Squats feel easy."), each previewed and then confirmed with its `rev`; and Monday, Wednesday and
+Friday marks at 19:00 on each day before today, week 2's Friday plank entered the next morning, so
+late. A last seal covers the days up to yesterday. Nothing writes a past day directly. The run
+counts in the totals: 8 week plans, its marks, and the squat's and the deadlift's notes as 2
+items' details.
+
+The command prints what it added ("Added 17 week plans, `<n>` marks and details for 5 items.",
+the marks depending on the day of the week), or "Nothing to add" when the account already has all
+of it.
 
 ## 6. Configuration
 
@@ -1099,7 +1365,7 @@ details for 2 items.", the marks depending on the day of the week), or "Nothing 
 | `RESEND_API_KEY`    | (unset)               | turns mail on (§4.1); a key with sending access is enough. Never logged   |
 | `MAIL_FROM`         | (required with a key) | the From line, `Name <address>` on a domain verified in Resend            |
 | `MAIL_PER_HOUR`     | `30`                  | emails of every kind, across all accounts, in any rolling hour; 1 or more |
-| `TIMEZONE`          | `Europe/Amsterdam`    | the IANA zone that decides today and this week for the MCP tools and Ask  |
+| `TIMEZONE`          | `Europe/Amsterdam`    | the IANA zone that decides today and this week for the MCP tools and Ask, and today for programmes: the lock, sealing and a change's from day (§3.4) |
 | `ANTHROPIC_API_KEY` | (unset)               | turns Ask on (§3.2). Never logged                                         |
 | `ASK_MODEL`         | `claude-sonnet-5-5`   | the Claude model Ask uses                                                 |
 | `ASK_PER_DAY`       | `30`                  | questions per account in any rolling 24 hours; 1 or more                  |

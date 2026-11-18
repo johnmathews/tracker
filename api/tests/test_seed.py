@@ -1,7 +1,8 @@
 import json
 import sqlite3
 from dataclasses import replace
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -9,13 +10,29 @@ import pytest
 from tracker_api import auth, seed
 from tracker_api.cli import main
 from tracker_api.config import Config
-from tracker_api.data import export_file, put_details, set_tick
+from tracker_api.data import (
+    When,
+    delete_programme,
+    export_file,
+    import_data,
+    load_programme,
+    load_tracker,
+    put_details,
+    read_run,
+    set_tick,
+)
 from tracker_api.types import SECTION_TYPES, Section
 from tracker_api.validate import parse_export
 
 from .conftest import Clock
 
 LOCAL = "http://localhost:5173"
+FIXTURE = (
+    Path(__file__).resolve().parents[2] / "fixtures" / "programmes" / "valid" / "beginner-5x5.json"
+)
+#: What the demo run adds: a plan for each of its 8 weeks, and the notes of the squat and the
+#: deadlift as their items' details.
+RUN_WEEKS, RUN_DETAILS = 8, 2
 
 
 @pytest.fixture
@@ -77,8 +94,8 @@ def test_fills_three_weeks_ending_today_with_every_kind_and_drawing(
     local: Config, conn: sqlite3.Connection
 ) -> None:
     result = seed.seed(conn, local, seed.DEMO_EMAIL, None)
-    # Three weeks of plans in each section.
-    assert result["weeks"] == 9
+    # Three weeks of plans in each section, and the demo run's weeks.
+    assert result["weeks"] == 9 + RUN_WEEKS
     exported = export_file(conn, user_id(conn, seed.DEMO_EMAIL), local.clock())
     data = parse_export(json.dumps(exported))
     weeks = sorted(data["sections"]["exercise"]["plans"])
@@ -141,7 +158,14 @@ def test_a_second_run_changes_nothing(local: Config, conn: sqlite3.Connection) -
     seed.seed(conn, local, seed.DEMO_EMAIL, None)
     before = export_file(conn, user_id(conn, seed.DEMO_EMAIL), local.clock())
     again = seed.seed(conn, local, seed.DEMO_EMAIL, None)
-    assert again == {"created": False, "weeks": 0, "ticks": 0, "details": 0}
+    assert again == {
+        "created": False,
+        "weeks": 0,
+        "ticks": 0,
+        "details": 0,
+        "programmes": 0,
+        "runs": 0,
+    }
     assert export_file(conn, user_id(conn, seed.DEMO_EMAIL), local.clock()) == before
 
 
@@ -167,8 +191,8 @@ def test_cli_prints_the_login_and_what_it_added(
     assert main(["seed-demo"], env, clock=Clock()) == 0
     out = capsys.readouterr().out
     assert f"Created {seed.DEMO_EMAIL} with the password '{seed.DEMO_PASSWORD}'." in out
-    assert "Added 9 week plans, " in out
-    assert " marks and details for 3 items." in out
+    assert f"Added {9 + RUN_WEEKS} week plans, " in out
+    assert f" marks and details for {3 + RUN_DETAILS} items." in out
     assert f"Sign in at {LOCAL}/" in out
     assert main(["seed-demo"], env, clock=Clock()) == 0
     out = capsys.readouterr().out
@@ -217,3 +241,95 @@ def test_adds_cardio_to_an_account_from_before_it(local: Config, conn: sqlite3.C
         {"id": "ru", "name": "Running", "distance": 5, "target": 2},
     ]
     assert seed.seed(conn, local, seed.DEMO_EMAIL, None)["weeks"] == 0
+
+
+def test_starts_a_running_programme_weeks_back(local: Config, conn: sqlite3.Connection) -> None:
+    """The demo account has the beginner programme in its library and a run of it, started
+    three weeks before this week's Monday, so today falls in its week 4. Its log holds a pause
+    and a change, each made on its own day; the days before today are sealed, and the past weeks
+    are marked."""
+    result = seed.seed(conn, local, seed.DEMO_EMAIL, None)
+    assert (result["programmes"], result["runs"]) == (1, 1)
+    uid = user_id(conn, seed.DEMO_EMAIL)
+    record = load_programme(conn, uid, seed.DEMO_PROGRAMME)
+    assert record is not None
+    assert record["doc"] == json.loads(FIXTURE.read_text())
+    tracker = load_tracker(conn, uid, seed.DEMO_RUN)
+    assert tracker is not None
+    assert (tracker["kind"], tracker["name"]) == ("strength", "Beginner 5\u00d75")
+
+    when = When(local.clock(), local.timezone)
+    run = read_run(conn, uid, seed.DEMO_RUN, when)
+    assert run is not None
+    monday = when.today - timedelta(days=when.today.weekday())
+    assert run["start"] == (monday - timedelta(weeks=3)).isoformat()
+    assert (run["status"], run["week"], run["weeks"]) == ("running", 4, 8)
+
+    changes = {entry["change"]["type"]: entry for entry in run["log"]}
+    assert set(changes) == {"pause-activity", "set-increase"}
+    assert changes["pause-activity"]["change"] == {
+        "type": "pause-activity",
+        "activity": "deadlift",
+        "weeks": 1,
+    }
+    assert changes["set-increase"]["change"] == {
+        "type": "set-increase",
+        "activity": "squat",
+        "field": "weight",
+        "rate": 7.5,
+    }
+    for entry in run["log"]:
+        assert entry["from"] < when.today.isoformat()
+        assert entry["source"] == "app"
+        assert entry["reason"]
+        assert not entry["undoable"]
+
+    # Every day from the start to yesterday is sealed: the past weeks are a record.
+    sealed = conn.execute(
+        "SELECT count(*) FROM programme_days WHERE user_id = ? AND tracker_id = ?",
+        (uid, seed.DEMO_RUN),
+    ).fetchone()[0]
+    assert sealed == (when.today - date.fromisoformat(run["start"])).days
+    past = [w for w in run["grid"]["weeks"] if w["locked"]]
+    assert len(past) == 3
+    for week in past:
+        assert any(m is not None for cell in week["cells"].values() for m in cell["marks"])
+    # The deadlift was paused in week 2, and came back in week 3.
+    assert past[1]["cells"]["deadlift"]["reason"]
+    assert past[2]["cells"]["deadlift"]["state"] == "running"
+    # One mark was entered the day after the day it marks.
+    late = conn.execute(
+        "SELECT count(*) FROM mark_events WHERE user_id = ? AND tracker_id = ? AND late = 1",
+        (uid, seed.DEMO_RUN),
+    ).fetchone()[0]
+    assert late == 1
+
+
+def test_adds_the_programme_to_an_account_from_before_it(
+    local: Config, conn: sqlite3.Connection
+) -> None:
+    """An account seeded before programmes has its demo weeks; a run now adds the library
+    programme and its run, with the run's weeks, marks and details, and nothing else."""
+    uid = auth.signup(conn, local, seed.DEMO_EMAIL, seed.DEMO_PASSWORD)
+    old = parse_export(seed.demo_file(today(local)))
+    import_data(conn, uid, old, quota=local.user_quota_bytes)
+    result = seed.seed(conn, local, seed.DEMO_EMAIL, None)
+    assert (result["programmes"], result["runs"]) == (1, 1)
+    assert (result["weeks"], result["details"]) == (RUN_WEEKS, RUN_DETAILS)
+    marks = conn.execute(
+        "SELECT count(*) FROM mark_events WHERE user_id = ? AND tracker_id = ?",
+        (uid, seed.DEMO_RUN),
+    ).fetchone()[0]
+    assert result["ticks"] == marks > 0
+
+
+def test_puts_back_a_deleted_library_programme_without_a_second_run(
+    local: Config, conn: sqlite3.Connection
+) -> None:
+    seed.seed(conn, local, seed.DEMO_EMAIL, None)
+    uid = user_id(conn, seed.DEMO_EMAIL)
+    assert delete_programme(conn, uid, seed.DEMO_PROGRAMME)
+    again = seed.seed(conn, local, seed.DEMO_EMAIL, None)
+    assert (again["programmes"], again["runs"], again["weeks"], again["ticks"]) == (1, 0, 0, 0)
+    runs = conn.execute("SELECT count(*) FROM programme_runs WHERE user_id = ?", (uid,))
+    assert runs.fetchone()[0] == 1
