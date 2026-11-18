@@ -133,7 +133,8 @@ describe('the Programmes page (K147)', () => {
     await openPage()
     await openTab('library')
     const entry = page().get(`[data-testid="library-programme"][data-programme="${PID}"]`)
-    expect(entry.get('h3').text()).toBe('Beginner 5×5')
+    // Each name is an h2 under the page's h1, so the headings never skip a level (axe).
+    expect(entry.get('h2').text()).toBe('Beginner 5×5')
     expect(entry.text()).toContain('Strength · 8 weeks · 5 activities')
     expect(entry.text()).toContain('Three full-body sessions a week')
     expect(entry.get('[data-testid="library-start"]').attributes('aria-expanded')).toBe('false')

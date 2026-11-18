@@ -2041,3 +2041,27 @@ def test_ask_sends_a_programme_trackers_log_upstream(
     state, entry = block(context)
     assert json.loads(state)["tracker"] == tracker
     assert json.loads(entry)["reason"] == "Knee."
+
+
+def test_a_run_that_cant_be_read_is_left_out_and_ask_still_answers(
+    ask_client: TestClient,
+    ask_config: Config,
+    upstream: Upstream,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A run whose replay fails never takes Ask down: the question is already claimed, so Ask
+    answers without that run's block and logs which run it left out."""
+    _, tracker = programme_tracker(ask_client, ask_config)
+
+    def broken(*_: object, **__: object) -> None:
+        raise RuntimeError("engine broke")
+
+    monkeypatch.setattr(data, "replay", broken)
+    upstream.replies = [answer("Fine.")]
+    events = ask_events(ask_client)
+    assert text_of(events) == "Fine."
+    context = upstream.requests[0]["messages"][0]["content"][0]["text"]
+    assert "<programme>" not in context
+    assert f"run {tracker}" in caplog.text
+    assert "engine broke" in caplog.text

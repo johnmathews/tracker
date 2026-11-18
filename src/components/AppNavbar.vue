@@ -191,8 +191,9 @@ function skipToToday(): void {
   The Header card (brand/design-system/project/components/Header), full width and as big as the
   week below it (K47). The week navigation comes first, at the start, its label set as the page's
   title (K81), and the BarActions follow at the end: "This week" while another week is on screen,
-  Ask (only while the API answers questions), Add tracker in Edit plan only (K124), Settings, Programmes (spec §9.1), Print
-  and Full screen (K49). There is no
+  Ask (only while the API answers questions), Add tracker in Edit plan only (K124), Settings,
+  Programmes (spec §9.1), Print and Full screen (K49). At phone width Print and Full screen hide,
+  and Programmes stays (K160). There is no
   wordmark and no Edit plan or Done button: the bar showing and Edit plan are one thing (K80),
   and a long press, E or Esc leave it (K91). The Settings and Ask pages have no bar (K52). Every size is a `--bar-*`
   size from main.css, so the bar follows the screen. Folded, the week takes the first row and the
@@ -309,9 +310,9 @@ function skipToToday(): void {
       </nav>
       <!-- The actions: Ask (only
            once the API has said it answers questions, so it never flashes in or out), Add tracker
-           in Edit plan only (K124), Settings, Print and Full screen, each naming its key (K91),
-           and last Profile, which opens the profile menu (K106). Folded, they share the second row
-           equally. -->
+           in Edit plan only (K124), Settings, Programmes, Print and Full screen, each naming its
+           key (K91), and last Profile, which opens the profile menu (K106). Folded, they share the
+           second row equally; at phone width without Print and Full screen (K160). -->
       <div class="flex items-stretch gap-(--bar-gap) folded:contents">
         <BarAction
           v-if="session.ask === true"
@@ -345,7 +346,9 @@ function skipToToday(): void {
           @click="openProgrammes"
           ><CalendarRange
         /></BarAction>
-        <!-- Printing from a phone is rare, and the bar has no room for it there. -->
+        <!-- Printing from a phone is rare, and the bar has no room for it there. Below `sm`
+             (the folded bar at phone width) Print and Full screen hide, so Ask, Settings,
+             Programmes and Profile share the row (K160). -->
         <BarAction
           label="Print…"
           aria-keyshortcuts="P"
@@ -353,12 +356,13 @@ function skipToToday(): void {
           @click="print"
           ><Printer
         /></BarAction>
-        <!-- Full screen (K34): left out where the browser has none, as on an iPhone. -->
+        <!-- Full screen (K34): left out where the browser has none, as on an iPhone, and hidden
+             at phone width as Print is (K160). F still works there. -->
         <BarAction
           v-if="fullscreen.supported"
           :label="fullscreen.active.value ? 'Exit full screen' : 'Full screen'"
           aria-keyshortcuts="F"
-          class="folded:flex-1 folded:basis-0"
+          class="max-sm:hidden folded:flex-1 folded:basis-0"
           data-testid="fullscreen-button"
           @click="fullscreen.toggle"
           ><Minimize v-if="fullscreen.active.value" /><Maximize v-else

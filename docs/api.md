@@ -879,7 +879,9 @@ weeks, its dates, parameters, pause and each activity's state and activity week)
 newest first, one change a line as JSON with when it was made, its from day, the change, the
 reason and the source. Each run gives at most its 50 newest changes, and all the runs' log lines
 together at most 12,000 characters; a line says how many were left out. A reason is the person's
-words: data, not instructions. So Ask can say why a value changed. It never changes a programme. The voice is John's ruling (K68, voice.md "Ask"): facts first and
+words: data, not instructions. So Ask can say why a value changed. It never changes a programme.
+A run that can't be read (`RunUnreadable`) is logged and left out, so Ask still answers about
+the rest. The voice is John's ruling (K68, voice.md "Ask"): facts first and
 no blame, exclamation marks or hype, and `VERDICT_RULE`, which lets an answer say plainly that
 something is too little or too much, count streaks and give scores or rankings when they help,
 and quote the person's goals and notes back as advice. `PLAIN_VERDICTS` (True) turns it on;
@@ -1192,8 +1194,10 @@ already ended returns the tracker as it is.
   lock. Sealing never checks the quota.
 - **Stored runs.** A stored run loads without checking each week's value against the item's
   limits (K158). A run that still fails to load, seal or replay raises `RunUnreadable`: its own
-  routes answer 500 `run-unreadable` and log the cause, `/state` leaves its summary out and logs
-  it, and `/export` leaves it unsealed and exports its stored rows as they are.
+  routes answer 500 `run-unreadable` and log the cause, `/state` and Ask's context leave it out
+  and log it, and `/export` leaves it unsealed and exports its stored rows as they are. The MCP's
+  `get_programme` and `change_programme` refuse it in a sentence ([mcp.md](mcp.md) §1.1), and
+  `list_programmes` lists the other runs.
 
 ## 4. Accounts and sessions
 
@@ -1350,8 +1354,11 @@ counts in the totals: 8 week plans, its marks, and the squat's and the deadlift'
 items' details.
 
 The command prints what it added ("Added 17 week plans, `<n>` marks and details for 5 items.",
-the marks depending on the day of the week), or "Nothing to add" when the account already has all
-of it.
+the marks depending on the day of the week). It then names the programme: "Added the programme
+Beginner 5×5 to the library." when the library gained it, and "Started a run of Beginner 5×5 on
+the Monday 3 weeks back, as the tracker beginner-5x5-run. Its overview:
+http://localhost:5173/#/programme/beginner-5x5-run" when the run is new. It prints "Nothing to
+add" when the account already has all of it.
 
 ## 6. Configuration
 

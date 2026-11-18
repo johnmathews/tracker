@@ -171,7 +171,10 @@ adds nothing):
 uv run tracker-admin seed-demo                       # demo@example.com, password demo-password
 ```
 
-It runs only against a local stack, and never overwrites a mark or a note. The database lives in
+It runs only against a local stack, and never overwrites a mark or a note. It also adds the
+programme Beginner 5×5 to the library and a running programme from it, started three weeks back,
+so the Programmes page and the week show one. When it starts the run, it prints the run's
+overview address, `#/programme/beginner-5x5-run` ([docs/programmes.md](docs/programmes.md)). The database lives in
 `api/.data` (git-ignored), so accounts and data survive restarts, rebuilds and branch switches;
 deleting that folder, or `git clean -x`, starts over.
 

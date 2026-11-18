@@ -97,7 +97,8 @@ tracker**, whose weekly plans the server writes from the programme.
 - `list_programmes()` returns `{programmes, runs, this_week, today}`. Each programme is
   `{id, name, description, kind, weeks, activities, rev, createdAt, updatedAt}`, without its
   document. Each run is `{tracker, trackerName, programmeId, name, status, week, weeks, start, end,
-  pausedUntil, rev}`, ended runs included. `status` is `upcoming`, `running`, `paused` or
+  pausedSince, pausedUntil, pauseReason, rev}`, ended runs included. A run the server can't read
+  is left out, and the others still list. `status` is `upcoming`, `running`, `paused` or
   `ended`.
 - `get_programme(programme=…)` returns `{programme, run: null}`, the programme with its `doc`.
   `get_programme(tracker=…)` returns `{programme: null, run}`, the run as
@@ -136,6 +137,7 @@ tracker**, whose weekly plans the server writes from the programme.
 | `change: the change has 1 problem, so nothing was changed. …` then `- change.activity: deadlift is already paused on Wed 7 Oct.`          | The change doesn't fit the run on its from day. A from day before today reads `from_date: a change starts today or later.` |
 | `tracker: Beginner 5×5 has ended, so its programme takes no more changes. start_programme starts it again as a new run`                   | The run was ended with End programme.                                                             |
 | `quota: the account is full, so nothing was saved` (or started, or changed)                                                              | The account's 5 MiB are used.                                                                     |
+| `tracker: Beginner 5×5's programme can't be read right now, so nothing was changed. The fault is the server's and is logged; the other trackers still answer. Try again later.` | `get_programme` (without "so nothing was changed") or `change_programme` met a stored run that fails to load or replay. The server logs the cause. |
 
 **A programme tracker's own rules:**
 

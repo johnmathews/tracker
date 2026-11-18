@@ -276,6 +276,16 @@ describe('Show it in the plan (K148)', () => {
     expect(document.activeElement).toBe(bar)
   })
 
+  it('keeps focus on the bar once the sheet has gone and handed focus back', async () => {
+    await showInPlan()
+    const bar = inDoc('change-preview-bar')!
+    // The sheet leaves after its closing animation; its focus scope hands focus back a task
+    // later. The bar must hold focus after that, not lose it to the cell that opened the sheet.
+    await vi.waitFor(() => expect(inDoc('change-sheet')).toBeNull())
+    for (let i = 0; i < 5; i++) await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(document.activeElement).toBe(bar)
+  })
+
   it('goes back to the change at step 2, as it was', async () => {
     await showInPlan()
     await click(inDoc('change-preview-back'))

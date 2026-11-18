@@ -213,6 +213,30 @@ describe('the planner’s screens (K24–K27)', () => {
     }
   })
 
+  it('at phone width keeps Ask, Settings, Programmes and Profile, and hides Print and Full screen (K160)', async () => {
+    Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: true })
+    Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: null })
+    try {
+      signedIn().ask = true
+      const pinia = createPinia()
+      setActivePinia(pinia)
+      wrapper = mount(App, { global: { plugins: [pinia] }, attachTo: document.body })
+      await flushPromises()
+      // jsdom applies no CSS, so the test reads the rule itself: Print's phone-width class.
+      const actions = bar().findAll('[data-slot="bar-action"]')
+      const print = actions.find((b) => b.text() === 'Print…')!
+      expect(print.classes()).toContain('max-sm:hidden')
+      const shown = actions
+        .filter((b) => !b.classes().includes('max-sm:hidden'))
+        .map((b) => b.text())
+      expect(shown).toEqual(['Ask', 'Settings', 'Programmes', 'Profile'])
+      expect(wrapper.get('[data-testid="fullscreen-button"]').classes()).toContain('max-sm:hidden')
+    } finally {
+      Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: undefined })
+      Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: null })
+    }
+  })
+
   it('has no Edit plan or Done action: the keyboard’s hidden button goes in and out (K82, K91)', async () => {
     mountApp()
     const actions = () =>

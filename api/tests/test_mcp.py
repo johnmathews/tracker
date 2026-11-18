@@ -1401,6 +1401,57 @@ def test_get_programme_reads_a_library_programme_or_a_run(
     assert len(mondays) == 7
 
 
+def broken_run(monkeypatch: pytest.MonkeyPatch, tracker: str) -> None:
+    """Make one run's replay fail, as an engine change since or a bad row would."""
+    real = data._seal_and_replay
+
+    def seal_and_replay(conn: sqlite3.Connection, user_id: int, tracker_id: str, when: Any) -> Any:
+        if tracker_id == tracker:
+            raise RuntimeError("engine broke")
+        return real(conn, user_id, tracker_id, when)
+
+    monkeypatch.setattr(data, "_seal_and_replay", seal_and_replay)
+
+
+def test_a_run_that_cant_be_read_is_a_plain_refusal_and_the_rest_still_answer(
+    agent: TestClient,
+    uid: int,
+    writer: str,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A run whose replay fails names itself in a sentence the agent can pass on; the other
+    runs still list, and nothing changes."""
+    first = running(agent, writer, name="Autumn block")["tracker"]["id"]
+    programme_id = tool(agent, writer, "list_programmes")["programmes"][0]["id"]
+    other = write(agent, writer, "start_programme", {"programme": programme_id, "name": "Spring"})
+    broken_run(monkeypatch, first)
+    listed = tool(agent, writer, "list_programmes")
+    assert [r["trackerName"] for r in listed["runs"]] == ["Spring"]
+    assert refused(agent, writer, "get_programme", {"tracker": first}) == (
+        "tracker: Autumn block's programme can't be read right now. The fault is the "
+        "server's and is logged; the other trackers still answer. Try again later."
+    )
+    for arguments in ({}, {"confirm": True, "rev": "0"}):
+        text = refused(
+            agent,
+            writer,
+            "change_programme",
+            {"tracker": first, "change": PAUSE_SQUAT, **arguments},
+        )
+        assert text == (
+            "tracker: Autumn block's programme can't be read right now, so nothing was "
+            "changed. The fault is the server's and is logged; the other trackers still "
+            "answer. Try again later."
+        )
+    assert f"run {first}" in caplog.text
+    assert "engine broke" in caplog.text
+    # The other run reads and changes as before.
+    other_id = other["tracker"]["id"]
+    assert tool(agent, writer, "get_programme", tracker=other_id)["run"]["tracker"] == other_id
+    assert change(agent, writer, other_id, PAUSE_SQUAT)["preview"] is True
+
+
 @pytest.mark.parametrize(
     ("arguments", "words"),
     [

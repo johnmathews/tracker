@@ -482,10 +482,15 @@ def _run_context(tracker: Tracker, run: dict[str, Any], when: data.When) -> RunC
 
 def programme_runs(conn: sqlite3.Connection, user_id: int, when: data.When) -> list[RunContext]:
     """The run of each programme tracker today's week shows, in the week's order, for
-    `context`. Reading a run seals its days up to yesterday first, as every read of one does."""
+    `context`. Reading a run seals its days up to yesterday first, as every read of one does. A
+    run that can't be read is logged and left out, so Ask still answers about the rest."""
     out: list[RunContext] = []
     for tracker in data.trackers_in(conn, user_id, insights.monday_of(when.today).isoformat()):
-        run = data.read_run(conn, user_id, tracker["id"], when)
+        try:
+            run = data.read_run(conn, user_id, tracker["id"], when)
+        except data.RunUnreadable:
+            log.exception("run %s can't be read, so Ask leaves it out", tracker["id"])
+            continue
         if run is not None:
             out.append(_run_context(tracker, run, when))
     return out

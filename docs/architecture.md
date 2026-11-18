@@ -1311,7 +1311,7 @@ and reads a damaged v1 key as nothing rather than as the default exercises.
 A programme is a plan of several weeks that the server writes into a tracker's weeks (the spec
 [specs/2026-11-17-programmes.md](specs/2026-11-17-programmes.md)). [programmes.md](programmes.md)
 documents the format and the changes, and [api.md](api.md) §3.4 the routes. This section is how
-it is built, on the API side.
+it is built: the API side first, then the web side (**In the app**, below).
 
 **A run is a tracker.** Starting a programme makes a tracker of its kind (strength, mobility or
 cardio) and a row in `programme_runs`: the run's own copy of the document, its parameters and its
@@ -1392,9 +1392,53 @@ seal, so a read can tell whether it has a status to store.
 started, so loading it again skips that check (`check_ranges=False`). A run that still fails to
 load, seal or replay raises `RunUnreadable` and never takes another tracker down: `/api/state`
 leaves its summary out and logs it, `seal_runs` passes over it, and its own routes answer 500
-`run-unreadable`.
+`run-unreadable`. Ask's context leaves it out and logs it (`ask.programme_runs`), so Ask still
+answers. The MCP's `list_programmes` lists the other runs, and `get_programme` and
+`change_programme` refuse it with a sentence that names the tracker.
 
 **Export and import.** The export carries the library and each run whole: its copy, parameters,
 log, sealed days and mark events, with no new file version. An import adds a run only with a
 tracker it adds, and only when the run's document, parameters, sealed days and log all read; a
 programme tracker the account has takes nothing from a file.
+
+**In the app.** The web app computes no plan value (P4). Every number it shows comes from the
+server: the start preview, the run's grid, a change's preview and the run a confirmed change sends
+back.
+
+- **The sync store** (`src/stores/sync.ts`) keeps `today` and `runs` from each `/api/state`, and
+  stores them under `tracker-runs-v1:<user>` (`RUNS_PREFIX`), apart from the cache, so a device
+  offline still knows which trackers are programmes and which days are locked. `locked(tracker,
+  day)` is true for a programme tracker's days before yesterday by the server's `today`, never the
+  device's clock; nothing is locked before the server has said what today is. It passes the run
+  ids to the trackers store (`setProgrammes`). There `isProgramme` stops `addItem`, `updateItem`,
+  `removeItem` and `changeTarget` on a programme tracker, so Edit plan never writes its plan.
+- **The programmes store** (`src/stores/programmes.ts`) holds the library, the open overview's run
+  (`run`) and each tracker's run as last read (`byTracker`). `loadPage` reads `/programmes` and
+  `/state` for the Programmes page. `previewStart`, `start`, `loadRun`, `previewChange`,
+  `confirmChange` and `endRun` call the routes in [api.md](api.md) §3.4; `ensureRun` reads a
+  tracker's run again when the state lists a newer `rev`. A start, a confirmed change and an end
+  call `sync.refresh()`, so the week reads the plans the server wrote. Nothing here queues: offline
+  (`offline`), the controls are disabled with one line saying why. `src/lib/programmes.ts` holds
+  the API types, the wording, the change bodies and `runsFromState`.
+- **The views.** `ProgrammesPage.vue` is `#/programmes`: the Running, Library and Add tabs, and
+  Preview and start in place in the library list (K147). `ProgrammeOverview.vue` is
+  `#/programme/<tracker>`: the plan in `ui/programme-grid/ProgrammeGrid.vue` (K142, K143), the
+  Changes tab with Undo, the controls, and Show it in the plan with its bar at the foot (K148).
+  `ui/change-sheet/ChangeSheet.vue` is the two-step change sheet (K144) that the overview and the
+  item page open. On an item page a programme activity's plan row is `ItemProgramme.vue`, with the
+  step chart (`ui/programme-chart/`, K145) and the activity's controls. In the week view,
+  `TrackerSection.vue` puts "Week 4 of 8" at the end of the title line, linked to the overview, and
+  reads the run's week for each paused activity's sentence, which `TrackerRow.vue` shows in place
+  of its boxes; `TrackerGrid.vue` puts a lock by a locked day's name, and `DayMark`'s `locked`
+  keeps its box from pressing (K146). App.vue routes the two addresses (`src/lib/routes.ts`), and
+  the bar's Programmes action opens the page (K160).
+- **Refused writes.** The outbox can hold a mark made offline that reaches the server after its
+  grace day, or a plan write to a programme tracker. The server refuses them with 409
+  `locked-day` and `programme-tracker`. The sync store then drops the write, reads
+  the state again so the change is undone here, and names it in its notice: `lateNotice` names
+  the first refused mark's item and day and counts the rest, and `programmeNotice` names the
+  tracker. A mark is never dropped silently.
+- **Import.** The app's import passes the file's `programmes` and `runs` through to
+  `POST /api/import` as they are (`src/lib/transfer.ts`, `importFile` in the sync store). The
+  server reads and checks them, so a run imported through the app keeps its log and its locked
+  days.

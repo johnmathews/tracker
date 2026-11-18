@@ -209,7 +209,7 @@
   const library = (s, id) => `<ul class="plist" aria-label="Library" data-testid="programmes-library">${LIB.map((p) => {
     const open = s.open === p.id
     const actions = open ? '' : `<div class="acts pa"><button type="button" class="btn" data-start="${p.id}" aria-expanded="false" data-testid="library-start">${ic('play')}Preview and start</button><button type="button" class="btn quiet" data-testid="library-duplicate">${ic('copy')}Duplicate</button><button type="button" class="btn quiet" data-testid="library-delete">${ic('trash')}Delete</button></div>`
-    return `<li class="lib${open ? ' open' : ''}" data-testid="library-programme" data-programme="${p.id}"><div><h3 class="pn" id="${id}-${p.id}">${p.name}</h3><p class="pm">${p.meta}</p><p class="pd">${p.desc}</p></div>${actions}${open ? startForm(id) : ''}</li>`
+    return `<li class="lib${open ? ' open' : ''}" data-testid="library-programme" data-programme="${p.id}"><div><h2 class="pn" id="${id}-${p.id}">${p.name}</h2><p class="pm">${p.meta}</p><p class="pd">${p.desc}</p></div>${actions}${open ? startForm(id) : ''}</li>`
   }).join('')}</ul>`
   const add = (s, id) => {
     const errs = s.errors ? `<div class="errs" id="${id}-errs" data-testid="add-errors"><p class="im err" role="alert">${ic('alert')}<span>This programme has three problems. Fix them, then check it again.</span></p><ul class="errlist">${ERRORS.map(([path, text]) => `<li data-testid="add-error" data-path="${path}"><span class="path">${path}:</span> ${text}</li>`).join('')}</ul></div>` : ''

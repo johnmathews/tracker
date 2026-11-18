@@ -101,6 +101,41 @@ test.describe('no sideways scroll at 375px', () => {
     }
   })
 
+  test('the folded bar with Ask on: no Full screen, and no action overlapping another (K160)', async ({
+    page,
+  }) => {
+    await openApp(page, { ask: true })
+    const actions = page.locator('[data-slot="bar"] [data-slot="bar-action"]:visible')
+    /** The actions' boxes: each inside the screen, and none over the next on its line. */
+    async function expectApart(): Promise<void> {
+      const boxes = await actions.evaluateAll((els) =>
+        els.map((el) => {
+          const r = el.getBoundingClientRect()
+          return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }
+        }),
+      )
+      const width = page.viewportSize()!.width
+      for (const [i, box] of boxes.entries()) {
+        expect(box.left).toBeGreaterThanOrEqual(0)
+        expect(box.right).toBeLessThanOrEqual(width)
+        const next = boxes[i + 1]
+        if (next && next.top < box.bottom) expect(next.left).toBeGreaterThanOrEqual(box.right)
+      }
+    }
+    // On the week, focus floats the bar over the screen (K80).
+    await page.getByTestId('settings-button').focus()
+    await settle(page)
+    await expect(actions).toHaveText(['Ask', 'Settings', 'Programmes', 'Profile'])
+    await expect(page.getByTestId('fullscreen-button')).toBeHidden()
+    await expectApart()
+    // Edit plan adds Add tracker (K124), and still fits.
+    await page.keyboard.press('Escape')
+    await callUpBar(page)
+    await expect(actions).toHaveText(['Ask', 'Add tracker', 'Settings', 'Programmes', 'Profile'])
+    await expectApart()
+    await expectNoSidewaysScroll(page)
+  })
+
   test('the profile menu and the Profile page', async ({ page }) => {
     await openApp(page)
     await callUpBar(page)

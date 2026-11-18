@@ -159,7 +159,16 @@ def _run(args: argparse.Namespace, config: Config, conn: sqlite3.Connection) -> 
             )
             if added:
                 print(f"Added {added}.")
-            else:
+            name = seed.PROGRAMME["name"]
+            if result["programmes"]:
+                print(f"Added the programme {name} to the library.")
+            if result["runs"]:
+                print(
+                    f"Started a run of {name} on the Monday {seed.RUN_WEEKS_BACK} weeks back, as "
+                    f"the tracker {seed.DEMO_RUN}. Its overview: "
+                    f"{config.public_origin}/#/programme/{seed.DEMO_RUN}"
+                )
+            if not (added or result["programmes"] or result["runs"]):
                 print("Nothing to add: the demo weeks are already there.")
             print(f"Sign in at {config.public_origin}/")
         case "revoke-sessions":

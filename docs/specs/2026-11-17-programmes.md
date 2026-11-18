@@ -7,11 +7,11 @@
 > trust, and shown in overview views. It is the authority for the build that follows the
 > 2026-11-17 mockup round.
 
-**Status:** implemented (API); views in progress. Approved by John on 2026-11-17, with the
-defaults in §12. Units W1 to W6 built the format, the replay, storage, runs and the lock, the MCP
-tools and the design-system cards (K142 to K159 in [decisions.md](../decisions.md) §4.32); W7 and
-W8 are building the views. [programmes.md](../programmes.md) documents the format. The views in §9
-follow John's picks in the mockup round `brand/design-system/mockups/261117-programmes/` (§10).
+**Status:** implemented on 2026-11-18. Approved by John on 2026-11-17, with the defaults in §12.
+The decisions made while building it are K142 to K160 in [decisions.md](../decisions.md) §4.32,
+and the text below follows them. [programmes.md](../programmes.md) documents the format. The views
+in §9 follow John's picks in the mockup round `brand/design-system/mockups/261117-programmes/`
+(§10).
 
 ## 1. Principles
 
@@ -211,8 +211,9 @@ A change takes effect from a day: today or any later day. Weeks stay aligned to 
 
 ## 7. Changes
 
-Each change has a **from** day (today or later), an optional **reason**, and a **source** (the
-app, an agent's connection, or Ask). It goes into the log, append-only.
+Each change has a **from** day (today or later), an optional **reason**, and a **source**: the
+app, or the name of an agent's connection. It goes into the log, append-only. Ask never changes a
+programme. It reads a run's log to explain it (§11.3).
 
 | Change           | Does                                                                                              |
 | ---------------- | ------------------------------------------------------------------------------------------------- |
@@ -235,8 +236,9 @@ app, an agent's connection, or Ask). It goes into the log, append-only.
   from day. The segment starts at the new value and keeps the progression's increase. The weeks
   after continue from the new value.
 - **Set increase** keeps this week's value and applies the new increase from the next programme
-  week. The series continues from the value **shown** this week, rounded, because that is the
-  value lifted.
+  week. The series continues from the rule's value this week, rounded to the step, because that
+  is the value lifted. A deload or a hand-edit in that week is a one-week exception, so the series
+  doesn't continue from it (K150).
 - Neither recomputes from activity week 1 (P3).
 
 A 10 kg exercise at 10% a week, rounded to 0.5 kg, with the rate changed to 15% on week 3:
@@ -265,12 +267,15 @@ and any activity that ends short. Nothing is written until the same change comes
 
 ## 8. Locking and evidence
 
-- **Plans lock at midnight.** The server refuses any change with a from day before today, and
-  any plan write for a programme tracker's past days.
+- **Plans lock at midnight.** The server refuses any change with a from day before today.
+- **Only the engine writes a programme tracker's plans.** The generic plan write refuses every
+  week of a programme tracker, past, present and future, with 409 `programme-tracker`. Its plans
+  change only through the run's changes (§7).
 - **Marks stay open for one day** (S6). A mark for today or yesterday is accepted. One for
-  yesterday is recorded as **late**. A mark for an earlier day gets 409 `locked-day`.
-- **Sealing.** Before any write to a run, and on the first read each day, the server seals every
-  unsealed day up to yesterday. It copies the plan in force that day, with its programme and
+  yesterday is recorded as **late**. A mark for an earlier day gets 409 `locked-day`. A mark for
+  a later day is accepted, as on any tracker (K159).
+- **Sealing.** Before a start, a change or an end, and on the first read each day, the server
+  seals every unsealed day up to yesterday. A mark doesn't seal: it needs no replay. It copies the plan in force that day, with its programme and
   activity weeks, into `programme_days`. A sealed day is what the history shows from then on, so
   a later bug fix in the engine can't rewrite it (P1).
 - **Mark evidence.** Every mark on a programme tracker also goes into `mark_events`: the day, the
@@ -349,6 +354,8 @@ One round, `brand/design-system/mockups/261117-programmes/`
 
 ### 11.1 Storage
 
+Schema 18 adds five tables:
+
 | Table            | Holds                                                                                                                                                  |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `programmes`     | The library: `user_id`, `id`, `name`, `doc_json`, `rev`, `created_at`, `updated_at`.                                                                   |
@@ -362,16 +369,17 @@ written only by the engine.
 
 ### 11.2 Endpoints
 
-| Method and path                             | Does                                         |
-| ------------------------------------------- | -------------------------------------------- |
-| `GET /api/programme.schema.json`            | The format's JSON Schema. Public.            |
-| `GET`, `POST /api/programmes`               | List the library; add a programme.           |
-| `GET`, `PUT`, `DELETE /api/programmes/{id}` | Read, replace (with `rev`) or delete one.    |
-| `POST /api/programmes/validate`             | Check a document; every error with its path. |
-| `POST /api/programmes/{id}/preview`         | Expand with given parameters and start date. |
-| `POST /api/programmes/{id}/start`           | Start a run; returns the new tracker.        |
-| `GET /api/runs/{tracker}`                   | The run: state, clocks, the grid, the log.   |
-| `POST /api/runs/{tracker}/changes`          | Preview or apply a change (§7.3).            |
+| Method and path                             | Does                                                |
+| ------------------------------------------- | --------------------------------------------------- |
+| `GET /api/programme.schema.json`            | The format's JSON Schema. Public.                   |
+| `GET`, `POST /api/programmes`               | List the library; add a programme.                  |
+| `GET`, `PUT`, `DELETE /api/programmes/{id}` | Read, replace (with `rev`) or delete one.           |
+| `POST /api/programmes/validate`             | Check a document; every error with its path.        |
+| `POST /api/programmes/{id}/preview`         | Expand with given parameters and start date.        |
+| `POST /api/programmes/{id}/start`           | Start a run; returns the new tracker.               |
+| `GET /api/runs/{tracker}`                   | The run: state, clocks, the grid, the log.          |
+| `POST /api/runs/{tracker}/changes`          | Preview or apply a change (§7.3).                   |
+| `POST /api/runs/{tracker}/end`              | End programme from today or a later day (§4, K156). |
 
 Programme changes need the server, as Ask does. Offline, the controls are disabled with one line
 saying why. Marks still queue.
@@ -384,7 +392,7 @@ carry the library, the runs, their logs, the sealed days and the mark events.
 | Tool               | Scope | Does                                                                                        |
 | ------------------ | ----- | ------------------------------------------------------------------------------------------- |
 | `programme_format` | read  | The schema and a worked example.                                                            |
-| `list_programmes`  | read  | The library and the live runs.                                                              |
+| `list_programmes`  | read  | The library and every run, ended ones included.                                             |
 | `get_programme`    | read  | One programme, or one run with its clocks, upcoming weeks and log.                          |
 | `save_programme`   | write | Validates and adds or replaces a library programme. Returns every error.                    |
 | `start_programme`  | write | Starts a run from a date with parameters.                                                   |

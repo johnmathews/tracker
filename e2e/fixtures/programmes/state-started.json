@@ -1,0 +1,472 @@
+{
+  "trackers": [
+    {
+      "id": "exercise",
+      "name": "Strength",
+      "kind": "strength",
+      "position": 0,
+      "dailyTarget": 3,
+      "startWeek": null,
+      "endWeek": null,
+      "rev": 1
+    },
+    {
+      "id": "cardio",
+      "name": "Cardio",
+      "kind": "cardio",
+      "position": 1,
+      "dailyTarget": null,
+      "startWeek": null,
+      "endWeek": null,
+      "rev": 1
+    },
+    {
+      "id": "diet",
+      "name": "Food",
+      "kind": "food",
+      "position": 2,
+      "dailyTarget": 2,
+      "startWeek": null,
+      "endWeek": null,
+      "rev": 1
+    },
+    {
+      "id": "xmwmdo222uxyt",
+      "name": "Beginner 5×5",
+      "kind": "strength",
+      "position": 3,
+      "dailyTarget": 3,
+      "startWeek": "2026-11-09",
+      "endWeek": "2027-01-04",
+      "rev": 1
+    }
+  ],
+  "sections": {
+    "exercise": {
+      "plans": {},
+      "log": {},
+      "revs": {}
+    },
+    "cardio": {
+      "plans": {},
+      "log": {},
+      "revs": {}
+    },
+    "diet": {
+      "plans": {},
+      "log": {},
+      "revs": {}
+    },
+    "xmwmdo222uxyt": {
+      "plans": {
+        "2026-11-09": [
+          {
+            "id": "squat",
+            "name": "Back squat",
+            "sets": 5,
+            "reps": 5,
+            "weight": 40,
+            "target": 3
+          },
+          {
+            "id": "bench",
+            "name": "Bench press",
+            "sets": 5,
+            "reps": 5,
+            "weight": 30,
+            "target": 3
+          },
+          {
+            "id": "row",
+            "name": "Barbell row",
+            "sets": 5,
+            "reps": 5,
+            "weight": 30,
+            "target": 3
+          },
+          {
+            "id": "deadlift",
+            "name": "Deadlift",
+            "sets": 1,
+            "reps": 5,
+            "weight": 60,
+            "target": 3
+          },
+          {
+            "id": "plank",
+            "name": "Plank",
+            "sets": 3,
+            "reps": 0,
+            "duration": 30,
+            "target": 3
+          }
+        ],
+        "2026-11-16": [
+          {
+            "id": "squat",
+            "name": "Back squat",
+            "sets": 5,
+            "reps": 5,
+            "weight": 42.5,
+            "target": 3
+          },
+          {
+            "id": "bench",
+            "name": "Bench press",
+            "sets": 5,
+            "reps": 5,
+            "weight": 32.5,
+            "target": 3
+          },
+          {
+            "id": "row",
+            "name": "Barbell row",
+            "sets": 5,
+            "reps": 5,
+            "weight": 32.5,
+            "target": 3
+          },
+          {
+            "id": "deadlift",
+            "name": "Deadlift",
+            "sets": 1,
+            "reps": 5,
+            "weight": 65,
+            "target": 3
+          },
+          {
+            "id": "plank",
+            "name": "Plank",
+            "sets": 3,
+            "reps": 0,
+            "duration": 30,
+            "target": 3
+          }
+        ],
+        "2026-11-23": [
+          {
+            "id": "squat",
+            "name": "Back squat",
+            "sets": 5,
+            "reps": 5,
+            "weight": 45,
+            "target": 3
+          },
+          {
+            "id": "bench",
+            "name": "Bench press",
+            "sets": 5,
+            "reps": 5,
+            "weight": 35,
+            "target": 3
+          },
+          {
+            "id": "row",
+            "name": "Barbell row",
+            "sets": 5,
+            "reps": 5,
+            "weight": 35,
+            "target": 3
+          },
+          {
+            "id": "deadlift",
+            "name": "Deadlift",
+            "sets": 1,
+            "reps": 5,
+            "weight": 70,
+            "target": 3
+          },
+          {
+            "id": "plank",
+            "name": "Plank",
+            "sets": 3,
+            "reps": 0,
+            "duration": 35,
+            "target": 3
+          }
+        ],
+        "2026-11-30": [
+          {
+            "id": "squat",
+            "name": "Back squat",
+            "sets": 3,
+            "reps": 5,
+            "weight": 42.5,
+            "target": 3
+          },
+          {
+            "id": "bench",
+            "name": "Bench press",
+            "sets": 3,
+            "reps": 5,
+            "weight": 35,
+            "target": 3
+          },
+          {
+            "id": "row",
+            "name": "Barbell row",
+            "sets": 3,
+            "reps": 5,
+            "weight": 35,
+            "target": 3
+          },
+          {
+            "id": "deadlift",
+            "name": "Deadlift",
+            "sets": 1,
+            "reps": 5,
+            "weight": 67.5,
+            "target": 3
+          },
+          {
+            "id": "plank",
+            "name": "Plank",
+            "sets": 3,
+            "reps": 0,
+            "duration": 35,
+            "target": 3
+          }
+        ],
+        "2026-12-07": [
+          {
+            "id": "squat",
+            "name": "Back squat",
+            "sets": 5,
+            "reps": 5,
+            "weight": 47.5,
+            "target": 3
+          },
+          {
+            "id": "bench",
+            "name": "Bench press",
+            "sets": 5,
+            "reps": 5,
+            "weight": 40,
+            "target": 3
+          },
+          {
+            "id": "row",
+            "name": "Barbell row",
+            "sets": 5,
+            "reps": 5,
+            "weight": 40,
+            "target": 3
+          },
+          {
+            "id": "deadlift",
+            "name": "Deadlift",
+            "sets": 1,
+            "reps": 5,
+            "weight": 80,
+            "target": 3
+          },
+          {
+            "id": "plank",
+            "name": "Plank",
+            "sets": 3,
+            "reps": 0,
+            "duration": 40,
+            "target": 3
+          }
+        ],
+        "2026-12-14": [
+          {
+            "id": "squat",
+            "name": "Back squat",
+            "sets": 5,
+            "reps": 5,
+            "weight": 50,
+            "target": 3
+          },
+          {
+            "id": "bench",
+            "name": "Bench press",
+            "sets": 5,
+            "reps": 5,
+            "weight": 42.5,
+            "target": 3
+          },
+          {
+            "id": "row",
+            "name": "Barbell row",
+            "sets": 5,
+            "reps": 5,
+            "weight": 42.5,
+            "target": 3
+          },
+          {
+            "id": "deadlift",
+            "name": "Deadlift",
+            "sets": 1,
+            "reps": 5,
+            "weight": 85,
+            "target": 3
+          },
+          {
+            "id": "plank",
+            "name": "Plank",
+            "sets": 3,
+            "reps": 0,
+            "duration": 40,
+            "target": 3
+          }
+        ],
+        "2026-12-21": [
+          {
+            "id": "squat",
+            "name": "Back squat",
+            "sets": 5,
+            "reps": 5,
+            "weight": 52.5,
+            "target": 3
+          },
+          {
+            "id": "bench",
+            "name": "Bench press",
+            "sets": 5,
+            "reps": 5,
+            "weight": 45,
+            "target": 3
+          },
+          {
+            "id": "row",
+            "name": "Barbell row",
+            "sets": 5,
+            "reps": 5,
+            "weight": 45,
+            "target": 3
+          },
+          {
+            "id": "deadlift",
+            "name": "Deadlift",
+            "sets": 1,
+            "reps": 5,
+            "weight": 90,
+            "target": 3
+          },
+          {
+            "id": "plank",
+            "name": "Plank",
+            "sets": 3,
+            "reps": 0,
+            "duration": 45,
+            "target": 3
+          }
+        ],
+        "2026-12-28": [
+          {
+            "id": "squat",
+            "name": "Back squat",
+            "sets": 3,
+            "reps": 5,
+            "weight": 50,
+            "target": 3
+          },
+          {
+            "id": "bench",
+            "name": "Bench press",
+            "sets": 3,
+            "reps": 5,
+            "weight": 42.5,
+            "target": 3
+          },
+          {
+            "id": "row",
+            "name": "Barbell row",
+            "sets": 3,
+            "reps": 5,
+            "weight": 42.5,
+            "target": 3
+          },
+          {
+            "id": "deadlift",
+            "name": "Deadlift",
+            "sets": 1,
+            "reps": 5,
+            "weight": 85,
+            "target": 3
+          },
+          {
+            "id": "plank",
+            "name": "Plank",
+            "sets": 3,
+            "reps": 0,
+            "duration": 45,
+            "target": 3
+          }
+        ]
+      },
+      "log": {},
+      "revs": {
+        "2026-11-09": 1,
+        "2026-11-16": 1,
+        "2026-11-23": 1,
+        "2026-11-30": 1,
+        "2026-12-07": 1,
+        "2026-12-14": 1,
+        "2026-12-21": 1,
+        "2026-12-28": 1
+      }
+    }
+  },
+  "details": {
+    "exercise": {},
+    "cardio": {},
+    "diet": {},
+    "xmwmdo222uxyt": {
+      "deadlift": {
+        "notes": "Hinge, don’t squat. Bar close to the shins."
+      },
+      "squat": {
+        "notes": "Belt from week 5."
+      }
+    }
+  },
+  "detailRevs": {
+    "exercise": {},
+    "cardio": {},
+    "diet": {},
+    "xmwmdo222uxyt": {
+      "deadlift": 1,
+      "squat": 1
+    }
+  },
+  "exercise": {
+    "plans": {},
+    "log": {},
+    "revs": {},
+    "details": {},
+    "detailRevs": {}
+  },
+  "cardio": {
+    "plans": {},
+    "log": {},
+    "revs": {},
+    "details": {},
+    "detailRevs": {}
+  },
+  "diet": {
+    "plans": {},
+    "log": {},
+    "revs": {},
+    "details": {},
+    "detailRevs": {}
+  },
+  "settings": null,
+  "today": "2026-11-12",
+  "runs": {
+    "xmwmdo222uxyt": {
+      "programmeId": "xmwmdo21iejbz",
+      "name": "Beginner 5×5",
+      "status": "running",
+      "week": 1,
+      "weeks": 8,
+      "start": "2026-11-12",
+      "end": "2027-01-03",
+      "pausedUntil": null,
+      "pausedSince": null,
+      "pauseReason": null,
+      "rev": "4f53cda18c2baa0c"
+    }
+  }
+}

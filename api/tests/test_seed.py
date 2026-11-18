@@ -200,6 +200,27 @@ def test_cli_prints_the_login_and_what_it_added(
     assert "Nothing to add: the demo weeks are already there." in out
 
 
+def test_cli_prints_the_programme_and_the_run_it_added(
+    local: Config, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+) -> None:
+    env = {"DATA_DIR": str(local.data_dir), "PUBLIC_ORIGIN": LOCAL, "COOKIE_SECURE": "false"}
+    name = seed.PROGRAMME["name"]
+    assert main(["seed-demo"], env, clock=Clock()) == 0
+    out = capsys.readouterr().out
+    assert f"Added the programme {name} to the library." in out
+    assert (
+        f"Started a run of {name} on the Monday 3 weeks back, as the tracker "
+        f"{seed.DEMO_RUN}. Its overview: {LOCAL}/#/programme/{seed.DEMO_RUN}" in out
+    )
+    # A library programme deleted since comes back on its own: the run is still there.
+    assert delete_programme(conn, user_id(conn, seed.DEMO_EMAIL), seed.DEMO_PROGRAMME)
+    assert main(["seed-demo"], env, clock=Clock()) == 0
+    out = capsys.readouterr().out
+    assert f"Added the programme {name} to the library." in out
+    assert "Started a run" not in out
+    assert "Nothing to add" not in out
+
+
 def test_cli_reports_details_added_to_weeks_already_there(
     local: Config, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
 ) -> None:

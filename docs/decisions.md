@@ -664,7 +664,8 @@ exercises", and "user trust in the tracker is paramount". The spec is
 [programmes.md](programmes.md). The views' mockup is
 `brand/design-system/mockups/261117-programmes`: John picked round 1 on 2026-11-17 ("1. A 2. C 3.
 B 4. A 5. A") and round 2 on 2026-11-18 ("6 = B, 7 = B"). K149 to K159 are the calls made while
-building the engine and the API, where the spec was silent or needed a rule.
+building the engine and the API, where the spec was silent or needed a rule. K160 is John's call on
+the crowded bar.
 
 | ID   | Decision | Why |
 | ---- | -------- | --- |
@@ -686,3 +687,4 @@ building the engine and the API, where the spec was silent or needed a rule.
 | K157 | A run's status is `upcoming` before its start, `running`, `paused` while the whole programme is paused, or `ended`. A paused activity leaves the run running | A run can start on a later day, so it exists before its week 1. Ended covers both the last Sunday and End programme |
 | K158 | A stored run loads without checking each week's value against the item's limits (`check_ranges=False`); its parameters are still read. A run that still fails to load raises `RunUnreadable`, which never takes another tracker down | The run was checked when it started. An engine change since, a cap lowered or a rounding fixed, must not make a run that exists unreadable (P1) |
 | K159 | A programme tracker takes marks on later days, as every tracker does; only days before yesterday are locked | The lock protects the record, which is the past. Marking ahead is how the app and `mark_day` already behave, and spec §8 names only today and yesterday |
+| K160 | Programmes is a BarAction in the Header at every width, after Settings (`calendar-range`). Below 640px wide (`max-sm`, the rule that already leaves Print out), Full screen is left out too, so the folded bar holds Ask, Settings, Programmes and Profile, with Add tracker in Edit plan. The F key still toggles full screen there. Amends K34 for phone width | At 375 to 390px the bar was crowded where Ask and Full screen both show (Android, desktop Chrome). John chose on 2026-11-18: Programmes stays in the bar, and Full screen hides at phone width as Print does |

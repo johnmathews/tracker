@@ -684,6 +684,17 @@ def _not_a_run(tracker: Tracker) -> ToolError:
     )
 
 
+def _unreadable(tracker: Tracker, e: data.RunUnreadable, *, changing: bool) -> ToolError:
+    """A stored run that fails to load or replay: logged with its cause, as REST's 500
+    `run-unreadable` is, and told to the agent in a sentence it can pass on."""
+    log.error("run %s can't be read", e.tracker_id, exc_info=e)
+    nothing = ", so nothing was changed" if changing else ""
+    return ToolError(
+        f"tracker: {tracker['name']}'s programme can't be read right now{nothing}. The fault "
+        "is the server's and is logged; the other trackers still answer. Try again later."
+    )
+
+
 QUOTA = "quota: the account is full, so nothing was {}"
 
 
@@ -937,7 +948,10 @@ def _add_tools(server: MCPServer, config: Config) -> None:
                 return {"programme": record, "run": None}
             found = insights.tracker_of(c, uid, tracker)
             when = _when(config)
-            run = data.read_run(c, uid, found["id"], when)
+            try:
+                run = data.read_run(c, uid, found["id"], when)
+            except data.RunUnreadable as e:
+                raise _unreadable(found, e, changing=False) from None
             if run is None:
                 raise _not_a_run(found)
             return {"programme": None, "run": _upcoming(run, when.today)}
@@ -1335,6 +1349,8 @@ def _add_tools(server: MCPServer, config: Config) -> None:
                 )
             except data.QuotaExceeded:
                 raise ToolError(QUOTA.format("changed")) from None
+            except data.RunUnreadable as e:
+                raise _unreadable(found, e, changing=True) from None
             if out is None:
                 raise _not_a_run(found)
             if out["preview"]:

@@ -352,7 +352,7 @@ const TWO =
               :data-programme="p.id"
             >
               <div>
-                <h3 :id="`${ids.heading}-${p.id}`" :class="NAME">{{ p.name }}</h3>
+                <h2 :id="`${ids.heading}-${p.id}`" :class="NAME">{{ p.name }}</h2>
                 <p :class="META">{{ facts(p) }}</p>
                 <p
                   v-if="p.description"
@@ -430,7 +430,7 @@ const TWO =
                   />
                 </div>
                 <div class="flex min-w-0 flex-col gap-1" data-testid="start-preview">
-                  <h4 :class="LABEL">Preview</h4>
+                  <h3 :class="LABEL">Preview</h3>
                   <template v-if="startPreview">
                     <p :class="META">{{ startLine(startPreview) }}</p>
                     <ProgrammeGrid
