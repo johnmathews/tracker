@@ -9,10 +9,28 @@
           "size": 564,
           "type": "image/svg+xml"
         },
+        "calendar-range.svg": {
+          "blob": "b676c0fe858afa1cdfb33c1b38dd8e2a",
+          "name": "calendar-range.svg",
+          "size": 483,
+          "type": "image/svg+xml"
+        },
+        "calendar.svg": {
+          "blob": "c6b2b733b69f4e4285dfab53e14a8eae",
+          "name": "calendar.svg",
+          "size": 357,
+          "type": "image/svg+xml"
+        },
         "check.svg": {
           "blob": "baff1d9149c8dac6ac209a476d288704",
           "name": "check.svg",
           "size": 312,
+          "type": "image/svg+xml"
+        },
+        "chevron-down.svg": {
+          "blob": "cb427205da43490c4cc4eb647e6379e3",
+          "name": "chevron-down.svg",
+          "size": 253,
           "type": "image/svg+xml"
         },
         "chevron-left.svg": {
@@ -27,16 +45,34 @@
           "size": 318,
           "type": "image/svg+xml"
         },
+        "chevron-up.svg": {
+          "blob": "16478b9425fd75a4181dc84ba341ee8c",
+          "name": "chevron-up.svg",
+          "size": 253,
+          "type": "image/svg+xml"
+        },
         "circle-alert.svg": {
           "blob": "e2f02abc59181f3d5717b76526fdc4f1",
           "name": "circle-alert.svg",
           "size": 412,
           "type": "image/svg+xml"
         },
+        "circle-stop.svg": {
+          "blob": "3f0dbcec626dd0cf1ae7074e5c1887bb",
+          "name": "circle-stop.svg",
+          "size": 318,
+          "type": "image/svg+xml"
+        },
         "cloud-off.svg": {
           "blob": "0c04dcf8705616f689d66d5615d573a7",
           "name": "cloud-off.svg",
           "size": 462,
+          "type": "image/svg+xml"
+        },
+        "copy.svg": {
+          "blob": "74b789d912c6697643934562d6ca424e",
+          "name": "copy.svg",
+          "size": 353,
           "type": "image/svg+xml"
         },
         "info.svg": {
@@ -49,6 +85,18 @@
           "blob": "00f76dd5a50a47317a71ac18e107b196",
           "name": "list.svg",
           "size": 425,
+          "type": "image/svg+xml"
+        },
+        "lock.svg": {
+          "blob": "af58c4af986d91e0eb217a17efe07d79",
+          "name": "lock.svg",
+          "size": 323,
+          "type": "image/svg+xml"
+        },
+        "mail.svg": {
+          "blob": "6b39abd95047b34322226cc74e017363",
+          "name": "mail.svg",
+          "size": 330,
           "type": "image/svg+xml"
         },
         "minus.svg": {
@@ -69,10 +117,22 @@
           "size": 406,
           "type": "image/svg+xml"
         },
+        "pause.svg": {
+          "blob": "5bb0e6b4bd72ef20276558e08f83dddc",
+          "name": "pause.svg",
+          "size": 328,
+          "type": "image/svg+xml"
+        },
         "pencil.svg": {
           "blob": "070a5c9a138aa8c7af6f1773eeff7895",
           "name": "pencil.svg",
           "size": 451,
+          "type": "image/svg+xml"
+        },
+        "play.svg": {
+          "blob": "68d50aa5cdefe4863c60085f4f71655c",
+          "name": "play.svg",
+          "size": 315,
           "type": "image/svg+xml"
         },
         "plus.svg": {
@@ -99,6 +159,12 @@
           "size": 662,
           "type": "image/svg+xml"
         },
+        "skip-forward.svg": {
+          "blob": "eee86ab83a7f657d6dd6f9abe0ecc88f",
+          "name": "skip-forward.svg",
+          "size": 355,
+          "type": "image/svg+xml"
+        },
         "sticky-note.svg": {
           "blob": "45bd006f99d53aa84790f10cf9a2e6e5",
           "name": "sticky-note.svg",
@@ -117,10 +183,28 @@
           "size": 464,
           "type": "image/svg+xml"
         },
+        "trending-up.svg": {
+          "blob": "bf873c5e95f87a28bc617f84e8d7be14",
+          "name": "trending-up.svg",
+          "size": 292,
+          "type": "image/svg+xml"
+        },
         "triangle-alert.svg": {
           "blob": "8d41fbfd46e054802dd170dc3f0f675c",
           "name": "triangle-alert.svg",
           "size": 427,
+          "type": "image/svg+xml"
+        },
+        "undo-2.svg": {
+          "blob": "cf4a4b164ab811ef7642edbec37903d8",
+          "name": "undo-2.svg",
+          "size": 325,
+          "type": "image/svg+xml"
+        },
+        "upload.svg": {
+          "blob": "541a1e558c0bb932e7e8126c31edfea3",
+          "name": "upload.svg",
+          "size": 339,
           "type": "image/svg+xml"
         },
         "x.svg": {
@@ -138,7 +222,10 @@
         "info.svg",
         "chevron-left.svg",
         "chevron-right.svg",
+        "chevron-up.svg",
+        "chevron-down.svg",
         "settings.svg",
+        "calendar-range.svg",
         "x.svg",
         "plus.svg",
         "minus.svg",
@@ -146,13 +233,24 @@
         "trash-2.svg",
         "search.svg",
         "cloud-off.svg",
+        "mail.svg",
         "refresh-cw.svg",
         "sun.svg",
         "moon.svg",
         "monitor.svg",
         "calendar-days.svg",
         "list.svg",
-        "sticky-note.svg"
+        "sticky-note.svg",
+        "pause.svg",
+        "play.svg",
+        "skip-forward.svg",
+        "circle-stop.svg",
+        "undo-2.svg",
+        "trending-up.svg",
+        "calendar.svg",
+        "copy.svg",
+        "upload.svg",
+        "lock.svg"
       ],
       "tile": "xs"
     },
@@ -227,9 +325,9 @@
   ],
   "lastChange": {
     "by": "John Mathews",
-    "at": "2026-11-16T23:38:00Z",
+    "at": "2026-11-18T20:10:00Z",
     "via": "Claude Code",
-    "note": "K139: the app icon's green ground joins pen's uses in the README's Never list and the pen row in foundations."
+    "note": "K142-K162, programmes: four new cards, ProgrammeGrid (a programme's overview, a row per activity and a column per week, past weeks locked on tile, a pencil after a hand-edited value), ChangeSheet (the change in two steps, Preview change then Confirm change, and Show it in the plan), ProgrammeChart (an activity's step chart with Set weight, Set increase, Pause activity and End activity) and ProgrammesPage (Started, Library and Add, with Preview and start in place). PlannerScreen gains a programme tracker's 'Week 4 of 8', a lock by a locked day and a paused row's sentence, and Edit plan's frame on a phone is a top line only (K162). The Header carries Programmes after Settings, and Full screen is hidden below 640px (K160). Icons gains calendar-range, calendar, chevron-up, chevron-down, circle-stop, copy, lock, pause, play, skip-forward, trending-up, undo-2 and upload, and the index now records mail. The README's Never list and foundations' pen and edit rows follow."
   },
 
   "layout": "files",
