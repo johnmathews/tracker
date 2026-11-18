@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, toRef, useTemplateRef } from 'vue'
 import {
+  CalendarRange,
   ChevronLeft,
   ChevronRight,
   CircleUserRound,
@@ -17,7 +18,7 @@ import { usePlannerStore } from '@/stores/planner'
 import { useSessionStore } from '@/stores/session'
 import { useTrackersStore } from '@/stores/trackers'
 import { weekRange } from '@/lib/dates'
-import { NEW_TRACKER_HREF, settingsHref } from '@/lib/routes'
+import { NEW_TRACKER_HREF, PROGRAMMES_HREF, settingsHref } from '@/lib/routes'
 import { BarAction } from '@/components/ui/bar-action'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -81,6 +82,11 @@ function toggleEditPlan(): void {
 /** Settings is a page of its own (#/settings, its first tab); App shows it on the hash change. */
 function openSettings(): void {
   location.hash = settingsHref()
+}
+
+/** Programmes (spec §9.1): a page of its own (#/programmes), like Settings. */
+function openProgrammes(): void {
+  location.hash = PROGRAMMES_HREF
 }
 
 /** Add tracker (K124): the new tracker page is a page of its own (#/new-tracker). */
@@ -185,7 +191,7 @@ function skipToToday(): void {
   The Header card (brand/design-system/project/components/Header), full width and as big as the
   week below it (K47). The week navigation comes first, at the start, its label set as the page's
   title (K81), and the BarActions follow at the end: "This week" while another week is on screen,
-  Ask (only while the API answers questions), Add tracker in Edit plan only (K124), Settings, Print
+  Ask (only while the API answers questions), Add tracker in Edit plan only (K124), Settings, Programmes (spec §9.1), Print
   and Full screen (K49). There is no
   wordmark and no Edit plan or Done button: the bar showing and Edit plan are one thing (K80),
   and a long press, E or Esc leave it (K91). The Settings and Ask pages have no bar (K52). Every size is a `--bar-*`
@@ -331,6 +337,13 @@ function skipToToday(): void {
           data-testid="settings-button"
           @click="openSettings"
           ><Settings
+        /></BarAction>
+        <BarAction
+          label="Programmes"
+          class="folded:flex-1 folded:basis-0"
+          data-testid="programmes-button"
+          @click="openProgrammes"
+          ><CalendarRange
         /></BarAction>
         <!-- Printing from a phone is rare, and the bar has no room for it there. -->
         <BarAction

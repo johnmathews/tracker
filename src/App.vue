@@ -8,6 +8,8 @@ import ProfilePage from '@/components/ProfilePage.vue'
 import AskPage from '@/components/AskPage.vue'
 import TrackerSection from '@/components/TrackerSection.vue'
 import NewTrackerPage from '@/components/NewTrackerPage.vue'
+import ProgrammesPage from '@/components/ProgrammesPage.vue'
+import ProgrammeOverview from '@/components/ProgrammeOverview.vue'
 import LoginForm from '@/components/LoginForm.vue'
 import PasswordForm from '@/components/PasswordForm.vue'
 import SignupForm from '@/components/SignupForm.vue'
@@ -32,10 +34,12 @@ import { useAskStore } from '@/stores/ask'
 import {
   isItemHash,
   isNewTrackerHash,
+  isProgrammesHash,
   itemHref,
   markFromWeek,
   parseItemHash,
   parseNewHash,
+  parseProgrammeHash,
   parseSettingsHash,
   type ItemRoute,
 } from '@/lib/routes'
@@ -90,11 +94,23 @@ const connectId = ref(connectRequest())
  * The page the hash asks for: Settings at `#/settings` and its tabs' `#/settings/<tab>` (K119),
  * Profile at `#/profile` (K106), Ask at `#/ask`, an item's page at `#/item/<tracker>/<id>`
  * (ItemPage card, D5), the new item page at `#/new/<tracker>` (K104), the new tracker page at
- * `#/new-tracker` (K124), otherwise the planner.
+ * `#/new-tracker` (K124), the Programmes page at `#/programmes` and a programme's overview at
+ * `#/programme/<tracker>` (spec §9.1, §9.2), otherwise the planner.
  */
-type Page = 'planner' | 'settings' | 'profile' | 'ask' | 'item' | 'new' | 'new-tracker'
+type Page =
+  | 'planner'
+  | 'settings'
+  | 'profile'
+  | 'ask'
+  | 'item'
+  | 'new'
+  | 'new-tracker'
+  | 'programmes'
+  | 'programme'
 function pageFor(): Page {
   if (parseSettingsHash(location.hash)) return 'settings'
+  if (isProgrammesHash(location.hash)) return 'programmes'
+  if (parseProgrammeHash(location.hash)) return 'programme'
   if (location.hash === '#/profile') return 'profile'
   if (location.hash === '#/ask') return 'ask'
   if (isNewTrackerHash(location.hash)) return 'new-tracker'
@@ -111,6 +127,8 @@ const page = ref<Page>(pageFor())
 const item = ref<ItemRoute | null>(parseItemHash(location.hash))
 /** The section the new item page adds to. */
 const newSection = ref(parseNewHash(location.hash))
+/** The programme tracker whose overview is open. */
+const programmeTracker = ref(parseProgrammeHash(location.hash))
 /**
  * The open Settings tab (K119): the one the address names, then the one chosen on the page, which
  * writes its address there too.
@@ -136,10 +154,15 @@ function onHash(): void {
   leftItem = item.value ?? leftItem
   item.value = parseItemHash(location.hash)
   newSection.value = parseNewHash(location.hash)
+  programmeTracker.value = parseProgrammeHash(location.hash)
   settingsTab.value = parseSettingsHash(location.hash) ?? settingsTab.value
   page.value = pageFor()
   // Opened from the week in this tab: its Back goes back through history (lib/routes).
-  if (['item', 'new', 'new-tracker'].includes(page.value) && before === 'planner') markFromWeek()
+  if (
+    ['item', 'new', 'new-tracker', 'programmes', 'programme'].includes(page.value) &&
+    before === 'planner'
+  )
+    markFromWeek()
 }
 /** Drop the page from the address bar, so a reload opens the week. */
 function forgetPage(): void {
@@ -152,12 +175,17 @@ function forgetPage(): void {
 // the menu's trigger, K106); back from an item's page, to that item's name in its row (WeekGrid
 // card); back from the new item page, to its tracker's Add button, ready for the next (K104); back
 // from the new tracker page, to the new tracker's Add button, or to Add tracker when none was added
-// (K124).
-const OPENERS: Record<'settings' | 'profile' | 'ask' | 'new-tracker', string> = {
+// (K124); back from the Programmes page or an overview, to the bar's Programmes.
+const OPENERS: Record<
+  'settings' | 'profile' | 'ask' | 'new-tracker' | 'programmes' | 'programme',
+  string
+> = {
   settings: 'settings-button',
   profile: 'profile-button',
   ask: 'ask-button',
   'new-tracker': 'add-tracker-button',
+  programmes: 'programmes-button',
+  programme: 'programmes-button',
 }
 /** A tracker's Add button on the week, found by its section's heading (TrackerSection). */
 function addButton(id: string): HTMLElement | null {
@@ -441,6 +469,16 @@ onBeforeUnmount(() => {
         <SyncStatus />
         <EmailStatus />
         <NewItemPage :key="newSection!" :section="newSection!" />
+      </template>
+      <template v-else-if="shown === 'programmes'">
+        <SyncStatus />
+        <EmailStatus />
+        <ProgrammesPage />
+      </template>
+      <template v-else-if="shown === 'programme'">
+        <SyncStatus />
+        <EmailStatus />
+        <ProgrammeOverview :key="programmeTracker!" :tracker="programmeTracker!" />
       </template>
       <template v-else-if="shown === 'profile'">
         <SyncStatus />

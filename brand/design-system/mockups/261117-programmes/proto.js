@@ -64,7 +64,6 @@
   const TARGET = 3
   const WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five']
   const fmt = (v, unit) => `${String(v)} ${unit}`
-  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
 
   // ---- The overview grid as a table (Q1 A; C on a wide screen) ----
   function weekHead(wk, s) {
@@ -567,7 +566,7 @@
       const keepDlg = el.querySelector('.dlg-body')?.scrollTop || 0
       s.scroll = null; s.scrollTo = null
       if (t.dataset.tab) s.tab = t.dataset.tab
-      else if (t.dataset.fold) { const n = Number(t.dataset.fold); s.unfolded.has(n) ? s.unfolded.delete(n) : s.unfolded.add(n) }
+      else if (t.dataset.fold) { const n = Number(t.dataset.fold); if (s.unfolded.has(n)) s.unfolded.delete(n); else s.unfolded.add(n) }
       else if (t.dataset.scope) s.scope = t.dataset.scope
       else if (t.dataset.drop) s.dropped = t.dataset.drop === '1'
       else if (t.dataset.step) s.step = Number(t.dataset.step)

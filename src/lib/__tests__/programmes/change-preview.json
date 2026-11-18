@@ -1,0 +1,1181 @@
+{
+  "preview": true,
+  "rev": "b64ca704a5971d71",
+  "change": {
+    "seq": 4,
+    "from": "2026-11-16",
+    "change": {
+      "type": "set-value",
+      "activity": "row",
+      "field": "weight",
+      "value": 45
+    },
+    "reason": null
+  },
+  "cells": [
+    {
+      "monday": "2026-11-23",
+      "key": "row",
+      "field": "weight",
+      "before": 42.5,
+      "after": 47.5,
+      "starts": "2026-11-23",
+      "programmeWeek": 6
+    },
+    {
+      "monday": "2026-11-30",
+      "key": "row",
+      "field": "weight",
+      "before": 45,
+      "after": 50,
+      "starts": "2026-11-30",
+      "programmeWeek": 7
+    },
+    {
+      "monday": "2026-12-07",
+      "key": "row",
+      "field": "weight",
+      "before": 42.5,
+      "after": 47.5,
+      "starts": "2026-12-07",
+      "programmeWeek": 8
+    }
+  ],
+  "blocking": [
+    {
+      "change": 1,
+      "key": "row",
+      "field": "weight",
+      "programmeWeek": 5,
+      "value": 35,
+      "madeOn": "2026-10-23",
+      "message": "Week 5 keeps the 35 kg set on 23 Oct."
+    }
+  ],
+  "endsShort": [
+    {
+      "key": "deadlift",
+      "name": "Deadlift",
+      "week": 7,
+      "of": 8,
+      "message": "Deadlift ends at its week 7 of 8."
+    }
+  ],
+  "undoes": null,
+  "deletes": null,
+  "grid": {
+    "activities": [
+      {
+        "key": "squat",
+        "name": "Back squat",
+        "addedOn": "2026-10-23",
+        "addedBy": null,
+        "endedOn": null
+      },
+      {
+        "key": "bench",
+        "name": "Bench press",
+        "addedOn": "2026-10-23",
+        "addedBy": null,
+        "endedOn": null
+      },
+      {
+        "key": "row",
+        "name": "Barbell row",
+        "addedOn": "2026-10-23",
+        "addedBy": null,
+        "endedOn": null
+      },
+      {
+        "key": "deadlift",
+        "name": "Deadlift",
+        "addedOn": "2026-10-23",
+        "addedBy": null,
+        "endedOn": null
+      },
+      {
+        "key": "plank",
+        "name": "Plank",
+        "addedOn": "2026-10-23",
+        "addedBy": null,
+        "endedOn": null
+      }
+    ],
+    "weeks": [
+      {
+        "monday": "2026-10-19",
+        "programmeWeeks": [1],
+        "label": null,
+        "current": false,
+        "locked": true,
+        "days": [
+          {
+            "date": "2026-10-19",
+            "status": "before-start",
+            "programmeWeek": null,
+            "sealed": true
+          },
+          {
+            "date": "2026-10-20",
+            "status": "before-start",
+            "programmeWeek": null,
+            "sealed": true
+          },
+          {
+            "date": "2026-10-21",
+            "status": "before-start",
+            "programmeWeek": null,
+            "sealed": true
+          },
+          {
+            "date": "2026-10-22",
+            "status": "before-start",
+            "programmeWeek": null,
+            "sealed": true
+          },
+          {
+            "date": "2026-10-23",
+            "status": "running",
+            "programmeWeek": 1,
+            "sealed": true
+          },
+          {
+            "date": "2026-10-24",
+            "status": "running",
+            "programmeWeek": 1,
+            "sealed": true
+          },
+          {
+            "date": "2026-10-25",
+            "status": "running",
+            "programmeWeek": 1,
+            "sealed": true
+          }
+        ],
+        "cells": {
+          "squat": {
+            "state": "running",
+            "activityWeek": 1,
+            "values": {
+              "target": 3,
+              "sets": 5,
+              "reps": 5,
+              "weight": 40
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, "great", "great", null]
+          },
+          "bench": {
+            "state": "running",
+            "activityWeek": 1,
+            "values": {
+              "target": 3,
+              "sets": 5,
+              "reps": 5,
+              "weight": 30
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "row": {
+            "state": "running",
+            "activityWeek": 1,
+            "values": {
+              "target": 3,
+              "sets": 5,
+              "reps": 5,
+              "weight": 30
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "deadlift": {
+            "state": "running",
+            "activityWeek": 1,
+            "values": {
+              "target": 3,
+              "sets": 1,
+              "reps": 5,
+              "weight": 60
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "plank": {
+            "state": "running",
+            "activityWeek": 1,
+            "values": {
+              "target": 3,
+              "sets": 3,
+              "duration": 30
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          }
+        }
+      },
+      {
+        "monday": "2026-10-26",
+        "programmeWeeks": [2],
+        "label": null,
+        "current": false,
+        "locked": true,
+        "days": [
+          {
+            "date": "2026-10-26",
+            "status": "running",
+            "programmeWeek": 2,
+            "sealed": true
+          },
+          {
+            "date": "2026-10-27",
+            "status": "running",
+            "programmeWeek": 2,
+            "sealed": true
+          },
+          {
+            "date": "2026-10-28",
+            "status": "running",
+            "programmeWeek": 2,
+            "sealed": true
+          },
+          {
+            "date": "2026-10-29",
+            "status": "running",
+            "programmeWeek": 2,
+            "sealed": true
+          },
+          {
+            "date": "2026-10-30",
+            "status": "running",
+            "programmeWeek": 2,
+            "sealed": true
+          },
+          {
+            "date": "2026-10-31",
+            "status": "running",
+            "programmeWeek": 2,
+            "sealed": true
+          },
+          {
+            "date": "2026-11-01",
+            "status": "running",
+            "programmeWeek": 2,
+            "sealed": true
+          }
+        ],
+        "cells": {
+          "squat": {
+            "state": "running",
+            "activityWeek": 2,
+            "values": {
+              "target": 3,
+              "sets": 5,
+              "reps": 5,
+              "weight": 42.5
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": ["great", null, "great", null, "partial", null, null]
+          },
+          "bench": {
+            "state": "running",
+            "activityWeek": 2,
+            "values": {
+              "target": 3,
+              "sets": 5,
+              "reps": 5,
+              "weight": 32.5
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": ["great", null, "great", null, null, null, null]
+          },
+          "row": {
+            "state": "running",
+            "activityWeek": 2,
+            "values": {
+              "target": 3,
+              "sets": 5,
+              "reps": 5,
+              "weight": 32.5
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "deadlift": {
+            "state": "running",
+            "activityWeek": 2,
+            "values": {
+              "target": 3,
+              "sets": 1,
+              "reps": 5,
+              "weight": 65
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "plank": {
+            "state": "running",
+            "activityWeek": 2,
+            "values": {
+              "target": 3,
+              "sets": 3,
+              "duration": 30
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          }
+        }
+      },
+      {
+        "monday": "2026-11-02",
+        "programmeWeeks": [3],
+        "label": null,
+        "current": false,
+        "locked": true,
+        "days": [
+          {
+            "date": "2026-11-02",
+            "status": "running",
+            "programmeWeek": 3,
+            "sealed": true
+          },
+          {
+            "date": "2026-11-03",
+            "status": "running",
+            "programmeWeek": 3,
+            "sealed": true
+          },
+          {
+            "date": "2026-11-04",
+            "status": "running",
+            "programmeWeek": 3,
+            "sealed": true
+          },
+          {
+            "date": "2026-11-05",
+            "status": "running",
+            "programmeWeek": 3,
+            "sealed": true
+          },
+          {
+            "date": "2026-11-06",
+            "status": "running",
+            "programmeWeek": 3,
+            "sealed": true
+          },
+          {
+            "date": "2026-11-07",
+            "status": "running",
+            "programmeWeek": 3,
+            "sealed": true
+          },
+          {
+            "date": "2026-11-08",
+            "status": "running",
+            "programmeWeek": 3,
+            "sealed": true
+          }
+        ],
+        "cells": {
+          "squat": {
+            "state": "running",
+            "activityWeek": 3,
+            "values": {
+              "target": 3,
+              "sets": 5,
+              "reps": 5,
+              "weight": 45
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "bench": {
+            "state": "running",
+            "activityWeek": 3,
+            "values": {
+              "target": 3,
+              "sets": 5,
+              "reps": 5,
+              "weight": 35
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "row": {
+            "state": "running",
+            "activityWeek": 3,
+            "values": {
+              "target": 3,
+              "sets": 5,
+              "reps": 5,
+              "weight": 35
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "deadlift": {
+            "state": "running",
+            "activityWeek": 3,
+            "values": {
+              "target": 3,
+              "sets": 1,
+              "reps": 5,
+              "weight": 70
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "plank": {
+            "state": "running",
+            "activityWeek": 3,
+            "values": {
+              "target": 3,
+              "sets": 3,
+              "duration": 35
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          }
+        }
+      },
+      {
+        "monday": "2026-11-09",
+        "programmeWeeks": [4],
+        "label": "Deload",
+        "current": true,
+        "locked": false,
+        "days": [
+          {
+            "date": "2026-11-09",
+            "status": "running",
+            "programmeWeek": 4,
+            "sealed": true
+          },
+          {
+            "date": "2026-11-10",
+            "status": "running",
+            "programmeWeek": 4,
+            "sealed": true
+          },
+          {
+            "date": "2026-11-11",
+            "status": "running",
+            "programmeWeek": 4,
+            "sealed": true
+          },
+          {
+            "date": "2026-11-12",
+            "status": "running",
+            "programmeWeek": 4,
+            "sealed": false
+          },
+          {
+            "date": "2026-11-13",
+            "status": "running",
+            "programmeWeek": 4,
+            "sealed": false
+          },
+          {
+            "date": "2026-11-14",
+            "status": "running",
+            "programmeWeek": 4,
+            "sealed": false
+          },
+          {
+            "date": "2026-11-15",
+            "status": "running",
+            "programmeWeek": 4,
+            "sealed": false
+          }
+        ],
+        "cells": {
+          "squat": {
+            "state": "running",
+            "activityWeek": 4,
+            "values": {
+              "target": 3,
+              "sets": 3,
+              "reps": 5,
+              "weight": 42.5
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "bench": {
+            "state": "running",
+            "activityWeek": 4,
+            "values": {
+              "target": 3,
+              "sets": 3,
+              "reps": 5,
+              "weight": 27.5
+            },
+            "target": 3,
+            "splits": {
+              "weight": [
+                {
+                  "from": "2026-11-09",
+                  "value": 35
+                },
+                {
+                  "from": "2026-11-12",
+                  "value": 27.5
+                }
+              ]
+            },
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "row": {
+            "state": "running",
+            "activityWeek": 4,
+            "values": {
+              "target": 3,
+              "sets": 3,
+              "reps": 5,
+              "weight": 35
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "deadlift": {
+            "state": "running",
+            "activityWeek": 4,
+            "values": {
+              "target": 3,
+              "sets": 1,
+              "reps": 5,
+              "weight": 67.5
+            },
+            "target": 0,
+            "splits": {},
+            "hand": {},
+            "until": "2026-11-26",
+            "reason": "Knee",
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "plank": {
+            "state": "running",
+            "activityWeek": 4,
+            "values": {
+              "target": 3,
+              "sets": 3,
+              "duration": 35
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          }
+        }
+      },
+      {
+        "monday": "2026-11-16",
+        "programmeWeeks": [5],
+        "label": null,
+        "current": false,
+        "locked": false,
+        "days": [
+          {
+            "date": "2026-11-16",
+            "status": "running",
+            "programmeWeek": 5,
+            "sealed": false
+          },
+          {
+            "date": "2026-11-17",
+            "status": "running",
+            "programmeWeek": 5,
+            "sealed": false
+          },
+          {
+            "date": "2026-11-18",
+            "status": "running",
+            "programmeWeek": 5,
+            "sealed": false
+          },
+          {
+            "date": "2026-11-19",
+            "status": "running",
+            "programmeWeek": 5,
+            "sealed": false
+          },
+          {
+            "date": "2026-11-20",
+            "status": "running",
+            "programmeWeek": 5,
+            "sealed": false
+          },
+          {
+            "date": "2026-11-21",
+            "status": "running",
+            "programmeWeek": 5,
+            "sealed": false
+          },
+          {
+            "date": "2026-11-22",
+            "status": "running",
+            "programmeWeek": 5,
+            "sealed": false
+          }
+        ],
+        "cells": {
+          "squat": {
+            "state": "running",
+            "activityWeek": 5,
+            "values": {
+              "target": 3,
+              "sets": 5,
+              "reps": 5,
+              "weight": 47.5
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "bench": {
+            "state": "running",
+            "activityWeek": 5,
+            "values": {
+              "target": 3,
+              "sets": 5,
+              "reps": 5,
+              "weight": 32.5
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "row": {
+            "state": "running",
+            "activityWeek": 5,
+            "values": {
+              "target": 3,
+              "sets": 5,
+              "reps": 5,
+              "weight": 35
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {
+              "weight": {
+                "change": 1,
+                "madeOn": "2026-10-23",
+                "rule": 45
+              }
+            },
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "deadlift": {
+            "state": "paused",
+            "activityWeek": 5,
+            "values": {
+              "target": 3,
+              "sets": 1,
+              "reps": 5,
+              "weight": 80
+            },
+            "target": 0,
+            "splits": {},
+            "hand": {},
+            "until": "2026-11-26",
+            "reason": "Knee",
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "plank": {
+            "state": "running",
+            "activityWeek": 5,
+            "values": {
+              "target": 3,
+              "sets": 3,
+              "duration": 40
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          }
+        }
+      },
+      {
+        "monday": "2026-11-23",
+        "programmeWeeks": [6],
+        "label": null,
+        "current": false,
+        "locked": false,
+        "days": [
+          {
+            "date": "2026-11-23",
+            "status": "running",
+            "programmeWeek": 6,
+            "sealed": false
+          },
+          {
+            "date": "2026-11-24",
+            "status": "running",
+            "programmeWeek": 6,
+            "sealed": false
+          },
+          {
+            "date": "2026-11-25",
+            "status": "running",
+            "programmeWeek": 6,
+            "sealed": false
+          },
+          {
+            "date": "2026-11-26",
+            "status": "running",
+            "programmeWeek": 6,
+            "sealed": false
+          },
+          {
+            "date": "2026-11-27",
+            "status": "running",
+            "programmeWeek": 6,
+            "sealed": false
+          },
+          {
+            "date": "2026-11-28",
+            "status": "running",
+            "programmeWeek": 6,
+            "sealed": false
+          },
+          {
+            "date": "2026-11-29",
+            "status": "running",
+            "programmeWeek": 6,
+            "sealed": false
+          }
+        ],
+        "cells": {
+          "squat": {
+            "state": "running",
+            "activityWeek": 6,
+            "values": {
+              "target": 3,
+              "sets": 5,
+              "reps": 5,
+              "weight": 50
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "bench": {
+            "state": "running",
+            "activityWeek": 6,
+            "values": {
+              "target": 3,
+              "sets": 5,
+              "reps": 5,
+              "weight": 35
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "row": {
+            "state": "running",
+            "activityWeek": 6,
+            "values": {
+              "target": 3,
+              "sets": 5,
+              "reps": 5,
+              "weight": 47.5
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "deadlift": {
+            "state": "running",
+            "activityWeek": 5,
+            "values": {
+              "target": 3,
+              "sets": 1,
+              "reps": 5,
+              "weight": 80
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": "2026-11-26",
+            "reason": "Knee",
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "plank": {
+            "state": "running",
+            "activityWeek": 6,
+            "values": {
+              "target": 3,
+              "sets": 3,
+              "duration": 40
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          }
+        }
+      },
+      {
+        "monday": "2026-11-30",
+        "programmeWeeks": [7],
+        "label": null,
+        "current": false,
+        "locked": false,
+        "days": [
+          {
+            "date": "2026-11-30",
+            "status": "running",
+            "programmeWeek": 7,
+            "sealed": false
+          },
+          {
+            "date": "2026-12-01",
+            "status": "running",
+            "programmeWeek": 7,
+            "sealed": false
+          },
+          {
+            "date": "2026-12-02",
+            "status": "running",
+            "programmeWeek": 7,
+            "sealed": false
+          },
+          {
+            "date": "2026-12-03",
+            "status": "running",
+            "programmeWeek": 7,
+            "sealed": false
+          },
+          {
+            "date": "2026-12-04",
+            "status": "running",
+            "programmeWeek": 7,
+            "sealed": false
+          },
+          {
+            "date": "2026-12-05",
+            "status": "running",
+            "programmeWeek": 7,
+            "sealed": false
+          },
+          {
+            "date": "2026-12-06",
+            "status": "running",
+            "programmeWeek": 7,
+            "sealed": false
+          }
+        ],
+        "cells": {
+          "squat": {
+            "state": "running",
+            "activityWeek": 7,
+            "values": {
+              "target": 3,
+              "sets": 5,
+              "reps": 5,
+              "weight": 52.5
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "bench": {
+            "state": "running",
+            "activityWeek": 7,
+            "values": {
+              "target": 3,
+              "sets": 5,
+              "reps": 5,
+              "weight": 37.5
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "row": {
+            "state": "running",
+            "activityWeek": 7,
+            "values": {
+              "target": 3,
+              "sets": 5,
+              "reps": 5,
+              "weight": 50
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "deadlift": {
+            "state": "running",
+            "activityWeek": 6,
+            "values": {
+              "target": 3,
+              "sets": 1,
+              "reps": 5,
+              "weight": 85
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "plank": {
+            "state": "running",
+            "activityWeek": 7,
+            "values": {
+              "target": 3,
+              "sets": 3,
+              "duration": 45
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          }
+        }
+      },
+      {
+        "monday": "2026-12-07",
+        "programmeWeeks": [8],
+        "label": "Deload",
+        "current": false,
+        "locked": false,
+        "days": [
+          {
+            "date": "2026-12-07",
+            "status": "running",
+            "programmeWeek": 8,
+            "sealed": false
+          },
+          {
+            "date": "2026-12-08",
+            "status": "running",
+            "programmeWeek": 8,
+            "sealed": false
+          },
+          {
+            "date": "2026-12-09",
+            "status": "running",
+            "programmeWeek": 8,
+            "sealed": false
+          },
+          {
+            "date": "2026-12-10",
+            "status": "running",
+            "programmeWeek": 8,
+            "sealed": false
+          },
+          {
+            "date": "2026-12-11",
+            "status": "running",
+            "programmeWeek": 8,
+            "sealed": false
+          },
+          {
+            "date": "2026-12-12",
+            "status": "running",
+            "programmeWeek": 8,
+            "sealed": false
+          },
+          {
+            "date": "2026-12-13",
+            "status": "running",
+            "programmeWeek": 8,
+            "sealed": false
+          }
+        ],
+        "cells": {
+          "squat": {
+            "state": "running",
+            "activityWeek": 8,
+            "values": {
+              "target": 3,
+              "sets": 3,
+              "reps": 5,
+              "weight": 50
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "bench": {
+            "state": "running",
+            "activityWeek": 8,
+            "values": {
+              "target": 3,
+              "sets": 3,
+              "reps": 5,
+              "weight": 35
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "row": {
+            "state": "running",
+            "activityWeek": 8,
+            "values": {
+              "target": 3,
+              "sets": 3,
+              "reps": 5,
+              "weight": 47.5
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "deadlift": {
+            "state": "running",
+            "activityWeek": 7,
+            "values": {
+              "target": 3,
+              "sets": 1,
+              "reps": 5,
+              "weight": 80
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          },
+          "plank": {
+            "state": "running",
+            "activityWeek": 8,
+            "values": {
+              "target": 3,
+              "sets": 3,
+              "duration": 45
+            },
+            "target": 3,
+            "splits": {},
+            "hand": {},
+            "until": null,
+            "reason": null,
+            "marks": [null, null, null, null, null, null, null]
+          }
+        }
+      }
+    ],
+    "whenResumed": []
+  }
+}

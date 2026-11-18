@@ -12,7 +12,17 @@ import { isRecord } from '@/lib/storage'
  * cleared, null when the item never had any); a tracker write's carries `tracker`. No copy is
  * validated here.
  */
-export type ConflictBody = { rev: number; items?: unknown; details?: unknown; tracker?: unknown }
+export type ConflictBody = {
+  rev: number
+  items?: unknown
+  details?: unknown
+  tracker?: unknown
+  /** A stale programme change's: the change previewed again (spec §7.3). */
+  preview?: unknown
+}
+
+/** One problem the API found with what was sent: where it is, and a sentence (spec §3.4). */
+export type Problem = { path: string; message: string }
 
 export type ApiError =
   /** No network, or the proxy could not reach the API (502, 503 or 504 without an API body). */
@@ -23,8 +33,11 @@ export type ApiError =
   | { kind: 'server'; status: number }
   /** A stale plan, details or tracker write; the body carries the server's copy and `rev`. */
   | { kind: 'conflict'; body: ConflictBody }
-  /** Any other refusal, with the API's error code (`error` when the reply was not the API's). */
-  | { kind: 'refused'; status: number; code: string; retryAfter?: number }
+  /**
+   * Any other refusal, with the API's error code (`error` when the reply was not the API's). A
+   * programme's 400 `invalid` lists every problem in `errors`.
+   */
+  | { kind: 'refused'; status: number; code: string; retryAfter?: number; errors?: Problem[] }
 
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: ApiError }
 
@@ -57,7 +70,12 @@ function errorFor(status: number, json: Record<string, unknown> | null): ApiErro
   if (status >= 500 && code === null) return { kind: 'server', status }
   const error: ApiError = { kind: 'refused', status, code: code ?? 'error' }
   if (typeof json?.retryAfter === 'number') error.retryAfter = json.retryAfter
+  if (Array.isArray(json?.errors)) error.errors = json.errors.filter(isProblem)
   return error
+}
+
+function isProblem(v: unknown): v is Problem {
+  return isRecord(v) && typeof v.path === 'string' && typeof v.message === 'string'
 }
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'

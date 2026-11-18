@@ -262,6 +262,8 @@ describe('the planner grids (W10)', () => {
         'Previous week',
         'Next week',
         'Settings',
+        // The Programmes page (spec §9.1).
+        'Programmes',
         'Print…',
         // The last action (K106): it opens the profile menu.
         'Profile',

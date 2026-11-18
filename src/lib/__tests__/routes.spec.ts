@@ -12,6 +12,10 @@ import {
   parseItemHash,
   parseNewHash,
   parseSettingsHash,
+  isProgrammesHash,
+  parseProgrammeHash,
+  programmeHref,
+  PROGRAMMES_HREF,
   SETTINGS_TABS,
   settingsHref,
   webHost,
@@ -90,6 +94,27 @@ describe('the new tracker page’s address (#/new-tracker, K124)', () => {
     expect(NEW_TRACKER_HREF).toBe('#/new-tracker')
     for (const hash of ['', '#/', '#/new-tracker/x', '#/new/tracker', '#/new-trackers'])
       expect(isNewTrackerHash(hash)).toBe(false)
+  })
+})
+
+describe('the Programmes page’s address (#/programmes, spec §9.1)', () => {
+  it('knows its own address and no other', () => {
+    expect(PROGRAMMES_HREF).toBe('#/programmes')
+    expect(isProgrammesHash('#/programmes')).toBe(true)
+    for (const hash of ['', '#/', '#/programmes/x', '#/programme', '#/programme/x'])
+      expect(isProgrammesHash(hash)).toBe(false)
+  })
+})
+
+describe('a programme’s overview address (#/programme/<tracker>, spec §9.2)', () => {
+  it('names the tracker, and reads back what it wrote', () => {
+    expect(programmeHref('xk3j9a2b1c')).toBe('#/programme/xk3j9a2b1c')
+    expect(parseProgrammeHash(programmeHref('xk3j9a2b1c'))).toBe('xk3j9a2b1c')
+  })
+
+  it('reads nothing from an address that names no tracker id', () => {
+    for (const hash of ['', '#/programme/', '#/programme/a/b', '#/programmes', '#/programme/A B'])
+      expect(parseProgrammeHash(hash)).toBeNull()
   })
 })
 

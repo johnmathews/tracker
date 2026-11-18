@@ -61,6 +61,31 @@ export function isNewTrackerHash(hash: string): boolean {
   return hash === NEW_TRACKER_HREF
 }
 
+/** The Programmes page's address (spec §9.1, K147): the bar's Programmes opens it. */
+export const PROGRAMMES_HREF = '#/programmes'
+
+/** Whether the address is the Programmes page's. */
+export function isProgrammesHash(hash: string): boolean {
+  return hash === PROGRAMMES_HREF
+}
+
+/** A programme's overview, `#/programme/<tracker>` (spec §9.2): its tracker's id names it. */
+const PROGRAMME = /^#\/programme\/([^/]+)$/
+
+/** The address of a programme tracker's overview. */
+export function programmeHref(tracker: string): string {
+  return `#/programme/${tracker}`
+}
+
+/**
+ * The tracker an overview's address names, or null for any other address. Whether the tracker
+ * has a run is the server's to say (`GET /api/runs/<tracker>`).
+ */
+export function parseProgrammeHash(hash: string): string | null {
+  const tracker = PROGRAMME.exec(hash)?.[1]
+  return isTrackerId(tracker) ? tracker : null
+}
+
 /**
  * The Settings page's tabs, in order (K119), each with its own address: `#/settings/<tab>`.
  * `#/settings` alone opens the first.

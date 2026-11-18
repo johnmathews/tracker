@@ -59,6 +59,45 @@ describe('request', () => {
     })
   })
 
+  it('passes a programme’s problems through, each with its path (spec §3.4)', async () => {
+    const errors = [
+      { path: 'weeks', message: 'give a whole number from 1 to 52.' },
+      { path: 'activities[2].weight.rate', message: 'a progression has add or rate, not both.' },
+    ]
+    respond(400, { error: 'invalid', errors })
+    expect(await request('POST', '/programmes', {})).toEqual({
+      ok: false,
+      error: { kind: 'refused', status: 400, code: 'invalid', errors },
+    })
+    // Only well-formed problems pass.
+    respond(400, { error: 'invalid', errors: [{ path: 'x' }, 'y', { path: 'from', message: 'm' }] })
+    expect(await request('POST', '/runs/t/changes', {})).toEqual({
+      ok: false,
+      error: {
+        kind: 'refused',
+        status: 400,
+        code: 'invalid',
+        errors: [{ path: 'from', message: 'm' }],
+      },
+    })
+    respond(400, { error: 'invalid', errors: 'all of it' })
+    expect(await request('POST', '/programmes', {})).toEqual({
+      ok: false,
+      error: { kind: 'refused', status: 400, code: 'invalid' },
+    })
+  })
+
+  it('keeps a stale programme change’s fresh preview with its conflict (spec §7.3)', async () => {
+    respond(409, { error: 'conflict', rev: 'b64c', preview: { rev: 'b64c' } })
+    expect(await request('POST', '/runs/t/changes', {})).toEqual({
+      ok: false,
+      error: {
+        kind: 'conflict',
+        body: { error: 'conflict', rev: 'b64c', preview: { rev: 'b64c' } },
+      },
+    })
+  })
+
   it('treats any other 409 as a refusal with its code', async () => {
     respond(409, { error: 'exists' })
     expect(await request('POST', '/auth/signup', {})).toEqual({

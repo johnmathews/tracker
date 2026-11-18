@@ -1,0 +1,337 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
+import { useProgrammesStore } from '@/stores/programmes'
+import { useSessionStore } from '@/stores/session'
+import { useSyncStore } from '@/stores/sync'
+import type { ChangePreview, ChangeRequest, Run } from '@/lib/programmes'
+import RUN_JSON from '@/lib/__tests__/programmes/run.json'
+import PREVIEW_JSON from '@/lib/__tests__/programmes/change-preview.json'
+import START_JSON from '@/lib/__tests__/programmes/start-preview.json'
+import LIBRARY_JSON from '@/lib/__tests__/programmes/library.json'
+import BEGINNER from '../../../fixtures/programmes/valid/beginner-5x5.json'
+
+const RUN = RUN_JSON as unknown as Run
+const PREVIEW = PREVIEW_JSON as unknown as ChangePreview
+const PID = LIBRARY_JSON.programmes[0]!.id
+const RECORD = { ...LIBRARY_JSON.programmes[0]!, doc: BEGINNER }
+const SUMMARY = {
+  programmeId: PID,
+  name: 'Beginner 5×5',
+  status: 'running',
+  week: 4,
+  weeks: 8,
+  start: '2026-10-23',
+  end: '2026-12-13',
+  pausedUntil: null,
+  rev: RUN.rev,
+}
+
+type Call = { method: string; path: string; body: unknown; user: string | null }
+type Reply = { status?: number; body?: unknown } | 'offline'
+let calls: Call[]
+let replies: Record<string, Reply>
+
+/** The API as a table of replies by "METHOD /path"; each call is kept. */
+function serve(table: Record<string, Reply>): void {
+  replies = table
+  vi.stubGlobal(
+    'fetch',
+    vi.fn<typeof fetch>(async (input, init = {}) => {
+      const method = init.method ?? 'GET'
+      const path = String(input).replace(/^\/api/, '')
+      const headers = new Headers(init.headers)
+      calls.push({
+        method,
+        path,
+        body: typeof init.body === 'string' ? JSON.parse(init.body) : undefined,
+        user: headers.get('X-Expected-User'),
+      })
+      const reply = replies[`${method} ${path}`] ?? { status: 404, body: { error: 'not-found' } }
+      if (reply === 'offline') throw new TypeError('Failed to fetch')
+      if (reply.status === 204) return new Response(null, { status: 204 })
+      return Response.json(reply.body ?? {}, { status: reply.status ?? 200 })
+    }),
+  )
+}
+
+beforeEach(() => {
+  setActivePinia(createPinia())
+  calls = []
+  useSessionStore().user = 'alice'
+})
+afterEach(() => vi.unstubAllGlobals())
+
+describe('the Programmes page’s data', () => {
+  it('loads the library, and the runs and today from the state', async () => {
+    serve({
+      'GET /programmes': { body: LIBRARY_JSON },
+      'GET /state': { body: { today: '2026-11-12', runs: { t1: SUMMARY }, trackers: [] } },
+    })
+    const store = useProgrammesStore()
+    expect(store.library).toBeNull()
+    await store.loadPage()
+    expect(store.library).toEqual(LIBRARY_JSON.programmes)
+    expect(store.runs).toEqual({ t1: SUMMARY })
+    expect(store.today).toBe('2026-11-12')
+    expect(store.loadFailure).toBeNull()
+    expect(calls.every((c) => c.user === 'alice')).toBe(true)
+  })
+
+  it('says why the page couldn’t load, keeping what it had', async () => {
+    serve({
+      'GET /programmes': { body: LIBRARY_JSON },
+      'GET /state': { body: { today: '2026-11-12' } },
+    })
+    const store = useProgrammesStore()
+    await store.loadPage()
+    serve({ 'GET /programmes': 'offline', 'GET /state': 'offline' })
+    await store.loadPage()
+    expect(store.library).toEqual(LIBRARY_JSON.programmes)
+    expect(store.loadFailure).toBe(
+      'Can’t reach the server, so the programmes couldn’t load. Try again when you’re online.',
+    )
+    serve({ 'GET /programmes': { body: LIBRARY_JSON }, 'GET /state': { status: 500, body: {} } })
+    await store.loadPage()
+    expect(store.loadFailure).toBe(
+      'The server had a problem, so the programmes couldn’t load. Try again in a while.',
+    )
+  })
+
+  it('is offline while the browser or the sync says so', async () => {
+    const store = useProgrammesStore()
+    expect(store.offline).toBe(false)
+    window.dispatchEvent(new Event('offline'))
+    expect(store.offline).toBe(true)
+    window.dispatchEvent(new Event('online'))
+    expect(store.offline).toBe(false)
+    useSyncStore().status = 'offline'
+    expect(store.offline).toBe(true)
+  })
+})
+
+describe('the library', () => {
+  it('reads one programme with its document', async () => {
+    serve({ [`GET /programmes/${PID}`]: { body: RECORD } })
+    expect(await useProgrammesStore().readProgramme(PID)).toEqual({ ok: true, data: RECORD })
+  })
+
+  it('adds pasted JSON, then lists it', async () => {
+    serve({
+      'POST /programmes': { status: 201, body: RECORD },
+      'GET /programmes': { body: LIBRARY_JSON },
+      'GET /state': { body: { today: '2026-11-12', runs: {} } },
+    })
+    const store = useProgrammesStore()
+    const result = await store.addProgramme(JSON.stringify(BEGINNER))
+    expect(result).toEqual({ ok: true, data: RECORD })
+    expect(calls[0]).toMatchObject({ method: 'POST', path: '/programmes', body: { doc: BEGINNER } })
+    expect(store.library).toEqual(LIBRARY_JSON.programmes)
+  })
+
+  it('returns the validator’s problems, each with its path', async () => {
+    const errors = [{ path: 'weeks', message: 'give a whole number from 1 to 52.' }]
+    serve({ 'POST /programmes': { status: 400, body: { error: 'invalid', errors } } })
+    expect(await useProgrammesStore().addProgramme('{"weeks": 60}')).toEqual({
+      ok: false,
+      problems: errors,
+      message: null,
+    })
+  })
+
+  it('says text that isn’t JSON is the problem, and sends nothing', async () => {
+    serve({})
+    expect(await useProgrammesStore().addProgramme('{ "name": ')).toEqual({
+      ok: false,
+      problems: [],
+      message:
+        'This isn’t JSON the app can read. Check its brackets, commas and quotes, then check it again.',
+    })
+    expect(calls).toEqual([])
+  })
+
+  it('says why an add failed', async () => {
+    serve({ 'POST /programmes': { status: 413, body: { error: 'too-large' } } })
+    expect(await useProgrammesStore().addProgramme('{}')).toEqual({
+      ok: false,
+      problems: [],
+      message: 'That programme is too big. A programme is at most 128 KB.',
+    })
+  })
+
+  it('duplicates a programme under a new name', async () => {
+    serve({
+      [`GET /programmes/${PID}`]: { body: RECORD },
+      'POST /programmes': { status: 201, body: { ...RECORD, id: 'p2' } },
+      'GET /programmes': { body: LIBRARY_JSON },
+      'GET /state': { body: {} },
+    })
+    const result = await useProgrammesStore().duplicate(PID)
+    expect(result.ok).toBe(true)
+    expect(calls[1]).toMatchObject({
+      method: 'POST',
+      path: '/programmes',
+      body: { doc: { ...BEGINNER, name: 'Copy of Beginner 5×5' } },
+    })
+  })
+
+  it('doesn’t duplicate a programme it can’t read', async () => {
+    serve({ [`GET /programmes/${PID}`]: 'offline' })
+    expect(await useProgrammesStore().duplicate(PID)).toMatchObject({ ok: false })
+    expect(calls).toHaveLength(1)
+  })
+
+  it('asks for no user when nobody is signed in, and deletes before the list has loaded', async () => {
+    useSessionStore().user = null
+    serve({ [`DELETE /programmes/${PID}`]: { status: 204 } })
+    const store = useProgrammesStore()
+    expect(await store.remove(PID)).toEqual({ ok: true, data: null })
+    expect(calls[0]!.user).toBe('')
+    expect(store.library).toEqual([])
+  })
+
+  it('deletes a programme and drops it from the list', async () => {
+    serve({
+      'GET /programmes': { body: LIBRARY_JSON },
+      'GET /state': { body: {} },
+      [`DELETE /programmes/${PID}`]: { status: 204 },
+    })
+    const store = useProgrammesStore()
+    await store.loadPage()
+    expect(await store.remove(PID)).toEqual({ ok: true, data: null })
+    expect(store.library).toEqual([])
+    serve({ [`DELETE /programmes/${PID}`]: 'offline' })
+    expect(await store.remove(PID)).toMatchObject({ ok: false, problems: [] })
+  })
+})
+
+describe('starting a programme', () => {
+  it('previews a start with the server’s grid', async () => {
+    serve({ [`POST /programmes/${PID}/preview`]: { body: START_JSON } })
+    const body = { start: '2026-10-26', params: { squat: 40, rate: 5 } }
+    expect(await useProgrammesStore().previewStart(PID, body)).toEqual({
+      ok: true,
+      data: START_JSON,
+    })
+    expect(calls[0]!.body).toEqual(body)
+  })
+
+  it('starts a run, then reads the state again so the week shows it', async () => {
+    serve({
+      [`POST /programmes/${PID}/start`]: { status: 201, body: { tracker: { id: 't1' }, run: RUN } },
+      'GET /programmes': { body: LIBRARY_JSON },
+      'GET /state': { body: { today: '2026-11-12', runs: { t1: SUMMARY } } },
+    })
+    const store = useProgrammesStore()
+    const refresh = vi.spyOn(useSyncStore(), 'refresh').mockResolvedValue()
+    const result = await store.start(PID, { name: 'Beginner 5×5', start: '2026-11-12', params: {} })
+    expect(result).toEqual({ ok: true, data: { tracker: { id: 't1' }, run: RUN } })
+    expect(refresh).toHaveBeenCalled()
+    expect(store.runs).toEqual({ t1: SUMMARY })
+    expect(store.run).toEqual(RUN)
+  })
+
+  it('returns a start’s problems', async () => {
+    const errors = [{ path: 'start', message: 'a programme starts today or later.' }]
+    serve({
+      [`POST /programmes/${PID}/start`]: { status: 400, body: { error: 'invalid', errors } },
+    })
+    expect(await useProgrammesStore().start(PID, {})).toEqual({
+      ok: false,
+      problems: errors,
+      message: null,
+    })
+  })
+})
+
+describe('a running programme', () => {
+  it('reads the run for its overview', async () => {
+    serve({ 'GET /runs/t1': { body: RUN } })
+    const store = useProgrammesStore()
+    expect(await store.loadRun('t1')).toEqual({ ok: true, data: RUN })
+    expect(store.run).toEqual(RUN)
+  })
+
+  it('says a tracker has no run with no message, and why else a run couldn’t be read', async () => {
+    serve({ 'GET /runs/t1': { status: 404, body: { error: 'not-found' } } })
+    const store = useProgrammesStore()
+    expect(await store.loadRun('t1')).toEqual({ ok: false, problems: [], message: null })
+    serve({ 'GET /runs/t1': 'offline' })
+    expect(await store.loadRun('t1')).toMatchObject({ ok: false, message: expect.any(String) })
+    expect(store.run).toBeNull()
+  })
+
+  it('previews a change, writing nothing', async () => {
+    serve({ 'POST /runs/t1/changes': { body: PREVIEW } })
+    const request = {
+      change: { type: 'set-value', activity: 'row', field: 'weight', value: 45 },
+      from: '2026-11-16',
+    } as const
+    expect(await useProgrammesStore().previewChange('t1', request)).toEqual({
+      ok: true,
+      data: PREVIEW,
+    })
+    expect(calls[0]!.body).toEqual({ ...request, preview: true })
+  })
+
+  it('confirms a change with the preview’s rev, then takes the new run', async () => {
+    const after = { ...RUN, rev: 'next' }
+    serve({ 'POST /runs/t1/changes': { body: { preview: false, change: {}, run: after } } })
+    const store = useProgrammesStore()
+    const refresh = vi.spyOn(useSyncStore(), 'refresh').mockResolvedValue()
+    const request: ChangeRequest = {
+      change: { type: 'go-to-week', week: 5 },
+      from: '2026-11-16',
+      reason: 'Bored',
+    }
+    expect(await store.confirmChange('t1', request, PREVIEW.rev)).toEqual({ ok: true, data: after })
+    expect(calls[0]!.body).toEqual({ ...request, preview: false, rev: PREVIEW.rev })
+    expect(store.run).toEqual(after)
+    expect(refresh).toHaveBeenCalled()
+  })
+
+  it('hands back the fresh preview when the plan changed since (409, a stale rev)', async () => {
+    const fresh = { ...PREVIEW, rev: 'fresh' }
+    serve({
+      'POST /runs/t1/changes': {
+        status: 409,
+        body: { error: 'conflict', rev: 'fresh', preview: fresh },
+      },
+    })
+    const request: ChangeRequest = { change: { type: 'go-to-week', week: 5 }, from: '2026-11-16' }
+    expect(await useProgrammesStore().confirmChange('t1', request, 'stale')).toEqual({
+      ok: false,
+      stale: fresh,
+    })
+  })
+
+  it('returns a change’s problems and its other failures', async () => {
+    const errors = [{ path: 'change.value', message: 'give a number.' }]
+    serve({ 'POST /runs/t1/changes': { status: 400, body: { error: 'invalid', errors } } })
+    const store = useProgrammesStore()
+    const request: ChangeRequest = { change: { type: 'go-to-week', week: 5 }, from: '2026-11-16' }
+    expect(await store.previewChange('t1', request)).toEqual({
+      ok: false,
+      problems: errors,
+      message: null,
+    })
+    serve({ 'POST /runs/t1/changes': { status: 409, body: { error: 'ended' } } })
+    expect(await store.confirmChange('t1', request, 'r')).toEqual({
+      ok: false,
+      problems: [],
+      message: 'This programme has ended, so it can’t change.',
+    })
+  })
+
+  it('ends a run from today', async () => {
+    const ended = { ...RUN, status: 'ended' }
+    serve({ 'POST /runs/t1/end': { body: { tracker: { id: 't1' }, run: ended } } })
+    const store = useProgrammesStore()
+    const refresh = vi.spyOn(useSyncStore(), 'refresh').mockResolvedValue()
+    expect(await store.endRun('t1')).toEqual({ ok: true, data: ended })
+    expect(calls[0]!.body).toEqual({})
+    expect(store.run).toEqual(ended)
+    expect(refresh).toHaveBeenCalled()
+    serve({ 'POST /runs/t1/end': 'offline' })
+    expect(await store.endRun('t1')).toMatchObject({ ok: false })
+  })
+})

@@ -1,0 +1,371 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
+import App from '@/App.vue'
+import { signedIn } from '@/lib/__tests__/signedIn'
+import { withProgrammes, type Call, type Route } from './programmesApi'
+import type { ChangePreview, Run } from '@/lib/programmes'
+import RUN_JSON from '@/lib/__tests__/programmes/run.json'
+import PAUSED_JSON from '@/lib/__tests__/programmes/run-paused.json'
+import PREVIEW_JSON from '@/lib/__tests__/programmes/change-preview.json'
+
+const RUN = RUN_JSON as unknown as Run
+const PAUSED = PAUSED_JSON as unknown as Run
+const PREVIEW = PREVIEW_JSON as unknown as ChangePreview
+const AFTER: Run = { ...RUN, rev: 'after', grid: PREVIEW.grid }
+
+let wrapper: VueWrapper
+let calls: Call[]
+let routes: Record<string, Route>
+
+async function settle(): Promise<void> {
+  for (let i = 0; i < 4; i++) {
+    await flushPromises()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+}
+
+async function openOverview(table: Record<string, Route> = {}) {
+  history.replaceState(null, '', '/#/programme/t1')
+  const api = signedIn()
+  ;({ calls, routes } = withProgrammes(api, {
+    'GET /runs/t1': { body: RUN },
+    'POST /runs/t1/changes': (body) =>
+      (body as { preview?: boolean }).preview === false
+        ? { body: { preview: false, change: {}, run: AFTER } }
+        : { body: PREVIEW },
+    ...table,
+  }))
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  wrapper = mount(App, { global: { plugins: [pinia] }, attachTo: document.body })
+  await settle()
+}
+
+const overview = () => wrapper.get('[data-testid="programme-overview"]')
+const byTestId = (id: string) => overview().get(`[data-testid="${id}"]`)
+const inDoc = (id: string) => document.querySelector<HTMLElement>(`[data-testid="${id}"]`)
+const changeCalls = () => calls.filter((c) => c.path === '/runs/t1/changes')
+
+function cell(activity: string, week: number): HTMLElement {
+  return document.querySelector<HTMLElement>(
+    `td[data-activity="${activity}"][data-week="${week}"]`,
+  )!
+}
+
+async function press(target: HTMLElement): Promise<void> {
+  target.dispatchEvent(
+    new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' }),
+  )
+  target.click()
+  await settle()
+}
+
+async function menuItem(label: string): Promise<void> {
+  ;[...document.querySelectorAll<HTMLElement>('[data-slot="menu-item"]')]
+    .find((i) => i.textContent?.trim() === label)!
+    .click()
+  await settle()
+}
+
+async function click(el: HTMLElement | null): Promise<void> {
+  el!.click()
+  await settle()
+}
+
+async function type(id: string, value: string): Promise<void> {
+  const input = inDoc(id) as HTMLInputElement
+  input.value = value
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+  await settle()
+}
+
+beforeEach(() => {
+  localStorage.clear()
+  sessionStorage.clear()
+})
+
+afterEach(() => {
+  wrapper?.unmount()
+  vi.unstubAllGlobals()
+  history.replaceState(null, '', '/')
+})
+
+describe('the programme overview (spec §9.2)', () => {
+  it('is ItemPage’s head with no bar: Back, “Programme”, the name and its line', async () => {
+    await openOverview()
+    expect(wrapper.find('[data-slot="bar"]').exists()).toBe(false)
+    expect(byTestId('back-to-week').text()).toBe('Back to the week')
+    expect(overview().text()).toContain('Programme')
+    expect(overview().get('h1').text()).toBe('Beginner 5×5')
+    expect(byTestId('programme-meta').text()).toBe(
+      'Week 4 of 8. Started Fri 23 Oct, ends Sun 13 Dec.',
+    )
+    expect(byTestId('programme-meta').get('b').text()).toBe('Week 4 of 8.')
+  })
+
+  it('has Plan and Changes tabs, opening on Plan with the grid from the server', async () => {
+    await openOverview()
+    expect(byTestId('programme-tab-plan').attributes('aria-selected')).toBe('true')
+    expect(byTestId('programme-tab-changes').text()).toBe('Changes')
+    expect(byTestId('programme-grid').attributes('aria-label')).toBe('The plan, week by week')
+    expect(cell('squat', 4).dataset.cell).toBe('current')
+    // Each activity links to its item page in the programme's tracker.
+    expect(overview().get('tbody tr[data-activity="squat"] a').attributes('href')).toBe(
+      '#/item/t1/squat',
+    )
+    expect(byTestId('programme-ends-short').text()).toContain('Deadlift ends at its week 7 of 8.')
+  })
+
+  it('has the programme’s controls: Pause, Go to week, Add activity and End', async () => {
+    await openOverview()
+    const controls = byTestId('programme-controls')
+    expect(controls.findAll('button').map((b) => b.text())).toEqual([
+      'Pause programme',
+      'Go to week',
+      'Add activity',
+      'End programme',
+    ])
+  })
+
+  it('offers Resume while paused, and shows the weeks to come when resumed', async () => {
+    await openOverview({ 'GET /runs/t1': { body: PAUSED } })
+    expect(byTestId('programme-meta').text()).toBe(
+      'Paused since Thu 12 Nov, in week 4 of 8. Resume it when you’re ready.',
+    )
+    expect(byTestId('programme-resume').text()).toBe('Resume programme')
+    expect(overview().find('[data-testid="programme-pause"]').exists()).toBe(false)
+    expect(overview().findAll('thead th[data-when-resumed]').length).toBeGreaterThan(0)
+    await click(inDoc('programme-resume'))
+    expect(inDoc('change-kind')!.textContent).toContain('Resume programme')
+  })
+
+  it('opens the week a run named by its address doesn’t have: the Programmes page', async () => {
+    await openOverview({ 'GET /runs/t1': { status: 404, body: { error: 'not-found' } } })
+    expect(location.hash).toBe('#/programmes')
+  })
+
+  it('says when the run can’t be read', async () => {
+    await openOverview({ 'GET /runs/t1': 'offline' })
+    expect(wrapper.text()).toContain('Can’t reach the server')
+  })
+
+  it('has no controls once the run has ended', async () => {
+    await openOverview({ 'GET /runs/t1': { body: { ...RUN, status: 'ended' } } })
+    expect(overview().find('[data-testid="programme-controls"]').exists()).toBe(false)
+    expect(cell('squat', 6).querySelector('button')).toBeNull()
+  })
+})
+
+describe('changing a programme from its overview', () => {
+  it('opens the sheet from a later week’s cell, from that week’s Monday', async () => {
+    await openOverview()
+    await press(cell('row', 6).querySelector('button')!)
+    await menuItem('Change from here')
+    expect(inDoc('change-sheet')!.querySelector('h2')!.textContent).toBe('Change Barbell row')
+    expect((inDoc('change-from') as HTMLInputElement).value).toBe('2026-11-23')
+    expect(inDoc('change-kind')!.textContent).toContain('Set weight')
+  })
+
+  it('opens Edit this week as That week only', async () => {
+    await openOverview()
+    await press(cell('row', 6).querySelector('button')!)
+    await menuItem('Edit this week')
+    await type('change-value', '40')
+    await click(inDoc('change-preview-button'))
+    expect(changeCalls()[0]!.body).toMatchObject({
+      change: { type: 'edit-week', activity: 'row', week: 6, field: 'weight', value: 40 },
+      from: '2026-11-23',
+      preview: true,
+    })
+  })
+
+  it('previews, then confirms, and the grid takes the server’s new plan', async () => {
+    await openOverview()
+    await press(cell('row', 6).querySelector('button')!)
+    await menuItem('Change from here')
+    await type('change-value', '45')
+    await click(inDoc('change-preview-button'))
+    expect(changeCalls()).toHaveLength(1)
+    expect(cell('row', 6).textContent).toContain('42.5 kg')
+    await click(inDoc('change-confirm'))
+    expect(changeCalls()[1]!.body).toMatchObject({ preview: false, rev: PREVIEW.rev })
+    expect(inDoc('change-sheet')).toBeNull()
+    expect(cell('row', 6).textContent).toContain('47.5 kg')
+  })
+
+  it('opens the programme’s changes from its controls', async () => {
+    await openOverview()
+    await click(inDoc('programme-pause'))
+    expect(inDoc('change-sheet')!.querySelector('h2')!.textContent).toBe('Change Beginner 5×5')
+    expect(inDoc('change-kind')!.textContent).toContain('Pause programme')
+    expect((inDoc('change-from') as HTMLInputElement).value).toBe(RUN.today)
+    await click(inDoc('change-cancel'))
+    await click(inDoc('programme-go-to-week'))
+    expect(inDoc('change-kind')!.textContent).toContain('Go to week')
+    await click(inDoc('change-cancel'))
+    await click(inDoc('programme-add-activity'))
+    expect(inDoc('change-kind')!.textContent).toContain('Add activity')
+  })
+
+  it('ends the programme after asking', async () => {
+    await openOverview({
+      'POST /runs/t1/end': { body: { tracker: { id: 't1' }, run: { ...RUN, status: 'ended' } } },
+    })
+    await click(inDoc('programme-end'))
+    const dialog = () =>
+      new DOMWrapper(document.querySelector<HTMLElement>('[role="alertdialog"]')!)
+    expect(dialog().text()).toContain('End Beginner 5×5?')
+    expect(dialog().text()).toContain(
+      'It ends today, Thu 12 Nov. Its weeks, marks and changes stay.',
+    )
+    await dialog()
+      .findAll('button')
+      .find((b) => b.text() === 'Cancel')!
+      .trigger('click')
+    await settle()
+    expect(calls.some((c) => c.path === '/runs/t1/end')).toBe(false)
+    await click(inDoc('programme-end'))
+    await dialog()
+      .findAll('button')
+      .find((b) => b.text() === 'End programme')!
+      .trigger('click')
+    await settle()
+    expect(calls.find((c) => c.path === '/runs/t1/end')!.body).toEqual({})
+    expect(overview().find('[data-testid="programme-controls"]').exists()).toBe(false)
+  })
+
+  it('says why ending failed', async () => {
+    await openOverview({ 'POST /runs/t1/end': 'offline' })
+    await click(inDoc('programme-end'))
+    await new DOMWrapper(document.querySelector<HTMLElement>('[role="alertdialog"]')!)
+      .findAll('button')
+      .find((b) => b.text() === 'End programme')!
+      .trigger('click')
+    await settle()
+    expect(byTestId('programme-error').text()).toContain('Can’t reach the server')
+  })
+})
+
+describe('Show it in the plan (K148)', () => {
+  async function showInPlan() {
+    await openOverview()
+    await press(cell('row', 6).querySelector('button')!)
+    await menuItem('Change from here')
+    await type('change-value', '45')
+    await click(inDoc('change-preview-button'))
+    await click(inDoc('change-show-in-plan'))
+  }
+
+  it('shows the change in the cells, with the bar at the foot and no tabs or controls', async () => {
+    await showInPlan()
+    expect(inDoc('change-sheet')).toBeNull()
+    expect(overview().attributes('data-previewing')).toBeDefined()
+    expect(cell('row', 6).dataset.cell).toBe('changed')
+    expect(cell('row', 6).textContent).toContain('42.5 → 47.5 kg')
+    expect(byTestId('programme-grid').attributes('aria-label')).toBe(
+      'The plan with the change, week by week',
+    )
+    expect(overview().find('[data-testid="programme-controls"]').exists()).toBe(false)
+    expect(overview().find('[role="tablist"]').exists()).toBe(false)
+    const bar = inDoc('change-preview-bar')!
+    expect(bar.getAttribute('role')).toBe('region')
+    expect(bar.textContent).toContain(
+      'Previewing a change. Barbell row at 45 kg from Mon 16 Nov. Nothing is saved yet.',
+    )
+    expect(document.activeElement).toBe(bar)
+  })
+
+  it('goes back to the change at step 2, as it was', async () => {
+    await showInPlan()
+    await click(inDoc('change-preview-back'))
+    expect(inDoc('change-sheet')!.dataset.step).toBe('2')
+    expect(inDoc('change-preview-bar')).toBeNull()
+    expect(overview().attributes('data-previewing')).toBeUndefined()
+  })
+
+  it('confirms from the bar with the preview’s rev', async () => {
+    await showInPlan()
+    await click(inDoc('change-preview-confirm'))
+    expect(changeCalls()[1]!.body).toMatchObject({ preview: false, rev: PREVIEW.rev })
+    expect(inDoc('change-preview-bar')).toBeNull()
+    expect(cell('row', 6).dataset.cell).toBe('planned')
+  })
+
+  it('brings the sheet back with the fresh preview when the plan changed since', async () => {
+    await showInPlan()
+    routes['POST /runs/t1/changes'] = {
+      status: 409,
+      body: { error: 'conflict', rev: 'fresh', preview: { ...PREVIEW, rev: 'fresh' } },
+    }
+    await click(inDoc('change-preview-confirm'))
+    expect(inDoc('change-sheet')!.dataset.step).toBe('2')
+    expect(inDoc('change-stale')!.textContent).toContain('The plan changed since this preview.')
+    expect(inDoc('change-preview-bar')).toBeNull()
+  })
+})
+
+describe('the Changes tab', () => {
+  async function openChanges(run: Run = RUN) {
+    await openOverview({ 'GET /runs/t1': { body: run } })
+    await byTestId('programme-tab-changes').trigger('mousedown')
+    await settle()
+  }
+
+  it('lists the log newest first: the day, what changed, the reason and where it came from', async () => {
+    await openChanges()
+    const entries = overview().findAll('[data-testid="programme-change"]')
+    expect(entries).toHaveLength(4)
+    expect(entries[0]!.text()).toContain('Thu 12 Nov')
+    expect(entries[0]!.text()).toContain('Bench press set to 30 kg, from Thu 12 Nov.')
+    expect(entries[0]!.text()).toContain('Shoulder')
+    expect(entries[0]!.text()).toContain('From the app')
+    expect(entries[2]!.text()).toContain('Barbell row set to 35 kg in week 5 only.')
+    expect(entries[3]!.text()).toContain('Started on Fri 23 Oct.')
+    // Undo shows only on a change whose effect starts today or later.
+    expect(entries.map((e) => e.find('[data-testid="programme-change-undo"]').exists())).toEqual([
+      true,
+      true,
+      false,
+      false,
+    ])
+  })
+
+  it('marks a change that was undone', async () => {
+    const log = RUN.log.map((e) => (e.seq === 2 ? { ...e, undoneBy: 4, undoable: false } : e))
+    await openChanges({ ...RUN, log })
+    expect(overview().findAll('[data-testid="programme-change"]')[1]!.text()).toContain('Undone.')
+  })
+
+  it('previews Undo before it applies (spec P2)', async () => {
+    await openChanges()
+    await click(inDoc('programme-change-undo'))
+    expect(inDoc('change-kind')!.textContent).toContain('Undo')
+    expect(inDoc('change-undoes')!.textContent).toContain('Bench press set to 30 kg')
+    await click(inDoc('change-preview-button'))
+    expect(changeCalls()[0]!.body).toMatchObject({
+      change: { type: 'undo', change: 3 },
+      from: RUN.today,
+      preview: true,
+    })
+  })
+})
+
+describe('the overview offline (spec §11.2)', () => {
+  it('disables the controls, the cells and Undo, with one line saying why', async () => {
+    await openOverview()
+    window.dispatchEvent(new Event('offline'))
+    await settle()
+    expect(byTestId('programme-offline').text()).toBe(
+      'Can’t reach the server, so the programme can’t change now. Try again when you’re online.',
+    )
+    for (const b of byTestId('programme-controls').findAll('button'))
+      expect(b.attributes('disabled')).toBeDefined()
+    expect(cell('squat', 6).querySelector('button')!.disabled).toBe(true)
+    await byTestId('programme-tab-changes').trigger('mousedown')
+    await settle()
+    expect(byTestId('programme-change-undo').attributes('disabled')).toBeDefined()
+    window.dispatchEvent(new Event('online'))
+    await settle()
+  })
+})
