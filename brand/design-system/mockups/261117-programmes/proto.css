@@ -92,6 +92,9 @@
 /* ---- new: the overview grid as a table (Q1 A, and C on a wide screen) ---- */
 .pg .grid-wrap { margin-top: calc(var(--u) * 20); overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
 .pg[data-layout="narrow"] .grid-wrap { margin: 16px -16px 0; }
+/* A table takes the frame's colour and type even where the page renders in quirks mode (index.html
+   before it is published), which would give it the root's light ink in a dark pane. */
+.pg table { color: inherit; font-family: inherit; font-size: inherit; line-height: inherit; }
 .pg table.og { border-collapse: separate; border-spacing: 0; width: 100%; font-size: var(--fs-text); }
 .pg .og th, .pg .og td { padding: calc(var(--u) * 12) calc(var(--u) * 8); border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; font-weight: 400; }
 .pg[data-layout="narrow"] .og th, .pg[data-layout="narrow"] .og td { padding: 10px 8px; }
@@ -338,6 +341,80 @@
 .pg[data-layout="narrow"] .wg .pz { grid-column: 1 / -1; min-height: 48px; font-size: 16px; }
 .pg .cue { display: flex; justify-content: center; margin-top: 10px; color: var(--ink-secondary); }
 .pg .cue svg { width: 24px; height: 24px; }
+
+
+/* ---- new, Q6: the Programmes page (spec §9.1). Built from ItemPage's rows, Tabs, Button,
+   TextField, TextArea, InlineMessage, Dialog and the ProgrammeGrid card; the question is the page's shape. ---- */
+.pg .pp .titleline.sp { justify-content: space-between; }
+/* A list of runs or programmes: line rules between, like the Changes log. */
+.pg .plist { list-style: none; margin: 0; padding: 0; max-width: calc(var(--u) * 820); }
+.pg .plist > li { border-bottom: 1px solid var(--line); }
+.pg .plist > li:first-child { border-top: 1px solid var(--line); }
+.pg .sec .plist > li:first-child { border-top: 0; }
+.pg .sec .plist > li:first-child .rl, .pg .sec .plist > li.lib:first-child { padding-top: 0; }
+/* A run: the whole line a link to its overview. */
+.pg .rl { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px 12px; padding: 14px 0; color: var(--ink); text-decoration: none; }
+.pg .rl .pn { grid-column: 1; font: 600 max(18px, calc(var(--u) * 22)) / 1.3 var(--font-sans); }
+.pg .rl:hover .pn { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.pg .rl .pm { grid-column: 1; }
+.pg .rl svg { grid-column: 2; grid-row: 1 / span 2; width: 22px; height: 22px; color: var(--ink-secondary); }
+.pg .pm { margin: 0; color: var(--ink-secondary); font-size: var(--fs-text); line-height: 1.45; }
+.pg .pm b { color: var(--ink); font-weight: 600; }
+/* A library programme: its name, kind, weeks and activities, a line about it, then its actions. */
+.pg .lib { display: flex; flex-direction: column; gap: 12px; padding: 16px 0; }
+.pg .lib .pn { margin: 0; font: 600 max(18px, calc(var(--u) * 22)) / 1.3 var(--font-sans); }
+.pg .lib .pd { margin: 4px 0 0; font-size: var(--fs-text); line-height: 1.45; max-width: 60ch; }
+.pg .lib .pa { gap: 8px; }
+.pg .lib .pa .btn { height: max(44px, calc(var(--u) * 52)); padding: 0 calc(var(--u) * 16); }
+.pg .lib .pa .btn.quiet { padding: 0 10px; }
+/* B: the programme opened in place to start it. */
+.pg .lib.open { gap: 20px; }
+.pg .xp { display: flex; flex-direction: column; gap: 20px; padding: 16px; margin: 0 -16px; border: 2px solid var(--ink); border-radius: var(--radius-lg); }
+.pg .acts.end { justify-content: flex-end; }
+.pg .tp { padding-top: 8px; }
+.pg .tp .plist > li:first-child { border-top: 0; }
+.pg .addtab { display: flex; flex-direction: column; gap: 20px; padding-top: 16px; max-width: calc(var(--u) * 820); }
+/* C: the section names over the lists. */
+.pg .lh2 { margin: calc(var(--u) * 32) 0 calc(var(--u) * 8); font: 600 var(--fs-h2) / 1.26 var(--font-sans); }
+.pg[data-layout="narrow"] .lh2 { margin: 28px 0 8px; }
+/* The pasted programme: TextArea's box, a few lines tall. */
+.pg .area { display: block; width: 100%; padding: 11px 15px; border: 1px solid var(--control-border); border-radius: var(--radius-sm); background: var(--panel);
+  color: var(--ink); font: 400 max(16px, calc(var(--u) * 17)) / 1.45 var(--font-sans); resize: vertical; white-space: pre; overflow-x: auto; }
+.pg .area[aria-invalid="true"] { border-color: var(--error-ink); }
+/* The validator's problems: an InlineMessage (error), then one line each, its path first. */
+.pg .errs { display: flex; flex-direction: column; gap: 8px; }
+.pg .im.err { color: var(--error-ink); }
+.pg .errlist { margin: 0; padding: 0 0 0 24px; display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-cap); line-height: 22px; }
+.pg .errlist .path { font-weight: 600; overflow-wrap: anywhere; }
+.pg .sec .content > .field, .pg .addtab > .field { max-width: calc(var(--u) * 720); }
+/* Starting: the fields, then the grid as the preview. */
+.pg .pp .row2 { max-width: calc(var(--u) * 820); }
+.pg .pp input.tf.num { max-width: 170px; }
+.pg .sec.wide { grid-template-columns: minmax(0, 1fr); row-gap: 12px; }
+.pg .spv { display: flex; flex-direction: column; gap: 4px; }
+.pg .spv h3 { margin: 0; font: 600 var(--fs-label) / 1.3 var(--font-sans); }
+.pg .spv .grid-wrap { margin-top: 8px; }
+.pg .xp .grid-wrap, .pg .dlg .grid-wrap { margin-left: 0; margin-right: 0; }
+.pg .dlg.wide { width: min(calc(var(--u) * 1100), calc(100% - 32px)); }
+/* In a sheet, the fixed activity column takes the sheet's own ground. */
+.pg .dlg .og .act { background: var(--panel); }
+/* Folded, a row's content takes the row's width, so a wide table scrolls inside it. */
+.pg[data-layout="narrow"] .pp .sec > .content { align-self: stretch; }
+.pg .pp .sec > .content { min-width: 0; }
+.pg[data-layout="narrow"] .lib .pa { display: grid; grid-template-columns: 1fr 1fr; }
+.pg[data-layout="narrow"] .lib .pa .btn:first-child { grid-column: 1 / -1; }
+.pg[data-layout="narrow"] .xp { margin: 0 -8px; padding: 12px 8px; }
+.pg[data-layout="narrow"] .sec.wide .grid-wrap { margin: 8px -16px 0; }
+
+/* ---- new, Q7 B: the plan showing a change while it is previewed, with a bar at the foot. ---- */
+.pg .sc.withbar { bottom: var(--pbar-h, 120px); }
+.pg .pbar { position: absolute; z-index: 20; left: 0; right: 0; bottom: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px;
+  padding: 14px var(--pad); background: var(--panel); border-top: 1px solid var(--line); box-shadow: var(--shadow-overlay); }
+.pg .pbar p { margin: 0; flex: 1 1 320px; font-size: var(--fs-text); line-height: 1.45; }
+.pg .pbar b { font-weight: 600; }
+.pg[data-layout="narrow"] .pbar .acts { flex: 1 1 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pg[data-layout="narrow"] .pbar .btn { height: auto; min-height: 48px; padding: 4px 8px; gap: 6px; white-space: normal; line-height: 20px; }
+.pg .showplan { margin: 0; font-size: var(--fs-text); line-height: 1.45; }
 
 @media (prefers-reduced-motion: no-preference) {
   .pg .btn, .pg .seg button, .pg .tabs button, .pg td.tap, .pg .ib { transition: background-color 120ms, color 120ms, border-color 120ms; }

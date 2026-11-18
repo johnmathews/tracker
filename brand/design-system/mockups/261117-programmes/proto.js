@@ -10,6 +10,10 @@
 //   step     1 | 2                sheet B's step;  scroll 'preview' opens sheet A scrolled to its preview
 //   act      'squat' | 'deadlift' the activity page;  prog 'a' | 'b'  chart or list (question 4)
 //   week     'a' | 'b'            the week view's header, locked and paused days (question 5)
+//   screen 'programmes': q6 'a' | 'b' | 'c'  the Programmes page: rows, tabs, or a list with sheets (question 6)
+//            view 'main' | 'start' | 'add'  the page, starting a programme, or a pasted programme with errors
+//   q7       'a' | 'b'            the change preview: the sheet's list only, or also in the plan (question 7)
+//   previewing true              the overview showing a change's preview in its cells (question 7 B)
 // The data: "Beginner 5×5", 8 weeks from Mon 23 Nov 2026; today is Wed 16 Dec, programme week 4.
 // Weights were computed with the spec's engine (§3.2): decimals, rounded to 2.5 kg, halves up.
 (() => {
@@ -24,6 +28,10 @@
     plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
     stop: '<circle cx="12" cy="12" r="10"/><rect x="9" y="9" width="6" height="6" rx="1"/>',
     up: '<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>',
+    trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
+    copy: '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+    upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>',
+    alert: '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>',
     skip: '<polygon points="5 4 15 12 5 20 5 4"/><line x1="19" x2="19" y1="5" y2="19"/>',
     info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
     undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/>',
@@ -60,8 +68,9 @@
 
   // ---- The overview grid as a table (Q1 A; C on a wide screen) ----
   function weekHead(wk, s) {
-    const past = wk.n < CUR, cur = wk.n === CUR
-    const open = s.openPause && wk.n > CUR
+    const C = s.cur ?? CUR
+    const past = wk.n < C, cur = wk.n === C
+    const open = s.openPause && wk.n > C
     const lock = past && s.cells === 'a' ? ic('lock', 'Locked') : ''
     let tag = []
     if (cur) tag.push(s.openPause ? 'Paused from Wed' : 'This week')
@@ -72,8 +81,9 @@
     return `<th class="${cls}" scope="col"${cur ? ' aria-current="date"' : ''}><span class="wn">${lock}Week ${wk.n}</span><span class="wd">${open ? 'When resumed' : wk.d}</span>${tagLine}</th>`
   }
   function cell(a, i, s, preview) {
-    const wk = WEEKS[i], v = a.w[i]
-    const past = wk.n < CUR, cur = wk.n === CUR
+    const C = s.cur ?? CUR
+    const wk = (s.weeks || WEEKS)[i], v = a.w[i]
+    const past = wk.n < C, cur = wk.n === C
     const cls = ['wk', past ? 'past' : '', cur ? 'cur' : '']
     let main = '', sub = '', sub2 = '', aria = ''
     const sets = a.sets[i]
@@ -93,18 +103,20 @@
       sub = sets
       if (v.hand && !pv) {
         aria = ` aria-label="${fmt(val, a.unit)}, ${sets}, set by hand on ${v.on}"`
-        if (s.cells === 'a') main += ic('pencil')
+        if (s.cells === 'a' || s.pencil) main += ic('pencil')
         if (s.cells === 'b') sub2 = `By hand, ${v.on}`
-        if (s.cells === 'c') cls.push('corner')
+        if (s.cells === 'c' && !s.pencil) cls.push('corner')
       }
+      if (v.hand && pv) main += ic('pencil')
       if (cur) sub2 = `${a.done[i]} of ${TARGET} so far`
-      if (!cur && a.key === 'row') cls.push('tap')
+      if (!cur && a.key === 'row' && !s.start && !preview) cls.push('tap')
     }
     return `<td class="${cls.join(' ')}"${aria}${cls.includes('tap') ? ` data-open="${i}" tabindex="0" role="button"` : ''}><span class="cv">${main}</span>${sub ? `<span class="cs nw">${sub}</span>` : ''}${sub2 ? `<span class="cs nw">${sub2}</span>` : ''}</td>`
   }
   function table(s, preview) {
-    const head = `<tr><th class="act" scope="col"><span class="vh">Activity</span></th>${WEEKS.map((w) => weekHead(w, s)).join('')}</tr>`
-    const rows = ACTS.map((a) => `<tr><th class="act" scope="row"><a href="#"><span class="an">${a.name}</span></a><span class="ac"><span class="chip s">${a.chip}</span><span class="t">${TARGET} a week</span></span></th>${WEEKS.map((_, i) => cell(a, i, s, preview)).join('')}</tr>`).join('')
+    const weeks = s.weeks || WEEKS, acts = s.acts || ACTS
+    const head = `<tr><th class="act" scope="col"><span class="vh">Activity</span></th>${weeks.map((w) => weekHead(w, s)).join('')}</tr>`
+    const rows = acts.map((a) => `<tr><th class="act" scope="row"><a href="#"><span class="an">${a.name}</span></a><span class="ac"><span class="chip s">${a.chip}</span><span class="t">${a.target ?? TARGET} a week</span></span></th>${weeks.map((_, i) => cell(a, i, s, preview)).join('')}</tr>`).join('')
     return `<div class="grid-wrap" tabindex="0" aria-label="The plan, week by week"><table class="og"><thead>${head}</thead><tbody>${rows}</tbody></table></div>`
   }
 
@@ -168,7 +180,7 @@
     const meta = s.openPause
       ? 'Paused since Wed 16 Dec, in week 4 of 8. Resume it when you’re ready.'
       : '<b>Week 4 of 8.</b> Started Mon 23 Nov, ends Sun 17 Jan.'
-    const plan = useTable ? table(s, s.preview) : timeline(s)
+    const plan = useTable ? table(s, s.previewing ? Q7_PREVIEW : s.preview) : timeline(s)
     const ends = `<p class="im ends">${ic('info')}<span>Deadlift ends at its week 6 of 8, because of its pause.</span></p>`
     const ctl = `<div class="acts controls">${s.openPause ? `<button type="button" class="btn">${ic('play')}Resume programme</button>` : `<button type="button" class="btn">${ic('pause')}Pause programme</button>`}<button type="button" class="btn">${ic('skip')}Go to week</button><button type="button" class="btn">${ic('plus')}Add activity</button><button type="button" class="btn">${ic('stop')}End programme</button></div>`
     const body = s.tab === 'changes' ? changes() : plan + ends + ctl
@@ -177,6 +189,10 @@
       <div class="tabs" role="tablist" aria-label="Programme"><button type="button" role="tab" aria-selected="${s.tab === 'plan'}" data-tab="plan">Plan</button><button type="button" role="tab" aria-selected="${s.tab === 'changes'}" data-tab="changes">Changes</button></div>
       <div role="tabpanel">${body}</div></main>`
   }
+
+  // ---- Question 7 B: the plan shows the change while it is previewed ----
+  const Q7_PREVIEW = { row: { 4: [40, 45], 6: [45, 50], 7: [42.5, 47.5] } }
+  const previewBar = () => `<div class="pbar" role="region" aria-label="Change preview"><p><b>Previewing a change.</b> Barbell row at 45 kg from Mon 21 Dec. Nothing is saved yet.</p><div class="acts"><button type="button" class="btn" data-backchange>${ic('left')}Back to the change</button><button type="button" class="btn primary">Confirm change</button></div></div>`
 
   // ---- The change sheet (Q3) ----
   const BEFORE = { 4: 40, 5: 35, 6: 45, 7: 42.5 }
@@ -212,7 +228,8 @@
       body = `<p class="steps">Step 1 of 2</p>${head()}${sheetFields(s)}<div class="actions"><button type="button" class="btn" data-close>Cancel</button><button type="button" class="btn primary" data-step="2">Preview change</button></div>`
     } else {
       const what = s.scope === 'once' ? 'Weight 45 kg in week 5 only.' : 'Weight 45 kg from Mon 21 Dec, from then on.'
-      body = `<p class="steps">Step 2 of 2</p>${head()}<p class="summary">${what} <i>Rows feel light.</i></p>${previewBlock(s)}<div class="actions"><button type="button" class="btn" data-step="1">${ic('left')}Back</button><button type="button" class="btn primary">Confirm change</button></div>`
+      const show = s.q7 === 'b' ? `<p class="showplan"><a class="tlink" href="#" data-showplan>Show it in the plan</a></p>` : ''
+      body = `<p class="steps">Step 2 of 2</p>${head()}<p class="summary">${what} <i>Rows feel light.</i></p>${previewBlock(s)}${show}<div class="actions"><button type="button" class="btn" data-step="1">${ic('left')}Back</button><button type="button" class="btn primary">Confirm change</button></div>`
     }
     return `<div class="scrim" data-close></div><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="dlg-h"><div class="dlg-body">${body}</div></div>`
   }
@@ -370,6 +387,101 @@
     return `<h1 class="wkband">14–20 December</h1><section class="screen" aria-labelledby="wk-h">${head}<div class="wg" role="group" aria-label="Beginner 5×5, 14 to 20 December">${cells}</div><div class="cue">${ic('down')}</div></section>`
   }
 
+  // ---- Question 6: the Programmes page (spec §9.1) ----
+  // Two runs (one paused), three programmes in the library, a pasted programme with three
+  // problems, and starting Hip mobility from Mon 21 Dec with its grid as the preview.
+  const RUNS = [
+    { name: 'Beginner 5×5', meta: '<b>Week 4 of 8.</b> Running. Ends Sun 17 Jan.' },
+    { name: 'Couch to 5K', meta: '<b>Week 3 of 9.</b> Paused since Mon 7 Dec. A cold.', paused: true },
+  ]
+  const LIB = [
+    { id: 'b55', name: 'Beginner 5×5', meta: 'Strength · 8 weeks · 5 activities', desc: 'Three full-body sessions a week, adding weight each week.' },
+    { id: 'hip', name: 'Hip mobility', meta: 'Mobility · 6 weeks · 4 activities', desc: 'Short daily holds and drills for the hips and lower back, a little longer each week.' },
+    { id: 'c25', name: 'Couch to 5K', meta: 'Cardio · 9 weeks · 1 activity', desc: 'Three runs a week, from run-walk intervals to 5 km.' },
+  ]
+  const S_WEEKS = [
+    { n: 1, d: '21–27 Dec' }, { n: 2, d: '28 Dec–3 Jan' }, { n: 3, d: '4–10 Jan' },
+    { n: 4, d: '11–17 Jan' }, { n: 5, d: '18–24 Jan' }, { n: 6, d: '25–31 Jan', deload: true },
+  ]
+  // Hip mobility as the engine expands it from a hold start of 30 s, 10 s more a week (max 90 s).
+  const S_ACTS = [
+    { key: 'squat-hold', name: 'Deep squat hold', chip: '3 sets', target: 5, unit: 's', sets: Array(6).fill('3 sets'), w: [30, 40, 50, 60, 70, 60] },
+    { key: 'couch', name: 'Couch stretch', chip: '2 sets', target: 5, unit: 's', sets: Array(6).fill('2 sets, each side'), w: [45, 45, 60, 60, 75, 60] },
+    { key: '9090', name: '90/90 switches', chip: '3 × 8', target: 5, unit: 'reps', sets: Array(6).fill('3 sets'), w: [8, 8, 9, 9, 10, 8] },
+    { key: 'airplane', name: 'Hip airplanes', chip: '2 × 5', target: 5, unit: 'reps', sets: Array(6).fill('2 sets, each side'), w: [5, 5, 6, 6, 7, 5] },
+  ]
+  const startGrid = () => table({ cells: 'c', pencil: true, cur: 0, start: true, weeks: S_WEEKS, acts: S_ACTS })
+  const btn = (label, icon, cls = '', attrs = '') => `<button type="button" class="btn${cls ? ' ' + cls : ''}"${attrs}>${icon ? ic(icon) : ''}${label}</button>`
+
+  const runsList = () => `<ul class="plist" aria-label="Running">${RUNS.map((r) => `<li class="run"><a class="rl" href="#"><span class="pn">${r.name}</span><span class="pm">${r.meta}</span>${ic('right')}</a></li>`).join('')}</ul>`
+  function libList(s, expand) {
+    return `<ul class="plist" aria-label="Library">${LIB.map((p) => {
+      const open = expand && p.id === 'hip'
+      const actions = open ? '' : `<div class="acts pa"><button type="button" class="btn" data-view="start">${ic('play')}Preview and start</button><button type="button" class="btn quiet">${ic('copy')}Duplicate</button><button type="button" class="btn quiet">${ic('trash')}Delete</button></div>`
+      return `<li class="lib${open ? ' open' : ''}"><div class="lh"><h3 class="pn">${p.name}</h3><p class="pm">${p.meta}</p><p class="pd">${p.desc}</p></div>${actions}${open ? `<div class="xp">${startFields()}${startPreview()}<div class="acts end">${btn('Cancel', '', '', ' data-view="main"')}${btn('Start programme', '', 'primary')}</div></div>` : ''}</li>`
+    }).join('')}</ul>`
+  }
+  const JSON_TEXT = `{
+  "format": "tracker-programme/1",
+  "name": "Upper and lower",
+  "kind": "strength",
+  "weeks": 60,
+  "activities": [
+    { "key": "bench", "name": "Bench press", …`
+  function addForm(s) {
+    const err = s.view === 'add'
+    const errs = err ? `<div class="errs" role="alert"><p class="im err">${ic('alert')}<span>This programme has three problems. Fix them, then check it again.</span></p><ul class="errlist">
+      <li><span class="path">weeks:</span> a programme runs 1 to 52 weeks; this one has 60.</li>
+      <li><span class="path">activities[2].weight.rate:</span> a progression has add or rate, not both.</li>
+      <li><span class="path">activities[4].key:</span> a key is a-z, 0-9 and -; “Pull-up” has capitals.</li></ul></div>` : ''
+    return `<div class="field"><label class="label" for="pg-json">Programme JSON</label><textarea class="area json" id="pg-json" rows="7"${err ? ' aria-invalid="true"' : ''}>${JSON_TEXT}</textarea><p class="hint">Paste a programme in the tracker-programme/1 format, or choose a file. Claude can add one for you through your connection.</p></div>
+      ${errs}<div class="acts">${btn('Choose file', 'upload')}${btn('Check and add', '', 'primary', ' data-view="add"')}</div>`
+  }
+  function startFields() {
+    return `<div class="row2"><div class="field"><label class="label" for="st-name">Name</label><input class="tf" id="st-name" value="Hip mobility"><p class="hint">Its tracker's name. You can change it later.</p></div>
+      <div class="field"><span class="label" id="st-from">Start</span><button type="button" class="pick" aria-labelledby="st-from"><span>Mon 21 Dec</span>${ic('cal')}</button><p class="hint">Today, Wed 16 Dec, or any later day. Week 1 starts on its Monday.</p></div>
+      <div class="field"><label class="label" for="st-hold">Hold start in seconds</label><input class="tf num" id="st-hold" inputmode="numeric" value="30"><p class="hint">The programme's own: 30.</p></div>
+      <div class="field"><label class="label" for="st-add">Hold increase in seconds a week</label><input class="tf num" id="st-add" inputmode="numeric" value="10"><p class="hint">The programme's own: 10.</p></div></div>`
+  }
+  const startPreview = () => `<div class="spv"><h3>Preview</h3><p class="pm">Six weeks, Mon 21 Dec to Sun 31 Jan. Week 6 is lighter.</p>${startGrid()}</div>`
+
+  function programmes(s) {
+    const back = `<a class="back" href="#">${ic('left')}<span>Back to the week</span></a>`
+    if (s.q6 === 'a' && s.view === 'start') {
+      return `<main class="page pp"><div class="topline"><a class="back" href="#" data-view="main">${ic('left')}<span>Back to programmes</span></a><div class="acts">${btn('Cancel', '', 'quiet', ' data-view="main"')}${btn('Start programme', '', 'primary')}</div></div>
+        <p class="type">Start a programme</p><div class="titleline"><h1>Hip mobility</h1></div><p class="meta">Mobility · 6 weeks · 4 activities</p>
+        <div style="height: calc(var(--u) * 28)"></div>
+        <section class="sec"><h2>Start</h2><div class="content">${startFields()}</div></section>
+        <section class="sec wide"><h2>Preview</h2><div class="content"><p class="lede">Six weeks, Mon 21 Dec to Sun 31 Jan. Week 6 is lighter.</p>${startGrid()}</div></section></main>`
+    }
+    if (s.q6 === 'a') {
+      return `<main class="page pp"><div class="topline">${back}</div><div class="titleline"><h1>Programmes</h1></div>
+        <div style="height: calc(var(--u) * 28)"></div>
+        <section class="sec"><h2>Running</h2><div class="content">${runsList()}</div></section>
+        <section class="sec"><h2>Library</h2><div class="content">${libList(s)}</div></section>
+        <section class="sec" id="pg-add"><h2>Add a programme</h2><div class="content">${addForm(s)}</div></section></main>`
+    }
+    if (s.q6 === 'b') {
+      const tab = s.view === 'start' ? 'library' : s.view === 'add' ? 'add' : (s.ptab || 'running')
+      const tb = (k, label) => `<button type="button" role="tab" aria-selected="${tab === k}" data-ptab="${k}">${label}</button>`
+      const body = tab === 'running' ? runsList() : tab === 'library' ? libList(s, s.view === 'start') : `<div class="addtab">${addForm(s)}</div>`
+      return `<main class="page pp"><div class="topline">${back}</div><div class="titleline"><h1>Programmes</h1></div>
+        <div class="tabs" role="tablist" aria-label="Programmes">${tb('running', 'Running')}${tb('library', 'Library')}${tb('add', 'Add')}</div>
+        <div role="tabpanel" class="tp">${body}</div></main>`
+    }
+    // C: one list; Add and Preview and start open sheets.
+    return `<main class="page pp"><div class="topline">${back}</div><div class="titleline sp"><h1>Programmes</h1>${btn('Add programme', 'plus', '', ' data-view="addsheet"')}</div>
+      <h2 class="lh2">Running</h2>${runsList()}<h2 class="lh2">Library</h2>${libList(s)}</main>`
+  }
+  function programmesSheet(s) {
+    if (s.q6 !== 'c' || (s.view !== 'start' && s.view !== 'add' && s.view !== 'addsheet')) return ''
+    const close = `<button type="button" class="ib" aria-label="Close" data-view="main">${ic('x')}</button>`
+    const body = s.view === 'start'
+      ? `<div class="dlg-head"><div><h2 id="ps-h">Start Hip mobility</h2><p>Mobility · 6 weeks · 4 activities</p></div>${close}</div>${startFields()}${startPreview()}<div class="actions">${btn('Cancel', '', '', ' data-view="main"')}${btn('Start programme', '', 'primary')}</div>`
+      : `<div class="dlg-head"><h2 id="ps-h">Add a programme</h2>${close}</div>${addForm(s)}`
+    return `<div class="scrim" data-view="main"></div><div class="dlg${s.view === 'start' ? ' wide' : ''}" role="dialog" aria-modal="true" aria-labelledby="ps-h"><div class="dlg-body">${body}</div></div>`
+  }
+
   // ---- Mount ----
   function render(s) {
     const el = s.el
@@ -377,10 +489,14 @@
     el.dataset.cells = s.cells
     el.dataset.week = s.week
     let html
-    if (s.screen === 'activity') html = activity(s)
+    if (s.screen === 'programmes') html = programmes(s)
+    else if (s.screen === 'activity') html = activity(s)
     else if (s.screen === 'week') html = week(s)
     else html = overview(s)
-    el.innerHTML = `<div class="sc">${html}</div>${s.screen === 'change' && s.sheetOpen ? sheet(s) : ''}`
+    const extra = s.screen === 'programmes' ? programmesSheet(s) : s.previewing && s.screen === 'overview' ? previewBar() : ''
+    el.innerHTML = `<div class="sc${s.previewing && s.screen === 'overview' ? ' withbar' : ''}">${html}</div>${s.screen === 'change' && s.sheetOpen ? sheet(s) : ''}${extra}`
+    const pbar = el.querySelector('.pbar')
+    if (pbar) el.style.setProperty('--pbar-h', `${pbar.offsetHeight}px`)
     const chart = el.querySelector('[data-chart]')
     if (chart) drawChart(chart, SERIES[s.act], s.layout === 'narrow')
     // A table on a phone opens on this week, with a little of the week before it.
@@ -403,6 +519,10 @@
       const li = el.querySelectorAll('.tw')[Number(s.scrollTo) - 1], sc = el.querySelector('.sc')
       if (li && sc) sc.scrollTop = li.offsetTop - 8
     }
+    if (s.scrollSel) {
+      const t = el.querySelector(s.scrollSel), sc = el.querySelector(s.screen === 'programmes' && s.q6 === 'c' && el.querySelector('.dlg-body') ? '.dlg-body' : '.sc')
+      if (t && sc) sc.scrollTop = t.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - 12
+    }
     if (s.scroll === 'preview') {
       const body = el.querySelector('.dlg-body'), pv = el.querySelector('.pv')
       if (body && pv) body.scrollTop = pv.offsetTop - 12
@@ -411,10 +531,12 @@
   function mount(el, opts = {}) {
     opts = Object.fromEntries(Object.entries(opts).filter(([, v]) => v !== undefined && v !== ''))
     const s = Object.assign({ screen: 'overview', q1: 'c', cells: 'a', tab: 'plan', sheet: 'a', step: 1, scope: 'on', dropped: false,
-      act: 'squat', prog: 'a', week: 'a', layout: '' }, opts)
+      act: 'squat', prog: 'a', week: 'a', layout: '', q6: 'a', view: 'main', q7: '' }, opts)
     s.step = Number(s.step)
     s.el = el
     s.sheetOpen = s.screen === 'change'
+    s.previewing = !!opts.previewing
+    if (s.previewing) { s.cells = 'c'; s.pencil = true; s.q1 = 'a' }
     s.unfolded = new Set(String(opts.unfold || '').split(',').filter(Boolean).map(Number))
     s.marks = ROWS.map((r) => (r.marks ? [...r.marks] : []))
     el.classList.add('pg')
@@ -427,8 +549,19 @@
       render(s)
     }
     el.addEventListener('click', (e) => {
-      const t = e.target.closest('[data-tab],[data-fold],[data-scope],[data-drop],[data-step],[data-close],[data-open],.dm,a')
+      const t = e.target.closest('[data-view],[data-ptab],[data-showplan],[data-backchange],[data-tab],[data-fold],[data-scope],[data-drop],[data-step],[data-close],[data-open],.dm,a')
       if (!t) return
+      if (t.dataset.view || t.dataset.ptab || t.hasAttribute('data-showplan') || t.hasAttribute('data-backchange')) {
+        e.preventDefault()
+        s.scrollSel = null
+        if (t.dataset.view) { s.view = t.dataset.view; if (s.view === 'add' && s.q6 === 'a') s.scrollSel = '.errs' }
+        if (t.dataset.ptab) { s.ptab = t.dataset.ptab; s.view = 'main' }
+        if (t.hasAttribute('data-showplan')) { s.screen = 'overview'; s.previewing = true; s.cells = 'c'; s.pencil = true; s.q1 = 'a'; s.tab = 'plan' }
+        if (t.hasAttribute('data-backchange')) { s.screen = 'change'; s.previewing = false; s.sheetOpen = true; s.step = 2 }
+        render(s)
+        if (!s.scrollSel) { const sc = el.querySelector('.sc'); if (sc) sc.scrollTop = 0 }
+        return
+      }
       if (t.matches('a')) { e.preventDefault(); return }
       const keep = el.querySelector('.sc')?.scrollTop || 0
       const keepDlg = el.querySelector('.dlg-body')?.scrollTop || 0

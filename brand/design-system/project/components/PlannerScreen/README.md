@@ -11,6 +11,11 @@ The planner's layout: the week fixed at the top, each tracker the week shows fil
 - **Messages** (Banner: sync, confirm your email, import) sit at the top of the first tracker's screen, under the band and above its SectionHeader, and push the section down while they show.
 - **Every screen size gets this layout.** A desktop, an iPad on its side and a phone on its side get the wide grid; a screen held upright under 1000px wide, or any screen under 760px wide, gets the folded one (K26). There is no separate phone view.
 - **Edit plan is one tracker per screen too** (K99). Each section is at least the window's height less the sticky bar's (`--bar-height`, which the Header measures), starts at the top with Edit plan's own rows (max(76px, 100u), K54), and leaves any space over empty at its foot. The page moves between them exactly as above, each screen resting just under the bar instead of the week. The arrows show: the way back on its own line above the title, the way on at the screen's foot (K114). Each tracker's title line holds its pen, its daily target, Add and Delete tracker (SectionHeader, K113, K122, K124), and the bar holds Add tracker (Header, K124), which opens the NewTrackerPage. Turning Edit plan on or off keeps the tracker on show: the page rests with its top just under the bar, or the week, once the layout has changed (K115). The week's `<h1>` is hidden on screen there, since Edit plan's bar shows the week (K81), and shows in `display` only on paper. **A frame says Edit plan is on** (K112): 8px of `edit` round the window's four edges, 4px on a phone (a touch screen whose shorter side is under 600px, K117), over the bar and under a dialog's scrim, which every press goes through. It shows only on Edit plan's screens, never on the week, another page or paper. Coming back from the new item page or an item's page, the page rests on the tracker it left, never across two (K111).
+- **A programme tracker** (spec §9.5, K146) is a screen like any other, with three additions, and nothing else changes:
+  - **"Week 4 of 8" at the end of the title's line**, a link to the programme's overview (`#/programme/<tracker>`, the ProgrammeGrid card), where Edit plan puts Add (SectionHeader's end slot): `body` at weight 600 in `ink`, underlined 1px 4px under the letters (2px under the pointer), then a 20px Lucide `chevron-right`. It never wraps; folded it stays on the title's line, and the title is the SectionHeader's 24n.
+  - **A lock by a locked day's name:** a 16px Lucide `lock` in `ink-secondary` (14px folded), 4px after the day's name. A day is locked once its marks are: before yesterday by the server's date (spec §8; marks stay open for one day, so on a Wednesday only Monday is locked). Its boxes stay as they are, marks and all, and don't press. A met day's name keeps its `pen` underline; the lock is not underlined.
+  - **A paused activity's row** reads its sentence in place of its seven boxes, centred across them: a 18px Lucide `pause` and "Paused until Mon 28 Dec. Knee." in `body` `ink-secondary` (16px folded). Its name and chips stay.
+  - Edit plan doesn't edit a programme tracker's items: their rows link to the activity's own controls on its page (ProgrammeChart).
 - **Not in Settings**: there the page scrolls freely, nothing sprints and there is no bar (K52).
 - **Print**: no sprinting, no bar, the WeekGrid as a table on paper. Each section starts a page of its own, with the week over it in `display` (SectionHeader, K97).
 
@@ -24,15 +29,18 @@ The planner's layout: the week fixed at the top, each tracker the week shows fil
 | Edit plan                                               | the bar sticky above the page, and the `edit` frame round the window: 8px, 4px on a phone (K112, K117)                                          |
 | Short (540px tall or less)                              | no band (the week is for a screen reader only); the title in the grid's corner; no chips, no arrows                                              |
 | Folded (upright under 1000px wide, or under 760px wide) | the WeekGrid folded; the band at 30n                                                                                                             |
+| A programme tracker | "Week 4 of 8" at the end of the title's line, a `lock` by each locked day's name, a paused row's sentence in place of its boxes (K146) |
 
 ## Accessibility
 
 - Each screen is a `<section aria-labelledby>` on its SectionHeader's `<h2>`. The band is the week's `<h1>`, before them all, so the heading outline is unchanged; where the band is hidden it stays for a screen reader.
 - The sprint never traps the keyboard: focus moving into the Cardio or Food grid scrolls it into view, and a stop across a line sprints on to the next screen.
 - Each arrow is a real `<button>` named for the tracker it goes to: "Go to Cardio", "Back to Strength", "Go to Food", "Back to Cardio". Each screen's `<h2>` has the id `tracker-<id>-heading`, and the Header's "Skip to today" link points at the first one.
+- On a programme tracker, the link reads "Week 4 of 8. Open the programme". A locked day's name adds ", locked" for a screen reader (the `lock` is `aria-hidden`), and each of its boxes is `aria-disabled="true"` with ", locked" in its name, so it can still be reached and read. The paused row's sentence is plain text in the row.
 - Nothing depends on hover: a long press, the handle and focus reach the bar with a mouse, a finger or the keyboard. Only focus lays it over the week.
 
 ## You provide
 
 - The trackers the week shows, in order (each one's name and kind), and whether Edit plan (screens under the bar) or another page (no screens) is showing.
 - The messages to show, if any.
+- For a programme tracker: its programme week and length, which days are locked (from the server's date), and each paused activity's sentence. Test ids: `programme-week-link` on the link, `paused-row` on a paused row's sentence, and `data-locked` on a locked day's head.

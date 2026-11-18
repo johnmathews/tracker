@@ -1,0 +1,252 @@
+<!-- @dsCard group="Screens" height=4200 subtitle="The Programmes page: tabs for Running, Library and Add; a run running and one paused; the library, with a programme opened in place to start, the plan as its preview; a pasted programme with its problems listed (K147)" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ProgrammesPage — preview</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: var(--space-6); background: var(--canvas); color: var(--ink); font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
+  button, input, textarea { font: inherit; color: inherit; }
+  .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .variant { margin: 0 0 var(--space-3); color: var(--ink-secondary); }
+  .gap { height: var(--space-8); }
+  svg.i { width: 1em; height: 1em; flex: none; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  /* The page, at u = 1 (a 1280×800 screen), at ItemPage's sizes (K51, K55), with no bar. */
+  .stage { border: 1px solid var(--line); border-radius: var(--radius-lg); min-width: 0; }
+  .page { padding: 28px 48px 64px; display: flex; flex-direction: column; min-width: 0; }
+  .back { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-size: 19px; line-height: 26px; text-decoration: underline; text-underline-offset: 4px; }
+  .back svg { width: 26px; height: 26px; }
+  h1 { margin: 4px 0 0; font: 600 40px / 46px var(--font-serif); }
+  .chip { display: inline-block; font: 600 16px / 22px var(--font-sans); background: var(--tile); color: var(--ink-secondary); border-radius: var(--radius-sm); padding: 1px var(--space-2); white-space: nowrap; }
+
+  /* Tabs, as the card. */
+  .tabs { display: flex; flex-wrap: wrap; column-gap: 32px; margin-top: 24px; border-bottom: 1px solid var(--line); }
+  .tabs button { display: inline-flex; align-items: center; min-height: 44px; padding: var(--space-2) 0; border: 0; background: transparent; color: var(--ink-secondary); font: 600 19px / 26px var(--font-sans); cursor: pointer; }
+  .tabs button:hover { color: var(--ink); }
+  .tabs button[aria-selected="true"] { color: var(--ink); box-shadow: inset 0 -3px 0 var(--ink); }
+  .tp { padding-top: 8px; }
+
+  /* Button, at the page's size: secondary, quiet, primary. */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 60px; padding: 0 22px; border: 1px solid var(--control-border); border-radius: var(--radius-md); background: transparent; color: var(--ink); font: 600 19px / 25px var(--font-sans); cursor: pointer; white-space: nowrap; }
+  .btn svg { width: 26px; height: 26px; }
+  .btn:hover { background: var(--tile); }
+  .btn.quiet { border-color: transparent; }
+  .btn.primary { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+  .btn.primary:hover { background: color-mix(in srgb, var(--ink) 82%, var(--canvas)); }
+  .acts { display: flex; flex-wrap: wrap; gap: 12px; }
+  .acts.end { justify-content: flex-end; }
+
+  /* The lists: a line rule under each entry, none above the first (the tabs' rule is there). */
+  .plist { list-style: none; margin: 0; padding: 0; max-width: 820px; }
+  .plist > li { border-bottom: 1px solid var(--line); }
+  .pn { margin: 0; font: 600 22px / 1.3 var(--font-sans); }
+  .pm { margin: 0; color: var(--ink-secondary); font-size: 19px; line-height: 1.45; }
+  .pm b { color: var(--ink); font-weight: 600; }
+  /* A run: the whole line a link to its overview. */
+  .rl { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px 12px; padding: 14px 0; color: var(--ink); text-decoration: none; }
+  .rl .pn, .rl .pm { grid-column: 1; }
+  .rl:hover .pn { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+  .rl svg { grid-column: 2; grid-row: 1 / span 2; width: 22px; height: 22px; color: var(--ink-secondary); }
+  /* A library programme: its name, kind, weeks and activities, a line about it, its actions. */
+  .lib { display: flex; flex-direction: column; gap: 12px; padding: 16px 0; }
+  .lib .pd { margin: 4px 0 0; font-size: 19px; line-height: 1.45; max-width: 60ch; }
+  .lib .pa { gap: 8px; }
+  .lib .pa .btn { height: 52px; padding: 0 16px; }
+  .lib .pa .btn.quiet { padding: 0 10px; }
+  /* Opened in place to start it (K147): framed in 2px ink, the fields, the plan, the actions. */
+  .lib.open { gap: 20px; }
+  .xp { display: flex; flex-direction: column; gap: 20px; padding: 16px; margin: 0 -16px; border: 2px solid var(--ink); border-radius: var(--radius-lg); min-width: 0; }
+
+  /* Fields, as TextField at the page's size. */
+  .row2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 20px 24px; align-items: start; max-width: 820px; }
+  .field { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .field > .label { font: 600 19px / 25px var(--font-sans); }
+  .hint { margin: 0; color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
+  input.tf, .pick { height: 60px; width: 100%; padding: 0 15px; border: 1px solid var(--control-border); border-radius: var(--radius-sm); background: var(--panel); color: var(--ink); font: 400 19px / 1.3 var(--font-sans); font-variant-numeric: tabular-nums; }
+  input.tf:hover, .pick:hover { border-color: var(--ink); }
+  input.tf.num { max-width: 170px; }
+  .pick { display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; cursor: pointer; }
+  .pick svg { width: 22px; height: 22px; color: var(--ink-secondary); }
+
+  /* The plan as the start's preview: the ProgrammeGrid card's table, every week still to come. */
+  .spv { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .spv h3 { margin: 0; font: 600 19px / 25px var(--font-sans); }
+  .grid-wrap { position: relative; margin-top: 8px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
+  table.og { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 19px; }
+  .og th, .og td { padding: 12px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; font-weight: 400; }
+  .og thead th { border-bottom: 1px solid var(--ink); vertical-align: bottom; }
+  .og .act { position: sticky; left: 0; z-index: 2; background: var(--canvas); width: 216px; min-width: 216px; }
+  .og .wk { min-width: 108px; }
+  .og .wn { display: block; font: 600 19px / 1.35 var(--font-sans); white-space: nowrap; }
+  .og .wd { display: block; color: var(--ink-secondary); font-size: 16px; line-height: 22px; white-space: nowrap; }
+  .og .wt { display: block; font: 600 16px / 22px var(--font-sans); white-space: nowrap; }
+  .og .an { display: block; font: 600 22px / 1.3 var(--font-sans); overflow-wrap: anywhere; }
+  .og .ac { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 4px; align-items: center; }
+  .og .ac .t { color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
+  .cv { display: block; font: 600 21px / 1.3 var(--font-sans); white-space: nowrap; }
+  .cs { display: block; color: var(--ink-secondary); font-size: 16px; line-height: 22px; white-space: nowrap; }
+
+  /* Add: the pasted programme in TextArea's box, then the validator's problems. */
+  .addtab { display: flex; flex-direction: column; gap: 20px; padding-top: 16px; max-width: 820px; }
+  .area { display: block; width: 100%; padding: 11px 15px; border: 1px solid var(--control-border); border-radius: var(--radius-sm); background: var(--panel); color: var(--ink);
+    font: 400 17px / 1.45 var(--font-sans); resize: vertical; white-space: pre; overflow-x: auto; }
+  .area:hover { border-color: var(--ink); }
+  .area[aria-invalid="true"] { border-color: var(--error-ink); }
+  .errs { display: flex; flex-direction: column; gap: 8px; }
+  .im { display: flex; align-items: flex-start; gap: var(--space-2); margin: 0; font-size: 16px; line-height: 22px; }
+  .im svg { width: 16px; height: 16px; margin-top: 3px; flex: none; }
+  .im.err { color: var(--error-ink); }
+  .errlist { margin: 0; padding: 0 0 0 24px; display: flex; flex-direction: column; gap: 6px; font-size: 16px; line-height: 22px; }
+  .errlist .path { font-weight: 600; overflow-wrap: anywhere; }
+
+  @media (prefers-reduced-motion: no-preference) { .btn, .tabs button, input.tf, .pick, .area { transition: background-color 120ms, color 120ms, border-color 120ms; } }
+
+  /* Folded: the system's sizes on n (1 on a phone), the stage the phone's own width. */
+  @media (max-width: 639px) {
+    body { padding: var(--space-4) 0; }
+    .variant { padding: 0 var(--space-4); }
+    .stage { border-width: 1px 0; border-radius: 0; }
+    .page { padding: 20px 16px 48px; }
+    .back, .pm, .lib .pd { font-size: 18px; line-height: 26px; }
+    .back svg, .btn svg { width: 22px; height: 22px; }
+    h1 { font-size: 30px; line-height: 36px; }
+    .tabs { margin-top: 20px; }
+    .tabs button { font-size: 18px; }
+    .pn { font-size: 18px; }
+    .btn, .lib .pa .btn { height: 48px; padding: 0 16px; font-size: 16px; line-height: 22px; }
+    .lib .pa { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .lib .pa .btn:first-child { grid-column: 1 / -1; }
+    .xp { margin: 0 -8px; padding: 12px 8px; }
+    .field > .label, .spv h3 { font-size: 16px; line-height: 22px; }
+    input.tf, .pick { height: 48px; font-size: 18px; }
+    .acts.end .btn { flex: 1 1 auto; }
+    table.og { font-size: 18px; }
+    .og th, .og td { padding: 10px 8px; }
+    .og .act { width: 132px; min-width: 132px; box-shadow: 1px 0 0 var(--line); }
+    .og .wk { min-width: 104px; }
+    .og .wn { font-size: 16px; }
+    .og .an, .cv { font-size: 18px; }
+    .area { font-size: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<p class="variant label">Running (K147): one programme running, one paused. Each line opens its overview. Press the tabs</p>
+<div class="stage" data-page data-tab="running"></div>
+
+<div class="gap"></div>
+<p class="variant label">Library: three programmes, each with Preview and start, Duplicate and Delete. Press Preview and start</p>
+<div class="stage" data-page data-tab="library"></div>
+
+<div class="gap"></div>
+<p class="variant label">Library, Hip mobility opened in place to start it: its name, start day and starting values, then the plan from Mon 21 Dec as the preview. Cancel closes it; Start programme starts it</p>
+<div class="stage" data-page data-tab="library" data-open="hip"></div>
+
+<div class="gap"></div>
+<p class="variant label">Add, after Check and add: a pasted programme with three problems, each on its own line with where it is</p>
+<div class="stage" data-page data-tab="add" data-errors></div>
+
+<script>
+// The Programmes page, drawn from the mockup's option 6B (mockups/261117-programmes, proto.js):
+// today Wed 16 Dec. The app shows what the server sends: the runs, the library, the validator's
+// problems and the start's preview grid (spec P4).
+(() => {
+  const P = {
+    left: '<path d="m15 18-6-6 6-6"/>', right: '<path d="m9 18 6-6-6-6"/>',
+    play: '<polygon points="6 3 20 12 6 21 6 3"/>',
+    copy: '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+    trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
+    upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>',
+    alert: '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>',
+    cal: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>',
+  }
+  const ic = (n) => `<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n]}</svg>`
+  const RUNS = [
+    { tracker: 'beginner-5x5', name: 'Beginner 5×5', meta: '<b>Week 4 of 8.</b> Running. Ends Sun 17 Jan.', state: 'running' },
+    { tracker: 'couch-to-5k', name: 'Couch to 5K', meta: '<b>Week 3 of 9.</b> Paused since Mon 7 Dec. A cold.', state: 'paused' },
+  ]
+  const LIB = [
+    { id: 'b55', name: 'Beginner 5×5', meta: 'Strength · 8 weeks · 5 activities', desc: 'Three full-body sessions a week, adding weight each week.' },
+    { id: 'hip', name: 'Hip mobility', meta: 'Mobility · 6 weeks · 4 activities', desc: 'Short daily holds and drills for the hips and lower back, a little longer each week.' },
+    { id: 'c25', name: 'Couch to 5K', meta: 'Cardio · 9 weeks · 1 activity', desc: 'Three runs a week, from run-walk intervals to 5 km.' },
+  ]
+  // Hip mobility from Mon 21 Dec, a hold start of 30 s and 10 s more a week, week 6 lighter.
+  const WEEKS = [{ n: 1, d: '21–27 Dec' }, { n: 2, d: '28 Dec–3 Jan' }, { n: 3, d: '4–10 Jan' }, { n: 4, d: '11–17 Jan' }, { n: 5, d: '18–24 Jan' }, { n: 6, d: '25–31 Jan', deload: true }]
+  const ACTS = [
+    { name: 'Deep squat hold', chip: '3 sets', unit: 's', sets: '3 sets', w: [30, 40, 50, 60, 70, 60] },
+    { name: 'Couch stretch', chip: '2 sets', unit: 's', sets: '2 sets, each side', w: [45, 45, 60, 60, 75, 60] },
+    { name: '90/90 switches', chip: '3 × 8', unit: 'reps', sets: '3 sets', w: [8, 8, 9, 9, 10, 8] },
+    { name: 'Hip airplanes', chip: '2 × 5', unit: 'reps', sets: '2 sets, each side', w: [5, 5, 6, 6, 7, 5] },
+  ]
+  const JSON_TEXT = '{\n  "format": "tracker-programme/1",\n  "name": "Upper and lower",\n  "kind": "strength",\n  "weeks": 60,\n  "activities": [\n    { "key": "bench", "name": "Bench press", …'
+  const ERRORS = [
+    ['weeks', 'a programme runs 1 to 52 weeks; this one has 60.'],
+    ['activities[2].weight.rate', 'a progression has add or rate, not both.'],
+    ['activities[4].key', 'a key is a-z, 0-9 and -; “Pull-up” has capitals.'],
+  ]
+
+  const runs = () => `<ul class="plist" aria-label="Running" data-testid="programmes-running">${RUNS.map((r) => `<li data-testid="programme-run" data-state="${r.state}"><a class="rl" href="#/programme/${r.tracker}"><span class="pn">${r.name}</span><span class="pm">${r.meta}</span>${ic('right')}</a></li>`).join('')}</ul>`
+
+  const grid = (id) => {
+    const head = `<tr><th class="act" scope="col"><span class="vh">Activity</span></th>${WEEKS.map((w) => `<th class="wk" scope="col" data-week="${w.n}"><span class="wn">Week ${w.n}</span><span class="wd">${w.d}</span>${w.deload ? '<span class="wt">Deload</span>' : ''}</th>`).join('')}</tr>`
+    const rows = ACTS.map((a) => `<tr><th class="act" scope="row"><span class="an">${a.name}</span><span class="ac"><span class="chip">${a.chip}</span><span class="t">5 a week</span></span></th>${a.w.map((v, i) => `<td class="wk" data-week="${i + 1}" data-cell="planned"><span class="cv">${v} ${a.unit}</span><span class="cs">${a.sets}</span></td>`).join('')}</tr>`).join('')
+    return `<div class="grid-wrap" tabindex="0" role="region" aria-labelledby="${id}-pv" data-testid="programme-grid"><table class="og"><thead>${head}</thead><tbody>${rows}</tbody></table></div>`
+  }
+  const startForm = (id) => `<div class="xp" role="group" aria-labelledby="${id}-hip" data-testid="programme-start">
+      <div class="row2">
+        <div class="field"><label class="label" for="${id}-name">Name</label><input class="tf" id="${id}-name" value="Hip mobility" aria-describedby="${id}-name-h" data-testid="start-name"><p class="hint" id="${id}-name-h">Its tracker's name. You can change it later.</p></div>
+        <div class="field"><span class="label" id="${id}-from">Start</span><button type="button" class="pick" aria-labelledby="${id}-from ${id}-from-v" aria-describedby="${id}-from-h" data-testid="start-date"><span id="${id}-from-v">Mon 21 Dec</span>${ic('cal')}</button><p class="hint" id="${id}-from-h">Today, Wed 16 Dec, or any later day. Week 1 starts on its Monday.</p></div>
+        <div class="field"><label class="label" for="${id}-hold">Hold start in seconds</label><input class="tf num" id="${id}-hold" inputmode="numeric" value="30" aria-describedby="${id}-hold-h" data-testid="start-param" data-param="hold"><p class="hint" id="${id}-hold-h">The programme's own: 30.</p></div>
+        <div class="field"><label class="label" for="${id}-add">Hold increase in seconds a week</label><input class="tf num" id="${id}-add" inputmode="numeric" value="10" aria-describedby="${id}-add-h" data-testid="start-param" data-param="holdIncrease"><p class="hint" id="${id}-add-h">The programme's own: 10.</p></div>
+      </div>
+      <div class="spv" data-testid="start-preview"><h3 id="${id}-pv">Preview</h3><p class="pm">Six weeks, Mon 21 Dec to Sun 31 Jan. Week 6 is lighter.</p>${grid(id)}</div>
+      <div class="acts end"><button type="button" class="btn" data-close data-testid="start-cancel">Cancel</button><button type="button" class="btn primary" data-testid="start-confirm">Start programme</button></div>
+    </div>`
+  const library = (s, id) => `<ul class="plist" aria-label="Library" data-testid="programmes-library">${LIB.map((p) => {
+    const open = s.open === p.id
+    const actions = open ? '' : `<div class="acts pa"><button type="button" class="btn" data-start="${p.id}" aria-expanded="false" data-testid="library-start">${ic('play')}Preview and start</button><button type="button" class="btn quiet" data-testid="library-duplicate">${ic('copy')}Duplicate</button><button type="button" class="btn quiet" data-testid="library-delete">${ic('trash')}Delete</button></div>`
+    return `<li class="lib${open ? ' open' : ''}" data-testid="library-programme" data-programme="${p.id}"><div><h3 class="pn" id="${id}-${p.id}">${p.name}</h3><p class="pm">${p.meta}</p><p class="pd">${p.desc}</p></div>${actions}${open ? startForm(id) : ''}</li>`
+  }).join('')}</ul>`
+  const add = (s, id) => {
+    const errs = s.errors ? `<div class="errs" id="${id}-errs" data-testid="add-errors"><p class="im err" role="alert">${ic('alert')}<span>This programme has three problems. Fix them, then check it again.</span></p><ul class="errlist">${ERRORS.map(([path, text]) => `<li data-testid="add-error" data-path="${path}"><span class="path">${path}:</span> ${text}</li>`).join('')}</ul></div>` : ''
+    return `<div class="addtab" data-testid="programme-add"><div class="field"><label class="label" for="${id}-json">Programme JSON</label><textarea class="area" id="${id}-json" rows="7" spellcheck="false" aria-describedby="${id}-json-h${s.errors ? ` ${id}-errs` : ''}"${s.errors ? ' aria-invalid="true"' : ''} data-testid="add-json">${JSON_TEXT}</textarea><p class="hint" id="${id}-json-h">Paste a programme in the tracker-programme/1 format, or choose a file. Claude can add one for you through your connection.</p></div>
+      ${errs}<div class="acts"><button type="button" class="btn" data-testid="add-choose-file">${ic('upload')}Choose file</button><button type="button" class="btn primary" data-check data-testid="add-check">Check and add</button></div></div>`
+  }
+
+  const TABS = [['running', 'Running'], ['library', 'Library'], ['add', 'Add']]
+  document.querySelectorAll('[data-page]').forEach((stage, k) => {
+    const id = `pp${k + 1}`
+    const s = { tab: stage.dataset.tab, open: stage.dataset.open || null, errors: 'errors' in stage.dataset }
+    const draw = (focus) => {
+      const body = s.tab === 'running' ? runs() : s.tab === 'library' ? library(s, id) : add(s, id)
+      stage.innerHTML = `<main class="page" data-testid="programmes-page"><a class="back" href="#" data-testid="back-to-week">${ic('left')}<span>Back to the week</span></a><h1>Programmes</h1>
+        <div class="tabs" role="tablist" aria-label="Programmes">${TABS.map(([key, label]) => `<button type="button" role="tab" id="${id}-t-${key}" aria-controls="${id}-p" aria-selected="${s.tab === key}" tabindex="${s.tab === key ? 0 : -1}" data-tab="${key}" data-testid="programmes-tab-${key}">${label}</button>`).join('')}</div>
+        <div class="tp" role="tabpanel" id="${id}-p" aria-labelledby="${id}-t-${s.tab}">${body}</div></main>`
+      if (focus) stage.querySelector(focus)?.focus()
+    }
+    stage.addEventListener('click', (e) => {
+      const t = e.target.closest('[data-tab],[data-start],[data-close],[data-check],a')
+      if (!t) return
+      if (t.matches('a')) { e.preventDefault(); return }
+      if (t.dataset.tab) { s.tab = t.dataset.tab; draw(`[data-tab="${s.tab}"]`) }
+      else if (t.dataset.start) { s.open = t.dataset.start; draw('[data-testid="start-name"]') }
+      else if ('close' in t.dataset) { const was = s.open; s.open = null; draw(`[data-start="${was}"]`) }
+      else if ('check' in t.dataset) { s.errors = true; draw('[data-testid="add-json"]') }
+    })
+    stage.addEventListener('keydown', (e) => {
+      const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key]
+      if (!d || !e.target.matches('[role="tab"]')) return
+      const keys = TABS.map(([key]) => key)
+      s.tab = keys[(keys.indexOf(s.tab) + d + keys.length) % keys.length]
+      draw(`[data-tab="${s.tab}"]`); e.preventDefault()
+    })
+    draw()
+  })
+})()
+</script>
+</body>
+</html>

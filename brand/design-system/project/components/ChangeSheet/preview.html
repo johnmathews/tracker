@@ -1,0 +1,189 @@
+<!-- @dsCard group="Overlays" height=2900 subtitle="A programme change in two steps on the Dialog: the change and Preview change, then what it does to each week, with Back and Confirm change; a hand-edit that blocks it, kept or dropped; Show it in the plan (K144, K148)" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ChangeSheet — preview</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: var(--space-6); background: var(--canvas); color: var(--ink); font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
+  button, input { font: inherit; color: inherit; }
+  .variant { margin: 0 0 var(--space-3); color: var(--ink-secondary); }
+  .gap { height: var(--space-8); }
+  svg.i { width: 1em; height: 1em; flex: none; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  /* The stage stands in for the viewport: the overview behind, the scrim, the sheet. */
+  .stage { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: var(--space-16) var(--space-4) var(--space-8); }
+  .behind { position: absolute; inset: 0; padding: var(--space-6) 48px; }
+  .behind h1 { margin: 0 0 var(--space-6); font: 600 40px / 46px var(--font-serif); }
+  .behind p { margin: 0; padding: var(--space-3) 0; border-bottom: 1px solid var(--line); font-weight: 600; font-size: 19px; }
+  .scrim { position: absolute; inset: 0; background: var(--scrim); opacity: 0.4; }
+
+  /* Dialog, at the page's size (K55): max(24px, 32u) padding, at most 720u wide. */
+  .dlg { position: relative; margin: 0 auto; width: min(720px, 100%); display: flex; flex-direction: column; gap: 20px; padding: 32px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-overlay); }
+  .steps { margin: 0; color: var(--ink-secondary); font: 600 16px / 22px var(--font-sans); }
+  .dlg-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin: -12px -12px 0 0; }
+  .dlg-head h2 { margin: 12px 0 0; font: 600 27px / 34px var(--font-sans); }
+  /* IconButton at the row buttons' size: 52px, a 28px icon. */
+  .ib { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 52px; height: 52px; padding: 0; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); cursor: pointer; }
+  .ib svg { width: 28px; height: 28px; }
+  .ib:hover { background: var(--tile); }
+
+  /* Fields at the Settings page's sizes: labels 19u, controls 60u. */
+  .field { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .field > .label { font: 600 19px / 25px var(--font-sans); }
+  .hint { margin: 0; color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
+  .row2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 20px 24px; align-items: start; }
+  input.tf, .pick { height: 60px; width: 100%; padding: 0 15px; border: 1px solid var(--control-border); border-radius: var(--radius-sm);
+    background: var(--panel); color: var(--ink); font: 400 19px / 1.3 var(--font-sans); font-variant-numeric: tabular-nums; }
+  input.tf:hover, .pick:hover { border-color: var(--ink); }
+  input.tf.num { max-width: 170px; }
+  /* A Menu's trigger and the date's: a field-shaped button, its value and an icon at the end. */
+  .pick { display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; cursor: pointer; }
+  .pick svg { width: 22px; height: 22px; color: var(--ink-secondary); }
+  /* SegmentedControl, as its card. */
+  .seg { display: inline-flex; flex-wrap: wrap; align-self: flex-start; max-width: 100%; border: 1px solid var(--control-border); border-radius: var(--radius-md); }
+  .seg button { height: 58px; padding: 0 22px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); font: 600 19px / 25px var(--font-sans); cursor: pointer; white-space: nowrap; }
+  .seg button:hover { background: var(--tile); }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
+  .seg button:focus-visible { position: relative; z-index: 1; }
+
+  /* Button, at the page's size: secondary, primary, small. */
+  .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; padding-top: 4px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 60px; padding: 0 22px; border: 1px solid var(--control-border); border-radius: var(--radius-md);
+    background: transparent; color: var(--ink); font: 600 19px / 25px var(--font-sans); cursor: pointer; white-space: nowrap; }
+  .btn svg { width: 26px; height: 26px; }
+  .btn:hover { background: var(--tile); }
+  .btn.primary { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+  .btn.primary:hover { background: color-mix(in srgb, var(--ink) 82%, var(--canvas)); }
+  .btn.sm { height: 44px; padding: 0 12px; font-size: 16px; }
+
+  /* Step 2: the change in a sentence, on a tile. */
+  .summary { margin: 0; padding: 12px 14px; background: var(--tile); border-radius: var(--radius-sm); font-size: 19px; line-height: 1.45; }
+  .summary:focus { outline: none; }
+  .summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  /* What changes: a week a line, before → after. */
+  .pv { display: flex; flex-direction: column; gap: 8px; padding-top: 20px; border-top: 1px solid var(--line); }
+  .pv h3 { margin: 0; font: 600 19px / 25px var(--font-sans); }
+  .pv ol { list-style: none; margin: 0; padding: 0; }
+  .pv li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: baseline; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 19px; line-height: 1.4; }
+  .pv li:first-child { border-top: 1px solid var(--line); }
+  .pv li .w { font-weight: 600; }
+  .pv li .d { display: block; color: var(--ink-secondary); font-weight: 400; font-size: 16px; line-height: 22px; }
+  .chg { font-weight: 600; white-space: nowrap; }
+  .chg .was { color: var(--ink-secondary); font-weight: 400; }
+  /* A hand-edit the change would meet: kept unless dropped (spec §7.2). */
+  .block { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px 0 4px; }
+  .block p { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 19px; line-height: 1.45; }
+  .block p svg { width: 18px; height: 18px; margin-top: 5px; color: var(--ink-secondary); }
+  .calm { margin: 0; color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
+  /* K148: a TextLink to the plan showing the change (ProgrammeGrid, Previewing a change). */
+  .showplan { margin: 0; font-size: 19px; line-height: 1.45; }
+  .link { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+  .link:hover { text-decoration-thickness: 2px; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .btn, .seg button, .ib, input.tf, .pick { transition: background-color 120ms, color 120ms, border-color 120ms; }
+  }
+  /* Folded: the system's sizes on n (1 on a phone), the sheet 16px from each edge. */
+  @media (max-width: 639px) {
+    body { padding: var(--space-4) 0; }
+    .variant { padding: 0 var(--space-4); }
+    .stage { border-width: 1px 0; border-radius: 0; padding: var(--space-12) var(--space-4) var(--space-4); }
+    .behind { padding: var(--space-4); }
+    .behind h1 { font-size: 30px; line-height: 36px; }
+    .dlg { padding: 16px; gap: 16px; }
+    .dlg-head h2 { font-size: 22px; line-height: 28px; }
+    .ib { width: 44px; height: 44px; }
+    .ib svg { width: 24px; height: 24px; }
+    .field > .label, .pv h3 { font-size: 16px; line-height: 22px; }
+    input.tf, .pick { height: 48px; font-size: 18px; }
+    .seg button { height: 46px; padding: 0 16px; font-size: 16px; }
+    .btn { height: 48px; padding: 0 16px; font-size: 16px; }
+    .btn svg { width: 22px; height: 22px; }
+    .actions .btn { flex: 1 1 auto; }
+    .summary, .pv li, .block p, .showplan { font-size: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<p class="variant label">Step 1 (K144): Change Barbell row, opened from week 5's cell with Change from here. The fields, then Preview change. Nothing changes yet</p>
+<div class="stage"><div class="behind" aria-hidden="true" inert><h1>Beginner 5×5</h1><p>Back squat</p><p>Bench press</p><p>Barbell row</p><p>Deadlift</p><p>Plank</p></div><div class="scrim" aria-hidden="true"></div><div data-sheet="1"></div></div>
+
+<div class="gap"></div>
+<p class="variant label">Step 2: the change in a sentence, then what it does to each week. Week 6's hand-edit blocks it and is kept; Drop it too puts week 6 in the change. Show it in the plan (K148) puts the sheet away and shows the overview with the change in its cells. Back keeps what was entered. Confirm change applies it</p>
+<div class="stage"><div class="behind" aria-hidden="true" inert><h1>Beginner 5×5</h1><p>Back squat</p><p>Bench press</p><p>Barbell row</p><p>Deadlift</p><p>Plank</p></div><div class="scrim" aria-hidden="true"></div><div data-sheet="2"></div></div>
+
+<div class="gap"></div>
+<p class="variant label">Step 2, the hand-edit dropped: week 6 joins the change, and Keep it takes it back out</p>
+<div class="stage"><div class="behind" aria-hidden="true" inert><h1>Beginner 5×5</h1><p>Back squat</p><p>Bench press</p><p>Barbell row</p><p>Deadlift</p><p>Plank</p></div><div class="scrim" aria-hidden="true"></div><div data-sheet="2" data-dropped="1"></div></div>
+
+<script>
+// The sheet, drawn from the mockup's markup (mockups/261117-programmes, proto.js, sheet B). The
+// change: Barbell row set to 45 kg from Mon 21 Dec. Every number comes from the server's preview
+// (spec §7.3); the app computes none of them.
+(() => {
+  const P = {
+    x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    down: '<path d="m6 9 6 6 6-6"/>',
+    left: '<path d="m15 18-6-6 6-6"/>',
+    cal: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>',
+    pencil: '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>',
+  }
+  const ic = (name) => `<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name]}</svg>`
+  const WEEKS = { 5: '21–27 Dec', 6: '28 Dec–3 Jan', 7: '4–10 Jan', 8: '11–17 Jan, deload' }
+  const BEFORE = { 5: 40, 6: 35, 7: 45, 8: 42.5 }
+  const AFTER = { 5: 45, 6: 47.5, 7: 50, 8: 47.5 }
+
+  function preview(s, id) {
+    const weeks = s.scope === 'once' ? [5] : [5, 6, 7, 8].filter((n) => n !== 6 || s.dropped)
+    const rows = weeks.map((n) => `<li data-testid="change-preview-week" data-week="${n}"><span class="w">Week ${n}<span class="d">${WEEKS[n]}</span></span><span class="chg"><span class="was">${BEFORE[n]} →</span> ${AFTER[n]} kg</span></li>`).join('')
+    const block = s.scope === 'once' ? ''
+      : s.dropped
+        ? `<div class="block" data-testid="change-hand-edit"><p>${ic('pencil')}<span>The 35 kg set by hand on 12 Dec goes too.</span></p><button type="button" class="btn sm" data-drop="0" data-testid="change-keep-hand-edit">Keep it</button></div>`
+        : `<div class="block" data-testid="change-hand-edit"><p>${ic('pencil')}<span>Week 6 keeps the 35 kg set on 12 Dec.</span></p><button type="button" class="btn sm" data-drop="1" data-testid="change-drop-hand-edit">Drop it too</button></div>`
+    const calm = s.scope === 'once' ? 'Weeks 6 to 8 stay as they are. Nothing before Mon 21 Dec changes.' : 'Nothing before Mon 21 Dec changes.'
+    return `<section class="pv" aria-labelledby="${id}-pv"><h3 id="${id}-pv">What changes</h3><ol data-testid="change-preview">${rows}</ol>${block}<p class="calm" data-testid="change-unchanged">${calm}</p></section>`
+  }
+
+  function fields(s, id) {
+    return `<div class="field"><span class="label" id="${id}-kind">Change</span><button type="button" class="pick" aria-labelledby="${id}-kind ${id}-kind-v" aria-haspopup="menu" data-testid="change-kind"><span id="${id}-kind-v">Set weight</span>${ic('down')}</button></div>
+      <div class="row2"><div class="field"><label class="label" for="${id}-kg">Weight in kg</label><input class="tf num" id="${id}-kg" inputmode="decimal" value="45" aria-describedby="${id}-kg-h" data-testid="change-value"><p class="hint" id="${id}-kg-h">Week 5 is 40 kg now.</p></div>
+      <div class="field"><span class="label" id="${id}-from">From</span><button type="button" class="pick" aria-labelledby="${id}-from ${id}-from-v" aria-describedby="${id}-from-h" data-testid="change-from"><span id="${id}-from-v">Mon 21 Dec</span>${ic('cal')}</button><p class="hint" id="${id}-from-h">Today, Wed 16 Dec, or any later day.</p></div></div>
+      <div class="field"><span class="label" id="${id}-for">For</span><div class="seg" role="group" aria-labelledby="${id}-for" data-testid="change-scope"><button type="button" aria-pressed="${s.scope === 'on'}" data-scope="on">From then on</button><button type="button" aria-pressed="${s.scope === 'once'}" data-scope="once">That week only</button></div></div>
+      <div class="field"><label class="label" for="${id}-why">Reason</label><input class="tf" id="${id}-why" value="Rows feel light" aria-describedby="${id}-why-h" data-testid="change-reason"><p class="hint" id="${id}-why-h">It shows in Changes.</p></div>`
+  }
+
+  function sheet(s, id) {
+    const head = `<div class="dlg-head"><h2 id="${id}-h">Change Barbell row</h2><button type="button" class="ib" aria-label="Close" data-testid="change-close">${ic('x')}</button></div>`
+    if (s.step === 1) {
+      return `<p class="steps" id="${id}-step" data-testid="change-step">Step 1 of 2</p>${head}${fields(s, id)}<div class="actions"><button type="button" class="btn" data-testid="change-cancel">Cancel</button><button type="button" class="btn primary" data-step="2" data-testid="change-preview-button">Preview change</button></div>`
+    }
+    const what = s.scope === 'once' ? 'Weight 45 kg in week 5 only.' : 'Weight 45 kg from Mon 21 Dec, from then on.'
+    return `<p class="steps" id="${id}-step" data-testid="change-step">Step 2 of 2</p>${head}<p class="summary" tabindex="-1" data-testid="change-summary">${what} <i>Rows feel light.</i></p>${preview(s, id)}<p class="showplan"><a class="link" href="#" data-testid="change-show-in-plan">Show it in the plan</a></p><div class="actions"><button type="button" class="btn" data-step="1" data-testid="change-back">${ic('left')}Back</button><button type="button" class="btn primary" data-testid="change-confirm">Confirm change</button></div>`
+  }
+
+  document.querySelectorAll('[data-sheet]').forEach((host, k) => {
+    const id = `cs${k + 1}`
+    const s = { step: Number(host.dataset.sheet), scope: 'on', dropped: host.dataset.dropped === '1' }
+    const draw = (focus) => {
+      host.innerHTML = `<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="${id}-h" aria-describedby="${id}-step" data-testid="change-sheet" data-step="${s.step}">${sheet(s, id)}</div>`
+      if (focus) host.querySelector(focus)?.focus()
+    }
+    host.addEventListener('click', (e) => {
+      if (e.target.closest('a')) e.preventDefault()
+      const t = e.target.closest('[data-step],[data-scope],[data-drop]')
+      if (!t) return
+      if (t.dataset.scope) { s.scope = t.dataset.scope; draw(`[data-scope="${s.scope}"]`) }
+      else if (t.dataset.drop) { s.dropped = t.dataset.drop === '1'; draw('[data-drop]') }
+      else { s.step = Number(t.dataset.step); draw(s.step === 2 ? '.summary' : 'input') }
+    })
+    draw()
+  })
+})()
+</script>
+</body>
+</html>

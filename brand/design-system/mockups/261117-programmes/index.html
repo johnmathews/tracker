@@ -56,23 +56,87 @@
 
 <main class="mockup-page">
   <header class="mockup-head">
-    <p class="caption mockup-meta">Mockup · 2026-11-17 · Tracker · Round 1</p>
+    <p class="caption mockup-meta">Mockup · 2026-11-18 · Tracker · Round 2</p>
     <h1 class="title-1">How a programme looks</h1>
-    <p class="body">Five questions about how a programme shows up in the app (spec §10). The data is the same everywhere: <strong>Beginner 5×5</strong>, eight weeks from Mon 23 Nov; today is Wed 16 Dec, in week 4, a deload week. Deadlift is paused for two weeks (knee), Barbell row has a hand-edit in week 6, and Bench press was lowered on Wed 9 Dec, which split week 3.</p>
+    <p class="body"><strong>Every question is decided:</strong> 1A, 2C with A’s pencil, 3B, 4A and 5A in round 1; 6B and 7B in round 2 (questions 6 and 7, at the top).</p>
+    <p class="body">Seven questions about how a programme shows up in the app (spec §9, §10). The data is the same everywhere: <strong>Beginner 5×5</strong>, eight weeks from Mon 23 Nov; today is Wed 16 Dec, in week 4, a deload week. Deadlift is paused for two weeks (knee), Barbell row has a hand-edit in week 6, and Bench press was lowered on Wed 9 Dec, which split week 3.</p>
     <p class="body">What stays as it is: the week view outside its header, a paused row and a locked day; an item page's other rows; the Dialog, the buttons, the chips and the marks. Every screen is live: press, scroll and unfold. <a href="try.html">Try it full size</a>, on your phone too.</p>
     <ul class="notes body">
-      <li><a class="go" href="#q1">1. The overview at phone width</a> (the biggest question)</li>
-      <li><a class="go" href="#q2">2. Locked, hand-edited and paused cells</a></li>
-      <li><a class="go" href="#q3">3. The change sheet and its preview</a></li>
-      <li><a class="go" href="#q4">4. The activity page’s Programme row</a></li>
-      <li><a class="go" href="#q5">5. The week view’s programme header</a></li>
+      <li><a class="go" href="#q6">6. The Programmes page</a> (decided: B)</li>
+      <li><a class="go" href="#q7">7. Where a change’s preview shows</a> (decided: B)</li>
+      <li><a class="go" href="#q1">1. The overview at phone width</a> (decided: A)</li>
+      <li><a class="go" href="#q2">2. Locked, hand-edited and paused cells</a> (decided: C with A’s pencil)</li>
+      <li><a class="go" href="#q3">3. The change sheet and its preview</a> (decided: B)</li>
+      <li><a class="go" href="#q4">4. The activity page’s Programme row</a> (decided: A)</li>
+      <li><a class="go" href="#q5">5. The week view’s programme header</a> (decided: A)</li>
     </ul>
   </header>
 
-  <!-- ===== Question 1 ===== -->
+  <!-- ===== Question 6 (round 2, decided: B) ===== -->
+  <section class="question one" id="q6" aria-labelledby="q6-h">
+    <header>
+      <h2 class="title-1" id="q6-h">6. The Programmes page (decided: B)</h2>
+      <p class="body">The page the bar opens (spec §9.1): the programmes running now, the library to start one from, and a way to add a programme an agent wrote. Two runs: Beginner 5×5 in week 4, and Couch to 5K, paused. Three programmes in the library. Starting one asks for its name, start day and starting values, with the plan as a preview: here Hip mobility from Mon 21 Dec. A pasted programme with mistakes lists each one with where it is. Press Preview and start, and Check and add.</p>
+    </header>
+    <section class="option" id="q6a" data-recommended aria-labelledby="q6a-h">
+      <div class="option-head"><h3 class="title-2" id="q6a-h">A. One page in rows, and Start as a page of its own</h3><span class="label option-tag">Option A</span></div>
+      <p class="body">Running, Library and Add a programme as rows down one page, the shape of an item’s page (K65). Preview and start opens a page of its own, like the new item page (K104), with the plan full width under the fields. Recommended: it is the shape the app already uses for a page of things and for adding one, and the preview gets the whole width the table needs. <a class="go" href="try.html#programmes-a">Try A full size</a></p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · desktop; phone; phone, a pasted programme with three problems</p><div class="devices"><div class="device" data-w="1280" data-h="800" data-screen="programmes" data-q6="a"></div><div class="device phone" data-w="390" data-h="844" data-screen="programmes" data-q6="a"></div><div class="device phone" data-w="390" data-h="844" data-screen="programmes" data-q6="a" data-view="add" data-scroll-sel=".errs"></div></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · Start on a desktop and on a phone, scrolled to the preview</p><div class="devices"><div class="device" data-w="1280" data-h="800" data-screen="programmes" data-q6="a" data-view="start" data-scroll-sel=".sec.wide"></div><div class="device phone" data-w="390" data-h="844" data-screen="programmes" data-q6="a" data-view="start" data-scroll-sel=".sec.wide"></div></div></div>
+      </div>
+    </section>
+    <section class="option" id="q6b" aria-labelledby="q6b-h">
+      <div class="option-head"><h3 class="title-2" id="q6b-h">B. Tabs: Running, Library, Add</h3><span class="label option-tag">Option B</span></div>
+      <p class="body">One tab for each part, as Settings has (Tabs). Preview and start opens the programme in place in the Library list, framed in ink, with the fields and the plan in it. Less to scroll on a phone; the running runs are a tab away from the library, and the plan’s preview sits in a narrower box. <a class="go" href="try.html#programmes-b">Try B full size</a></p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · desktop, Running; phone, Library with Hip mobility opened to start; phone, Add with three problems</p><div class="devices"><div class="device" data-w="1280" data-h="800" data-screen="programmes" data-q6="b"></div><div class="device phone" data-w="390" data-h="844" data-screen="programmes" data-q6="b" data-view="start" data-scroll-sel=".lib.open"></div><div class="device phone" data-w="390" data-h="844" data-screen="programmes" data-q6="b" data-view="add" data-scroll-sel=".errs"></div></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · desktop, Library with Hip mobility opened to start; phone, Running</p><div class="devices"><div class="device" data-w="1280" data-h="800" data-screen="programmes" data-q6="b" data-view="start" data-scroll-sel=".lib.open"></div><div class="device phone" data-w="390" data-h="844" data-screen="programmes" data-q6="b"></div></div></div>
+      </div>
+    </section>
+    <section class="option" id="q6c" aria-labelledby="q6c-h">
+      <div class="option-head"><h3 class="title-2" id="q6c-h">C. One list, with Add and Start in sheets</h3><span class="label option-tag">Option C</span></div>
+      <p class="body">Running and Library as two plain lists on one page, with Add programme on the title’s line. Adding and starting each open a sheet (the Dialog card) over the list. The page stays short, but the plan’s preview is squeezed into a sheet, and K104 took the app’s add forms out of sheets. <a class="go" href="try.html#programmes-c">Try C full size</a></p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · desktop; phone; phone, Start in a sheet</p><div class="devices"><div class="device" data-w="1280" data-h="800" data-screen="programmes" data-q6="c"></div><div class="device phone" data-w="390" data-h="844" data-screen="programmes" data-q6="c"></div><div class="device phone" data-w="390" data-h="844" data-screen="programmes" data-q6="c" data-view="start"></div></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · desktop, Start in a sheet; phone, Add with three problems</p><div class="devices"><div class="device" data-w="1280" data-h="800" data-screen="programmes" data-q6="c" data-view="start"></div><div class="device phone" data-w="390" data-h="844" data-screen="programmes" data-q6="c" data-view="add" data-scroll-sel=".errs"></div></div></div>
+      </div>
+    </section>
+      <ul class="measures caption">
+        <li data-fg="var(--error-ink)" data-bg="var(--canvas)" data-min="4.5">A problem’s message on the page</li>
+        <li data-fg="var(--error-ink)" data-bg="var(--panel)" data-min="4.5">A problem’s message in a sheet (C)</li>
+        <li data-fg="var(--error-ink)" data-bg="var(--canvas)" data-min="3">The pasted box’s border with problems</li>
+      </ul>
+  </section>
+
+  <!-- ===== Question 7 (round 2, decided: B) ===== -->
+  <section class="question one" id="q7" aria-labelledby="q7-h">
+    <header>
+      <h2 class="title-1" id="q7-h">7. Where a change’s preview shows (decided: B)</h2>
+      <p class="body">The spec says the plan’s table also shows a change’s preview, each changed cell reading “40 → 45 kg” (§9.3). Question 3’s pick (B) shows the preview as a list of weeks in the sheet. Is the list enough, or should the plan show it too? The change: Barbell row set to 45 kg from Mon 21 Dec.</p>
+    </header>
+    <section class="option" id="q7a" data-recommended aria-labelledby="q7a-h">
+      <div class="option-head"><h3 class="title-2" id="q7a-h">A. The sheet’s list only</h3><span class="label option-tag">Option A</span></div>
+      <p class="body">As picked in 3B: step 2 lists the weeks that change, before → after, and the plan behind it changes only once you confirm. Recommended: one place to read a change, as John picked it, and one thing less to build. <a class="go" href="try.html#change-b">Try it full size</a></p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · phone, step 2</p><div class="devices"><div class="device phone" data-w="390" data-h="844" data-screen="change" data-sheet="b" data-step="2"></div></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · desktop, step 2</p><div class="devices"><div class="device" data-w="1280" data-h="800" data-screen="change" data-sheet="b" data-step="2"></div></div></div>
+      </div>
+    </section>
+    <section class="option" id="q7b" aria-labelledby="q7b-h">
+      <div class="option-head"><h3 class="title-2" id="q7b-h">B. The sheet’s list, and the plan too</h3><span class="label option-tag">Option B</span></div>
+      <p class="body">Step 2 adds “Show it in the plan”. It puts the sheet away and shows the overview with each changed cell reading “40 → 45 kg”, and a bar at the foot: “Previewing a change.”, Back to the change and Confirm change. You see the change among every other week, at the cost of a second way to confirm. <a class="go" href="try.html#preview-b">Try B full size</a></p>
+      <div class="panes">
+        <div class="pane" data-theme="light"><p class="label pane-label">Light · phone, step 2 with the link; phone, the plan showing the change</p><div class="devices"><div class="device phone" data-w="390" data-h="844" data-screen="change" data-sheet="b" data-step="2" data-q7="b"></div><div class="device phone" data-w="390" data-h="844" data-screen="overview" data-previewing="1"></div></div></div>
+        <div class="pane" data-theme="dark"><p class="label pane-label">Dark · desktop, the plan showing the change</p><div class="devices"><div class="device" data-w="1280" data-h="800" data-screen="overview" data-previewing="1"></div></div></div>
+      </div>
+    </section>
+  </section>
+
+  <!-- ===== Question 1 (decided: A) ===== -->
   <section class="question" id="q1" aria-labelledby="q1-h">
     <header>
-      <h2 class="title-1" id="q1-h">1. The overview at phone width</h2>
+      <h2 class="title-1" id="q1-h">1. The overview at phone width (decided: A)</h2>
       <p class="body">The programme’s own page: every activity against every week. Eight weeks don’t fit across a 390px phone. Which shape does the plan take there, and on a desktop? The cells use question 2’s option A here.</p>
     </header>
 
@@ -113,7 +177,7 @@
   <!-- ===== Question 2 ===== -->
   <section class="question one" id="q2" aria-labelledby="q2-h">
     <header>
-      <h2 class="title-1" id="q2-h">2. Locked, hand-edited and paused cells</h2>
+      <h2 class="title-1" id="q2-h">2. Locked, hand-edited and paused cells (decided: C with A’s pencil)</h2>
       <p class="body">The same in every option: a past week shows how it went (“3 of 3”, in pen and underlined when the goal was met, as Recent weeks does) over what was planned; this week shows what to lift and how many so far; a later week shows what to lift; a deload week says “Deload” under its dates; a split week reads “35 → 32.5 kg from Wed”. On a tile a met count is ink with its pen underline, because pen text measures 4.49:1 on the light tile, just under 4.5:1. What differs is how a locked week, a hand-edited value and a paused activity look. Press Barbell row’s later weeks to open the change sheet.</p>
     </header>
 
@@ -164,7 +228,7 @@
   <!-- ===== Question 3 ===== -->
   <section class="question one" id="q3" aria-labelledby="q3-h">
     <header>
-      <h2 class="title-1" id="q3-h">3. The change sheet and its preview</h2>
+      <h2 class="title-1" id="q3-h">3. The change sheet and its preview (decided: B)</h2>
       <p class="body">Every change shows what it does before it happens (spec P2). The example: Barbell row set to 45 kg from Mon 21 Dec, from then on. Week 6 has a hand-edit (35 kg, set on 12 Dec), which a later change keeps unless you drop it. Press “Drop it too”, or switch to “That week only”, and the preview follows. The sheet is the Dialog card, nothing new; on a phone it keeps 16px round it.</p>
     </header>
 
@@ -190,7 +254,7 @@
   <!-- ===== Question 4 ===== -->
   <section class="question one" id="q4" aria-labelledby="q4-h">
     <header>
-      <h2 class="title-1" id="q4-h">4. The activity page’s Programme row</h2>
+      <h2 class="title-1" id="q4-h">4. The activity page’s Programme row (decided: A)</h2>
       <p class="body">An item in a programme gets a Programme row on its page, first, where “This week’s plan” would be: where it has been, where it goes, and its controls (Set weight, Set increase, Pause, End). Back squat shows a change of rate on Thu 3 Dec; Deadlift shows a pause. The Notes row under it is the ItemPage card’s, unchanged.</p>
     </header>
 
@@ -222,7 +286,7 @@
   <!-- ===== Question 5 ===== -->
   <section class="question one" id="q5" aria-labelledby="q5-h">
     <header>
-      <h2 class="title-1" id="q5-h">5. The week view’s programme header</h2>
+      <h2 class="title-1" id="q5-h">5. The week view’s programme header (decided: A)</h2>
       <p class="body">A programme tracker on the week: its header says which programme week this is and leads to the overview; Monday is locked (marks stay open for one day, so Tuesday can still be marked); Deadlift is paused. Monday’s name is green and underlined because two were marked, as any day that meets the daily pick. The rest is the week as PlannerScreen draws it.</p>
     </header>
 
@@ -268,7 +332,8 @@
     fit()
     const d = device.dataset
     PG.mount(screen, { screen: d.screen, q1: d.q1, cells: d.cells, sheet: d.sheet, step: d.step, scroll: d.scroll, scrollTo: d.scrollTo,
-      unfold: d.unfold, act: d.act, prog: d.prog, week: d.week, openPause: !!d.openPause, dropped: !!d.dropped })
+      unfold: d.unfold, act: d.act, prog: d.prog, week: d.week, openPause: !!d.openPause, dropped: !!d.dropped,
+      q6: d.q6, view: d.view, scrollSel: d.scrollSel, q7: d.q7, previewing: !!d.previewing })
   }
 </script>
 <script>

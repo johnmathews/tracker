@@ -1,4 +1,4 @@
-<!-- @dsCard group="Planner" height=1180 subtitle="A screen per tracker (Strength, Cardio, Food), the scroll sprinting, the bar out of sight: a desktop and a phone held upright" -->
+<!-- @dsCard group="Planner" height=2600 subtitle="A screen per tracker (Strength, Cardio, Food), the scroll sprinting, the bar out of sight: a desktop and a phone held upright; a programme tracker's screen with its week link, a locked day and a paused row (K146)" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -239,6 +239,27 @@
 
 /* A day that meets the daily pick (K30, K60): its name in pen, underlined. Nothing else. */
 .fs .hd.met .dn { color: var(--pen); text-decoration: underline; text-decoration-thickness: max(2px, calc(var(--u) * 3)); text-underline-offset: 0.22em; }
+
+/* ---- A programme tracker's screen (K146): its programme week at the end of the title's line, a
+   lock by a locked day's name, and a paused row's sentence in place of its boxes. ---- */
+/* "Week 4 of 8", a link to the programme's overview, where Edit plan puts Add (SectionHeader). */
+.fs .head .prog { display: inline-flex; align-items: center; gap: 4px; color: var(--ink); font: 600 max(18px, calc(var(--u) * 19)) / 1.4 var(--font-sans);
+  text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 1px; white-space: nowrap; }
+.fs .head .prog svg { width: 20px; height: 20px; }
+.fs .head .prog:hover { text-decoration-thickness: 2px; }
+/* Folded, the title at the SectionHeader card's 24n, as the mockup drew it, so the link keeps to its line. */
+.fs[data-layout="narrow"] .prog-screen .head h2 { font-size: calc(var(--n) * 24); }
+/* A locked day (before yesterday, spec §8): a lock by its name; its boxes stay as they are and don't press. */
+.fs .hd .dl { display: inline-flex; align-items: center; gap: 4px; }
+.fs .hd .lk { flex: none; width: 16px; height: 16px; color: var(--ink-secondary); }
+.fs .ngrid .hd .lk { width: 14px; height: 14px; }
+.fs .d.locked .mark { cursor: default; }
+.fs .d.locked .mark:not([data-mark]):hover .bx { stroke: var(--control-border); }
+/* A paused activity says so across its seven days. */
+.fs .pz { grid-column: span 7; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0 8px; border-bottom: 1px solid var(--line);
+  color: var(--ink-secondary); font-size: max(18px, calc(var(--u) * 19)); line-height: 1.4; text-align: center; }
+.fs .pz svg { flex: none; width: 18px; height: 18px; }
+.fs .ngrid .pz { grid-column: 1 / -1; min-height: 48px; font-size: 16px; }
 </style>
 </head>
 <body>
@@ -247,6 +268,11 @@
 <div class="gap"></div>
 <p class="variant label">A 390×844 phone held upright, folded, Edit plan opened with the handle: the bar above the week</p>
 <div class="device phone" data-w="390" data-h="844" data-input="touch" data-bar="docked"></div>
+<div class="gap"></div>
+<p class="variant label">A programme tracker's screen (K146): Beginner 5×5 in the week of 14–20 December, today Wednesday. “Week 4 of 8” at the end of the title's line opens the programme; Monday is locked, since marks stay open for one day and Tuesday can still be marked; Deadlift is paused. A 390×844 phone, then a 1280×800 desktop; press a box</p>
+<div class="device phone" data-w="390" data-h="844" data-input="touch" data-programme></div>
+<div class="gap"></div>
+<div class="device" data-w="1280" data-h="800" data-input="mouse" data-programme></div>
 <script>
 // The app's own drawings (src/components/ui/day-mark, the Header card), for the mockup.
 // Generated from the source; not hand-edited.
@@ -550,7 +576,74 @@ window.FP_ART = {"box": "M6.5 4.8C12.5 4.3 23.5 4.6 30.2 4.9C31.4 5 31.6 6.1 31.
     return state
   }
 
-  window.PlannerScreen = { mount }
+  // ---- A programme tracker's screen (K146), from the mockup (mockups/261117-programmes, 5A). ----
+  // One screen, the week of 14–20 December, today Wednesday. Plans lock at midnight, marks a day
+  // later (spec §8): Tuesday can still be marked, so only Monday is locked.
+  const PDAYS = [['Mon', 'Monday', 14], ['Tue', 'Tuesday', 15], ['Wed', 'Wednesday', 16], ['Thu', 'Thursday', 17],
+    ['Fri', 'Friday', 18], ['Sat', 'Saturday', 19], ['Sun', 'Sunday', 20]]
+  const PTODAY = 2
+  const PPICK = 2
+  const locked = (i) => i < PTODAY - 1
+  const PROWS = [
+    { name: 'Back squat', chips: ['3 × 5', '45 kg'], marks: [g, _, _, _, _, _, _] },
+    { name: 'Bench press', chips: ['3 × 5', '32.5 kg'], marks: [g, _, _, _, _, _, _] },
+    { name: 'Barbell row', chips: ['3 × 5', '35 kg'], marks: [g, _, _, _, _, _, _] },
+    { name: 'Deadlift', chips: ['1 × 5'], paused: 'Paused until Mon 28 Dec. Knee.' },
+    { name: 'Plank', chips: ['3 × 35 s'], marks: [g, _, _, _, _, _, _] },
+  ]
+  const LOCK = '<svg class="lk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'
+  const PAUSE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/></svg>'
+
+  function programmeScreen(state) {
+    const rows = state.rows
+    const met = (i) => rows.filter((r) => r.marks && r.marks[i]).length >= PPICK
+    const narrow = state.layout === 'narrow'
+    const head = `<header class="head"><h2 id="prog-h">Beginner 5×5${narrow ? '' : '<span class="wk">14–20 December</span>'}</h2><a class="prog" href="#" aria-label="Week 4 of 8. Open the programme" data-testid="programme-week-link">Week 4 of 8${icon('m9 18 6-6-6-6')}</a></header>`
+    let cells = narrow ? '' : '<div class="hd corner"><span class="vh">Exercise</span></div>'
+    PDAYS.forEach(([short, , date], i) => {
+      const words = `${date} December${i === PTODAY ? ', today' : ''}${locked(i) ? ', locked' : ''}${met(i) ? ', two picked' : ''}`
+      cells += `<div class="hd${i === PTODAY ? ' today' : ''}${met(i) ? ' met' : ''}"${locked(i) ? ' data-locked' : ''}><span class="dl"><span class="dn">${short}</span>${locked(i) ? LOCK : ''}</span><span class="vh"> ${words}</span></div>`
+    })
+    rows.forEach((row, r) => {
+      const chips = row.chips.map((c) => `<span class="chip">${esc(c)}</span>`).join('')
+      cells += narrow ? `<div class="line"><span class="n">${esc(row.name)}</span>${chips}</div>` : `<div class="nm"><span class="n">${esc(row.name)}</span><span class="chips">${chips}</span></div>`
+      if (row.paused) { cells += `<div class="pz" data-testid="paused-row">${PAUSE}<span>${esc(row.paused)}</span></div>`; return }
+      PDAYS.forEach(([, full, date], i) => {
+        const kind = row.marks[i]
+        const label = `${row.name}, ${full} ${date} December${i === PTODAY ? ', today' : ''}${locked(i) ? ', locked' : ''}${kind ? KIND_WORDS[kind] : ''}`
+        cells += `<div class="d${locked(i) ? ' locked' : ''}"><button type="button" class="mark" data-r="${r}" data-c="${i}"${kind ? ` data-mark="${kind}"` : ''} aria-pressed="${Boolean(kind)}"${locked(i) ? ' aria-disabled="true"' : ''} aria-label="${esc(label)}">${markSvg(kind)}</button></div>`
+      })
+    })
+    const grid = narrow ? `<div class="ngrid">${cells}</div>` : `<div class="grid" style="--rows:${rows.length}">${cells}</div>`
+    return `<section class="screen prog-screen" aria-labelledby="prog-h">${head}${grid}</section>`
+  }
+
+  function mountProgramme(el, opts = {}) {
+    const state = { el, layout: '', rows: PROWS.map((r) => ({ ...r, marks: r.marks ? [...r.marks] : null })) }
+    el.classList.add('fs')
+    el.dataset.input = opts.input || 'mouse'
+    const render = () => { el.innerHTML = `<div class="scroller">${programmeScreen(state)}</div>` }
+    new ResizeObserver(() => {
+      const layout = el.offsetHeight > el.offsetWidth && el.offsetWidth < 1000 ? 'narrow' : 'wide'
+      if (layout === state.layout) return
+      state.layout = layout
+      el.dataset.layout = layout
+      render()
+    }).observe(el)
+    // A press steps a day great, partial, missed, then empty; a locked day doesn't press.
+    el.addEventListener('click', (e) => {
+      const btn = e.target.closest('.mark')
+      if (e.target.closest('a')) e.preventDefault()
+      if (!btn || btn.getAttribute('aria-disabled') === 'true') return
+      const row = state.rows[Number(btn.dataset.r)], c = Number(btn.dataset.c)
+      const cycle = [null, g, p, x]
+      row.marks[c] = cycle[(cycle.indexOf(row.marks[c]) + 1) % cycle.length]
+      render()
+      el.querySelector(`.mark[data-r="${btn.dataset.r}"][data-c="${c}"]`)?.focus({ preventScroll: true })
+    })
+  }
+
+  window.PlannerScreen = { mount, mountProgramme }
 })()
   for (const device of document.querySelectorAll('.device')) {
     const w = Number(device.dataset.w), h = Number(device.dataset.h)
@@ -565,7 +658,8 @@ window.FP_ART = {"box": "M6.5 4.8C12.5 4.3 23.5 4.6 30.2 4.9C31.4 5 31.6 6.1 31.
     }
     new ResizeObserver(fit).observe(device)
     fit()
-    PlannerScreen.mount(screen, { option: 'a', phone: 'p2', affirm: 'g2', input: device.dataset.input, bar: device.dataset.bar })
+    if ('programme' in device.dataset) PlannerScreen.mountProgramme(screen, { input: device.dataset.input })
+    else PlannerScreen.mount(screen, { option: 'a', phone: 'p2', affirm: 'g2', input: device.dataset.input, bar: device.dataset.bar })
   }
 </script>
 </body>

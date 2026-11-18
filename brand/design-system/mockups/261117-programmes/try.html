@@ -26,7 +26,7 @@
 <div id="screen"></div>
 <div class="mock">
   <div class="panel" role="group" aria-label="Mockup">
-    <div><span>Screen</span><button data-k="screen" data-v="overview">1 Overview</button><button data-k="screen" data-v="change">3 Change</button><button data-k="screen" data-v="activity">4 Activity</button><button data-k="screen" data-v="week">5 Week</button></div>
+    <div><span>Screen</span><button data-k="screen" data-v="programmes">6 Programmes</button><button data-k="screen" data-v="preview">7 Preview</button><button data-k="screen" data-v="overview">1 Overview</button><button data-k="screen" data-v="change">3 Change</button><button data-k="screen" data-v="activity">4 Activity</button><button data-k="screen" data-v="week">5 Week</button></div>
     <div><span>Option</span><button data-k="opt" data-v="a">A</button><button data-k="opt" data-v="b">B</button><button data-k="opt" data-v="c">C</button></div>
     <div data-only="overview"><span>Cells</span><button data-k="cells" data-v="a">2A Icons</button><button data-k="cells" data-v="b">2B Words</button><button data-k="cells" data-v="c">2C Fill</button></div>
     <div data-only="activity"><span>Activity</span><button data-k="act" data-v="squat">Back squat</button><button data-k="act" data-v="deadlift">Deadlift</button></div>
@@ -37,12 +37,13 @@
 <script src="proto.js"></script>
 <script>
   // The hash carries the choice: screen-option, then the cells, the activity and the theme
-  // ("#overview-c", "#overview-a-cells-b-dark", "#activity-a-deadlift").
-  const SCREENS = ['overview', 'change', 'activity', 'week']
+  // ("#overview-c", "#overview-a-cells-b-dark", "#activity-a-deadlift", "#programmes-b", "#preview-b").
+  const SCREENS = ['overview', 'change', 'activity', 'week', 'programmes', 'preview']
   const read = () => {
     const h = location.hash.slice(1).split('-')
     const screen = SCREENS.includes(h[0]) ? h[0] : 'overview'
-    const max = screen === 'overview' ? 'c' : 'b'
+    const three = screen === 'overview' || screen === 'programmes'
+    const max = three ? 'c' : 'b'
     let opt = ['a', 'b', 'c'].includes(h[1]) ? h[1] : (screen === 'overview' ? 'c' : 'a')
     if (opt > max) opt = 'a'
     const at = h.indexOf('cells')
@@ -66,10 +67,13 @@
     if (s.screen === 'change') o.sheet = s.opt
     if (s.screen === 'activity') o.prog = s.opt
     if (s.screen === 'week') o.week = s.opt
+    if (s.screen === 'programmes') o.q6 = s.opt
+    // Question 7: A is sheet B's step 2; B adds "Show it in the plan" to it.
+    if (s.screen === 'preview') Object.assign(o, { screen: 'change', sheet: 'b', step: 2, q7: s.opt })
     PG.mount(el, o)
     document.querySelectorAll('.mock .panel button').forEach((b) => {
       b.setAttribute('aria-pressed', String(s[b.dataset.k] === b.dataset.v))
-      if (b.dataset.k === 'opt') b.hidden = b.dataset.v === 'c' && s.screen !== 'overview'
+      if (b.dataset.k === 'opt') b.hidden = b.dataset.v === 'c' && s.screen !== 'overview' && s.screen !== 'programmes'
     })
     document.querySelectorAll('.mock [data-only]').forEach((d) => { d.hidden = d.dataset.only !== s.screen; d.style.display = d.hidden ? 'none' : '' })
   }

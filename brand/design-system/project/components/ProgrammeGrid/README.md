@@ -1,0 +1,70 @@
+A programme's plan as a table, one row per activity and one column per programme week, at every screen width: how each past week went, this week's numbers and what is still to come.
+
+## Use
+
+- **Where:** three places, one component (spec §9.3). The Plan tab of a programme's overview page (`#/programme/<tracker>`, spec §9.2), the start form's live preview on the Programmes page (§9.1), and a change's preview (§7.3). The preview shows the overview page as the overview draws it.
+- **A table at every width (K142).** No timeline, no second layout for a phone. Eight weeks don't fit across a 390px phone, so the table scrolls sideways inside its own box, never the page. The activity column stays put (`position: sticky`, on `canvas`, with a 1px `line` rule at its right edge when folded). **On a phone it opens on this week**: the box is scrolled so this week's column comes first after the activity column, with the weeks before it a swipe to the right. On a wide screen it opens at week 1, and all eight weeks fit at 1280 × 800.
+- **The box is positioned** (`position: relative`). The visually hidden words in the cells (", goal met", ", set by hand on 12 Dec") then scroll and clip with it. Without it they sit at the table's far edge and widen the page.
+- **The activity column:** the activity's name, a link to its item page (ItemPage, the Programme row, ProgrammeChart), in `ink` at weight 600, underlined only under the pointer as a WeekGrid name is. Under it, a Chip with its sets and reps ("5 × 5") and its goal in `caption` `ink-secondary` ("3 a week"). The name wraps; nothing else does.
+- **The week columns:** "Week 4" in `label` weight 600, the dates under it in `caption` `ink-secondary` ("14–20 Dec"), then the week's tags in `caption` weight 600: "This week", "Deload". The head's rule is 1px `ink`, the rows' rules 1px `line`. No vertical rules.
+- **Past weeks sit on a `tile`** (K143), head and cells, down to the last row. They are locked: nothing in them can be pressed. Each shows how the week went, as RecentWeeks counts it, over what was planned.
+- **This week is framed in 2px `ink`** (K143): an inset line down both sides of its column, across the top of its head and under its last row. Its cells stay on `canvas`.
+- **A hand-edited value has a `pencil` after it** (K143): Lucide `pencil`, 16px, in `ink-secondary`, 6px after the value, and ", set by hand on 12 Dec" for a screen reader. The folded corner is not used here: it keeps meaning only "has a note" (NoteMark).
+- **Later weeks are buttons.** Each later week's cell that has a value opens a Menu with **Edit this week** and **Change from here**, which open the ChangeSheet. Under the pointer the cell takes a `tile` fill. This week's cells and paused cells are not buttons: this week changes through the activity's own controls, from today.
+- **Previewing a change** (K148). Step 2 of the ChangeSheet has **Show it in the plan**: it puts the sheet away and shows the overview with the change in its cells. Each changed cell reads "40 → 45 kg": the old value in `ink-secondary` at weight 400, the arrow, then the new value in `ink` at 600. A hand-edit that blocks the change keeps its value and its pencil. Cells are not buttons while previewing, and the tabs and controls are left out. **The bar at the foot** of the window, over the page: `panel`, a 1px `line` rule above it and `shadow-overlay`, holding "**Previewing a change.** Barbell row at 45 kg from Mon 21 Dec. Nothing is saved yet." in `body`, then **Back to the change** (secondary, Lucide `chevron-left`), which brings the sheet back at step 2, and **Confirm change** (primary), which applies the change with the preview's `rev`, as the sheet's own button does. Folded, the two buttons share a row under the words, and a label too long for its half wraps inside its button. The page scrolls above the bar, never under it.
+- **The start preview** is the same table before the run starts: every week a later week, no week framed, no tile, no buttons. Its dates follow the chosen start date.
+- **Under the grid on the overview:** an InlineMessage (info) for each activity that ends short ("Deadlift ends at its week 6 of 8, because of its pause."), then the programme's controls: Pause programme (Resume programme while it is paused), Go to week, Add activity, End programme. Each is a secondary Button with its Lucide icon (`pause`, `play`, `skip-forward`, `plus`, `circle-stop`). Folded they sit two to a row, and a label too long for its half wraps inside its button.
+- **The overview page** is ItemPage's head with no bar: Back to the week, "Programme" in `label` `ink-secondary`, the tracker's name in `title-1`, then one line in `body` `ink-secondary`: "**Week 4 of 8.** Started Mon 23 Nov, ends Sun 17 Jan." (the first sentence in `ink` at 600). Paused, it reads "Paused since Wed 16 Dec, in week 4 of 8. Resume it when you’re ready." Then Tabs: **Plan** (this grid) and **Changes**.
+- **The Changes tab** is the run's log, newest first, as a list with 1px `line` rules: the day in `caption` `ink-secondary` (its own line when folded), what changed in `body`, the reason in the `note` style (Source Serif 4 italic), and where it came from in `caption` `ink-secondary` ("From the app", "From Claude"). A change whose effect starts today or later ends in a quiet small Button, **Undo** (Lucide `undo-2`).
+- **Offline,** the controls, the cells' buttons and Undo are disabled, with one InlineMessage (info) above the controls saying why (spec §11.2). Changes need the server.
+- **Sizes:** at u = 1, text 19u, values 21u at 600, names 22u, 108u per week column and 216u for the activity column, 12u by 8u of padding per cell. **Folded**, the system's n sizes: text 18n, values 18n, labels 16n, 104px per week and 132px for the activity column, 10px by 8px of padding, and the table bleeds to the screen's edges (16px of padding inside its first and last column).
+
+## States
+
+| Cell | Look |
+| --- | --- |
+| Past week, goal met | On `tile`: "3 of 3" in `ink`, weight 600, underlined 2px in `pen` 0.22em under the letters, ", goal met" for a screen reader. The planned value under it ("40 kg") in `caption` `ink-secondary`. `pen` as text on the light `tile` is 4.49:1, under 4.5:1, so the count is `ink` and only its underline is `pen` (3:1 as a mark) |
+| Past week, goal not met | On `tile`: "2 of 3" in `ink-secondary`, weight 400 |
+| Past split week | The count, then "35 → 32.5 kg" and "from Wed" on two `caption` lines (`data-split`) |
+| This week | In the frame: the value at 600 ("45 kg"), the sets ("3 × 5"), and "1 of 3 so far" |
+| Later week | The value at 600 and the sets under it; a button |
+| Hand-edited | The value, then the `pencil` (`data-hand-edit="12 Dec"`) |
+| Paused | "Paused" in `ink-secondary` at 600, the reason under it ("Knee"). Words, no icon |
+| Changed, while previewing a change | "40 → 45 kg", the old value in `ink-secondary` (`data-cell="changed"`) |
+
+| Week head | Look |
+| --- | --- |
+| Past | On `tile` |
+| This week | Framed; "This week" under the dates, `aria-current="date"` |
+| Deload | "Deload" under the dates |
+| This week, programme paused | "Paused from Wed" in place of "This week" |
+| After an open pause | "When resumed" in place of the dates, for every week after this one (spec §5) |
+
+## Accessibility
+
+- A real `<table>`: a `<th scope="col">` per week, a `<th scope="row">` per activity, so a screen reader names the week and the activity of every cell. The activity column's head is "Activity", visually hidden.
+- The scrolling box is focusable (`tabindex="0"`) with `role="region"` and a label ("The plan, week by week"; "The plan with the change, week by week" while previewing), so a keyboard can scroll it with the arrow keys.
+- A later week's cell holds a `<button aria-haspopup="menu">` filling the cell. Its focus ring is drawn inside the cell (offset -2px), so the scrolling box never clips it.
+- While previewing a change, the bar is a `region` labelled by its sentence, and focus moves to the bar on arrival (`tabindex="-1"`), so a screen reader hears that nothing is saved yet; Back to the change returns focus to the sheet's step 2.
+- The `pencil` is `aria-hidden`; the hidden words carry it. A met count adds ", goal met".
+- Contrast, measured by the gate in both themes: `ink` and `ink-secondary` on `tile` (4.5:1), `pen` on `tile` as a mark (3:1), `ink` on `canvas` for the frame, `control-border` and `focus` on `canvas`.
+
+## For the app
+
+`src/components/ui/programme-grid/` (W7). Test ids and data attributes, as in the preview:
+
+| Element | Hook |
+| --- | --- |
+| The scrolling box | `data-testid="programme-grid"` |
+| A week's head | `th[data-week="4"]`; this week has `aria-current="date"` |
+| A row | `tr[data-activity="squat"]` (the activity's key) |
+| A cell | `td[data-activity][data-week][data-cell]`, `data-cell` one of `done`, `current`, `planned`, `paused`, `changed`; plus `data-hand-edit="<date>"` or `data-split` |
+| A later week's button | `td.tap > button[aria-haspopup="menu"]` |
+| The overview page | `programme-overview`, `back-to-week`, `programme-meta`, `programme-tab-plan`, `programme-tab-changes`, `programme-ends-short` |
+| The controls | `programme-controls`, `programme-pause`, `programme-resume`, `programme-go-to-week`, `programme-add-activity`, `programme-end` |
+| The Changes tab | `programme-changes`, each `programme-change`, `programme-change-undo` |
+| Previewing a change | the page has `data-previewing`; the bar `change-preview-bar`, its buttons `change-preview-back` and `change-preview-confirm` |
+
+## You provide
+
+The run's grid from the server (spec P4: the app never computes a value): the programme weeks with their Monday, dates, tags (deload) and whether each is past, this week or later; the activities with their key, name, the address of their item page, chip and goal; and per cell its state, value and unit, sets, the count done and the goal for a past week or this week, the split (before, after, day), the hand-edit's date, the pause's reason, or the before and after in a preview. Also whether the programme is paused with no end date, and the label of the scrolling box. While previewing a change: the change in a sentence for the bar, and the preview's `rev`.

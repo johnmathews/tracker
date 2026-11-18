@@ -43,7 +43,11 @@
     "AnswerProgress",
     "QuotaChip",
     "SidePanel",
-    "HistoryList"
+    "HistoryList",
+    "ProgrammeGrid",
+    "ChangeSheet",
+    "ProgrammeChart",
+    "ProgrammesPage"
   ],
   "extra_contrast_pairs": [
     [
@@ -135,6 +139,11 @@
       "canvas",
       "pen-partial",
       1.5
+    ],
+    [
+      "focus",
+      "tile",
+      3.0
     ]
   ],
   "forbidden_words": [
