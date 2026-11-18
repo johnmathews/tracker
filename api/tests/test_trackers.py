@@ -274,6 +274,30 @@ def test_delete_ends_the_tracker_from_the_week_given(client: TestClient, config:
     assert tracker["id"] in ids(client)
 
 
+def test_delete_on_a_programme_tracker_ends_its_run_from_today(
+    client: TestClient, config: Config
+) -> None:
+    """Delete tracker on a programme tracker is End programme (spec §4): it ends the run, logs
+    it, and never ends it before today, so the locked days of an earlier week stay in view."""
+    from .test_api import start_a_programme
+
+    tracker = start_a_programme(client, config)
+    r = client.post(f"/api/trackers/{tracker}/end", json={"week": "2026-10-05"})
+    assert r.status_code == 200, r.text
+    # Ended from today, a Friday: this week still shows it.
+    assert r.json()["endWeek"] == NEXT_WEEK
+    run = client.get(f"/api/runs/{tracker}").json()
+    assert run["ended"] == {"from": "2026-10-23", "reason": None, "seq": 1}
+    assert run["log"][0]["change"] == {"type": "end-programme"}
+    # Ended once, it stays ended where it is.
+    again = client.post(f"/api/trackers/{tracker}/end", json={"week": "2026-11-30"})
+    assert again.json()["endWeek"] == NEXT_WEEK
+    # A programme tracker can still be renamed.
+    rev = again.json()["rev"]
+    patched = client.patch(f"/api/trackers/{tracker}", json={"name": "Push-ups block", "rev": rev})
+    assert patched.json()["name"] == "Push-ups block"
+
+
 @pytest.mark.parametrize("week", ["2026-10-32", "next", 5, ""])
 def test_a_bad_end_week_is_400(client: TestClient, config: Config, week: object) -> None:
     sign_up(client, config)
@@ -444,6 +468,8 @@ def test_the_state_carries_trackers_and_the_older_keys(client: TestClient, confi
         "cardio",
         "diet",
         "settings",
+        "today",
+        "runs",
     }
     exercise = {
         "plans": {WEEK: [PUSHUPS]},

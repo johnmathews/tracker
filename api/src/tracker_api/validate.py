@@ -39,7 +39,10 @@ OLD_EXPORT_FORMATS = ("fitness-planner-export", "exercise-planner-export")
 #: as `foodPick` came: a reader from before them drops the key, and a file without them reads as
 #: none. Ask's conversations (`conversations`) came the same way, and so did Daily goal
 #: (`dailyGoal`, K85): a file without it reads as on, Cardio (`cardio`, K90): a file without it
-#: has none, and the week title (`weekTitle`, K131): a file without it reads as dates.
+#: has none, and the week title (`weekTitle`, K131): a file without it reads as dates. The
+#: programme library (`programmes`) and the programme runs (`runs`: each with its log, sealed days
+#: and mark events) came the same way: a reader from before them drops the keys, and the runs'
+#: trackers then read as ordinary ones, with their plans and marks.
 EXPORT_VERSION = 6
 #: The last version whose notes live in plan items.
 LAST_ITEM_NOTES_VERSION = 4
@@ -236,6 +239,67 @@ class Conversation(TypedDict):
     turns: list[Turn]
 
 
+class ProgrammeFile(TypedDict):
+    """A library programme as a file carries it (docs/specs/2026-11-17-programmes.md §11.2). The
+    document is checked against the format on import, not here."""
+
+    id: str
+    doc: dict[str, Any]
+    createdAt: int
+    updatedAt: int
+
+
+#: One entry in a run's log as a file carries it. `from` is a keyword, hence the call form.
+RunChangeFile = TypedDict(
+    "RunChangeFile",
+    {
+        "seq": int,
+        "madeAt": int,
+        "from": str,
+        "change": dict[str, Any],
+        "reason": str | None,
+        "source": str,
+        "undoneBy": int | None,
+    },
+)
+
+
+class RunDayFile(TypedDict):
+    """A sealed day: the plan in force that day, as `programme_replay.day_to_json` wrote it."""
+
+    date: str
+    #: None before the run's start.
+    programmeWeek: int | None
+    plan: dict[str, Any]
+    sealedAt: int
+
+
+class MarkEventFile(TypedDict):
+    """One mark on a programme tracker, as it was entered (spec §8)."""
+
+    date: str
+    item: str
+    #: None for a cleared day.
+    mark: Mark | None
+    enteredAt: int
+    source: str
+    late: bool
+
+
+class RunFile(TypedDict):
+    """A programme run as a file carries it: the run's own copy of the document, the parameters
+    it started with, its start, and its evidence. Its status is worked out, so it isn't read."""
+
+    tracker: str
+    programmeId: str | None
+    doc: dict[str, Any]
+    params: dict[str, Any]
+    start: str
+    changes: list[RunChangeFile]
+    days: list[RunDayFile]
+    marks: list[MarkEventFile]
+
+
 class ExportData(TypedDict):
     """A file as read: its trackers (none before version 6) and each tracker's data by id. The
     first three ids are always there, so a file from before version 6 maps onto them."""
@@ -245,6 +309,14 @@ class ExportData(TypedDict):
     settings: Portable | None
     #: Present only when the file carries a list of them.
     conversations: NotRequired[list[Conversation]]
+
+
+class ImportData(ExportData):
+    """A file as read with its programmes: the library and the runs, each present only when the
+    file carries a list. The web app reads a file as `ExportData` and has no programmes."""
+
+    programmes: NotRequired[list[ProgrammeFile]]
+    runs: NotRequired[list[RunFile]]
 
 
 class Summary(TypedDict):
@@ -954,7 +1026,183 @@ def _dict(v: object) -> dict[str, Any]:
     return v if isinstance(v, dict) else {}
 
 
-def parse_export(text: str) -> ExportData:
+# --- programmes and runs in a file (docs/specs/2026-11-17-programmes.md §11.2) ------------------
+
+#: A change's reason and a run's source, in characters.
+MAX_REASON = 500
+MAX_SOURCE = 100
+
+
+def is_date(v: object) -> TypeIs[str]:
+    """A calendar date written YYYY-MM-DD."""
+    if not isinstance(v, str) or not is_week(v):
+        return False
+    try:
+        date.fromisoformat(v)
+    except ValueError:
+        return False
+    return True
+
+
+def normalise_reason(v: object) -> str | None:
+    """A change's reason: text trimmed and cut to MAX_REASON characters; None for none."""
+    return normalise_text(v, MAX_REASON)
+
+
+def _whole_at_least(v: object, lo: int) -> int | None:
+    return v if type(v) is int and v >= lo else None
+
+
+def normalise_programme_file(v: object) -> ProgrammeFile | None:
+    """A file's library programme, or None: a URL-safe id, a document object and two times."""
+    if not isinstance(v, dict) or not is_tracker_id(v.get("id")):
+        return None
+    doc, created, updated = v.get("doc"), _time(v.get("createdAt")), _time(v.get("updatedAt"))
+    if not isinstance(doc, dict) or created is None or updated is None:
+        return None
+    return {"id": v["id"], "doc": doc, "createdAt": created, "updatedAt": updated}
+
+
+def normalise_programme_files(v: list[Any]) -> list[ProgrammeFile]:
+    """A file's library: the valid programmes, the first of each id, at most MAX_TRACKERS (the
+    library's cap)."""
+    out: list[ProgrammeFile] = []
+    seen: set[str] = set()
+    for programme in map(normalise_programme_file, v):
+        if programme is None or programme["id"] in seen:
+            continue
+        seen.add(programme["id"])
+        out.append(programme)
+        if len(out) == MAX_TRACKERS:
+            break
+    return out
+
+
+def _run_change(v: object) -> RunChangeFile | None:
+    if not isinstance(v, dict):
+        return None
+    seq, made, body = _whole_at_least(v.get("seq"), 0), _time(v.get("madeAt")), v.get("change")
+    source, undone = v.get("source"), v.get("undoneBy")
+    if seq is None or made is None or not is_date(v.get("from")) or not isinstance(body, dict):
+        return None
+    if not isinstance(source, str) or not 1 <= len(source) <= MAX_SOURCE:
+        return None
+    if undone is not None and _whole_at_least(undone, seq + 1) is None:
+        return None
+    reason = v.get("reason")
+    if reason is not None and not isinstance(reason, str):
+        return None
+    return {
+        "seq": seq,
+        "madeAt": made,
+        "from": v["from"],
+        "change": body,
+        "reason": normalise_reason(reason),
+        "source": source,
+        "undoneBy": undone,
+    }
+
+
+def _run_day(v: object) -> RunDayFile | None:
+    if not isinstance(v, dict) or not is_date(v.get("date")):
+        return None
+    week, plan, sealed_at = v.get("programmeWeek"), v.get("plan"), _time(v.get("sealedAt"))
+    if week is not None and _whole_at_least(week, 1) is None:
+        return None
+    if not isinstance(plan, dict) or sealed_at is None:
+        return None
+    return {"date": v["date"], "programmeWeek": week, "plan": plan, "sealedAt": sealed_at}
+
+
+def _mark_event(v: object) -> MarkEventFile | None:
+    if not isinstance(v, dict) or not is_date(v.get("date")) or not is_item_id(v.get("item")):
+        return None
+    mark, entered, source, late = (
+        v.get("mark"),
+        _time(v.get("enteredAt")),
+        v.get("source"),
+        v.get("late"),
+    )
+    if mark is not None and not is_mark(mark):
+        return None
+    if entered is None or not isinstance(late, bool):
+        return None
+    if not isinstance(source, str) or not 1 <= len(source) <= MAX_SOURCE:
+        return None
+    return {
+        "date": v["date"],
+        "item": v["item"],
+        "mark": mark,
+        "enteredAt": entered,
+        "source": source,
+        "late": late,
+    }
+
+
+def _all[T](raw: object, read: Callable[[object], T | None]) -> list[T] | None:
+    """Every entry of a list read by `read`, or None when any fails: a run comes whole or not at
+    all. A missing list reads as empty."""
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        return None
+    out: list[T] = []
+    for entry in raw:
+        read_one = read(entry)
+        if read_one is None:
+            return None
+        out.append(read_one)
+    return out
+
+
+def normalise_run_file(v: object) -> RunFile | None:
+    """A file's run, or None. It comes whole or not at all: a bad tracker id, programme id,
+    document, parameters or start, any bad change, sealed day or mark event, two changes with one
+    `seq` or two sealed days with one date drop it. Missing lists read as empty, missing
+    parameters as none, and a missing programme id as null."""
+    if not isinstance(v, dict) or not is_tracker_id(v.get("tracker")):
+        return None
+    programme_id, doc, params = v.get("programmeId"), v.get("doc"), v.get("params", {})
+    if programme_id is not None and not is_tracker_id(programme_id):
+        return None
+    if not isinstance(doc, dict) or not isinstance(params, dict) or not is_date(v.get("start")):
+        return None
+    changes = _all(v.get("changes"), _run_change)
+    days = _all(v.get("days"), _run_day)
+    marks = _all(v.get("marks"), _mark_event)
+    if changes is None or days is None or marks is None:
+        return None
+    if len({c["seq"] for c in changes}) < len(changes) or len({d["date"] for d in days}) < len(
+        days
+    ):
+        return None
+    return {
+        "tracker": v["tracker"],
+        "programmeId": programme_id,
+        "doc": doc,
+        "params": params,
+        "start": v["start"],
+        "changes": changes,
+        "days": days,
+        "marks": marks,
+    }
+
+
+def normalise_run_files(v: list[Any]) -> list[RunFile]:
+    """A file's runs: the valid ones, the first for each tracker, at most MAX_TRACKERS."""
+    out: list[RunFile] = []
+    seen: set[str] = set()
+    for run in map(normalise_run_file, v):
+        if run is None or run["tracker"] in seen:
+            continue
+        seen.add(run["tracker"])
+        out.append(run)
+        if len(out) == MAX_TRACKERS:
+            break
+    return out
+
+
+def parse_export(text: str) -> ImportData:
     """Read an export file, or raise ExportError. Valid files normalise like stored data.
 
     A file from before version 6 maps its fixed keys onto the first three trackers' ids. A
@@ -993,7 +1241,13 @@ def parse_export(text: str) -> ExportData:
     conversations = parsed.get("conversations")
     if isinstance(conversations, list):
         data["conversations"] = normalise_conversations(conversations)
-    return cast(ExportData, data)
+    # The library and the runs likewise: a file from before them has none.
+    programmes, runs = parsed.get("programmes"), parsed.get("runs")
+    if isinstance(programmes, list):
+        data["programmes"] = normalise_programme_files(programmes)
+    if isinstance(runs, list):
+        data["runs"] = normalise_run_files(runs)
+    return cast(ImportData, data)
 
 
 NO_DAYS: Days = [None] * 7

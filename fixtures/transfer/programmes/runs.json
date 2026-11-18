@@ -1,0 +1,224 @@
+{
+  "description": "A file's library and runs (no new version): each programme keeps its id, document and times, and each run its tracker, programme id, document copy, parameters, start, log, sealed days and mark events. Extra keys go, a reason is trimmed, and a run's status is not read: the server works it out.",
+  "input": {
+    "format": "tracker-export",
+    "version": 6,
+    "programmes": [
+      {
+        "id": "xp1",
+        "doc": {
+          "format": "tracker-programme/1",
+          "name": "Push-ups",
+          "kind": "strength",
+          "weeks": 1,
+          "activities": [
+            {
+              "key": "push-ups",
+              "name": "Push-ups",
+              "sets": 3,
+              "reps": 12
+            }
+          ]
+        },
+        "createdAt": 1792742400,
+        "updatedAt": 1792742460,
+        "rev": 4,
+        "name": "Ignored",
+        "extra": true
+      }
+    ],
+    "runs": [
+      {
+        "tracker": "xrun1",
+        "programmeId": "xp1",
+        "doc": {
+          "format": "tracker-programme/1",
+          "name": "Push-ups",
+          "kind": "strength",
+          "weeks": 1,
+          "activities": [
+            {
+              "key": "push-ups",
+              "name": "Push-ups",
+              "sets": 3,
+              "reps": 12
+            }
+          ]
+        },
+        "params": {
+          "squat": 40
+        },
+        "start": "2026-10-26",
+        "status": "running",
+        "extra": 1,
+        "changes": [
+          {
+            "seq": 1,
+            "madeAt": 1792742400,
+            "from": "2026-10-26",
+            "change": {
+              "type": "pause-programme"
+            },
+            "reason": "  Flu  ",
+            "source": "app",
+            "undoneBy": null,
+            "extra": true
+          },
+          {
+            "seq": 2,
+            "madeAt": 1792742400,
+            "from": "2026-10-27",
+            "change": {
+              "type": "undo",
+              "change": 1
+            },
+            "source": "Claude"
+          }
+        ],
+        "days": [
+          {
+            "date": "2026-10-26",
+            "programmeWeek": 1,
+            "plan": {
+              "date": "2026-10-26",
+              "status": "running"
+            },
+            "sealedAt": 1792742400,
+            "extra": true
+          },
+          {
+            "date": "2026-10-19",
+            "programmeWeek": null,
+            "plan": {},
+            "sealedAt": 1792742400
+          }
+        ],
+        "marks": [
+          {
+            "date": "2026-10-26",
+            "item": "push-ups",
+            "mark": "great",
+            "enteredAt": 1792742400,
+            "source": "app",
+            "late": false
+          },
+          {
+            "date": "2026-10-26",
+            "item": "push-ups",
+            "mark": null,
+            "enteredAt": 1792742400,
+            "source": "Claude",
+            "late": true
+          }
+        ]
+      }
+    ]
+  },
+  "expected": {
+    "programmes": [
+      {
+        "id": "xp1",
+        "doc": {
+          "format": "tracker-programme/1",
+          "name": "Push-ups",
+          "kind": "strength",
+          "weeks": 1,
+          "activities": [
+            {
+              "key": "push-ups",
+              "name": "Push-ups",
+              "sets": 3,
+              "reps": 12
+            }
+          ]
+        },
+        "createdAt": 1792742400,
+        "updatedAt": 1792742460
+      }
+    ],
+    "runs": [
+      {
+        "tracker": "xrun1",
+        "programmeId": "xp1",
+        "doc": {
+          "format": "tracker-programme/1",
+          "name": "Push-ups",
+          "kind": "strength",
+          "weeks": 1,
+          "activities": [
+            {
+              "key": "push-ups",
+              "name": "Push-ups",
+              "sets": 3,
+              "reps": 12
+            }
+          ]
+        },
+        "params": {
+          "squat": 40
+        },
+        "start": "2026-10-26",
+        "changes": [
+          {
+            "seq": 1,
+            "madeAt": 1792742400,
+            "from": "2026-10-26",
+            "change": {
+              "type": "pause-programme"
+            },
+            "reason": "Flu",
+            "source": "app",
+            "undoneBy": null
+          },
+          {
+            "seq": 2,
+            "madeAt": 1792742400,
+            "from": "2026-10-27",
+            "change": {
+              "type": "undo",
+              "change": 1
+            },
+            "reason": null,
+            "source": "Claude",
+            "undoneBy": null
+          }
+        ],
+        "days": [
+          {
+            "date": "2026-10-26",
+            "programmeWeek": 1,
+            "plan": {
+              "date": "2026-10-26",
+              "status": "running"
+            },
+            "sealedAt": 1792742400
+          },
+          {
+            "date": "2026-10-19",
+            "programmeWeek": null,
+            "plan": {},
+            "sealedAt": 1792742400
+          }
+        ],
+        "marks": [
+          {
+            "date": "2026-10-26",
+            "item": "push-ups",
+            "mark": "great",
+            "enteredAt": 1792742400,
+            "source": "app",
+            "late": false
+          },
+          {
+            "date": "2026-10-26",
+            "item": "push-ups",
+            "mark": null,
+            "enteredAt": 1792742400,
+            "source": "Claude",
+            "late": true
+          }
+        ]
+      }
+    ]
+  }
+}

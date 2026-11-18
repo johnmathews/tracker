@@ -225,6 +225,31 @@ def create_app(
     async def on_too_many_programmes(_: Request, __: data.TooManyProgrammes) -> JSONResponse:
         return error_response(409, "too-many")
 
+    @app.exception_handler(data.ProgrammeTracker)
+    async def on_programme_tracker(_: Request, __: data.ProgrammeTracker) -> JSONResponse:
+        """A generic plan write to a programme tracker, whose plans only its run writes."""
+        return error_response(409, "programme-tracker")
+
+    @app.exception_handler(data.LockedDay)
+    async def on_locked_day(_: Request, e: data.LockedDay) -> JSONResponse:
+        """A mark on a programme tracker's day before yesterday: `date` names it."""
+        return error_response(409, "locked-day", date=e.day.isoformat())
+
+    @app.exception_handler(data.RunUnreadable)
+    async def on_run_unreadable(_: Request, e: data.RunUnreadable) -> JSONResponse:
+        """A stored run that fails to load or replay: the server's fault, logged with its cause,
+        and kept apart from the 400s a request's own problems get."""
+        log.error("run %s can't be read", e.tracker_id, exc_info=e)
+        return error_response(500, "run-unreadable")
+
+    @app.exception_handler(data.RunEnded)
+    async def on_run_ended(_: Request, __: data.RunEnded) -> JSONResponse:
+        return error_response(409, "ended")
+
+    @app.exception_handler(data.TooManyTrackers)
+    async def on_too_many_trackers(_: Request, __: data.TooManyTrackers) -> JSONResponse:
+        return error_response(409, "too-many")
+
     @app.exception_handler(RequestValidationError)
     async def on_invalid(_: Request, __: RequestValidationError) -> JSONResponse:
         return error_response(400, "invalid")
@@ -238,6 +263,10 @@ def create_app(
         return error_response(
             e.status_code, {404: "not-found", 405: "method"}.get(e.status_code, "error")
         )
+
+    def now() -> data.When:
+        """Now and the server's time zone: today, the lock and sealing follow them."""
+        return data.When(config.clock(), config.timezone)
 
     def get_conn() -> Iterator[sqlite3.Connection]:
         conn = connect(config.db_path)
@@ -483,7 +512,7 @@ def create_app(
 
     @app.get("/api/state")
     def get_state(user: User, conn: Conn) -> dict[str, Any]:
-        return data.state(conn, user.id)
+        return data.state(conn, user.id, now())
 
     @app.get("/api/trackers")
     def trackers(user: User, conn: Conn) -> dict[str, list[Tracker]]:
@@ -528,9 +557,10 @@ def create_app(
     @app.post("/api/trackers/{tracker_id}/end")
     def end_tracker(tracker_id: str, body: Body, user: User, conn: Conn) -> Tracker:
         """Delete tracker (K122): it ends from the week of `week`, the one on screen (today's
-        without it), and keeps its history."""
+        without it), and keeps its history. A programme tracker's run ends from that Monday or
+        today, whichever is later (End programme, `POST /api/runs/{tracker}/end`)."""
         week = week_monday(body.get("week"), config.today())
-        tracker = data.end_tracker(conn, user.id, tracker_id, week)
+        tracker = data.end_tracker(conn, user.id, tracker_id, week, now())
         if tracker is None:
             raise ApiError(404, "not-found")
         return tracker
@@ -577,6 +607,7 @@ def create_app(
             check_day(day),
             tick_mark(body),
             quota=config.user_quota_bytes,
+            when=now(),
         )
         return {"days": days}
 
@@ -592,6 +623,7 @@ def create_app(
 
     @app.get("/api/export")
     def export(user: User, conn: Conn, response: Response) -> dict[str, Any]:
+        data.seal_runs(conn, user.id, now())
         file = data.export_file(conn, user.id, config.clock())
         day = file["exportedAt"][:10]
         response.headers["Content-Disposition"] = f'attachment; filename="tracker-{day}.json"'
@@ -603,7 +635,10 @@ def create_app(
             parsed = parse_export(text)
         except ExportError as e:
             raise ApiError(400, e.code) from None
-        return dict(data.import_data(conn, user.id, parsed, quota=config.user_quota_bytes))
+        result = data.import_data(
+            conn, user.id, parsed, quota=config.user_quota_bytes, zone=config.timezone
+        )
+        return dict(result)
 
     # --- the programme library (docs/specs/2026-11-17-programmes.md §3.4, §11.2) ----------------
 
@@ -678,6 +713,99 @@ def create_app(
         """Runs started from it keep their own copy."""
         if not data.delete_programme(conn, user.id, programme_id):
             raise ApiError(404, "not-found")
+
+    # --- programme runs (docs/specs/2026-11-17-programmes.md §4 to §8, §11.2) --------------------
+
+    def preview_flag(body: dict[str, Any]) -> bool:
+        flag = body.get("preview", True)
+        if not isinstance(flag, bool):
+            raise ProgrammeInvalid([ProgrammeError("preview", "give true or false.")])
+        return flag
+
+    @app.post("/api/programmes/{programme_id}/preview")
+    def preview_programme(programme_id: str, body: Body, user: User, conn: Conn) -> dict[str, Any]:
+        """`{params?, start?}` → what starting it would write, writing nothing: `{start, end,
+        weeks, params, endsShort, grid}`. Problems as a start's."""
+        found = data.preview_programme(
+            conn,
+            user.id,
+            programme_id,
+            start=body.get("start"),
+            params=body.get("params"),
+            when=now(),
+        )
+        if found is None:
+            raise ApiError(404, "not-found")
+        return found
+
+    @app.post("/api/programmes/{programme_id}/start", status_code=201)
+    def start_programme(programme_id: str, body: Body, user: User, conn: Conn) -> dict[str, Any]:
+        """`{params?, start?, name?}` → 201 `{tracker, run}`: a new tracker of the programme's
+        kind, its run and every week written. The start is today or later (today without it),
+        the name the programme's without one. Problems get 400 `invalid` with every one in
+        `errors`; past the tracker cap 409 `too-many`; past the quota 413 `quota`."""
+        started = data.start_programme(
+            conn,
+            user.id,
+            programme_id,
+            start=body.get("start"),
+            params=body.get("params"),
+            name=body.get("name"),
+            when=now(),
+            quota=config.user_quota_bytes,
+            make_id=new_id,
+        )
+        if started is None:
+            raise ApiError(404, "not-found")
+        return {"tracker": started.tracker, "run": started.run}
+
+    @app.get("/api/runs/{tracker_id}")
+    def read_run(tracker_id: str, user: User, conn: Conn) -> dict[str, Any]:
+        """The run: its state, clocks, log, what ends short, and the grid. 404 for a tracker
+        that isn't a programme tracker of the account."""
+        found = data.read_run(conn, user.id, tracker_id, now())
+        if found is None:
+            raise ApiError(404, "not-found")
+        return found
+
+    @app.post("/api/runs/{tracker_id}/changes")
+    def change_run(tracker_id: str, body: Body, user: User, conn: Conn) -> dict[str, Any]:
+        """`{change, from, reason?, preview?, rev?}` (§7.3). A preview (the default) writes
+        nothing and returns `{preview: true, rev, change, cells, blocking, endsShort, undoes,
+        deletes, grid}`. `preview: false` with the preview's `rev` applies it and returns
+        `{preview: false, change, run}`. A stale `rev` gets 409 `{"error": "conflict", rev,
+        preview}` with the change previewed again; a run ended by End programme 409 `ended`;
+        problems 400 `invalid` with `errors`, the change's own at `change.…`."""
+        confirm = not preview_flag(body)
+        try:
+            result = data.change_run(
+                conn,
+                user.id,
+                tracker_id,
+                body.get("change"),
+                body.get("from"),
+                reason=body.get("reason"),
+                confirm=confirm,
+                rev=body.get("rev"),
+                when=now(),
+                quota=config.user_quota_bytes,
+            )
+        except data.StaleRun as e:
+            raise ApiError(409, "conflict", rev=e.preview["rev"], preview=e.preview) from None
+        if result is None:
+            raise ApiError(404, "not-found")
+        return result
+
+    @app.post("/api/runs/{tracker_id}/end")
+    def end_run(tracker_id: str, body: Body, user: User, conn: Conn) -> dict[str, Any]:
+        """End programme: `{from?, reason?}` → `{tracker, run}`. From today (the default) or a
+        later day; the run's history stays. A second end gets 409 `ended`."""
+        ended = data.end_run(
+            conn, user.id, tracker_id, body.get("from"), reason=body.get("reason"), when=now()
+        )
+        if ended is None:
+            raise ApiError(404, "not-found")
+        return {"tracker": ended.tracker, "run": ended.run}
 
     def need_ask() -> AsyncAnthropic:
         if ask_client is None:

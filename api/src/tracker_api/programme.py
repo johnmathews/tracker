@@ -510,6 +510,8 @@ class _Checker:
     #: The parameter keys references may name; None when `params` isn't an object, so references
     #: can't be checked.
     known: set[str] | None = None
+    #: Whether every week's value must fit the item (`_resolve_series`): off for a stored run.
+    check_ranges: bool = True
 
     def error(self, path: str, message: str) -> None:
         self.errors.append(ProgrammeError(path, message))
@@ -566,7 +568,9 @@ class _Checker:
         if kind is not None and weeks is not None:
             defaults = {key: p.default for key, p in params.items()}
             fields = [(d.path, d.key, d.values) for d in drafts]
-            _resolve_series(self, kind, weeks, fields, overrides, defaults)
+            _resolve_series(
+                self, kind, weeks, fields, overrides, defaults, check_ranges=self.check_ranges
+            )
         if self.errors:
             return None
         assert name is not None and kind is not None and weeks is not None
@@ -956,13 +960,16 @@ def _resolve_series(
     activities: Sequence[tuple[str, str | None, Mapping[Field, Value]]],
     overrides: Sequence[Override],
     params: Mapping[str, Decimal],
+    *,
+    check_ranges: bool = True,
 ) -> dict[str, dict[Field, Series]]:
     """Each activity's series by field, and an error for each field whose value the item can't
     hold in some week (the first such week). `activities` holds each one's path (`activities[2]`),
     key and parsed values. Fields that use a parameter with no usable value are left out.
 
     The check runs each programme week with its override at the same activity week, as a run
-    with no pauses would."""
+    with no pauses would. Without `check_ranges` it is skipped: a stored run was checked when it
+    started, and must load whatever the engine computes now (spec P1)."""
     out: dict[str, dict[Field, Series]] = {}
     rules = KIND_FIELDS[kind]
     for base, activity_key, values in activities:
@@ -975,7 +982,7 @@ def _resolve_series(
             if series is None:
                 continue
             fields[name] = series
-            for week in range(1, weeks + 1):
+            for week in range(1, weeks + 1 if check_ranges else 1):
                 shown = series.value(week, _override_at(overrides, week, key, name))
                 problem = rule.out_of_range(week, shown)
                 if problem is not None:
@@ -1022,21 +1029,31 @@ def check_programme(doc: object) -> list[ProgrammeError]:
     return checker.errors
 
 
-def parse_programme(doc: object) -> Programme:
-    """The programme a document describes. Raises `ProgrammeInvalid` with every problem."""
-    checker = _Checker()
+def parse_programme(doc: object, *, check_ranges: bool = True) -> Programme:
+    """The programme a document describes. Raises `ProgrammeInvalid` with every problem.
+
+    `check_ranges=False` skips checking each week's value against the item's limits, for a
+    document a run already holds: it was checked when the run started, and an engine change
+    since must not stop the run from loading (spec P1). Saving and starting keep the check."""
+    checker = _Checker(check_ranges=check_ranges)
     programme = checker.document(doc)
     if programme is None:
         raise ProgrammeInvalid(checker.errors)
     return programme
 
 
-def resolve(programme: Programme, given: Mapping[str, object] | None = None) -> Resolved:
+def resolve(
+    programme: Programme,
+    given: Mapping[str, object] | None = None,
+    *,
+    check_ranges: bool = True,
+) -> Resolved:
     """The programme with its parameters: each given value, else the default.
 
     Raises `ProgrammeInvalid` with every problem: a parameter the programme doesn't have, one that
     isn't a number or is outside its min and max, and any week whose value the item can't hold
-    with these values.
+    with these values. `check_ranges=False` skips that last check, for a stored run
+    (`parse_programme`); the parameters are still checked.
     """
     checker = _Checker()
     values = {key: param.default for key, param in programme.params.items()}
@@ -1060,7 +1077,13 @@ def resolve(programme: Programme, given: Mapping[str, object] | None = None) -> 
         values[key] = n
     activities = [(f"activities[{i}]", a.key, a.values) for i, a in enumerate(programme.activities)]
     series = _resolve_series(
-        checker, programme.kind, programme.weeks, activities, programme.overrides, values
+        checker,
+        programme.kind,
+        programme.weeks,
+        activities,
+        programme.overrides,
+        values,
+        check_ranges=check_ranges,
     )
     if checker.errors:
         raise ProgrammeInvalid(checker.errors)

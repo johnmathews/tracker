@@ -1,0 +1,25 @@
+{
+  "description": "Programmes or runs that aren't a list read as none, as in a file from before them.",
+  "input": {
+    "format": "tracker-export",
+    "version": 6,
+    "programmes": {
+      "xp1": {
+        "format": "tracker-programme/1",
+        "name": "Push-ups",
+        "kind": "strength",
+        "weeks": 1,
+        "activities": [
+          {
+            "key": "push-ups",
+            "name": "Push-ups",
+            "sets": 3,
+            "reps": 12
+          }
+        ]
+      }
+    },
+    "runs": "none"
+  },
+  "expected": {}
+}

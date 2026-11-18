@@ -72,6 +72,9 @@ EMPTY_STATE: dict[str, Any] = {
     "cardio": EMPTY,
     "diet": EMPTY,
     "settings": None,
+    #: The conftest clock's day in the server's time zone, and no programme runs.
+    "today": "2026-10-23",
+    "runs": {},
 }
 
 
@@ -417,6 +420,68 @@ def test_plain_http_config_uses_an_unprefixed_cookie(config: Config, tmp_path: A
 def test_empty_state(client: TestClient, config: Config) -> None:
     sign_up(client, config)
     assert client.get("/api/state").json() == EMPTY_STATE
+
+
+def start_a_programme(client: TestClient, config: Config) -> str:
+    """Alice with the Push-ups programme started today: its tracker's id."""
+    from .test_programmes_api import doc
+
+    sign_up(client, config)
+    programme = client.post("/api/programmes", json={"doc": doc("minimal")}).json()["id"]
+    r = client.post(f"/api/programmes/{programme}/start", json={})
+    assert r.status_code == 201, r.text
+    tracker: str = r.json()["tracker"]["id"]
+    return tracker
+
+
+def test_the_generic_plan_write_refuses_a_programme_tracker(
+    client: TestClient, config: Config
+) -> None:
+    """Only the engine writes a programme tracker's plans (spec §11.1), on any week, at any rev:
+    the REST write and the data layer the MCP's edits share both refuse it."""
+    tracker = start_a_programme(client, config)
+    before = client.get("/api/state").json()["sections"][tracker]
+    items = before["plans"][WEEK]
+    for week, rev in ((WEEK, 1), (WEEK, 0), ("2026-11-30", 0), ("2026-10-12", 0)):
+        r = client.put(f"/api/plans/{tracker}/{week}", json={"items": items, "rev": rev})
+        assert (r.status_code, r.json()) == (409, {"error": "programme-tracker"})
+    assert client.get("/api/state").json()["sections"][tracker] == before
+    conn = connect(config.db_path)
+    try:
+        uid = conn.execute("SELECT id FROM users").fetchone()[0]
+        with pytest.raises(data.ProgrammeTracker):
+            data.put_plan(conn, uid, tracker, WEEK, items, 1, quota=QUOTA)
+    finally:
+        conn.close()
+    # Its items' notes are not plans: they stay the person's to write.
+    r = client.put(
+        f"/api/details/{tracker}/push-ups", json={"details": {"notes": "Slow."}, "rev": 0}
+    )
+    assert r.json() == {"rev": 1}
+
+
+def test_an_ordinary_tracker_takes_every_write_it_did_before(
+    client: TestClient, config: Config
+) -> None:
+    """Beside a programme tracker, an ordinary one plans any week and marks any day, with no
+    mark evidence: the lock is the programme tracker's alone."""
+    start_a_programme(client, config)
+    url = "/api/plans/exercise"
+    assert client.put(f"{url}/2026-10-12", json={"items": [PUSHUPS], "rev": 0}).json() == {"rev": 1}
+    assert client.put(f"{url}/2026-10-12", json={"items": [], "rev": 1}).json() == {"rev": 2}
+    assert client.put(f"{url}/2027-01-04", json={"items": [PUSHUPS], "rev": 0}).json() == {"rev": 1}
+    for week, day in (("2026-10-12", 0), ("2020-01-06", 3), ("2027-01-04", 6), (WEEK, 4)):
+        r = client.put(f"/api/ticks/exercise/{week}/pu/{day}", json={"mark": "great"})
+        assert r.status_code == 200, r.text
+    # A week that is no date keeps its old shape-only rule on an ordinary tracker.
+    assert (
+        client.put("/api/ticks/exercise/2026-13-45/pu/0", json={"mark": "great"}).status_code == 200
+    )
+    conn = connect(config.db_path)
+    try:
+        assert conn.execute("SELECT count(*) FROM mark_events").fetchone()[0] == 0
+    finally:
+        conn.close()
 
 
 def test_plan_revisions_and_conflicts(client: TestClient, config: Config) -> None:
