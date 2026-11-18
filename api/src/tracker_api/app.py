@@ -2,7 +2,7 @@
 
 import logging
 import sqlite3
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Iterator
 from contextlib import asynccontextmanager, suppress
 from functools import partial
 from typing import Annotated, Any
@@ -22,6 +22,7 @@ from .edits import new_id
 from .item_sections import item_sections_valid
 from .mail import Mailer, Message, ResendMailer, send_quietly
 from .mcp_server import MCP_PATH, build_mcp
+from .programme import SCHEMA_PATH, ProgrammeError, ProgrammeInvalid
 from .validate import (
     Days,
     ExportError,
@@ -103,6 +104,11 @@ def error_response(
         status_code=status,
         headers={**(headers or {}), "Cache-Control": "no-store"},
     )
+
+
+def problems_json(errors: Iterable[ProgrammeError]) -> list[dict[str, str]]:
+    """A programme's problems as REST sends them: `[{path, message}]`, in document order."""
+    return [{"path": e.path, "message": e.message} for e in errors]
 
 
 def create_app(
@@ -206,6 +212,18 @@ def create_app(
     @app.exception_handler(data.DetailsTooLarge)
     async def on_details_too_large(_: Request, __: data.DetailsTooLarge) -> JSONResponse:
         return error_response(413, "too-large")
+
+    @app.exception_handler(ProgrammeInvalid)
+    async def on_programme_invalid(_: Request, e: ProgrammeInvalid) -> JSONResponse:
+        return error_response(400, "invalid", errors=problems_json(e.errors))
+
+    @app.exception_handler(data.ProgrammeTooLarge)
+    async def on_programme_too_large(_: Request, __: data.ProgrammeTooLarge) -> JSONResponse:
+        return error_response(413, "too-large")
+
+    @app.exception_handler(data.TooManyProgrammes)
+    async def on_too_many_programmes(_: Request, __: data.TooManyProgrammes) -> JSONResponse:
+        return error_response(409, "too-many")
 
     @app.exception_handler(RequestValidationError)
     async def on_invalid(_: Request, __: RequestValidationError) -> JSONResponse:
@@ -586,6 +604,80 @@ def create_app(
         except ExportError as e:
             raise ApiError(400, e.code) from None
         return dict(data.import_data(conn, user.id, parsed, quota=config.user_quota_bytes))
+
+    # --- the programme library (docs/specs/2026-11-17-programmes.md §3.4, §11.2) ----------------
+
+    schema = SCHEMA_PATH.read_bytes()
+
+    @app.get("/api/programme.schema.json")
+    def programme_schema() -> Response:
+        """The format's JSON Schema, the committed file. Public: an agent reads the format
+        before it has a token."""
+        return Response(schema, media_type="application/schema+json")
+
+    @app.get("/api/programmes")
+    def programmes(user: User, conn: Conn) -> dict[str, list[data.ProgrammeSummary]]:
+        """The library, the programme changed last first, without the documents."""
+        return {"programmes": data.list_programmes(conn, user.id)}
+
+    @app.post("/api/programmes", status_code=201)
+    def add_programme(body: Body, user: User, conn: Conn) -> data.ProgrammeRecord:
+        """`{doc}` → the stored programme with a new id, at rev 1. A document with problems gets
+        400 `invalid` with every one in `errors` and is not stored; one over the size cap 413
+        `too-large`; past the library's cap 409 `too-many`; past the account's quota 413
+        `quota`."""
+        return data.add_programme(
+            conn,
+            user.id,
+            body.get("doc"),
+            config.clock(),
+            quota=config.user_quota_bytes,
+            make_id=new_id,
+        )
+
+    @app.post("/api/programmes/validate")
+    def validate_programme(body: Body, user: User) -> dict[str, list[dict[str, str]]]:
+        """`{doc}` → `{errors}`, every problem an add would refuse it for ([] for none). Stores
+        nothing."""
+        return {"errors": problems_json(data.programme_problems(body.get("doc")))}
+
+    @app.get("/api/programmes/{programme_id}")
+    def programme(programme_id: str, user: User, conn: Conn) -> data.ProgrammeRecord:
+        found = data.load_programme(conn, user.id, programme_id)
+        if found is None:
+            raise ApiError(404, "not-found")
+        return found
+
+    @app.put("/api/programmes/{programme_id}")
+    def replace_programme(
+        programme_id: str, body: Body, user: User, conn: Conn
+    ) -> data.ProgrammeRecord:
+        """`{doc, rev}` → the programme at its next rev. The document's problems come before
+        the revision: a stale `rev` gets 409 `{"error": "conflict", "programme": p, "rev": n}`
+        with the server's copy, unless that copy already holds the document sent."""
+        rev = body.get("rev")
+        if type(rev) is not int or rev < 0:
+            raise ApiError(400, "invalid")
+        result = data.replace_programme(
+            conn,
+            user.id,
+            programme_id,
+            body.get("doc"),
+            rev,
+            config.clock(),
+            quota=config.user_quota_bytes,
+        )
+        if result is None:
+            raise ApiError(404, "not-found")
+        if isinstance(result, data.ProgrammeConflict):
+            raise ApiError(409, "conflict", programme=result.programme, rev=result.programme["rev"])
+        return result.programme
+
+    @app.delete("/api/programmes/{programme_id}", status_code=204)
+    def delete_programme(programme_id: str, user: User, conn: Conn) -> None:
+        """Runs started from it keep their own copy."""
+        if not data.delete_programme(conn, user.id, programme_id):
+            raise ApiError(404, "not-found")
 
     def need_ask() -> AsyncAnthropic:
         if ask_client is None:

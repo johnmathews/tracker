@@ -38,14 +38,15 @@ SECTION_CHECK_STEP = "CREATE TABLE plans_new"
 LIMITS_STEP = "ADD COLUMN limits"
 TRACKERS_STEP = "CREATE TABLE trackers"
 WEEK_TITLE_STEP = "ADD COLUMN week_title"
+PROGRAMMES_STEP = "CREATE TABLE IF NOT EXISTS programmes"
 
 
 def test_steps_are_numbered_as_the_docs_say() -> None:
     """Schema 6 adds API tokens, 7 item details, 8 the item pages' arrangement, 9 My goals,
     10 Ask's caps, 11 Ask's history, 12 OAuth connections, 13 Daily goal, 14 plans and ticks
-    without a CHECK on the section, for Cardio, 15 the limits note, 16 the trackers and 17 the
-    week title (docs/api.md §2)."""
-    assert SCHEMA_VERSION == 17
+    without a CHECK on the section, for Cardio, 15 the limits note, 16 the trackers, 17 the
+    week title and 18 the programmes (docs/api.md §2)."""
+    assert SCHEMA_VERSION == 18
     steps = (
         TOKENS_STEP,
         DETAILS_STEP,
@@ -59,8 +60,9 @@ def test_steps_are_numbered_as_the_docs_say() -> None:
         LIMITS_STEP,
         TRACKERS_STEP,
         WEEK_TITLE_STEP,
+        PROGRAMMES_STEP,
     )
-    assert [_step_of(m) + 1 for m in steps] == [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+    assert [_step_of(m) + 1 for m in steps] == [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
 
 
 def test_section_check_step_keeps_plans_and_ticks_and_takes_cardio(
@@ -1069,3 +1071,309 @@ def test_revert_trackers_gives_back_version_15(
     monkeypatch.undo()
     assert c.execute("SELECT count(*) FROM trackers").fetchone()[0] == 9
     c.close()
+
+
+# --- step 18: programmes (docs/specs/2026-11-17-programmes.md §11.1) ------------------------------
+
+PROGRAMME_TABLES = ("programmes", "programme_runs", "run_changes", "programme_days", "mark_events")
+
+
+def before_programmes(path: Path, monkeypatch: pytest.MonkeyPatch) -> sqlite3.Connection:
+    """A database at schema 17, the last one before programmes, shaped like production and
+    dirty: three accounts (one disabled, one without settings), the first three trackers each
+    plus made ones, an ended tracker and one that starts later, plans with odd items_json, marks
+    of every kind, details, sessions, a token, Ask's history and an OAuth connection."""
+    from tracker_api import db
+
+    c = connect(path)
+    monkeypatch.setattr(db, "MIGRATIONS", db.MIGRATIONS[: _step_of(PROGRAMMES_STEP)])
+    db.migrate(c)
+    monkeypatch.undo()
+    assert c.execute("PRAGMA user_version").fetchone()[0] == 17
+    c.executescript(
+        """
+        INSERT INTO users (id, username, password_hash, created_at, email_confirmed_at, disabled)
+            VALUES (1, 'john@example.com', 'h1', 0, 5, 0), (2, 'ann', 'h2', 1, NULL, 1),
+                (7, 'bob@example.com', 'h3', 2, NULL, 0);
+        INSERT INTO settings (user_id, accent, daily_pick, food_pick, item_sections, goals,
+                limits, daily_goal, week_title)
+            VALUES (1, '#30d158', 4, 3, '{"strength":{"order":["plan"],"hidden":[]}}',
+                'Squat 100 kg', 'Left knee', 0, 'number'),
+            (2, '#0a84ff', 3, 2, NULL, '', '', 1, 'dates');
+        INSERT INTO trackers VALUES
+            (1, 'xlegs0001', 'strength', 'Legs', 3, 2, '2026-09-07', '2026-10-12', 4),
+            (1, 'xhips0002', 'mobility', 'Hips', 4, 3, '2026-10-19', NULL, 1),
+            (1, 'xlater003', 'cardio', 'Bike', 5, NULL, '2026-12-07', NULL, 1),
+            (7, 'xbobs0004', 'strength', 'Upper', 3, 8, NULL, NULL, 2);
+        UPDATE trackers SET end_week = '2026-10-05', rev = 2 WHERE user_id = 2 AND id = 'cardio';
+        INSERT INTO plans VALUES
+            (1, 'exercise', '2026-10-12', '[{"id":"pu","name":"Push-ups","reps":10}]', 3),
+            (1, 'exercise', '2026-10-19', '[{"id":"pu","name":"Push-ups","notes":"old note"}]', 1),
+            (1, 'xlegs0001', '2026-09-07', '[{"id":"sq","name":"Squat","weight":40.5}]', 2),
+            (1, 'xhips0002', '2026-10-19', '[]', 1),
+            (1, 'diet', '2026-10-19', 'not json [', 1),
+            (2, 'cardio', '2026-09-28', '[{"id":"run","name":"Run","distance":5}]', 1),
+            (7, 'gone-tracker', '2026-10-19', '[{"id":"a","name":"A"}]', 1);
+        INSERT INTO ticks (user_id, section, week, item_id, days, partial, missed, solid, hatch)
+            VALUES (1, 'exercise', '2026-10-12', 'pu', 127, 2, 4, 1, 8),
+            (1, 'xlegs0001', '2026-09-07', 'sq', 5, 0, 0, 0, 0),
+            (1, 'diet', '2026-10-19', 'veg', 0, 0, 0, 0, 0),
+            (2, 'cardio', '2026-09-28', 'run', 64, 0, 64, 0, 0),
+            (7, 'gone-tracker', '2026-10-19', 'a', 1, 1, 0, 0, 1);
+        INSERT INTO item_details VALUES (1, 'exercise', 'pu', '{"notes":"slow"}', 2),
+            (1, 'xlegs0001', 'sq', '{}', 3), (7, 'xbobs0004', 'x', '{"link":"https://e.x"}', 1);
+        INSERT INTO sessions VALUES ('s1', 1, 0, 0, 99), ('s2', 7, 0, 0, 99);
+        INSERT INTO invites (token_hash, kind, username, user_id, created_at, expires_at, mailed)
+            VALUES ('i1', 'invite', 'new@example.com', NULL, 0, 9, 1);
+        INSERT INTO api_tokens VALUES ('t1', 1, 'laptop', 'abcdefgh', 'write', 3, 4);
+        INSERT INTO ask_log (user_id, asked_at) VALUES (1, 10), (1, 11);
+        INSERT INTO ask_conversations VALUES (1, 'c1', 'How was my week?', 10, 20);
+        INSERT INTO ask_turns VALUES (1, 'c1', 0, 'How was it?', 'Fine.', 'end_turn', 10),
+            (1, 'c1', 1, 'And?', '', 'cancelled', 11);
+        INSERT INTO oauth_grants (id, user_id, client_id, client_name, client_host, scope,
+                resource, created_at, expires_at)
+            VALUES ('g1', 1, 'https://claude.ai/c', 'Claude', 'claude.ai', 'write', 'r', 0, 99);
+        INSERT INTO oauth_access VALUES ('a1', 'g1', 0, 99);
+        """
+    )
+    return c
+
+
+def all_rows(c: sqlite3.Connection) -> dict[str, list[tuple[object, ...]]]:
+    """Every row of every table but the new ones, and the schema of everything already there."""
+    names = [
+        r[0]
+        for r in c.execute("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+        if r[0] not in PROGRAMME_TABLES
+    ]
+    rows = table_rows(c, *names)
+    rows["sqlite_master"] = sorted(
+        tuple(r)
+        for r in c.execute("SELECT type, name, tbl_name, sql FROM sqlite_master")
+        if r[2] not in PROGRAMME_TABLES
+    )
+    return rows
+
+
+def test_programmes_migration_keeps_every_row_of_a_dirty_database(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Step 18 only adds the five programme tables, empty: every row and every table, index and
+    trigger already there stays as it was, and the state still reads."""
+    from tracker_api.data import load_trackers, usage
+
+    c = before_programmes(tmp_path / "f.db", monkeypatch)
+    before = all_rows(c)
+    assert sum(len(v) for k, v in before.items() if k != "sqlite_master") == 44
+    migrate(c)
+    assert c.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION == 18
+    assert all_rows(c) == before
+    for table in PROGRAMME_TABLES:
+        assert c.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0  # noqa: S608
+    assert c.execute("PRAGMA foreign_key_check").fetchall() == []
+    assert c.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    # The new code reads the migrated file: usage counts no programmes yet (plans, details,
+    # ticks and Ask's text for account 1), and an ended tracker still reads as ended.
+    plans = sum(
+        len(r[0].encode()) for r in c.execute("SELECT items_json FROM plans WHERE user_id = 1")
+    )
+    details = sum(
+        len(r[0].encode())
+        for r in c.execute("SELECT details_json FROM item_details WHERE user_id = 1")
+    )
+    ask_text = len(b"How was my week?") + len(b"How was it?Fine.And?")
+    assert usage(c, 1) == plans + details + 3 * 64 + ask_text + 64 + 2 * 64
+    assert [t["endWeek"] for t in load_trackers(c, 1)][3] == "2026-10-12"
+    c.close()
+
+
+def test_programmes_migration_reruns_from_a_partial_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The step runs inside the version bump's transaction; if it ever ran without one, a second
+    run over tables already there keeps their rows (IF NOT EXISTS throughout)."""
+    from tracker_api import db
+
+    c = before_programmes(tmp_path / "f.db", monkeypatch)
+    step = db.MIGRATIONS[_step_of(PROGRAMMES_STEP)]
+    c.executescript(step)  # a first run, without the version bump
+    c.execute(
+        "INSERT INTO programmes VALUES (1, 'xp1', 'Beginner', '{}', 2, 10, 20)",
+    )
+    before = all_rows(c)
+    migrate(c)
+    assert c.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
+    assert all_rows(c) == before
+    assert table_rows(c, "programmes")["programmes"] == [(1, "xp1", "Beginner", "{}", 2, 10, 20)]
+    c.executescript(step)  # and once more changes nothing
+    assert c.execute("SELECT count(*) FROM programmes").fetchone()[0] == 1
+    c.close()
+
+
+def columns_of(c: sqlite3.Connection, table: str) -> list[tuple[str, str, int]]:
+    """Each column's name, type and NOT NULL flag."""
+    return [(r["name"], r["type"], r["notnull"]) for r in c.execute(f"PRAGMA table_info({table})")]
+
+
+def test_programme_tables_have_the_specs_columns(conn: sqlite3.Connection) -> None:
+    """The columns of spec §11.1, keyed for the reads the runs make: runs, changes and sealed
+    days by their primary keys, mark events by an index on (user, tracker, date)."""
+    assert columns_of(conn, "programmes") == [
+        ("user_id", "INTEGER", 1),
+        ("id", "TEXT", 1),
+        ("name", "TEXT", 1),
+        ("doc_json", "TEXT", 1),
+        ("rev", "INTEGER", 1),
+        ("created_at", "INTEGER", 1),
+        ("updated_at", "INTEGER", 1),
+    ]
+    assert columns_of(conn, "programme_runs") == [
+        ("user_id", "INTEGER", 1),
+        ("tracker_id", "TEXT", 1),
+        ("programme_id", "TEXT", 0),
+        ("doc_json", "TEXT", 1),
+        ("params_json", "TEXT", 1),
+        ("start_date", "TEXT", 1),
+        ("status", "TEXT", 1),
+        ("rev", "INTEGER", 1),
+    ]
+    assert columns_of(conn, "run_changes") == [
+        ("user_id", "INTEGER", 1),
+        ("tracker_id", "TEXT", 1),
+        ("seq", "INTEGER", 1),
+        ("made_at", "INTEGER", 1),
+        ("from_date", "TEXT", 1),
+        ("change_json", "TEXT", 1),
+        ("reason", "TEXT", 1),
+        ("source", "TEXT", 1),
+        ("undone_by", "INTEGER", 0),
+    ]
+    assert columns_of(conn, "programme_days") == [
+        ("user_id", "INTEGER", 1),
+        ("tracker_id", "TEXT", 1),
+        ("date", "TEXT", 1),
+        ("programme_week", "INTEGER", 0),
+        ("items_json", "TEXT", 1),
+        ("sealed_at", "INTEGER", 1),
+    ]
+    assert columns_of(conn, "mark_events") == [
+        ("id", "INTEGER", 0),
+        ("user_id", "INTEGER", 1),
+        ("tracker_id", "TEXT", 1),
+        ("date", "TEXT", 1),
+        ("item_id", "TEXT", 1),
+        ("mark", "TEXT", 0),
+        ("entered_at", "INTEGER", 1),
+        ("source", "TEXT", 1),
+        ("late", "INTEGER", 1),
+    ]
+
+    def primary_key(table: str) -> list[str]:
+        cols = [r for r in conn.execute(f"PRAGMA table_info({table})") if r["pk"]]
+        return [r["name"] for r in sorted(cols, key=lambda r: r["pk"])]
+
+    assert primary_key("programmes") == ["user_id", "id"]
+    assert primary_key("programme_runs") == ["user_id", "tracker_id"]
+    assert primary_key("run_changes") == ["user_id", "tracker_id", "seq"]
+    assert primary_key("programme_days") == ["user_id", "tracker_id", "date"]
+    assert primary_key("mark_events") == ["id"]
+    sql = {r[0]: r[1] for r in conn.execute("SELECT name, sql FROM sqlite_master")}
+    for table in PROGRAMME_TABLES:
+        assert "STRICT" in sql[table]
+        assert ("WITHOUT ROWID" in sql[table]) == (table != "mark_events")
+    index = [r["name"] for r in conn.execute("PRAGMA index_info(mark_events_by_day)")]
+    assert index == ["user_id", "tracker_id", "date"]
+    index = [r["name"] for r in conn.execute("PRAGMA index_info(programmes_by_time)")]
+    assert index == ["user_id", "updated_at"]
+
+
+def seed_run(conn: sqlite3.Connection) -> None:
+    """User 1 with a library programme and a programme tracker whose run has a change log, a
+    sealed day and a mark event."""
+    conn.executescript(
+        """
+        INSERT INTO users (id, username, password_hash, created_at) VALUES (1, 'a', 'h', 0);
+        INSERT INTO trackers VALUES (1, 'xrun', 'strength', 'Beginner 5x5', 3, 2,
+            '2026-11-16', NULL, 1);
+        INSERT INTO programmes VALUES (1, 'xp', 'Beginner 5x5', '{}', 1, 0, 0);
+        INSERT INTO programme_runs VALUES (1, 'xrun', 'xp', '{}', '{}', '2026-11-18',
+            'running', 1);
+        INSERT INTO run_changes VALUES (1, 'xrun', 1, 5, '2026-11-18', '{}', '', 'app', 2),
+            (1, 'xrun', 2, 6, '2026-11-18', '{}', 'Knee', 'Claude', NULL);
+        INSERT INTO programme_days VALUES (1, 'xrun', '2026-11-18', 1, '[]', 7);
+        INSERT INTO mark_events (user_id, tracker_id, date, item_id, mark, entered_at, source,
+            late) VALUES (1, 'xrun', '2026-11-18', 'squat', 'great', 8, 'app', 0),
+            (1, 'xrun', '2026-11-18', 'squat', NULL, 9, 'app', 1);
+        """
+    )
+
+
+def test_programme_rows_are_checked(conn: sqlite3.Connection) -> None:
+    """A run hangs off its tracker, and a change, a sealed day and a mark event off their run.
+    Revisions are positive, a change is undone only by a later one, a mark is late or not, a
+    programme week starts at 1, and every column is strictly typed."""
+    seed_run(conn)
+    bad = [
+        "INSERT INTO programmes VALUES (1, 'xp', 'Again', '{}', 1, 0, 0)",  # the same id
+        "INSERT INTO programmes VALUES (1, 'xq', 'P', '{}', 0, 0, 0)",
+        "INSERT INTO programmes VALUES (2, 'xq', 'P', '{}', 1, 0, 0)",  # no such user
+        "INSERT INTO programmes VALUES (1, 'xq', NULL, '{}', 1, 0, 0)",
+        "INSERT INTO programmes VALUES (1, 'xq', 'P', x'7b7d', 1, 0, 0)",  # STRICT
+        # A run needs its tracker, and only one run a tracker.
+        "INSERT INTO programme_runs VALUES (1, 'nope', NULL, '{}', '{}', 'd', 'running', 1)",
+        "INSERT INTO programme_runs VALUES (1, 'xrun', NULL, '{}', '{}', 'd', 'running', 1)",
+        "INSERT INTO programme_runs VALUES (1, 'diet', NULL, '{}', '{}', 'd', 'running', 0)",
+        # The rest need their run.
+        "INSERT INTO run_changes VALUES (1, 'diet', 1, 0, 'd', '{}', '', 'app', NULL)",
+        "INSERT INTO run_changes VALUES (1, 'xrun', 1, 0, 'd', '{}', '', 'app', NULL)",
+        "INSERT INTO run_changes VALUES (1, 'xrun', -1, 0, 'd', '{}', '', 'app', NULL)",
+        "INSERT INTO run_changes VALUES (1, 'xrun', 3, 0, 'd', '{}', '', 'app', 3)",
+        "INSERT INTO run_changes VALUES (1, 'xrun', 3, 0, 'd', '{}', NULL, 'app', NULL)",
+        "INSERT INTO programme_days VALUES (1, 'diet', '2026-11-19', 1, '[]', 0)",
+        "INSERT INTO programme_days VALUES (1, 'xrun', '2026-11-18', 2, '[]', 0)",
+        "INSERT INTO programme_days VALUES (1, 'xrun', '2026-11-19', 0, '[]', 0)",
+        "INSERT INTO mark_events (user_id, tracker_id, date, item_id, mark, entered_at, source,"
+        " late) VALUES (1, 'diet', 'd', 'veg', 'great', 0, 'app', 0)",
+        "INSERT INTO mark_events (user_id, tracker_id, date, item_id, mark, entered_at, source,"
+        " late) VALUES (1, 'xrun', 'd', 'squat', 'great', 0, 'app', 2)",
+    ]
+    conn.execute(
+        "INSERT INTO users (id, username, password_hash, created_at) VALUES (3, 'c', 'h', 0)"
+    )
+    for sql in bad:
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(sql)
+    # A run's library programme may be gone: deleting it leaves the run and its copy.
+    conn.execute("DELETE FROM programmes WHERE id = 'xp'")
+    assert conn.execute("SELECT programme_id FROM programme_runs").fetchone()[0] == "xp"
+    # A day before the run's start has no programme week.
+    conn.execute("INSERT INTO programme_days VALUES (1, 'xrun', '2026-11-16', NULL, '[]', 7)")
+
+
+def test_programme_rows_go_with_their_user(conn: sqlite3.Connection) -> None:
+    """Deleting an account takes its library, its runs (through their trackers) and every
+    change, sealed day and mark event, and leaves another account's alone."""
+    seed_run(conn)
+    conn.executescript(
+        """
+        INSERT INTO users (id, username, password_hash, created_at) VALUES (2, 'b', 'h', 0);
+        INSERT INTO trackers VALUES (2, 'xrun', 'cardio', 'C25K', 3, NULL, NULL, NULL, 1);
+        INSERT INTO programmes VALUES (2, 'xp', 'C25K', '{}', 1, 0, 0);
+        INSERT INTO programme_runs VALUES (2, 'xrun', 'xp', '{}', '{}', 'd', 'paused', 1);
+        INSERT INTO run_changes VALUES (2, 'xrun', 1, 5, 'd', '{}', '', 'app', NULL);
+        INSERT INTO mark_events (user_id, tracker_id, date, item_id, mark, entered_at, source,
+            late) VALUES (2, 'xrun', 'd', 'run', 'great', 8, 'app', 0);
+        """
+    )
+    conn.execute("DELETE FROM users WHERE id = 1")
+    counts = {
+        t: conn.execute(f"SELECT user_id, count(*) FROM {t} GROUP BY user_id").fetchall()  # noqa: S608
+        for t in PROGRAMME_TABLES
+    }
+    assert {t: [tuple(r) for r in rows] for t, rows in counts.items()} == {
+        "programmes": [(2, 1)],
+        "programme_runs": [(2, 1)],
+        "run_changes": [(2, 1)],
+        "programme_days": [],
+        "mark_events": [(2, 1)],
+    }

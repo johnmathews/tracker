@@ -394,6 +394,82 @@ MIGRATIONS = [
     ALTER TABLE settings ADD COLUMN week_title TEXT NOT NULL DEFAULT 'dates'
         CHECK (week_title IN ('dates', 'number'));
     """,
+    # Programmes (docs/specs/2026-11-17-programmes.md §11.1). Only adds tables, and IF NOT
+    # EXISTS lets it run again. The library is the account's own. A run hangs off its programme
+    # tracker, and its change log, sealed days and mark events off the run, so deleting an
+    # account takes them all through its trackers. A run keeps its own copy of the document,
+    # and `programme_id` names the library programme it came from, which may be gone, so it
+    # references nothing. Status, source and mark have no CHECK (F3): the API checks them, so a
+    # new value needs no table rebuild. A sealed day before the run's start has no programme
+    # week. Mark events are a log, many a day, so they keep a rowid and an index by day.
+    """
+    CREATE TABLE IF NOT EXISTS programmes (
+        user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        doc_json TEXT NOT NULL,
+        rev INTEGER NOT NULL CHECK (rev > 0),
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (user_id, id)
+    ) STRICT, WITHOUT ROWID;
+    CREATE INDEX IF NOT EXISTS programmes_by_time ON programmes (user_id, updated_at);
+
+    CREATE TABLE IF NOT EXISTS programme_runs (
+        user_id INTEGER NOT NULL,
+        tracker_id TEXT NOT NULL,
+        programme_id TEXT,
+        doc_json TEXT NOT NULL,
+        params_json TEXT NOT NULL,
+        start_date TEXT NOT NULL,
+        status TEXT NOT NULL,
+        rev INTEGER NOT NULL CHECK (rev > 0),
+        PRIMARY KEY (user_id, tracker_id),
+        FOREIGN KEY (user_id, tracker_id) REFERENCES trackers (user_id, id) ON DELETE CASCADE
+    ) STRICT, WITHOUT ROWID;
+
+    CREATE TABLE IF NOT EXISTS run_changes (
+        user_id INTEGER NOT NULL,
+        tracker_id TEXT NOT NULL,
+        seq INTEGER NOT NULL CHECK (seq >= 0),
+        made_at INTEGER NOT NULL,
+        from_date TEXT NOT NULL,
+        change_json TEXT NOT NULL,
+        reason TEXT NOT NULL DEFAULT '',
+        source TEXT NOT NULL,
+        undone_by INTEGER CHECK (undone_by > seq),
+        PRIMARY KEY (user_id, tracker_id, seq),
+        FOREIGN KEY (user_id, tracker_id)
+            REFERENCES programme_runs (user_id, tracker_id) ON DELETE CASCADE
+    ) STRICT, WITHOUT ROWID;
+
+    CREATE TABLE IF NOT EXISTS programme_days (
+        user_id INTEGER NOT NULL,
+        tracker_id TEXT NOT NULL,
+        date TEXT NOT NULL,
+        programme_week INTEGER CHECK (programme_week >= 1),
+        items_json TEXT NOT NULL,
+        sealed_at INTEGER NOT NULL,
+        PRIMARY KEY (user_id, tracker_id, date),
+        FOREIGN KEY (user_id, tracker_id)
+            REFERENCES programme_runs (user_id, tracker_id) ON DELETE CASCADE
+    ) STRICT, WITHOUT ROWID;
+
+    CREATE TABLE IF NOT EXISTS mark_events (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        tracker_id TEXT NOT NULL,
+        date TEXT NOT NULL,
+        item_id TEXT NOT NULL,
+        mark TEXT,
+        entered_at INTEGER NOT NULL,
+        source TEXT NOT NULL,
+        late INTEGER NOT NULL CHECK (late IN (0, 1)),
+        FOREIGN KEY (user_id, tracker_id)
+            REFERENCES programme_runs (user_id, tracker_id) ON DELETE CASCADE
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS mark_events_by_day ON mark_events (user_id, tracker_id, date);
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

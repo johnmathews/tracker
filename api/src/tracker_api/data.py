@@ -3,12 +3,14 @@ and export (docs/api.md §3)."""
 
 import json
 import sqlite3
+from collections.abc import Callable, Container
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal, TypedDict
 
 from .db import transaction
 from .item_sections import normalise_item_sections, with_old_keys
+from .programme import Programme, ProgrammeError, check_programme, parse_programme
 from .types import SECTION_TYPES, TYPES, PickKey, TypeId
 from .validate import (
     DEFAULT_WEEK_TITLE,
@@ -74,15 +76,17 @@ class TooManyTrackers(Exception):
 
 
 def usage(conn: sqlite3.Connection, user_id: int) -> int:
-    """The bytes of the user's plans' and item details' JSON, plus TICK_BYTES per tick row; and
-    for Ask's history the bytes of each title, question and answer, plus CONVERSATION_BYTES and
-    TURN_BYTES for each row."""
+    """The bytes of the user's plans', item details' and library programmes' JSON, plus
+    TICK_BYTES per tick row; and for Ask's history the bytes of each title, question and answer,
+    plus CONVERSATION_BYTES and TURN_BYTES for each row."""
     stored = conn.execute(
         "SELECT"
         " (SELECT coalesce(sum(length(CAST(items_json AS BLOB))), 0)"
         "  FROM plans WHERE user_id = :user)"
         " + (SELECT coalesce(sum(length(CAST(details_json AS BLOB))), 0)"
-        "  FROM item_details WHERE user_id = :user)",
+        "  FROM item_details WHERE user_id = :user)"
+        " + (SELECT coalesce(sum(length(CAST(doc_json AS BLOB))), 0)"
+        "  FROM programmes WHERE user_id = :user)",
         {"user": user_id},
     ).fetchone()[0]
     ticks = conn.execute("SELECT count(*) FROM ticks WHERE user_id = ?", (user_id,)).fetchone()[0]
@@ -769,6 +773,224 @@ def put_settings(conn: sqlite3.Connection, user_id: int, raw: dict[str, Any]) ->
             {"target": settings[key], "user": user_id, "id": tracker_id},
         )
     return settings
+
+
+# --- the programme library (docs/specs/2026-11-17-programmes.md §3.4, §11) -----------------------
+
+#: The most programmes one account's library holds: as many as its trackers.
+MAX_PROGRAMMES = MAX_TRACKERS
+#: The largest programme document as stored (`encode_programme`, UTF-8). The biggest worked
+#: example is under 2 KB; this leaves room for long notes on every activity.
+MAX_PROGRAMME_BYTES = 128 * 1024
+
+
+class ProgrammeTooLarge(Exception):
+    """A programme document over MAX_PROGRAMME_BYTES as stored; nothing was changed."""
+
+
+class TooManyProgrammes(Exception):
+    """An add would take the library past MAX_PROGRAMMES; nothing was changed."""
+
+
+class ProgrammeSummary(TypedDict):
+    """A library programme as the list shows it, read from its stored document."""
+
+    id: str
+    #: The document's name, trimmed as the format reads it.
+    name: str
+    description: str | None
+    kind: str
+    weeks: int
+    #: How many activities it has.
+    activities: int
+    rev: int
+    #: Unix seconds.
+    createdAt: int
+    updatedAt: int
+
+
+class ProgrammeRecord(ProgrammeSummary):
+    """One library programme: its summary and the document as it was sent."""
+
+    doc: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class ProgrammeSaved:
+    programme: ProgrammeRecord
+
+
+@dataclass(frozen=True)
+class ProgrammeConflict:
+    #: The server's copy, its revision in `rev`.
+    programme: ProgrammeRecord
+
+
+def encode_programme(doc: object) -> str:
+    """A document as stored: compact JSON, its keys in the order sent."""
+    return json.dumps(doc, ensure_ascii=False, separators=(",", ":"))
+
+
+def _too_large(encoded: str) -> bool:
+    return len(encoded.encode()) > MAX_PROGRAMME_BYTES
+
+
+def programme_problems(doc: object) -> list[ProgrammeError]:
+    """Every reason a document can't be stored: each problem `check_programme` finds, then its
+    size. [] when an add would take it (the count and the account's quota aside)."""
+    errors = check_programme(doc)
+    if _too_large(encode_programme(doc)):
+        errors.append(
+            ProgrammeError("", f"the programme is over {MAX_PROGRAMME_BYTES:,} bytes as stored.")
+        )
+    return errors
+
+
+def _checked(doc: object) -> tuple[Programme, str]:
+    """A document's programme and its stored text. Raises ProgrammeInvalid with every problem,
+    then ProgrammeTooLarge."""
+    programme = parse_programme(doc)
+    encoded = encode_programme(doc)
+    if _too_large(encoded):
+        raise ProgrammeTooLarge
+    return programme, encoded
+
+
+_PROGRAMME_COLUMNS = "id, name, doc_json, rev, created_at, updated_at"
+
+
+def _programme(row: sqlite3.Row) -> ProgrammeRecord:
+    # Every stored document passed the format's check, so its kind, weeks and activities are
+    # there. `weeks` may have been sent as 8.0.
+    doc: dict[str, Any] = json.loads(row["doc_json"])
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "description": doc.get("description"),
+        "kind": doc["kind"],
+        "weeks": int(doc["weeks"]),
+        "activities": len(doc["activities"]),
+        "rev": row["rev"],
+        "createdAt": row["created_at"],
+        "updatedAt": row["updated_at"],
+        "doc": doc,
+    }
+
+
+def _summary(record: ProgrammeRecord) -> ProgrammeSummary:
+    summary: dict[str, Any] = {k: v for k, v in record.items() if k != "doc"}
+    return summary  # type: ignore[return-value]
+
+
+def _programme_row(conn: sqlite3.Connection, user_id: int, programme_id: str) -> sqlite3.Row | None:
+    row: sqlite3.Row | None = conn.execute(
+        f"SELECT {_PROGRAMME_COLUMNS} FROM programmes WHERE user_id = ? AND id = ?",  # noqa: S608
+        (user_id, programme_id),
+    ).fetchone()
+    return row
+
+
+def list_programmes(conn: sqlite3.Connection, user_id: int) -> list[ProgrammeSummary]:
+    """The account's library, the programme changed last first."""
+    return [
+        _summary(_programme(r))
+        for r in conn.execute(
+            f"SELECT {_PROGRAMME_COLUMNS} FROM programmes WHERE user_id = ?"  # noqa: S608
+            " ORDER BY updated_at DESC, created_at DESC, id",
+            (user_id,),
+        )
+    ]
+
+
+def load_programme(
+    conn: sqlite3.Connection, user_id: int, programme_id: str
+) -> ProgrammeRecord | None:
+    """One of the account's programmes; None for an id it doesn't have, another account's
+    included."""
+    row = _programme_row(conn, user_id, programme_id)
+    return None if row is None else _programme(row)
+
+
+def add_programme(
+    conn: sqlite3.Connection,
+    user_id: int,
+    doc: object,
+    now: int,
+    *,
+    quota: int,
+    make_id: Callable[[Container[str]], str],
+) -> ProgrammeRecord:
+    """Add a document to the library under an id `make_id` picks from those the account hasn't
+    taken (`edits.new_id`), at revision 1. A document with any problem is never stored.
+
+    Raises ProgrammeInvalid with every problem, ProgrammeTooLarge, TooManyProgrammes past
+    MAX_PROGRAMMES, or QuotaExceeded."""
+    programme, encoded = _checked(doc)
+    with transaction(conn):
+        taken = {
+            r["id"] for r in conn.execute("SELECT id FROM programmes WHERE user_id = ?", (user_id,))
+        }
+        if len(taken) >= MAX_PROGRAMMES:
+            raise TooManyProgrammes
+        before = usage(conn, user_id)
+        _check_growth(before, before + len(encoded.encode()), quota)
+        programme_id = make_id(taken)
+        conn.execute(
+            "INSERT INTO programmes (user_id, id, name, doc_json, rev, created_at, updated_at)"
+            " VALUES (?, ?, ?, ?, 1, ?, ?)",
+            (user_id, programme_id, programme.name, encoded, now, now),
+        )
+        row = _programme_row(conn, user_id, programme_id)
+    assert row is not None  # written in this transaction
+    return _programme(row)
+
+
+def replace_programme(
+    conn: sqlite3.Connection,
+    user_id: int,
+    programme_id: str,
+    doc: object,
+    rev: int,
+    now: int,
+    *,
+    quota: int,
+) -> ProgrammeSaved | ProgrammeConflict | None:
+    """Replace a programme's document if `rev` is current, by patch_tracker's rules: a stale
+    `rev` conflicts unless the programme already holds this document, which is then returned as
+    it is. The name follows the document. None when the account has no such programme. Runs
+    started from it keep their own copy (spec §4).
+
+    Raises ProgrammeInvalid, ProgrammeTooLarge or QuotaExceeded, checked in that order before
+    the revision, so a document with problems is never stored."""
+    programme, encoded = _checked(doc)
+    with transaction(conn):
+        row = _programme_row(conn, user_id, programme_id)
+        if row is None:
+            return None
+        stored = _programme(row)
+        if stored["doc"] == json.loads(encoded):
+            return ProgrammeSaved(stored)
+        if rev != stored["rev"]:
+            return ProgrammeConflict(stored)
+        before = usage(conn, user_id)
+        _check_growth(before, before - len(row["doc_json"].encode()) + len(encoded.encode()), quota)
+        conn.execute(
+            "UPDATE programmes SET name = ?, doc_json = ?, rev = ?, updated_at = ?"
+            " WHERE user_id = ? AND id = ?",
+            (programme.name, encoded, stored["rev"] + 1, now, user_id, programme_id),
+        )
+        row = _programme_row(conn, user_id, programme_id)
+    assert row is not None  # written in this transaction
+    return ProgrammeSaved(_programme(row))
+
+
+def delete_programme(conn: sqlite3.Connection, user_id: int, programme_id: str) -> bool:
+    """Delete a library programme; False when the account has no such programme. Runs started
+    from it keep their copy, and their `programme_id` then names nothing."""
+    cur = conn.execute(
+        "DELETE FROM programmes WHERE user_id = ? AND id = ?", (user_id, programme_id)
+    )
+    return cur.rowcount > 0
 
 
 # --- Ask's history (docs/api.md §3.2) -------------------------------------------------------------
