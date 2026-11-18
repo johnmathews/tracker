@@ -3,8 +3,8 @@ The Programmes page: the programmes running now, the library to start one from, 
 ## Use
 
 - **Where:** `#/programmes`, opened from the bar (spec §9.1). It is a page like an item's page: no bar, Back to the week at the top, then "Programmes" in `title-1`.
-- **Three tabs** (K147), the Tabs card: **Running**, **Library**, **Add**. The page opens on Running. A tab's content starts 8u under the tabs' rule.
-- **Running:** one line per live run, each a link to its overview (`#/programme/<tracker>`, the ProgrammeGrid card). The tracker's name in weight 600 (22u), then one line in `body` `ink-secondary` with its first sentence in `ink` at 600: "**Week 4 of 8.** Running. Ends Sun 17 Jan." or "**Week 3 of 9.** Paused since Mon 7 Dec. A cold." A Lucide `chevron-right` in `ink-secondary` ends the line. Lines are separated by 1px `line` rules, with none above the first (the tabs' rule is there). Under the pointer the name underlines, 2px.
+- **Three tabs** (K147), the Tabs card: **Started**, **Library**, **Add** (K161: "Running" is also an activity's name, so the tab and a run's line say Started). The page opens on Started. A tab's content starts 8u under the tabs' rule.
+- **Started:** one line per live run, each a link to its overview (`#/programme/<tracker>`, the ProgrammeGrid card). The tracker's name in weight 600 (22u), then one line in `body` `ink-secondary` with its first sentence in `ink` at 600: "**Week 4 of 8.** Running. Ends Sun 17 Jan." or "**Week 3 of 9.** Paused since Mon 7 Dec. A cold." A Lucide `chevron-right` in `ink-secondary` ends the line. Lines are separated by 1px `line` rules, with none above the first (the tabs' rule is there). Under the pointer the name underlines, 2px.
 - **Library:** one entry per programme in the account's library. Its name in weight 600 (an `h2` under the page's `h1`, so the headings never skip a level; "Preview" inside it is an `h3`), its kind, weeks and activities in `body` `ink-secondary` ("Strength · 8 weeks · 5 activities"), its description in `body`, then its actions: **Preview and start** (secondary, Lucide `play`), **Duplicate** (quiet, `copy`) and **Delete** (quiet, `trash-2`; it asks first, in the ConfirmDialog). Folded, Preview and start takes a row of its own, and Duplicate and Delete share the next.
 - **Opened in place to start** (K147): Preview and start opens the programme where it is in the list, in a box framed in 2px `ink` (`radius-lg`, 16px inside, 16px out past the list's edges; 8px folded). Its actions give way to:
   - **Name** (TextField, the programme's name to begin with; hint "Its tracker's name. You can change it later."), **Start** (a field-shaped date button with Lucide `calendar`; hint "Today, Wed 16 Dec, or any later day. Week 1 starts on its Monday.") and one TextField per parameter, labelled with its label and unit ("Hold start in seconds"), its hint giving the programme's own value ("The programme's own: 30."). The fields sit two to a row where there is room (at least 260u each).
@@ -19,8 +19,8 @@ The Programmes page: the programmes running now, the library to start one from, 
 
 | State | Look |
 | --- | --- |
-| Running, a run running | "**Week 4 of 8.** Running. Ends Sun 17 Jan." (`data-state="running"`) |
-| Running, a run paused | "**Week 3 of 9.** Paused since Mon 7 Dec. A cold." (`data-state="paused"`) |
+| Started, a run running | "**Week 4 of 8.** Started Mon 23 Nov. Ends Sun 17 Jan." (`data-state="running"`) |
+| Started, a run paused | "**Week 3 of 9.** Paused since Mon 7 Dec. A cold." (`data-state="paused"`) |
 | Library | Each programme with its actions |
 | A programme opened to start | The ink frame with the fields, the preview and Cancel and Start programme; its own actions hidden |
 | Add | The box, its hint, Choose file and Check and add |
@@ -44,7 +44,7 @@ The Programmes page: the programmes running now, the library to start one from, 
 | --- | --- |
 | The page, Back | `programmes-page`, `back-to-week` |
 | The tabs | `programmes-tab-running`, `programmes-tab-library`, `programmes-tab-add` |
-| Running | `programmes-running`; each run `programme-run` with `data-state="running"` or `"paused"` |
+| Started | `programmes-running`; each run `programme-run` with `data-state="running"` or `"paused"` |
 | Library | `programmes-library`; each `library-programme` with `data-programme="<id>"`; its `library-start`, `library-duplicate`, `library-delete` |
 | Opened to start | `programme-start`; `start-name`, `start-date`, each `start-param` with `data-param="<key>"`; `start-preview` (holding the `programme-grid`); `start-cancel`, `start-confirm` |
 | Add | `programme-add`, `add-json`, `add-choose-file`, `add-check`; the problems `add-errors`, each `add-error` with `data-path="<JSON path>"` |

@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, ref, useId, useTemplateRef } from 'vue'
 import { ChevronLeft, CircleStop, Pause, Play, Plus, SkipForward, Undo2 } from '@lucide/vue'
 import { useConfirm } from '@/composables/useConfirm'
-import { PROGRAMMES_HREF, backToWeek, itemHref } from '@/lib/routes'
+import { PROGRAMMES_HREF, backToWeek, cameFromProgrammes, itemHref } from '@/lib/routes'
 import {
   dayText,
   logSentence,
@@ -176,6 +176,17 @@ const log = computed(() =>
 const META = 'body text-(length:--set-text) leading-[1.45] text-ink-secondary'
 const CONTROL =
   'folded:h-auto folded:min-h-12 folded:gap-2 folded:px-2 folded:py-1 folded:leading-5 folded:whitespace-normal'
+
+/**
+ * Back goes where the overview was opened from (K161): the Programmes page, back through history,
+ * or the week, as every page's Back to the week does.
+ */
+const fromProgrammes = cameFromProgrammes()
+function backToProgrammes(ev: MouseEvent): void {
+  if (ev.ctrlKey || ev.metaKey || ev.shiftKey) return
+  ev.preventDefault()
+  history.back()
+}
 </script>
 
 <!--
@@ -196,6 +207,16 @@ const CONTROL =
     :data-previewing="previewing ? '' : undefined"
   >
     <TextLink
+      v-if="fromProgrammes"
+      :href="PROGRAMMES_HREF"
+      class="inline-flex items-center gap-1.5 self-start text-(length:--set-text) [&_svg]:size-(--set-icon)"
+      data-noprint
+      data-testid="back-to-programmes"
+      @click="backToProgrammes"
+      ><ChevronLeft :stroke-width="1.5" aria-hidden="true" />Back to programmes</TextLink
+    >
+    <TextLink
+      v-else
       href="#/"
       class="inline-flex items-center gap-1.5 self-start text-(length:--set-text) [&_svg]:size-(--set-icon)"
       data-noprint

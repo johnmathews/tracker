@@ -628,7 +628,7 @@ describe('ChangeSheet, its edges', () => {
     )
     const weeks = [...document.querySelectorAll<HTMLElement>('[data-testid="change-preview-week"]')]
     expect(weeks[0]!.textContent).toContain('Week 5, Back squat')
-    expect(weeks[0]!.textContent).toContain('Running → Paused')
+    expect(weeks[0]!.textContent).toContain('Active → Paused')
     expect(weeks[1]!.textContent).toContain('Not started, gone')
     expect(weeks[1]!.dataset.week).toBeUndefined()
     expect(weeks[1]!.textContent).toContain('– → 40 kg')

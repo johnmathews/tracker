@@ -88,6 +88,8 @@
   --grid-head-h: calc(var(--u) * 24 + var(--fs-day) * 1.25 + 1px);
   /* Edit plan's frame round the window (K112): 8px, and 4px on a phone below (K117). */
   --edit-frame: 8px;
+  /* The frame's sides and foot: the whole frame on a desktop, none on a phone (K162). */
+  --edit-frame-sides: var(--edit-frame);
   --fs-title: max(30px, calc(var(--u) * 40));
   /* A section's title on the planner, the serif a step under the week's (K86, K87). */
   --fs-section: max(26px, calc(var(--u) * 32));
@@ -205,10 +207,11 @@
 }
 
 /* A phone, upright or on its side (a touch screen whose shorter side is under 600px; not an iPad):
-   Edit plan's frame at half its width, 4px (K117). */
+   Edit plan's frame is a 4px line along the top only (K117, K162). */
 @media (pointer: coarse) and (width < 600px), (pointer: coarse) and (height < 600px) {
   :root {
     --edit-frame: 4px;
+    --edit-frame-sides: 0px;
   }
 }
 

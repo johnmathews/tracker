@@ -120,6 +120,21 @@ export function markFromWeek(): void {
   history.replaceState({ ...(isRecord(state) ? state : {}), [FROM_WEEK]: true }, '')
 }
 
+/** On an overview's history entry: the entry before it is the Programmes page, in this tab. */
+const FROM_PROGRAMMES = 'trackerFromProgrammes'
+
+/** Mark the current history entry as an overview opened from the Programmes page. */
+export function markFromProgrammes(): void {
+  const state: unknown = history.state
+  history.replaceState({ ...(isRecord(state) ? state : {}), [FROM_PROGRAMMES]: true }, '')
+}
+
+/** Whether the current entry was opened from the Programmes page in this tab. */
+export function cameFromProgrammes(): boolean {
+  const state: unknown = history.state
+  return isRecord(state) && state[FROM_PROGRAMMES] === true
+}
+
 /** Whether the current entry was opened from the week in this tab (`markFromWeek`). */
 export function cameFromWeek(): boolean {
   const state: unknown = history.state

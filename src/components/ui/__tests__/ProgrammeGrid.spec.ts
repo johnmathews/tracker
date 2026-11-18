@@ -237,7 +237,7 @@ describe('ProgrammeGrid, a change’s preview (K148)', () => {
       ],
     })
     expect(cell('squat', 6).dataset.cell).toBe('changed')
-    expect(cell('squat', 6).textContent).toContain('Running → Paused')
+    expect(cell('squat', 6).textContent).toContain('Active → Paused')
     expect(cell('squat', 7).textContent).toContain('5 sets → 4 sets')
   })
 })

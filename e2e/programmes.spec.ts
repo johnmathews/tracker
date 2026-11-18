@@ -110,7 +110,12 @@ test('starts a programme from the Library, and its overview opens', async ({ pag
   expect(starts.map((r) => r.postDataJSON())).toEqual([
     { name: 'Beginner 5×5', start: '2026-11-12', params: { squat: 40, rate: 5 } },
   ])
-  // The week shows the new tracker, with its "Week 1 of 8" link.
+  // Opened from the Programmes page, the overview goes back there (K161), and the page's Back
+  // goes on to the week, which shows the new tracker with its "Week 1 of 8" link.
+  await expect(page.getByTestId('back-to-week')).toHaveCount(0)
+  await page.getByTestId('back-to-programmes').click()
+  await expect(page).toHaveURL(/#\/programmes$/)
+  await expect(page.getByTestId('programmes-page')).toBeVisible()
   await page.getByTestId('back-to-week').click()
   await expect(page.getByTestId('programme-week-link')).toHaveText('Week 1 of 8')
 })

@@ -292,7 +292,7 @@ These follow John's picks in the mockup round (§10) and the Notebook design sys
 
 ### 9.1 Programmes page (`#/programmes`)
 
-- **Running:** each live run, with the tracker's name, "Week 4 of 8", and paused or running.
+- **Started** (K161; "Running" is also an activity's name): each live run, with the tracker's name, "Week 4 of 8", when it started, or since when it is paused.
 - **Library:** each programme, with its kind, weeks and activities. Each has Preview and start,
   Duplicate and Delete.
 - **Add:** paste or upload a programme's JSON, with the validator's errors listed per line.

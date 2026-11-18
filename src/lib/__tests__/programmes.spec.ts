@@ -128,7 +128,7 @@ describe('values as the cells write them (spec P4: the server computes, the app 
   })
 
   it('words an activity’s state', () => {
-    expect(stateWord('running')).toBe('Running')
+    expect(stateWord('running')).toBe('Active')
     expect(stateWord('paused')).toBe('Paused')
     expect(stateWord('ended')).toBe('Ended')
     expect(stateWord('not-started')).toBe('Not yet')
@@ -149,11 +149,14 @@ describe('a run in a line', () => {
     rev: 'r',
   }
 
-  it('says the week, and running and when it ends', () => {
-    expect(runLine(summary)).toEqual({ lead: 'Week 4 of 8.', rest: 'Running. Ends Sun 17 Jan.' })
+  it('says the week, when it started and when it ends (“Running” is also an activity’s name)', () => {
+    expect(runLine(summary)).toEqual({
+      lead: 'Week 4 of 8.',
+      rest: 'Started Mon 23 Nov. Ends Sun 17 Jan.',
+    })
   })
 
-  it('says since when a run is paused, and why, as the Running list reads (§8.8)', () => {
+  it('says since when a run is paused, and why, as the Started list reads (§8.8)', () => {
     const paused = { ...summary, status: 'paused' as const, end: null }
     expect(runLine({ ...paused, pausedSince: '2026-12-07', pauseReason: 'A cold' })).toEqual({
       lead: 'Week 4 of 8.',

@@ -351,7 +351,7 @@ export function weekCount(cell: Cell): { done: number; target: number; met: bool
 /**
  * A changed cell's words (spec §9.3): the value before, with its arrow, then the value after.
  * "40 → " and "45 kg": a weight or a distance drops its unit before the arrow; a change of state
- * reads "Running → " and "Paused".
+ * reads "Active → " and "Paused" (K161: "Running" is also an activity's name).
  */
 export function changeWords(change: PreviewCell): { was: string; now: string } {
   if (change.field === null) {
@@ -372,7 +372,7 @@ export function fieldsOf(kind: ProgrammeKind): Field[] {
 
 /** An activity's state in a word. */
 export function stateWord(state: unknown): string {
-  if (state === 'running') return 'Running'
+  if (state === 'running') return 'Active'
   if (state === 'paused') return 'Paused'
   if (state === 'ended') return 'Ended'
   return 'Not yet'
@@ -380,7 +380,7 @@ export function stateWord(state: unknown): string {
 
 // -- runs --
 
-/** A run in the Running list: its first sentence (in ink, at 600), then the rest. */
+/** A run in the Started list (K161): its first sentence (in ink, at 600), then the rest. */
 export function runLine(run: RunSummary): { lead: string; rest: string } {
   const ends = run.end ? `Ends ${dayText(run.end)}.` : ''
   if (run.status === 'upcoming') return { lead: `Starts ${dayText(run.start)}.`, rest: ends }
@@ -391,7 +391,7 @@ export function runLine(run: RunSummary): { lead: string; rest: string } {
     const why = reasonText(run.pauseReason)
     return { lead, rest: `Paused${since}${until}.${why ? ` ${why}` : ''}` }
   }
-  return { lead, rest: `Running. ${ends}`.trim() }
+  return { lead, rest: `Started ${dayText(run.start)}. ${ends}`.trim() }
 }
 
 /** A reason as a sentence of its own: "knee" reads "Knee."; none reads ''. */

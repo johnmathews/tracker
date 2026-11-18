@@ -94,11 +94,14 @@ for (const mode of ['the week', 'Edit plan'] as const) {
   })
 }
 
-test('Edit plan’s frame is 4px on a phone (K117)', async ({ page }) => {
+test('Edit plan’s frame is a 4px line along the top on a phone, with no sides (K117, K162)', async ({
+  page,
+}) => {
   await openApp(page)
   await page.keyboard.press('e')
-  const width = await page
-    .locator('[data-slot="edit-frame"]')
-    .evaluate((el) => getComputedStyle(el).borderTopWidth)
-  expect(width).toBe('4px')
+  const widths = await page.locator('[data-slot="edit-frame"]').evaluate((el) => {
+    const s = getComputedStyle(el)
+    return [s.borderTopWidth, s.borderRightWidth, s.borderBottomWidth, s.borderLeftWidth]
+  })
+  expect(widths).toEqual(['4px', '0px', '0px', '0px'])
 })

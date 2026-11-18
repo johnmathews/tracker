@@ -36,6 +36,7 @@ import {
   isNewTrackerHash,
   isProgrammesHash,
   itemHref,
+  markFromProgrammes,
   markFromWeek,
   parseItemHash,
   parseNewHash,
@@ -163,6 +164,8 @@ function onHash(): void {
     before === 'planner'
   )
     markFromWeek()
+  // Opened from the Programmes page: the overview's Back goes back there (K161).
+  if (page.value === 'programme' && before === 'programmes') markFromProgrammes()
 }
 /** Drop the page from the address bar, so a reload opens the week. */
 function forgetPage(): void {
@@ -531,13 +534,13 @@ onBeforeUnmount(() => {
   <SignupForm v-else-if="session.status === 'signed-out' && signup" @leave="closeSignup" />
   <ForgotForm v-else-if="session.status === 'signed-out' && forgot" @leave="closeForgot" />
   <LoginForm v-else-if="session.status === 'signed-out'" />
-  <!-- Edit plan's frame (PlannerScreen card, K112): `--edit-frame` of `edit` round the window (8px,
-       4px on a phone, K117), over the bar and under a dialog's scrim, so it is plain that Edit plan
-       is on. Every press goes through. -->
+  <!-- Edit plan's frame (PlannerScreen card, K112): `--edit-frame` of `edit` round the window (8px);
+       on a phone, a 4px line along the top only (K117, K162). Over the bar and under a dialog's
+       scrim, so it is plain that Edit plan is on. Every press goes through. -->
   <div
     v-if="editScreens"
     aria-hidden="true"
-    class="pointer-events-none fixed inset-0 z-40 border-(length:--edit-frame) border-edit print:hidden"
+    class="pointer-events-none fixed inset-0 z-40 border-x-(length:--edit-frame-sides) border-t-(length:--edit-frame) border-b-(length:--edit-frame-sides) border-edit print:hidden"
     data-slot="edit-frame"
   />
   <!-- The one host for useConfirm(): removing a row and copying over next week's plan ask here. -->

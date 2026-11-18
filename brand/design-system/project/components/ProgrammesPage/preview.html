@@ -1,4 +1,4 @@
-<!-- @dsCard group="Screens" height=4200 subtitle="The Programmes page: tabs for Running, Library and Add; a run running and one paused; the library, with a programme opened in place to start, the plan as its preview; a pasted programme with its problems listed (K147)" -->
+<!-- @dsCard group="Screens" height=4200 subtitle="The Programmes page: tabs for Started, Library and Add; a run running and one paused; the library, with a programme opened in place to start, the plan as its preview; a pasted programme with its problems listed (K147)" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -135,7 +135,7 @@
 </head>
 <body>
 
-<p class="variant label">Running (K147): one programme running, one paused. Each line opens its overview. Press the tabs</p>
+<p class="variant label">Started (K147, K161): one programme running, one paused. Each line opens its overview. Press the tabs</p>
 <div class="stage" data-page data-tab="running"></div>
 
 <div class="gap"></div>
@@ -166,7 +166,7 @@
   }
   const ic = (n) => `<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n]}</svg>`
   const RUNS = [
-    { tracker: 'beginner-5x5', name: 'Beginner 5×5', meta: '<b>Week 4 of 8.</b> Running. Ends Sun 17 Jan.', state: 'running' },
+    { tracker: 'beginner-5x5', name: 'Beginner 5×5', meta: '<b>Week 4 of 8.</b> Started Mon 23 Nov. Ends Sun 17 Jan.', state: 'running' },
     { tracker: 'couch-to-5k', name: 'Couch to 5K', meta: '<b>Week 3 of 9.</b> Paused since Mon 7 Dec. A cold.', state: 'paused' },
   ]
   const LIB = [
@@ -189,7 +189,7 @@
     ['activities[4].key', 'a key is a-z, 0-9 and -; “Pull-up” has capitals.'],
   ]
 
-  const runs = () => `<ul class="plist" aria-label="Running" data-testid="programmes-running">${RUNS.map((r) => `<li data-testid="programme-run" data-state="${r.state}"><a class="rl" href="#/programme/${r.tracker}"><span class="pn">${r.name}</span><span class="pm">${r.meta}</span>${ic('right')}</a></li>`).join('')}</ul>`
+  const runs = () => `<ul class="plist" aria-label="Started" data-testid="programmes-running">${RUNS.map((r) => `<li data-testid="programme-run" data-state="${r.state}"><a class="rl" href="#/programme/${r.tracker}"><span class="pn">${r.name}</span><span class="pm">${r.meta}</span>${ic('right')}</a></li>`).join('')}</ul>`
 
   const grid = (id) => {
     const head = `<tr><th class="act" scope="col"><span class="vh">Activity</span></th>${WEEKS.map((w) => `<th class="wk" scope="col" data-week="${w.n}"><span class="wn">Week ${w.n}</span><span class="wd">${w.d}</span>${w.deload ? '<span class="wt">Deload</span>' : ''}</th>`).join('')}</tr>`
@@ -217,7 +217,7 @@
       ${errs}<div class="acts"><button type="button" class="btn" data-testid="add-choose-file">${ic('upload')}Choose file</button><button type="button" class="btn primary" data-check data-testid="add-check">Check and add</button></div></div>`
   }
 
-  const TABS = [['running', 'Running'], ['library', 'Library'], ['add', 'Add']]
+  const TABS = [['running', 'Started'], ['library', 'Library'], ['add', 'Add']]
   document.querySelectorAll('[data-page]').forEach((stage, k) => {
     const id = `pp${k + 1}`
     const s = { tab: stage.dataset.tab, open: stage.dataset.open || null, errors: 'errors' in stage.dataset }

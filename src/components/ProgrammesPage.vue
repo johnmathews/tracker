@@ -35,7 +35,7 @@ import { TextField } from '@/components/ui/text-field'
 import { TextLink } from '@/components/ui/text-link'
 
 const TABS = [
-  ['running', 'Running'],
+  ['running', 'Started'],
   ['library', 'Library'],
   ['add', 'Add'],
 ] as const
@@ -240,7 +240,7 @@ const TWO =
 
 <!--
   The Programmes page (brand/design-system/project/components/ProgrammesPage, K147, spec §9.1), at
-  #/programmes, with no bar: Back to the week, the heading, then three tabs. Running lists each
+  #/programmes, with no bar: Back to the week, the heading, then three tabs. Started (K161: "Running" is also an activity's name) lists each
   live run as a link to its overview. Library lists the account's programmes; Preview and start
   opens one in place, framed in ink, with its name, start day and parameters and the server's plan
   as a live preview. Add takes pasted JSON (or a file) to the validator, listing every problem with
@@ -297,7 +297,7 @@ const TWO =
       <TabsContent value="running" class="pt-2">
         <ul
           v-if="live.length"
-          aria-label="Running"
+          aria-label="Started"
           class="max-w-[820px]"
           data-testid="programmes-running"
         >

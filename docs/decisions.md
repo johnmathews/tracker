@@ -664,8 +664,8 @@ exercises", and "user trust in the tracker is paramount". The spec is
 [programmes.md](programmes.md). The views' mockup is
 `brand/design-system/mockups/261117-programmes`: John picked round 1 on 2026-11-17 ("1. A 2. C 3.
 B 4. A 5. A") and round 2 on 2026-11-18 ("6 = B, 7 = B"). K149 to K159 are the calls made while
-building the engine and the API, where the spec was silent or needed a rule. K160 is John's call on
-the crowded bar.
+building the engine and the API, where the spec was silent or needed a rule. K160 to K162 are John's calls on
+the crowded bar, on the words "Started" and the overview's Back, and on Edit plan's frame on a phone.
 
 | ID   | Decision | Why |
 | ---- | -------- | --- |
@@ -688,3 +688,5 @@ the crowded bar.
 | K158 | A stored run loads without checking each week's value against the item's limits (`check_ranges=False`); its parameters are still read. A run that still fails to load raises `RunUnreadable`, which never takes another tracker down | The run was checked when it started. An engine change since, a cap lowered or a rounding fixed, must not make a run that exists unreadable (P1) |
 | K159 | A programme tracker takes marks on later days, as every tracker does; only days before yesterday are locked | The lock protects the record, which is the past. Marking ahead is how the app and `mark_day` already behave, and spec §8 names only today and yesterday |
 | K160 | Programmes is a BarAction in the Header at every width, after Settings (`calendar-range`). Below 640px wide (`max-sm`, the rule that already leaves Print out), Full screen is left out too, so the folded bar holds Ask, Settings, Programmes and Profile, with Add tracker in Edit plan. The F key still toggles full screen there. Amends K34 for phone width | At 375 to 390px the bar was crowded where Ask and Full screen both show (Android, desktop Chrome). John chose on 2026-11-18: Programmes stays in the bar, and Full screen hides at phone width as Print does |
+| K161 | A run that is going reads **Started**, never "Running": the Programmes page's first tab is Started, and a run's line reads "Week 4 of 8. Started Mon 23 Nov. Ends Sun 17 Jan." An activity's state in a change preview reads "Active → Paused". An overview opened from the Programmes page has Back to programmes (back through history); opened any other way, it has Back to the week | "Running" is also an activity's name, so it read as one. From the overview, the only way back went past the Programmes page to the week. John's feedback on the local stack, 2026-11-18 |
+| K162 | On a phone (K117's rule: a touch screen whose shorter side is under 600px), Edit plan's frame is a 4px line of `edit` along the top of the window only, with no sides or foot: `--edit-frame-sides` is 0 there. The desktop keeps the 8px frame round all four edges. Amends K117 | John, on the local stack on 2026-11-18: "in edit mode on mobile i have a blue border. this is too much ... there is a blue line at the top of the screen only and not a complete blue border" |

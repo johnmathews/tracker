@@ -1420,7 +1420,7 @@ back.
   call `sync.refresh()`, so the week reads the plans the server wrote. Nothing here queues: offline
   (`offline`), the controls are disabled with one line saying why. `src/lib/programmes.ts` holds
   the API types, the wording, the change bodies and `runsFromState`.
-- **The views.** `ProgrammesPage.vue` is `#/programmes`: the Running, Library and Add tabs, and
+- **The views.** `ProgrammesPage.vue` is `#/programmes`: the Started, Library and Add tabs (K161), and
   Preview and start in place in the library list (K147). `ProgrammeOverview.vue` is
   `#/programme/<tracker>`: the plan in `ui/programme-grid/ProgrammeGrid.vue` (K142, K143), the
   Changes tab with Undo, the controls, and Show it in the plan with its bar at the foot (K148).

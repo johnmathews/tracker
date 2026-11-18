@@ -99,7 +99,7 @@ afterEach(() => {
 })
 
 describe('the Programmes page (K147)', () => {
-  it('is a page of its own with no bar, Back to the week, and three tabs opening on Running', async () => {
+  it('is a page of its own with no bar, Back to the week, and three tabs opening on Started', async () => {
     await openPage()
     expect(wrapper.find('[data-slot="bar"]').exists()).toBe(false)
     expect(page().get('h1').text()).toBe('Programmes')
@@ -108,8 +108,8 @@ describe('the Programmes page (K147)', () => {
       page()
         .findAll('[role="tab"]')
         .map((t) => t.text()),
-    ).toEqual(['Running', 'Library', 'Add'])
-    expect(page().get('[role="tab"][aria-selected="true"]').text()).toBe('Running')
+    ).toEqual(['Started', 'Library', 'Add'])
+    expect(page().get('[role="tab"][aria-selected="true"]').text()).toBe('Started')
   })
 
   it('lists each live run as a link to its overview, with its week and state', async () => {
@@ -118,7 +118,7 @@ describe('the Programmes page (K147)', () => {
     expect(runs.map((r) => r.attributes('data-state'))).toEqual(['running', 'paused'])
     expect(runs[0]!.get('a').attributes('href')).toBe('#/programme/t1')
     expect(runs[0]!.text()).toContain('Beginner 5×5')
-    expect(runs[0]!.text()).toContain('Week 4 of 8. Running. Ends Sun 13 Dec.')
+    expect(runs[0]!.text()).toContain('Week 4 of 8. Started Fri 23 Oct. Ends Sun 13 Dec.')
     expect(runs[1]!.text()).toContain('Week 3 of 9. Paused since Mon 7 Dec. A cold.')
   })
 

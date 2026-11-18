@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   backToWeek,
+  cameFromProgrammes,
   cameFromWeek,
   isItemHash,
   itemHref,
   leaveForWeek,
+  markFromProgrammes,
   markFromWeek,
   newItemHref,
   NEW_TRACKER_HREF,
@@ -220,5 +222,16 @@ describe('webHost', () => {
   it('is null for anything that isn’t an http or https address', () => {
     for (const text of ['', 'kettlebell', 'javascript:alert(1)', 'mailto:a@b.c', 'ftp://x.org'])
       expect(webHost(text)).toBeNull()
+  })
+})
+
+describe('whether an overview was opened from the Programmes page in this tab', () => {
+  it('is marked on the overview’s own entry, apart from the week’s mark', () => {
+    history.replaceState({ other: 1 }, '')
+    expect(cameFromProgrammes()).toBe(false)
+    markFromProgrammes()
+    expect(cameFromProgrammes()).toBe(true)
+    expect(cameFromWeek()).toBe(false)
+    expect(history.state).toMatchObject({ other: 1 })
   })
 })

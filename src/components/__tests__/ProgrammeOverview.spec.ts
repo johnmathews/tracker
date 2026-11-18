@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
-import { createPinia, setActivePinia } from 'pinia'
+import { createPinia, getActivePinia, setActivePinia } from 'pinia'
 import App from '@/App.vue'
 import { signedIn } from '@/lib/__tests__/signedIn'
 import { withProgrammes, type Call, type Route } from './programmesApi'
@@ -102,6 +102,24 @@ describe('the programme overview (spec §9.2)', () => {
       'Week 4 of 8. Started Fri 23 Oct, ends Sun 13 Dec.',
     )
     expect(byTestId('programme-meta').get('b').text()).toBe('Week 4 of 8.')
+  })
+
+  it('goes back to Programmes when the Programmes page opened it', async () => {
+    const back = vi.spyOn(history, 'back').mockImplementation(() => {})
+    history.replaceState(null, '', '/#/programmes')
+    const api = signedIn()
+    ;({ calls, routes } = withProgrammes(api, { 'GET /runs/t1': { body: RUN } }))
+    setActivePinia(createPinia())
+    wrapper = mount(App, { global: { plugins: [getActivePinia()!] }, attachTo: document.body })
+    await settle()
+    location.hash = '#/programme/t1'
+    await settle()
+    const link = byTestId('back-to-programmes')
+    expect(link.text()).toBe('Back to programmes')
+    expect(link.attributes('href')).toBe('#/programmes')
+    expect(overview().find('[data-testid="back-to-week"]').exists()).toBe(false)
+    await link.trigger('click')
+    expect(back).toHaveBeenCalledOnce()
   })
 
   it('has Plan and Changes tabs, opening on Plan with the grid from the server', async () => {
