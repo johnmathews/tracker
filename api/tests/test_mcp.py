@@ -1528,7 +1528,7 @@ def test_a_stale_confirm_previews_the_change_again_and_says_so(
     )
     assert (out["preview"], out["stale"]) == (True, True)
     assert out["rev"] != first["rev"]
-    assert out["message"].startswith("The programme changed since that preview, so nothing was")
+    assert out["message"].startswith("That rev doesn't confirm this change: the programme changed")
     assert (
         targets(tool(agent, writer, "week_summary", tracker=tracker, week=NEXT_MONDAY))["squat"]
         == 3
@@ -1538,6 +1538,39 @@ def test_a_stale_confirm_previews_the_change_again_and_says_so(
     )
     assert (out["preview"], out["stale"]) == (False, False)
     assert [e["seq"] for e in out["run"]["log"]] == [2, 1]
+
+
+def test_a_confirm_with_the_runs_rev_or_another_change_is_previewed_again(
+    agent: TestClient, uid: int, writer: str
+) -> None:
+    """get_programme's rev is the log's: it confirms nothing. Nor does a preview's rev confirm
+    any change but the one it previewed (P2)."""
+    tracker = running(agent, writer)["tracker"]["id"]
+    rev = tool(agent, writer, "get_programme", tracker=tracker)["run"]["rev"]
+    out = change(agent, writer, tracker, PAUSE_SQUAT, from_date=NEXT_MONDAY, confirm=True, rev=rev)
+    assert (out["preview"], out["stale"], out["change"]["change"]) == (True, True, PAUSE_SQUAT)
+    assert out["rev"] != rev
+    first = change(agent, writer, tracker, PAUSE_SQUAT, from_date=NEXT_MONDAY)
+    out = change(
+        agent, writer, tracker, LONGER_PLANK, from_date=NEXT_MONDAY, confirm=True, rev=first["rev"]
+    )
+    assert (out["preview"], out["stale"], out["change"]["change"]) == (True, True, LONGER_PLANK)
+    out = change(
+        agent,
+        writer,
+        tracker,
+        PAUSE_SQUAT,
+        from_date=NEXT_MONDAY,
+        reason="Knee.",
+        confirm=True,
+        rev=first["rev"],
+    )
+    assert (out["preview"], out["stale"], out["change"]["reason"]) == (True, True, "Knee.")
+    assert tool(agent, writer, "get_programme", tracker=tracker)["run"]["log"] == []
+    out = change(
+        agent, writer, tracker, PAUSE_SQUAT, from_date=NEXT_MONDAY, confirm=True, rev=first["rev"]
+    )
+    assert (out["preview"], out["stale"]) == (False, False)
 
 
 def test_change_programme_defaults_to_today(agent: TestClient, uid: int, writer: str) -> None:

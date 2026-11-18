@@ -16,7 +16,9 @@ trackers and, per tracker, its plans and log, which take their week from `planne
 account: `session` (who is signed in, and whether the API sends email and answers questions) and
 `sync` (the per-user cache, the outbox of unsent writes, and reads). A sixth, `ask`, holds the Ask
 page's conversation and history (§3), read through `request` and `stream` in `src/lib/api.ts`;
-`src/lib/ask.ts` holds the page's words. Every tracker tracks the same thing, a mark per day
+`src/lib/ask.ts` holds the page's words. A seventh, `programmes`, holds the programme library and
+each programme run the page or the overview has read; `src/lib/programmes.ts` holds its types and
+wording, and `sync` carries the server's `today` and the account's `runs` (§8). Every tracker tracks the same thing, a mark per day
 against a weekly goal, through the pure helpers in `src/lib/tracker.ts`.
 
 **Tracker kinds.** `src/lib/trackerTypes.ts` is the registry of tracker kinds: `strength` (the
@@ -145,9 +147,9 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 │                       plan) for the keyboard; ‹ the week › first, as the page's title (K81),
 │                       by its dates or its number (K131), and "View current week" after the › while
 │                       another week is on screen (K130); then the BarActions Ask (only while the API answers
-│                       questions), Add tracker (in Edit plan only, K124), Settings, Print…,
-│                       Full screen (useFullscreen, where the
-│                       browser has one) and Profile, which opens the profile Menu: Signed in
+│                       questions), Add tracker (in Edit plan only, K124), Settings, Programmes (K160), Print…
+│                       and Full screen (useFullscreen, where the browser has one), both left out
+│                       below 640px wide (K160), and Profile, which opens the profile Menu: Signed in
 │                       as, Profile and Sign out (useSignOut, K106); the week's keys E, Esc,
 │                       F, P, S and A, ← and → (useShortcuts, K91, K109, K133); full width, sized by main.css's --bar-* (K47, K49); on the
 │                       planner's screens out of sight until a long press or the handle opens
@@ -177,8 +179,10 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 │   │                   Remove last, in both modes (K120)
 │   ├── PlanFields.vue  the plan's controls: an exercise's (a mobility item's without Weight), a
 │   │                   cardio item's or a food's, with Times a week
-│   └── RecentWeeks.vue the RecentWeeks card: up to eight weeks, newest first, a met week's count
-│                       in pen
+│   ├── RecentWeeks.vue the RecentWeeks card: up to eight weeks, newest first, a met week's count
+│   │                   in pen
+│   └── ItemProgramme.vue  a programme activity's plan row (§8, K145): the step chart and the
+│                       activity's controls, in place of PlanFields
 ├── NewItemPage.vue     the new item page, at #/new/<tracker> (K104): Back to the week, Cancel and
 │                       the kind's Add ("Add exercise"); "New exercise" and the Name field; then the plan
 │                       (PlanFields), Notes and Details as the type's arrangement shows them;
@@ -188,6 +192,10 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 │                       SegmentedControl of the registry's kinds with the chosen kind's line;
 │                       Starts, "This week, empty."; Add tracker adds it last, from the week on
 │                       screen (K125), and goes back with focus on its Add
+├── ProgrammesPage.vue  the Programmes page, at #/programmes (§8, K147, K161): the Started,
+│                       Library and Add tabs; Preview and start opens in place in the library
+├── ProgrammeOverview.vue  a run's overview, at #/programme/<tracker> (§8, K142, K148): the
+│                       plan in ProgrammeGrid, the Changes tab with Undo and the ChangeSheet
 ├── SyncStatus.vue      loading, offline and conflict Banners above the planner
 ├── EmailStatus.vue     "Confirm your email." Banner, with Send it again, until it is confirmed
 ├── ImportPrompt.vue    this browser's log from before accounts, offered once (§7)
@@ -634,7 +642,7 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
   wanted (K24, K25; §6.6). Edit plan has a sticky navbar (K27) and is one tracker per screen under
   it too (K99), full width at the week's sizes with rows a fixed 100u (K54). Settings has no navbar (K52) and is full
   width in rows like the week (K51), and an item's page follows it, rows and all (K64, K65). The navbar keeps the week controls with View current week after them (K130), Ask,
-  Add tracker (Edit plan only, K124), Settings, Print…, Full screen and Profile (K106).
+  Add tracker (Edit plan only, K124), Settings, Programmes (K160), Print…, Full screen and Profile (K106). Below 640px wide Print and Full screen are left out (K160).
 - **Light and dark themes.** The handoff is dark-only. Settings offers System (the default, which
   follows `prefers-color-scheme` live), Light and Dark. `App.vue` toggles a `dark` class on
   `<html>`; `public/theme-init.js` applies the saved choice before first paint so a dark preference
@@ -783,7 +791,7 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
   `goals`, a tab sends it only once it knows it (from the server, its cache or the person):
   `PortableSettings.dailyGoal` is optional, absent reads as on, and the API keeps the saved value
   when it is absent, so a cache from before it can't switch it back on. The sections have no weekly figure (K31), Settings no totals switch (K32), and the grids no Week
-  column (K33). The Header has a Full screen button where the browser supports one (K34).
+  column (K33). The Header has a Full screen button where the browser supports one and the window is at least 640px wide (K34, K160).
 - **Print is the light theme on white paper, from either theme** (§6.7).
 - **Narrow screens.** Folded (held upright under 1000px wide, or under 760px wide), the navbar
   puts the week across its first row (by CSS order), "View current week" after it or, without room, under
@@ -815,7 +823,7 @@ have no `<style>` blocks. Everything global is in `src/styles/main.css`.
   `dark:` variants. The roles are `canvas`, `panel`, `tile`, `line`, `control-border`, `ink`,
   `on-ink`, `ink-secondary`, `error-ink`, `focus`, `pen`, `pen-partial`, `pen-missed`,
   `caution-ink`, `edit` and `scrim`. `edit` draws only Edit plan's frame (K112): App.vue's
-  `data-slot="edit-frame"`, fixed round the window, `--edit-frame` wide (8px, 4px on a phone, K117).
+  `data-slot="edit-frame"`, fixed round the window, `--edit-frame` wide (8px; on a phone a 4px line along the top only, K117, K162).
 - **No palette.** `--color-*: initial` switches Tailwind's default colours off, keeping only
   `transparent` and `current`, so a palette class such as `bg-red-500` or `text-white` generates
   nothing. Every colour on screen comes from a role.
@@ -869,20 +877,21 @@ an `index.ts`. They are shadcn-vue (K1): owned source on Reka UI, added with the
 to the tokens and the cards. `cn` (`src/lib/utils.ts`) merges a consumer's classes over a
 component's own.
 
-| Group    | Primitives                                                                                                                                                                    |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Basics   | Button (primary, secondary and quiet, 44px tall, `sm` 36px from 640px up), IconButton (44px, a required `label`), TextLink, Tabs with TabsList, TabsTrigger and TabsContent (K119), BrandMark, BarAction (the Header's actions, K47) |
-| Forms    | TextField, TextArea, SegmentedControl, Switch, Stepper, RadioCard                                                                                                             |
-| Overlays | Dialog, ConfirmDialog with ConfirmHost, Popover, Menu with MenuItem (K106)                                                                                                    |
-| Planner  | DayMark, Chip, SectionHeader                                                                                                                                                  |
-| Feedback | InlineMessage, Banner                                                                                                                                                         |
-| Ask      | Transcript (the turns in rows, answers through `answer()` in `src/lib/markdown.ts`), AnswerProgress (main.css's `pen-write` keyframe), QuotaChip, SidePanel (S1), HistoryList |
+| Group      | Primitives                                                                                                                                                                                                                           |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Basics     | Button (primary, secondary and quiet, 44px tall, `sm` 36px from 640px up), IconButton (44px, a required `label`), TextLink, Tabs with TabsList, TabsTrigger and TabsContent (K119), BrandMark, BarAction (the Header's actions, K47) |
+| Forms      | TextField, TextArea, SegmentedControl, Switch, Stepper, RadioCard                                                                                                                                                                    |
+| Overlays   | Dialog, ConfirmDialog with ConfirmHost, Popover, Menu with MenuItem (K106)                                                                                                                                                           |
+| Planner    | DayMark, Chip, SectionHeader                                                                                                                                                                                                         |
+| Feedback   | InlineMessage, Banner                                                                                                                                                                                                                |
+| Programmes | ProgrammeGrid (`programme-grid`, the plan's weeks, K142), ChangeSheet (`change-sheet`, the two-step change, K144), ProgrammeChart (`programme-chart`, an activity's step chart, K145)                                                |
+| Ask        | Transcript (the turns in rows, answers through `answer()` in `src/lib/markdown.ts`), AnswerProgress (main.css's `pen-write` keyframe), QuotaChip, SidePanel (S1), HistoryList                                                        |
 
 The other cards are composed in the screens: Header in `AppNavbar.vue`, Panel in `AuthCard.vue`
 and `ImportPrompt.vue`, WeekGrid in `TrackerGrid.vue` and `TrackerRow.vue`, PlannerScreen in
 `TrackerSection.vue` (the class lists in `src/lib/screens.ts`), NewTrackerPage in
 `NewTrackerPage.vue`, SettingsPage in
-`SettingsPage.vue`, ConnectionsSection in `ConnectionsSection.vue`, ConnectPage in `ConnectPage.vue`. Icons are `@lucide/vue` at a 1.5px stroke, `aria-hidden` beside words. A
+`SettingsPage.vue`, ProgrammesPage in `ProgrammesPage.vue`, ConnectionsSection in `ConnectionsSection.vue`, ConnectPage in `ConnectPage.vue`. Icons are `@lucide/vue` at a 1.5px stroke, `aria-hidden` beside words. A
 primitive's colour transitions last 120ms at most, stop under `prefers-reduced-motion`, and name
 the properties they animate, so the focus ring never fades in.
 
@@ -1341,8 +1350,11 @@ MCP's item tools refuse one.
   calendar week and later ones only. Past days are sealed (below), and the replay reads a sealed day
   from the record, never from its own output. A stored run loads without the week-by-week range
   check (K158), so an engine change can't stop it loading.
-- **P2, no surprises.** A change is a preview until it comes back with the preview's `rev`, a hash
-  of the log. A different `rev` means the log moved, and the answer is a fresh preview.
+- **P2, no surprises.** A change is a preview until it comes back with the preview's `rev`,
+  `confirm_token`: a hash of the log's revision and of the change itself (its body with
+  `dropHandEdits`, its from day and its reason). A different `rev` means the log moved or the
+  change isn't the one previewed, and the answer is a fresh preview of the change sent. The run's
+  own `rev`, the log's alone, never confirms a change.
 - **P3, no jumps.** A value change adds a segment to the field's series at the activity week in
   force (`Series.origin`), so the weeks after continue from the value shown (K150). Increases keep
   the activity's own weeks (K149).
@@ -1382,7 +1394,10 @@ than its own clock.
 
 **The evidence.** Every mark on a programme tracker, a cleared day included, also goes into
 `mark_events`: the day, the item, the mark, when it was entered, its source and whether it was
-late. The weekly bitmasks in `ticks` stay the fast path every reader uses.
+late. The weekly bitmasks in `ticks` stay the fast path every reader uses. The run's tables count
+towards the quota (`data.usage`): its document and parameters, each log entry, each sealed day and
+`RUN_ROW_BYTES` a row, mark events included. Only a start, a change and a library save check it,
+so a full account still seals and takes marks (P1).
 
 **Status.** A run reads as `upcoming` before its start, `running`, `paused` while the whole
 programme is paused, or `ended` (K157). `programme_runs.status` stores it as at the last write or

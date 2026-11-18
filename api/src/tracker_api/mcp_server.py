@@ -364,16 +364,18 @@ class ProgrammeStarted(TypedDict):
 
 
 class ProgrammeChange(TypedDict):
-    """A preview (`preview` true), or the change applied. `stale` says a confirm came with an
-    old rev, so this is a fresh preview and nothing changed. `message` says what to do next."""
+    """A preview (`preview` true), or the change applied. `stale` says a confirm came with a rev
+    that isn't this change's preview on the run as it is, so this is a fresh preview of the change
+    sent and nothing changed. `message` says what to do next."""
 
     preview: bool
     stale: bool
     message: str
     #: The log entry: a preview's as it would be, or the applied one.
     change: dict[str, Any]
-    #: A preview's: the rev to confirm with, each cell before and after, the hand-edits that
-    #: block it, the activities that end short, and the change it undoes or item it deletes.
+    #: A preview's: the rev that confirms this change alone, each cell before and after, the
+    #: hand-edits that block it, the activities that end short, and the change it undoes or item
+    #: it deletes.
     rev: NotRequired[str]
     cells: NotRequired[list[dict[str, Any]]]
     blocking: NotRequired[list[dict[str, Any]]]
@@ -1275,8 +1277,10 @@ def _add_tools(server: MCPServer, config: Config) -> None:
         "that keep their value (send their seqs in `dropHandEdits` to drop them), and "
         "`endsShort` the activities that end before their last week. Show the person the "
         "preview; nothing changes until the same call comes back with `confirm` true and the "
-        "preview's `rev`. If the programme changed since, the result is a fresh preview with "
-        "`stale` true, and nothing changed. Problems are listed one a line, each with its "
+        "preview's `rev`, which confirms that change, date and reason alone (the run's own `rev` "
+        "from get_programme confirms nothing). If the programme changed since, or the confirm "
+        "differs, the result is a fresh preview with `stale` true, and nothing changed. "
+        "Problems are listed one a line, each with its "
         "path. Needs a write token.",
         annotations=SETTING,
     )
@@ -1343,9 +1347,10 @@ def _add_tools(server: MCPServer, config: Config) -> None:
                 return _previewed(
                     e.preview,
                     stale=True,
-                    message="The programme changed since that preview, so nothing was changed. "
-                    "This is the same change previewed again on the programme as it is now: "
-                    "show it, then confirm with this rev.",
+                    message="That rev doesn't confirm this change: the programme changed since "
+                    "its preview, or the change, its date or its reason isn't the one previewed. "
+                    "Nothing was changed. This is the change sent, previewed on the programme as "
+                    "it is now: show it, then confirm with this rev.",
                 )
             except data.QuotaExceeded:
                 raise ToolError(QUOTA.format("changed")) from None

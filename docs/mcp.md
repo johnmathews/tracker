@@ -117,8 +117,11 @@ tracker**, whose weekly plans the server writes from the programme.
   `{preview: true, stale: false, message, rev, change, cells, blocking, endsShort, undoes,
   deletes}`, and nothing changes. Show the person the preview, then send the same call with
   `confirm: true` and the preview's `rev`. That returns `{preview: false, stale: false, message,
-  change, run}`, with `message` "Changed from 2026-11-18.". If the run changed since the preview,
-  the result is a fresh preview with `stale: true`, and nothing changed.
+  change, run}`, with `message` "Changed from 2026-11-18.". The preview's `rev` confirms that
+  change alone: it covers the run's log, the change body (`dropHandEdits` included), `from_date`
+  and `reason`. If the run changed since the preview, or the confirm sends another change, day or
+  reason, or the run's own `rev` from `get_programme`, the result is a fresh preview of the change
+  sent with `stale: true`, and nothing changed.
 
 **Refusals** come back as tool errors whose first word names the argument:
 
@@ -154,7 +157,7 @@ tracker**, whose weekly plans the server writes from the programme.
   the app's name for an OAuth connection ("Claude"). The run's log keeps it with each change.
 - The read tools (`week_summary`, `weeks`, `item_history`, `goals`, `consistency`) read a programme
   tracker as any other, since its weeks are ordinary plans.
-- **End programme has no tool yet** (follow-up F1). Ask the person to end a run in the app.
+- **End programme has no tool yet** (issue #83). Ask the person to end a run in the app.
 
 ## 2. Two ways to connect
 

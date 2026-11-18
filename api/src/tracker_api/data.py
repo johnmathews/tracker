@@ -93,6 +93,9 @@ TICK_BYTES = 64
 #: What an Ask conversation or turn row counts besides its text: its key and times, as for a tick.
 CONVERSATION_BYTES = 64
 TURN_BYTES = 64
+#: What a programme run's row, a log entry, a sealed day or a mark event counts besides its JSON
+#: and text: its key, dates, times and flags, as for a tick.
+RUN_ROW_BYTES = 64
 
 
 class QuotaExceeded(Exception):
@@ -155,8 +158,9 @@ class RunUnreadable(Exception):
 
 
 class StaleRun(Exception):
-    """A confirmed change whose `rev` isn't the log's now; nothing was changed. `preview` is the
-    same change previewed against the log as it is (§7.3)."""
+    """A confirmed change whose `rev` isn't its preview's token on the log as it is now: the log
+    changed since, or the change, its from day or its reason isn't the one previewed. Nothing was
+    changed. `preview` is the change sent, previewed against the log as it is (§7.3)."""
 
     def __init__(self, preview: dict[str, Any]) -> None:
         super().__init__("stale")
@@ -189,8 +193,13 @@ class TrackerRun:
 
 def usage(conn: sqlite3.Connection, user_id: int) -> int:
     """The bytes of the user's plans', item details' and library programmes' JSON, plus
-    TICK_BYTES per tick row; and for Ask's history the bytes of each title, question and answer,
-    plus CONVERSATION_BYTES and TURN_BYTES for each row."""
+    TICK_BYTES per tick row; for the programme runs, the bytes of each run's document and
+    parameters, each log entry's change and reason, and each sealed day's JSON, plus RUN_ROW_BYTES
+    for each of those rows and each mark event; and for Ask's history the bytes of each title,
+    question and answer, plus CONVERSATION_BYTES and TURN_BYTES for each row.
+
+    The runs' evidence counts like any data, so a full account refuses a start, a change or a
+    library save; sealing and marks never check it (P1)."""
     stored = conn.execute(
         "SELECT"
         " (SELECT coalesce(sum(length(CAST(items_json AS BLOB))), 0)"
@@ -200,6 +209,17 @@ def usage(conn: sqlite3.Connection, user_id: int) -> int:
         " + (SELECT coalesce(sum(length(CAST(doc_json AS BLOB))), 0)"
         "  FROM programmes WHERE user_id = :user)",
         {"user": user_id},
+    ).fetchone()[0]
+    runs = conn.execute(
+        "SELECT"
+        " (SELECT coalesce(sum(length(CAST(doc_json AS BLOB)) + length(CAST(params_json AS BLOB))"
+        "  + :row), 0) FROM programme_runs WHERE user_id = :user)"
+        " + (SELECT coalesce(sum(length(CAST(change_json AS BLOB)) + length(CAST(reason AS BLOB))"
+        "  + :row), 0) FROM run_changes WHERE user_id = :user)"
+        " + (SELECT coalesce(sum(length(CAST(items_json AS BLOB)) + :row), 0)"
+        "  FROM programme_days WHERE user_id = :user)"
+        " + (SELECT :row * count(*) FROM mark_events WHERE user_id = :user)",
+        {"user": user_id, "row": RUN_ROW_BYTES},
     ).fetchone()[0]
     ticks = conn.execute("SELECT count(*) FROM ticks WHERE user_id = ?", (user_id,)).fetchone()[0]
     titles, conversations = conn.execute(
@@ -214,6 +234,7 @@ def usage(conn: sqlite3.Connection, user_id: int) -> int:
     ).fetchone()
     return (
         int(stored)
+        + int(runs)
         + TICK_BYTES * int(ticks)
         + int(titles)
         + CONVERSATION_BYTES * int(conversations)
@@ -1961,11 +1982,12 @@ def _preview_json(
     conn: sqlite3.Connection, user_id: int, loaded: _Loaded, p: Preview, when: When
 ) -> dict[str, Any]:
     """A change's preview (§7.3): each cell it changes, before and after; the hand-edits that
-    block it; what ends short; the log's rev to confirm with; and the grid as it would be."""
+    block it; what ends short; the token to confirm it with (`rev`, `confirm_token`: the log's rev
+    and this change); and the grid as it would be."""
     log = load_log(conn, user_id, loaded.tracker_id)
     return {
         "preview": True,
-        "rev": p.rev,
+        "rev": p.token,
         "change": {
             "seq": p.change.seq,
             "from": p.change.from_date.isoformat(),
@@ -2024,13 +2046,15 @@ def change_run(
     (`programme_replay`'s format), `from_day` its first day (today or later), `source` who made
     it: `app`, or an agent's connection.
 
-    A preview writes nothing beyond sealing. An apply needs the preview's `rev`: it appends the
+    A preview writes nothing beyond sealing. An apply needs the preview's `rev`, a token for the
+    log as it was and for this change, its from day and its reason (`confirm_token`): it appends the
     change to the log, marks an undone change, deletes an activity ended before it had a day,
     writes an added activity's details, rewrites today's week and every later one, and moves the
     tracker's end. None when the tracker has no run.
 
     Raises ProgrammeInvalid with every problem (the change's own at `change.…`), RunEnded after
-    End programme, StaleRun for a `rev` that isn't the log's, or QuotaExceeded."""
+    End programme, StaleRun for a `rev` that isn't this change's token on the log as it is (the
+    run's own rev never is), or QuotaExceeded."""
     errors: list[ProgrammeError] = []
     on = _parse_day(from_day, "from", errors)
     why = _parse_reason(reason, errors)
@@ -2053,7 +2077,7 @@ def change_run(
             raise RunEnded
         loaded = _seal(conn, user_id, loaded, when)
         p = _preview(loaded, body, on, why, when)
-        if rev != p.rev:
+        if rev != p.token:
             raise StaleRun(_preview_json(conn, user_id, loaded, p, when))
         before = usage(conn, user_id)
         new = p.change

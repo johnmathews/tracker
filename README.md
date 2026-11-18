@@ -36,6 +36,10 @@
   one. Each food has a weekly goal, set on its page. Defaults are Vegetables (7), Fruit (5),
   Fish (2) and Nuts (3). A day whose marked foods reach **Foods a day** (default two) turns green,
   as an exercise day does.
+- **Programmes.** A programme is a multi-week plan, written in a formal format an agent can push,
+  and kept in a library. Start one and it becomes a tracker of its own. Change it on any day,
+  with a preview first; the days before yesterday stay locked, so the record of the past never
+  moves. See [docs/programmes.md](docs/programmes.md).
 - **Normal mode and config mode.** The app opens in normal mode, where you only mark cells. The
   week stays fixed at the top centre as the page's title, and the trackers move under it,
   one screen at a time, each a step smaller under the week.
@@ -172,11 +176,11 @@ uv run tracker-admin seed-demo                       # demo@example.com, passwor
 ```
 
 It runs only against a local stack, and never overwrites a mark or a note. It also adds the
-programme Beginner 5×5 to the library and a running programme from it, started three weeks back,
-so the Programmes page and the week show one. When it starts the run, it prints the run's
-overview address, `#/programme/beginner-5x5-run` ([docs/programmes.md](docs/programmes.md)). The database lives in
-`api/.data` (git-ignored), so accounts and data survive restarts, rebuilds and branch switches;
-deleting that folder, or `git clean -x`, starts over.
+programme Beginner 5×5 to the library, and a running programme from it, started three weeks back.
+The Programmes page and the week then show one. When it starts the run, it prints the run's
+overview address, `#/programme/beginner-5x5-run` ([docs/programmes.md](docs/programmes.md)).
+The database lives in `api/.data` (git-ignored). Accounts and data survive restarts, rebuilds and
+branch switches. Deleting that folder, or `git clean -x`, starts over.
 
 Vite forwards `/api` and the three OAuth discovery paths ([docs/api.md](docs/api.md) §3.3) to `http://127.0.0.1:8000` (set `API_URL` to change it). Open the invite link
 from the dev server's own address: the API checks the `Origin` of every write, so
@@ -279,7 +283,7 @@ end to end.
 | [docs/decisions.md](docs/decisions.md)                                                 | Why accounts, sync and the design system are built the way they are                                                          |
 | [docs/specs/2026-10-24-brand-design.md](docs/specs/2026-10-24-brand-design.md)         | The approved brand spec (Notebook): intent, rules and calls K1–K8                                                            |
 | [docs/specs/2026-11-14-account-trackers.md](docs/specs/2026-11-14-account-trackers.md) | The account trackers spec: kinds, ids, the weeks a tracker shows in, state and export v6 (K122–K126)                         |
-| [docs/specs/2026-11-17-programmes.md](docs/specs/2026-11-17-programmes.md)             | The programmes spec: the format, runs, changes on any day, the lock and the views (K142–K159)                                |
+| [docs/specs/2026-11-17-programmes.md](docs/specs/2026-11-17-programmes.md)             | The programmes spec: the format, runs, changes on any day, the lock and the views (K142–K162)                                |
 | [design_handoff_exercise_planner/](design_handoff_exercise_planner/README.md)          | The original design spec and HTML prototype                                                                                  |
 
 Development history lives in [`journal/`](journal/).

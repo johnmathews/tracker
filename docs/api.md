@@ -488,10 +488,12 @@ for each conversation and each turn. A plan or details write, a tick that would 
 import that would take the account over it gets 413 `quota` and changes nothing. An Ask turn
 that would is not saved, and its answer says so (§3.2). Writes that keep usage level or shrink
 it always succeed, so a full account can still change existing ticks and trim its plans and
-details. Settings do not count and are never refused. A run's copy of its document, its log,
-its sealed days and its mark events don't count either, and sealing and a mark's event never
-check the quota, so the record is never refused. A programme start or change counts the plans it
-writes, and one that would take the account over gets 413 `quota` and changes nothing. The quota measures what the account holds, not the bytes on disk, which include keys and
+details. Settings do not count and are never refused. A programme run counts too: the bytes of
+its copy of the document and its parameters, each log entry's change and reason, and each sealed
+day's JSON, plus 64 for each of those rows and for each mark event. A programme start or change
+that would take the account over gets 413 `quota` and changes nothing. Sealing and a mark's
+event never check the quota, so the record is never refused: a full account still seals its days
+and takes marks on a week whose tick row exists. The quota measures what the account holds, not the bytes on disk, which include keys and
 indexes. The client drops a refused write with a notice that the account is full (`architecture.md`
 §7), and an import says the same.
 
@@ -763,7 +765,7 @@ follows.
 The run objects they return keep REST's camelCase (§3.4), and `get_programme`'s, `start_programme`'s
 and `change_programme`'s carry the grid's weeks from this one on. A preview from
 `change_programme` leaves out the grid, since `cells` says what changes. End programme has no tool
-yet (follow-up F1): the person ends a run in the app.
+yet (issue #83): the person ends a run in the app.
 
 ### 3.2 Ask
 
@@ -1055,7 +1057,7 @@ that isn't a programme tracker on the run routes. JSON keys are camelCase, as el
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | 400 `invalid`          | A document, start, change or end with problems: `{"error": "invalid", "errors": [{path, message}]}`, every problem at once, in order |
 | 404 `not-found`        | No such programme, or no such programme tracker                                                                                        |
-| 409 `conflict`         | A stale `rev`: the library's `{programme, rev}` with the server's copy; a change's `{rev, preview}` with a fresh preview               |
+| 409 `conflict`         | A stale `rev`: the library's `{programme, rev}` with the server's copy; a change's `{rev, preview}`, the change sent previewed again   |
 | 409 `too-many`         | An add past 100 library programmes, or a start past 100 trackers                                                                       |
 | 409 `ended`            | A change to a run End programme ended, or a second end                                                                                 |
 | 409 `programme-tracker` | A generic plan write (`PUT /plans`) to a programme tracker                                                                            |
@@ -1118,7 +1120,7 @@ endsShort, grid}`.
 | `status`       | `upcoming`, `running`, `paused` or `ended`                                                                                          |
 | `today`        | The date in `TIMEZONE`                                                                                                              |
 | `week`         | Today's programme week, null unless running or paused; `weeks` is the programme's                                                   |
-| `rev`          | The log's revision: the first 16 hex characters of a SHA-256 over the log                                                           |
+| `rev`          | The log's revision: 16 hex characters of a SHA-256 over the log. It shows the run changed, and never confirms a change              |
 | `openPause`    | `{since, programmeWeek, reason}` while the programme is paused with no end date, else null                                          |
 | `endsShort`    | Each activity that ends before its last week: `{key, name, week, of, message}`                                                      |
 | `ended`        | `{from, reason, seq}` after End programme, else null                                                                                |
@@ -1150,7 +1152,10 @@ A day's `status` is `before-start`, `running` or `paused`, and an activity's `st
 left out.
 
 - **A preview** writes nothing but the sealing, and returns `{preview: true, rev, change, cells,
-  blocking, endsShort, undoes, deletes, grid}`. `change` is the log entry it would add
+  blocking, endsShort, undoes, deletes, grid}`. Its `rev` is the token that confirms this change
+  and no other: the first 16 hex characters of a SHA-256 over the log's revision and the change as
+  sent, its `change` body (`dropHandEdits` included), `from` and `reason`, written as sorted-key
+  compact JSON. It isn't the run's `rev`. `change` is the log entry it would add
   (`{seq, from, change, reason}`). Each of `cells` is `{monday, key, field, before, after, starts,
   programmeWeek}`; `field` is null for a change of state, such as running to paused. Each of
   `blocking` is a hand-edit that keeps its value, `{change, key, field, programmeWeek, value,
@@ -1161,9 +1166,10 @@ left out.
   `{preview: false, change, run}`: the new log entry and the run. It appends the change, marks an
   undone change's `undone_by`, deletes an activity ended before it had a day (and its details),
   gives an added activity's notes and link to its item, rewrites today's calendar week and every
-  later one from the replay, and moves the tracker's `endWeek` to the run's end. A stale `rev`
-  gets 409 `{"error": "conflict", "rev": r, "preview": p}`, `p` being the same change previewed
-  on the log as it is now.
+  later one from the replay, and moves the tracker's `endWeek` to the run's end. Any other `rev`
+  gets 409 `{"error": "conflict", "rev": r, "preview": p}`: the log changed since the preview,
+  the change, `from` or `reason` isn't the one previewed, or the `rev` is the run's own. `p` is
+  the change as sent, previewed on the log as it is now, and `r` its token.
 
 Problems get 400 `invalid`: the change's own at `change.…` (`change.activity`: "deadlift is
 already paused on Wed 7 Oct."), a from day before today at `from` ("a change starts today or
@@ -1571,7 +1577,29 @@ Tests sit in `api/tests/`:
   both).
 - `test_seed.py`: `seed-demo` only on a local stack, a confirmed account, three weeks of every mark
   in each tracker, details for three items, an account's own marks and details kept, a second run
-  adding nothing, Cardio added to an account seeded before it, and what the CLI prints.
+  adding nothing, Cardio added to an account seeded before it, and what the CLI prints. For
+  programmes: the library programme and a run started weeks back, a second run adding no run, an
+  account from before it getting both, a deleted library programme put back without a second run,
+  and the CLI printing the run's overview address.
+- `test_programme.py`: the programme format: parsing and validation against the fixtures in
+  `fixtures/programmes/` (every error with its path), the committed JSON Schema, the parameters,
+  and the expansion of values: rounding, `add` and `rate` steps, the cap, scales, overrides, and
+  the golden weeks worked by hand.
+- `test_programme_replay.py`: the change log and its replay: the mockup run week by week, each
+  change type and its from-day rule, pauses, resumes and going to a week, activities added and
+  ended, hand-edits, undo, sealed days, the change checks and the preview, the revision, and the
+  week's items.
+- `test_programmes_api.py`: the library over REST: the public schema, the session and Origin
+  checks, list, add, read, replace with `rev` (a stale one gets 409 with the server's copy),
+  delete and validate (every error, nothing stored), another account's programme as 404, and the
+  count, size and quota caps.
+- `test_runs_api.py`: runs over REST: start and its preview, the run's own copy of the programme,
+  the grid, change previews and applies with `rev` (only the change, from day and reason
+  previewed, never with the run's own `rev`), what a change rewrites in the plans, pauses, skips
+  and undo, the run's tables in the quota (a full account refusing a change but taking marks and
+  sealing), the lock on past days and sealing, a stored run loading after an engine change
+  and an unreadable one leaving the rest answering, End programme, and export and import of the
+  library and the runs.
 - `test_ask.py`: Ask with no network. An `httpx2.MockTransport` behind the SDK replays Messages
   API event streams, built in the documented wire format: a plain answer, a tool round, every
   tool, a refusal, `max_tokens`, the last round, 529, 429, 500, a dropped connection, a timeout,
@@ -1594,7 +1622,9 @@ Tests sit in `api/tests/`:
   and 11 holding text only and going with their user, step 14 keeping every plan and tick and
   taking a cardio row, step 16 giving each user the first three trackers with their targets,
   moving the arrangement's key, passing over what it can't read, the trigger for new users, and
-  `REVERT_TRACKERS` giving back version 15), configuration from the environment (`TIMEZONE`, and the
+  `REVERT_TRACKERS` giving back version 15, and step 18's five programme tables: added empty to
+  a dirty version 17 database with every row kept, rerun from a partial state, the spec's columns,
+  the checks on a run's rows, and a run's rows going with their user), configuration from the environment (`TIMEZONE`, and the
   week turning over at local midnight), daily copies, `tracker-admin`.
 - `test_mcp.py`: the MCP endpoint through `TestClient`: `initialize`, `tools/list` and `whoami`
   with a token, on both protocol kinds, and each refusal (no, bad, revoked or disabled token; a
@@ -1606,7 +1636,13 @@ Tests sit in `api/tests/`:
   account's trackers: the instructions, `list_trackers`, `add_item` and `mark_day` on a new
   tracker by id and by name, `add_item` on a mobility tracker (a hold, reps, `weight_kg` and
   `distance_km` refused), an ended tracker absent from its end week on, `section` as an alias,
-  and goals and daily targets per tracker.
+  and goals and daily targets per tracker. For programmes: an agent saving, starting and changing
+  one through MCP alone, `programme_format`, `save_programme` (the document as JSON text, replace
+  with `rev`, the library and size caps), `list_programmes`, `get_programme` (an unreadable run a
+  plain refusal while the rest answer), `start_programme` (every problem listed, a date,
+  parameters and a name, the tracker cap), `change_programme` (today by default, an ordinary or
+  ended tracker refused), the item tools refusing a programme tracker, and `mark_day` following
+  the lock.
 - `test_oauth.py`, `test_oauth_api.py`, `test_tokens_api.py`: OAuth's storage and rules (clients and
   redirects, codes, rotation and its grace, reuse, expiry, the caps, sweeping, ending credentials
   together), then its routes (discovery, authorize and each of its errors, the consent calls, the

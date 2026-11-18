@@ -363,11 +363,16 @@ Every change is sent first as a preview, which writes nothing. The preview gives
   differs and its programme week;
 - `blocking`: the hand-edits that keep their value;
 - `endsShort`: each activity that ends before its last week;
-- `rev`: the log's revision, the first 16 hex characters of a SHA-256 over the log.
+- `rev`: the token that confirms this change. It is the first 16 hex characters of a SHA-256 over
+  the log's revision and the change as sent: its body (`dropHandEdits` included), its from day and
+  its reason, written as sorted-key compact JSON.
 
 Nothing changes until the same change comes back with `preview: false` (REST) or `confirm: true`
-(MCP) and the preview's `rev`. A different `rev` means the log changed since: the server changes
-nothing and answers with the same change previewed again.
+(MCP) and the preview's `rev`. A different `rev` means the log changed since, or the change, its
+from day or its reason isn't the one previewed. The server then changes nothing and answers with
+the change it was sent, previewed on the log as it is now. The run's own `rev` (`GET
+/api/runs/{tracker}`, `get_programme`) is the log's revision alone: it shows that the run changed,
+and it never confirms a change.
 
 ## 9. Locked days and late marks
 
@@ -410,7 +415,7 @@ six tools:
 
 `list_programmes` lists the library and every run, and `get_programme` reads one library
 programme or one run with its clock, its log and its weeks from this one on. End programme has no
-tool yet: the person ends a run in the app (follow-up F1).
+tool yet: the person ends a run in the app (issue #83).
 
 ```text
 programme_format()

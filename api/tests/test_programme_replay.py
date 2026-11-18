@@ -6,6 +6,7 @@ week's values, the bench's split week, the deadlift that ends short and the barb
 
 import json
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -22,6 +23,7 @@ from tracker_api.programme_replay import (
     Replay,
     Run,
     check_change,
+    confirm_token,
     day_from_json,
     day_to_json,
     preview_change,
@@ -1056,6 +1058,16 @@ CHECKS: list[tuple[str, object, str, list[tuple[str, str]]]] = [
         [("dropHandEdits[0]", "change 2 isn't a hand-edit that still applies.")],
     ),
     (
+        "drop-not-a-number",
+        ROW | {"value": 45, "dropHandEdits": [[1], {"seq": 1}, True]},
+        "2026-12-21",
+        [
+            ("dropHandEdits[0]", "give a hand-edit by its change number."),
+            ("dropHandEdits[1]", "give a hand-edit by its change number."),
+            ("dropHandEdits[2]", "give a hand-edit by its change number."),
+        ],
+    ),
+    (
         "drop-on-a-pause",
         {"type": "pause-programme", "dropHandEdits": [3]},
         "2026-12-21",
@@ -1215,6 +1227,46 @@ def test_the_revision_changes_with_the_log_and_only_with_it() -> None:
         ),
     ]
     assert rev_of(edited) != rev_of(log)
+
+
+def test_the_confirm_token_covers_the_log_and_the_change() -> None:
+    """A preview's token is the log's rev and exactly what the confirm appends: its body
+    (dropHandEdits included), from day and reason; never seq or made_at."""
+    log = mockup_log()
+    base = Change(
+        seq=5,
+        from_date=d("2026-12-21"),
+        made_at=datetime(2026, 12, 16, 12, 0),
+        body=ROW | {"value": 45},
+        reason="Easy",
+    )
+    token = confirm_token(rev_of(log), base)
+    assert len(token) == 16
+    assert token != rev_of(log)
+    # The same change made later, or with its keys in another order, has the same token.
+    later = replace(base, made_at=datetime(2026, 12, 16, 13, 0), seq=6)
+    assert confirm_token(rev_of(log), later) == token
+    reordered = replace(base, body=dict(reversed(list(base.body.items()))))
+    assert confirm_token(rev_of(log), reordered) == token
+    for other in (
+        replace(base, body=ROW | {"value": 50}),
+        replace(base, body=ROW | {"value": 45, "dropHandEdits": [2]}),
+        replace(base, from_date=d("2026-12-22")),
+        replace(base, reason=None),
+        replace(base, reason="Hard"),
+    ):
+        assert confirm_token(rev_of(log), other) != token
+    assert confirm_token(rev_of(log[:3]), base) != token
+    preview = preview_change(
+        mockup_run(),
+        log,
+        base.body,
+        from_date=base.from_date,
+        today=TODAY,
+        made_at=base.made_at,
+        reason="Easy",
+    )
+    assert (preview.rev, preview.token) == (rev_of(log), token)
 
 
 # ---- Plan items for W4 ----

@@ -70,8 +70,8 @@ up to the run's last week, and `when_resumed`, the weeks that follow without dat
 target and values, §6.2), and `day_to_json`/`day_from_json` store a day for sealing.
 
 `preview_change` replays the log with and without one change: the cells it changes, the
-hand-edits that block it, the activities that end short, and `rev_of(log)`, the token a confirm
-must send back (§7.3).
+hand-edits that block it, the activities that end short, the log's `rev_of(log)`, and
+`confirm_token`, which covers that rev and the change itself: a confirm must send it back (§7.3).
 """
 
 import copy
@@ -789,7 +789,27 @@ def rev_of(changes: Sequence[Change]) -> str:
         [c.seq, c.from_date.isoformat(), c.made_at.isoformat(), c.body, c.reason]
         for c in sorted(changes, key=lambda c: c.seq)
     ]
-    text = json.dumps(rows, sort_keys=True, ensure_ascii=False, separators=(",", ":"), default=str)
+    return _hash(rows)
+
+
+def confirm_token(rev: str, change: Change) -> str:
+    """The token a preview gives and its confirm sends back (§7.3, P2): a hash of the log's `rev`
+    and of exactly what the confirm appends, the change's body (`dropHandEdits` included), its
+    from day and its reason. The log's rev alone, another change, or the log changed since gives
+    another token. `seq` follows from the log and `made_at` from the clock, so neither is in it."""
+    return _hash(
+        {
+            "rev": rev,
+            "change": change.body,
+            "from": change.from_date.isoformat(),
+            "reason": change.reason,
+        }
+    )
+
+
+def _hash(value: object) -> str:
+    """The first 16 hex digits of the SHA-256 of `value` as sorted-key compact JSON."""
+    text = json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"), default=str)
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
@@ -1106,7 +1126,10 @@ class _Check:
             return
         live = {h.seq for h in current.hand_edits if h.dropped_on is None}
         for i, seq in enumerate(drops):
-            if seq not in live or type(seq) is not int:
+            # The type first: a list or an object can't be looked up in a set.
+            if type(seq) is not int:
+                self.error(f"dropHandEdits[{i}]", "give a hand-edit by its change number.")
+            elif seq not in live:
                 self.error(
                     f"dropHandEdits[{i}]", f"change {seq} isn't a hand-edit that still applies."
                 )
@@ -1251,8 +1274,11 @@ class Preview:
     cells: tuple[CellChange, ...]
     blocking: tuple[Blocking, ...]
     ends_short: tuple[EndsShort, ...]
-    #: The log's revision now: a confirm sends it back, and a different one means a stale preview.
+    #: The log's revision now.
     rev: str
+    #: What a confirm sends back (`confirm_token`): a different one means another change, or a
+    #: stale preview.
+    token: str
     #: The change to append when confirmed.
     change: Change
     #: For an undo, the change it reverses (W4 sets that row's `undone_by`).
@@ -1375,6 +1401,7 @@ def preview_change(
         blocking=tuple(_blocking(before, after, from_date)),
         ends_short=after.ends_short,
         rev=before.rev,
+        token=confirm_token(before.rev, new),
         change=new,
         undoes=body["change"] if body["type"] == "undo" else None,
         deletes=deletes,

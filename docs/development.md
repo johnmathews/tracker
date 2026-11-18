@@ -149,7 +149,14 @@ mark and details writes, so a later read returns what the app wrote.
   the folded week and Edit plan, the Ask page (empty with no goals yet, and with an answer and its
   history drawer open) and the Settings page (its four tabs wrapped onto two lines, and each tab), and every cell of the folded week stays on screen as the keyboard
   walks it. `callUpBar` in `support.ts` brings the navbar into view before a test presses its
-  controls, since on the planner's screens it is out of sight.
+  controls, since on the planner's screens it is out of sight. With Ask on, the folded bar (K160) shows
+  no Full screen, and no action overlaps another.
+- `programmes.spec.ts`: the Programmes page and a run's overview against a mocked API
+  (`e2e/fixtures/programmes/`): starting a programme from the Library and the overview opening;
+  pausing an activity from its page, then the overview and the week showing the pause; focus
+  staying on the preview bar after Show it in the plan; at phone width, a locked day not pressing
+  and the overview's table scrolling inside itself, not the page; and axe on the Programmes page
+  (opened to start) and the overview (with a paused activity), in both themes.
 - `connections.spec.ts`: Settings › Connections (its tab pressed, at `#/settings/connections`;
   creating a token, shown once with Copy, then removed; axe with the banner in both themes; no
   sideways scroll at 375px; the address opening the tab, the arrow keys moving to Your data and
@@ -189,7 +196,7 @@ mark and details writes, so a later read returns what the app wrote.
   flings through `Input.dispatchTouchEvent` (a touch start, ten moves a frame apart, and the lift
   while still moving; `Input.synthesizeScrollGesture` scrolls nothing in headless Linux): a fling up
   from Cardio onto a tall Strength ends at its top, in one movement, never turning back or setting
-  off again after slowing (K116, K118); and Edit plan's frame is 4px there (K117).
+  off again after slowing (K116, K118); and Edit plan's frame is a 4px line along the top there (K117, K162).
 - `week-title.spec.ts`: "View current week" (K130) follows the bar's next-week arrow in Edit plan
   and the band's title in the week view, the two centred together, only on another week;
   Settings' Week title (K131), "Date" or "Week number", titles the bar and the band "Week 43", the
@@ -344,14 +351,32 @@ listed in [api.md](api.md) §10):
   that is a link (its cell's widget, Enter its own in one press, Space doing nothing, F2 into the
   cell's other controls and Escape back to the link).
 - `src/components/ui/__tests__/`: one spec per primitive (AnswerProgress, BarAction, Banner,
-  BrandMark, Button, Chip, ConfirmDialog, DayMark, Dialog, HistoryList, IconButton, InlineMessage,
-  Menu, Popover, QuotaChip, RadioCard, SectionHeader, SegmentedControl, SidePanel, Stepper, Switch,
+  BrandMark, Button, ChangeSheet, Chip, ConfirmDialog, DayMark, Dialog, HistoryList, IconButton,
+  InlineMessage, Menu, Popover, ProgrammeChart, ProgrammeGrid, QuotaChip, RadioCard, SectionHeader, SegmentedControl, SidePanel, Stepper, Switch,
   Tabs, TextArea, TextField, TextLink, Transcript), each checking its
   roles, accessible names, sizes, states and the role colours its card names. Examples: an
   IconButton renders nothing without a label, the Popover closes when focus leaves it (F14), the
   Stepper's limits stay focusable with `aria-disabled`.
   `transitions.spec.ts` checks no primitive animates `outline-color`, so the focus ring never fades
   in. `setup.ts` fills the jsdom gaps Reka UI's overlays reach for.
+- `src/lib/__tests__/programmes.spec.ts`: the words around programmes (the app computes no plan
+  value, P4): dates and a week's dates, each field's value and unit, the line under a value, the
+  run's line (Started, paused, upcoming; K161), the validator's and the requests' problems, and
+  each change's sentence. It reads the JSON in `src/lib/__tests__/programmes/`.
+- `src/stores/__tests__/programmes.spec.ts`: the programmes store against a fake API: the page's
+  data and why it couldn't load, offline, the library (add, problems, duplicate, delete), a start
+  and its preview, a run's overview, a change's preview and confirm (a stale `rev` handing back a
+  fresh preview), ending, and each tracker's run read once.
+- `src/stores/__tests__/syncProgrammes.spec.ts`: the sync store's `today` and `runs`: kept for the
+  next start, a damaged copy read as none, days before yesterday locked by the server's today,
+  refused late marks and programme plan writes dropped with a notice (§8), and an import passing
+  the library and runs through.
+- `src/components/__tests__/ProgrammesPage.spec.ts`, `ProgrammeOverview.spec.ts`,
+  `ProgrammeWeek.spec.ts` and `ItemProgramme.spec.ts`: the Programmes page (its tabs, the start
+  opened in place, the library's actions, adding, offline, the bar's way in), a run's overview
+  (the plan, Changes, the controls, Show it in the plan), a programme tracker's week (the week
+  link, locked days, a paused activity's sentence, no Add in Edit plan) and an activity's
+  Programme row (the step chart and its controls), all against `programmesApi.ts`, a helper.
 - `src/styleguide/__tests__/look.spec.ts`: the style guide's theme from the query string, the
   round trip back to it, and the class it sets.
 - `src/stores/__tests__/planner.spec.ts`: stepping a day through its marks, totals, week navigation, goal clamping, adding,

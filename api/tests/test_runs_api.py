@@ -435,7 +435,9 @@ def test_a_preview_writes_nothing_and_an_apply_needs_its_rev(
     assert r.status_code == 200, r.text
     preview = r.json()
     assert preview["preview"] is True
-    assert preview["rev"] == made["run"]["rev"]
+    # The token to confirm with: not the run's rev, which is the log's alone.
+    assert len(preview["rev"]) == 16
+    assert preview["rev"] != made["run"]["rev"]
     assert preview["cells"][0] == {
         "monday": THIS_WEEK,
         "key": "squat",
@@ -467,7 +469,9 @@ def test_a_preview_writes_nothing_and_an_apply_needs_its_rev(
         },
     )
     # A stale rev gets the preview as it is now.
-    r = change(client, tracker, SQUAT_50, TODAY, preview=False, rev="0000000000000000")
+    r = change(
+        client, tracker, SQUAT_50, TODAY, preview=False, rev="0000000000000000", reason="Felt easy"
+    )
     assert r.status_code == 409
     assert r.json()["error"] == "conflict"
     assert r.json()["rev"] == preview["rev"]
@@ -501,6 +505,102 @@ def test_a_preview_writes_nothing_and_an_apply_needs_its_rev(
     # The rev the change was confirmed with is stale now.
     r = change(client, tracker, SQUAT_50, TODAY, preview=False, rev=preview["rev"])
     assert r.status_code == 409
+
+
+def test_the_runs_rev_alone_confirms_nothing(client: TestClient, config: Config) -> None:
+    """The run's rev, which the state and the run give, is the log's: a confirm with it previews
+    nothing, so it gets 409 and a preview of the change it sent (P2)."""
+    made = started(client, config, on=TODAY)
+    tracker = made["tracker"]["id"]
+    before = plans(client, tracker)
+    rev = run_of(client, tracker)["rev"]
+    assert client.get("/api/state").json()["runs"][tracker]["rev"] == rev
+    r = change(client, tracker, SQUAT_50, TODAY, preview=False, rev=rev)
+    assert r.status_code == 409, r.text
+    refused = r.json()
+    assert refused["error"] == "conflict"
+    assert refused["rev"] != rev
+    assert refused["rev"] == refused["preview"]["rev"]
+    assert refused["preview"]["change"]["change"] == SQUAT_50
+    assert plans(client, tracker) == before
+    assert rows(config, "SELECT count(*) FROM run_changes") == [(0,)]
+    # Its preview's rev confirms it.
+    r = change(client, tracker, SQUAT_50, TODAY, preview=False, rev=refused["rev"])
+    assert r.status_code == 200, r.text
+    assert item(plans(client, tracker)[THIS_WEEK], "squat")["weight"] == 50
+
+
+SQUAT_45 = {**SQUAT_50, "value": 45}
+
+
+@pytest.mark.parametrize(
+    ("confirmed", "why"),
+    [
+        ({"change": SQUAT_45, "from": TODAY, "reason": "Felt easy"}, "another change"),
+        ({"change": SQUAT_50, "from": NEXT_MONDAY, "reason": "Felt easy"}, "another from day"),
+        ({"change": SQUAT_50, "from": TODAY, "reason": "Felt hard"}, "another reason"),
+        ({"change": SQUAT_50, "from": TODAY}, "no reason"),
+    ],
+)
+def test_a_confirm_must_send_the_change_it_previewed(
+    client: TestClient, config: Config, confirmed: dict[str, Any], why: str
+) -> None:
+    made = started(client, config, on=TODAY)
+    tracker = made["tracker"]["id"]
+    before = plans(client, tracker)
+    preview = change(client, tracker, SQUAT_50, TODAY, reason="Felt easy").json()
+    sent = {**confirmed, "preview": False, "rev": preview["rev"]}
+    r = client.post(f"/api/runs/{tracker}/changes", json=sent)
+    assert r.status_code == 409, why
+    refused = r.json()
+    assert refused["error"] == "conflict"
+    # The fresh preview is of the change sent, with the rev that confirms that one.
+    assert refused["preview"]["change"] == {
+        "seq": 1,
+        "from": confirmed["from"],
+        "change": confirmed["change"],
+        "reason": confirmed.get("reason"),
+    }
+    assert refused["rev"] == refused["preview"]["rev"] != preview["rev"]
+    assert plans(client, tracker) == before
+    assert rows(config, "SELECT count(*) FROM run_changes") == [(0,)]
+
+
+def test_a_confirm_must_drop_the_hand_edits_its_preview_dropped(
+    client: TestClient, config: Config
+) -> None:
+    made = started(client, config, on=TODAY)
+    tracker = made["tracker"]["id"]
+    edit = {"type": "edit-week", "activity": "squat", "week": 3, "field": "weight", "value": 60}
+    apply(client, tracker, edit, TODAY)
+    preview = change(client, tracker, SQUAT_50, TODAY).json()
+    assert [b["change"] for b in preview["blocking"]] == [1]
+    dropping = {**SQUAT_50, "dropHandEdits": [1]}
+    r = change(client, tracker, dropping, TODAY, preview=False, rev=preview["rev"])
+    assert r.status_code == 409
+    assert r.json()["preview"]["change"]["change"] == dropping
+    assert rows(config, "SELECT count(*) FROM run_changes") == [(1,)]
+    # Previewed with the drop, it confirms.
+    apply(client, tracker, dropping, TODAY)
+    assert rows(config, "SELECT count(*) FROM run_changes") == [(2,)]
+
+
+def test_a_hand_edit_that_is_no_number_is_400(client: TestClient, config: Config) -> None:
+    made = started(client, config, on=TODAY)
+    for drops in ([[1]], [{"seq": 1}], ["1"]):
+        r = change(client, made["tracker"]["id"], {**SQUAT_50, "dropHandEdits": drops}, TODAY)
+        assert (r.status_code, r.json()) == (
+            400,
+            {
+                "error": "invalid",
+                "errors": [
+                    {
+                        "path": "change.dropHandEdits[0]",
+                        "message": "give a hand-edit by its change number.",
+                    }
+                ],
+            },
+        ), drops
 
 
 def test_a_change_dated_yesterday_is_refused(
@@ -789,6 +889,112 @@ def test_a_change_past_the_quota_is_413_and_writes_nothing(
     assert (r.status_code, r.json()) == (413, {"error": "quota"})
     assert plans(client, tracker) == before
     assert rows(config, "SELECT count(*) FROM run_changes") == [(0,)]
+
+
+def test_the_runs_tables_count_towards_the_quota(client: TestClient, config: Config) -> None:
+    """A run's copy of its programme and its parameters, its log, its sealed days and its mark
+    events count: their JSON and text as stored, plus RUN_ROW_BYTES a row."""
+    made = started(client, config, on=TODAY)
+    tracker = made["tracker"]["id"]
+    uid = rows(config, "SELECT id FROM users")[0][0]
+    conn = connect(config.db_path)
+    try:
+
+        def grows(sql: str, *args: object) -> int:
+            before = data.usage(conn, uid)
+            conn.execute(sql, args)
+            return data.usage(conn, uid) - before
+
+        (params,) = conn.execute("SELECT params_json FROM programme_runs").fetchone()
+        assert grows(
+            "UPDATE programme_runs SET doc_json = doc_json || 'é', params_json = '{}'"
+            " WHERE tracker_id = ?",
+            tracker,
+        ) == 2 + 2 - len(params)
+        added = grows(
+            "INSERT INTO run_changes (user_id, tracker_id, seq, made_at, from_date, change_json,"
+            " reason, source) VALUES (?, ?, 9, 0, ?, '{\"type\":\"x\"}', 'Knée', 'app')",
+            uid,
+            tracker,
+            TODAY,
+        )
+        assert added == len('{"type":"x"}') + len("Knée".encode()) + data.RUN_ROW_BYTES
+        added = grows(
+            "INSERT INTO programme_days (user_id, tracker_id, date, items_json, sealed_at)"
+            " VALUES (?, ?, '2026-10-24', '{\"d\":1}', 0)",
+            uid,
+            tracker,
+        )
+        assert added == len('{"d":1}') + data.RUN_ROW_BYTES
+        added = grows(
+            "INSERT INTO mark_events"
+            " (user_id, tracker_id, date, item_id, mark, entered_at, source, late)"
+            " VALUES (?, ?, ?, 'squat', 'great', 0, 'app', 0)",
+            uid,
+            tracker,
+            TODAY,
+        )
+        assert added == data.RUN_ROW_BYTES
+        # The whole account: every table's bytes, and a row allowance for each run row too.
+        rows_of = {
+            table: conn.execute(
+                f"SELECT count(*) FROM {table} WHERE user_id = ?",  # noqa: S608
+                (uid,),
+            ).fetchone()[0]
+            for table in ("programme_runs", "run_changes", "programme_days", "mark_events", "ticks")
+        }
+        text = conn.execute(
+            "SELECT (SELECT sum(length(CAST(items_json AS BLOB))) FROM plans WHERE user_id = :u)"
+            " + (SELECT sum(length(CAST(details_json AS BLOB))) FROM item_details"
+            "  WHERE user_id = :u)"
+            " + (SELECT sum(length(CAST(doc_json AS BLOB))) FROM programmes WHERE user_id = :u)"
+            " + (SELECT sum(length(CAST(doc_json AS BLOB)) + length(CAST(params_json AS BLOB)))"
+            "  FROM programme_runs WHERE user_id = :u)"
+            " + (SELECT sum(length(CAST(change_json AS BLOB)) + length(CAST(reason AS BLOB)))"
+            "  FROM run_changes WHERE user_id = :u)"
+            " + (SELECT sum(length(CAST(items_json AS BLOB))) FROM programme_days"
+            "  WHERE user_id = :u)",
+            {"u": uid},
+        ).fetchone()[0]
+        assert data.usage(conn, uid) == text + data.TICK_BYTES * rows_of.pop("ticks") + (
+            data.RUN_ROW_BYTES * sum(rows_of.values())
+        )
+    finally:
+        conn.rollback()
+        conn.close()
+
+
+def test_a_full_account_refuses_a_change_but_takes_marks_and_seals(
+    client: TestClient, config: Config, clock: Clock
+) -> None:
+    """The evidence fills the account like any data (§8), but only a start, a change or a library
+    save is refused for it: marks and sealing never are (P1)."""
+    made = started(client, config, on=TODAY)
+    tracker = made["tracker"]["id"]
+    assert tick(client, tracker, THIS_WEEK, "squat", 4, "great").status_code == 200
+    # A change the same size as the plans it rewrites: only the log grows.
+    apply(client, tracker, SQUAT_50, TODAY)
+    rev = change(client, tracker, SQUAT_45, TODAY).json()["rev"]
+    conn = connect(config.db_path)
+    try:
+        used = data.usage(conn, rows(config, "SELECT id FROM users")[0][0])
+    finally:
+        conn.close()
+    full = create_app(replace(config, user_quota_bytes=used), run_backups=False)
+    with TestClient(full, base_url=ORIGIN, headers={"Origin": ORIGIN}) as small:
+        small.cookies = client.cookies
+        r = change(small, tracker, SQUAT_45, TODAY, preview=False, rev=rev)
+        assert (r.status_code, r.json()) == (413, {"error": "quota"})
+        assert rows(config, "SELECT count(*) FROM run_changes") == [(1,)]
+        # A mark today still goes in, with its evidence.
+        assert tick(small, tracker, THIS_WEEK, "squat", 4, "partial").status_code == 200
+        assert tick(small, tracker, THIS_WEEK, "squat", 4, None).status_code == 200
+        assert rows(config, "SELECT count(*) FROM mark_events") == [(3,)]
+        # Tomorrow's first read seals today.
+        days = len(sealed(config))
+        go_to(clock, "2026-10-24")
+        assert small.get(f"/api/runs/{tracker}").status_code == 200
+        assert len(sealed(config)) == days + 1
 
 
 # --- the lock and the evidence -----------------------------------------------------------------
