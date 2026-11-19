@@ -7,7 +7,7 @@
 > trust, and shown in overview views. It is the authority for the build that follows the
 > 2026-11-17 mockup round.
 
-**Status:** implemented on 2026-11-18. Approved by John on 2026-11-17, with the defaults in §12.
+**Status:** implemented on 2026-11-18, amended on 2026-11-19 (K163 replaces Q1's default; K164–K166 add restart, re-open and the paused-ink line). Approved by John on 2026-11-17, with the defaults in §12.
 The decisions made while building it are K142 to K166 in [decisions.md](../decisions.md) §4.32,
 and the text below follows them. [programmes.md](../programmes.md) documents the format. The views
 in §9 follow John's picks in the mockup round `brand/design-system/mockups/261117-programmes/`
