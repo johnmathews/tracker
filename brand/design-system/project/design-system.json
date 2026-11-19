@@ -325,9 +325,9 @@
   ],
   "lastChange": {
     "by": "John Mathews",
-    "at": "2026-11-19T07:19:00Z",
+    "at": "2026-11-19T22:16:00Z",
     "via": "Claude Code",
-    "note": "K166, programmes follow-ups: a new colour role, paused-ink (#9f1d1d light, #f08a7e dark), for the ProgrammeGrid's \"Paused until\" line only, at weight 600; foundations' role table has six project roles. The ProgrammeGrid card gains a \"Paused for part of the week\" state and table, its contrast figures and the line's test hook, and its height grows to 3450."
+    "note": "K167-K177, the programmes library and follow-ups: ProgrammesPage gains a Reference tab (the shared library: Preview in a Dialog, Copy to library asked first, the copy landing in Library on a tile that fades), an admin's More menu with Publish and a Published chip, and lists that fill the page's column. Every page but the week sits in a centred 960u column (SettingsPage, ProfilePage, ItemPage). ProgrammeGrid gains a Rest week and undated weeks, ProgrammeChart the paused lede, ChangeSheet the Restart and Re-open sheets, Menu its first row menu and Chip the Published chip. Dialog and ConfirmDialog give focus back without scrolling, and Settings' mark sets wrap at 260u."
   },
   "layout": "files",
   "libraries": [],
