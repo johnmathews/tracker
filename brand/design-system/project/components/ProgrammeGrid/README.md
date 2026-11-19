@@ -30,6 +30,7 @@ A programme's plan as a table, one row per activity and one column per programme
 | Later week | The value at 600 and the sets under it; a button |
 | Hand-edited | The value, then the `pencil` (`data-hand-edit="12 Dec"`) |
 | Paused | "Paused" in `ink-secondary` at 600, the reason under it ("Knee"). Words, no icon |
+| Paused for part of the week | The cell as it is, then a last line "Paused until Wed 30 Dec" in `caption` `paused-ink` at 600, so the pause stands out (K166). This week's cell and a later week's alike. Words, no icon. `paused-ink` is red, but not `error-ink`: a pause is a plan, not a fault |
 | Changed, while previewing a change | "40 → 45 kg", the old value in `ink-secondary` (`data-cell="changed"`) |
 
 | Week head | Look |
@@ -47,7 +48,7 @@ A programme's plan as a table, one row per activity and one column per programme
 - A later week's cell holds a `<button aria-haspopup="menu">` filling the cell. Its focus ring is drawn inside the cell (offset -2px), so the scrolling box never clips it.
 - While previewing a change, the bar is a `region` labelled by its sentence, and focus moves to the bar on arrival (`tabindex="-1"`), so a screen reader hears that nothing is saved yet; Back to the change returns focus to the sheet's step 2.
 - The `pencil` is `aria-hidden`; the hidden words carry it. A met count adds ", goal met".
-- Contrast, measured by the gate in both themes: `ink` and `ink-secondary` on `tile` (4.5:1), `pen` on `tile` as a mark (3:1), `ink` on `canvas` for the frame, `control-border` and `focus` on `canvas`.
+- Contrast, measured by the gate in both themes: `ink` and `ink-secondary` on `tile` (4.5:1), `paused-ink` on `canvas` and `tile` (4.5:1; 7.4:1 and 7.2:1 on `canvas`, 6.7:1 and 6.0:1 on `tile`, light and dark), `pen` on `tile` as a mark (3:1), `ink` on `canvas` for the frame, `control-border` and `focus` on `canvas`.
 
 ## For the app
 
@@ -60,6 +61,7 @@ A programme's plan as a table, one row per activity and one column per programme
 | A row | `tr[data-activity="squat"]` (the activity's key) |
 | A cell | `td[data-activity][data-week][data-cell]`, `data-cell` one of `done`, `current`, `planned`, `paused`, `changed`; plus `data-hand-edit="<date>"` or `data-split` |
 | A later week's button | `td.tap > button[aria-haspopup="menu"]` |
+| "Paused until …" | `data-testid="paused-until"` |
 | The overview page | `programme-overview`, `back-to-week`, `programme-meta`, `programme-tab-plan`, `programme-tab-changes`, `programme-ends-short` |
 | The controls | `programme-controls`, `programme-pause`, `programme-resume`, `programme-go-to-week`, `programme-add-activity`, `programme-end` |
 | The Changes tab | `programme-changes`, each `programme-change`, `programme-change-undo` |

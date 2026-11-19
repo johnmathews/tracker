@@ -820,6 +820,7 @@
   --color-pen-partial: var(--pen-partial);
   --color-pen-missed: var(--pen-missed);
   --color-caution-ink: var(--caution-ink);
+  --color-paused-ink: var(--paused-ink);
   --color-scrim: var(--scrim);
 }
 
@@ -926,6 +927,7 @@
     --ink-secondary: #5f5a52;
     --error-ink: #9f1d1d;
     --caution-ink: #a0461a;
+    --paused-ink: #9f1d1d;
     --pen: #2e7a4c;
     --pen-partial: #f2b300;
     --pen-missed: #c0392b;

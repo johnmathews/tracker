@@ -31,6 +31,7 @@ describe('print', () => {
       'ink-secondary',
       'error-ink',
       'caution-ink',
+      'paused-ink',
       'pen',
       'pen-partial',
       'pen-missed',

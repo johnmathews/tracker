@@ -50,7 +50,7 @@ never a control border), `control-border` (inputs, outlined buttons, the day's b
 goals, hints), `error-ink` (form errors) and `focus` (the focus ring). `scrim` dims the page behind a
 dialog.
 
-Five project roles each mean one thing, and nothing else may use them:
+Six project roles each mean one thing, and nothing else may use them:
 
 | Role          | Means                                                                                                                               | Never                      |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
@@ -58,6 +58,7 @@ Five project roles each mean one thing, and nothing else may use them:
 | `pen-partial` | Partly done: a day's mark                                                                                                           | Over the pick, warnings    |
 | `pen-missed`  | Too difficult: a day's mark                                                                                                         | Errors                     |
 | `caution-ink` | A caution, always with words; nothing on the planner uses it (K28). The consent screen's warning does (K73)                                                                  | Errors                     |
+| `paused-ink`  | "Paused until …" in the programme overview's grid, at weight 600 (K166). It has `error-ink`'s values but not its meaning: a pause is a plan, not a fault | Errors, a too-difficult day |
 | `edit`        | Edit plan is on: the frame round the window, 8px; on a phone a 4px line along the top only (K112, K117, K162). A brighter blue than `focus`, so the two never read as one thing                                              | Text, buttons, decoration  |
 
 The primary action is `ink`, not a brand colour (K8): one colour for "act", the pens for "done".
@@ -229,8 +230,8 @@ PlannerScreen is a layout, not a primitive, so it has no Vue primitive or style 
 Its class lists are `src/lib/screens.ts`, its preview draws the layout live, and the app is where
 it is checked.
 
-ProgrammeGrid, ChangeSheet and ProgrammeChart are primitives with a card and a spec but no style
-guide section yet (issue #84).
+Step 3 is checked: `src/styleguide/__tests__/complete.spec.ts` fails while a folder in
+`src/components/ui/` has no section whose id is `sg-` and the folder's name.
 
 The EmailLayout card is the other exception to steps 1 to 3: its preview reverses step 1's rule, with
 the light theme's values written inline and no `var(--token)` (email clients read neither; the gate

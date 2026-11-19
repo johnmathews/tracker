@@ -142,6 +142,55 @@ describe('ProgrammeGrid, a running programme (K142, K143)', () => {
     expect(cell('deadlift', 6).textContent).toContain('Paused until Thu 26 Nov')
   })
 
+  it('counts a past week run and then paused against the days it ran, not as Paused (K163)', () => {
+    const grid: Grid = structuredClone(RUN.grid)
+    // John's squat: 3 a week, done Monday and Tuesday, paused from Wednesday. Its goal is 1.
+    const split = {
+      ...grid.weeks[1]!.cells.squat!,
+      target: 1,
+      until: '2026-11-11',
+      reason: 'Knee',
+      marks: ['great', 'great', null, null, null, null, null],
+    }
+    grid.weeks[1]!.cells.squat = split
+    grid.weeks[2]!.cells.squat = { ...split, marks: [null, null, null, null, null, null, null] }
+    mountGrid({ grid })
+    const met = cell('squat', 2)
+    expect(met.dataset.cell).toBe('done')
+    expect(met.dataset.met).toBe('')
+    expect(met.textContent).toContain('2 of 1, goal met')
+    expect(met.textContent).not.toContain('Paused')
+    const missed = cell('squat', 3)
+    expect(missed.dataset.cell).toBe('done')
+    expect(missed.dataset.met).toBeUndefined()
+    expect(missed.textContent).toContain('0 of 1')
+    expect(missed.textContent).not.toContain('goal met')
+  })
+
+  it('counts this week so far against a split week’s goal, and says until when it is paused', () => {
+    mountGrid()
+    const deadlift = cell('deadlift', 4)
+    expect(deadlift.dataset.cell).toBe('current')
+    expect(deadlift.textContent).toContain('0 of 2 so far')
+    expect(deadlift.textContent).toContain('Paused until Thu 26 Nov')
+  })
+
+  it('draws the Paused until line in paused-ink at 600, and nothing else in the cell (K166)', () => {
+    mountGrid()
+    // This week's cell (no button) and a later week's (a button): the line looks the same in both.
+    for (const week of [4, 6]) {
+      const td = cell('deadlift', week)
+      const until = td.querySelectorAll<HTMLElement>('[data-testid="paused-until"]')
+      expect(until).toHaveLength(1)
+      expect(until[0]!.textContent).toBe('Paused until Thu 26 Nov')
+      expect(until[0]!.classList).toContain('text-paused-ink')
+      expect(until[0]!.classList).toContain('font-semibold')
+      expect(until[0]!.classList).not.toContain('text-ink-secondary')
+      // The cell's other lines keep their ink-secondary.
+      expect(td.innerHTML.match(/text-paused-ink/g)).toHaveLength(1)
+    }
+  })
+
   it('makes each later week’s cell a button that opens Edit this week and Change from here', async () => {
     const wrapper = mountGrid()
     const button = cell('squat', 6).querySelector<HTMLButtonElement>(

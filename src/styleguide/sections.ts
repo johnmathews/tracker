@@ -17,6 +17,7 @@ import PopoverSection from './sections/PopoverSection.vue'
 import MenuSection from './sections/MenuSection.vue'
 import DialogSection from './sections/DialogSection.vue'
 import ConfirmDialogSection from './sections/ConfirmDialogSection.vue'
+import ChangeSheetSection from './sections/ChangeSheetSection.vue'
 import InlineMessageSection from './sections/InlineMessageSection.vue'
 import BannerSection from './sections/BannerSection.vue'
 import DayMarkSection from './sections/DayMarkSection.vue'
@@ -24,6 +25,8 @@ import ChipSection from './sections/ChipSection.vue'
 import SectionHeaderSection from './sections/SectionHeaderSection.vue'
 import WeekGridSection from './sections/WeekGridSection.vue'
 import RecentWeeksSection from './sections/RecentWeeksSection.vue'
+import ProgrammeGridSection from './sections/ProgrammeGridSection.vue'
+import ProgrammeChartSection from './sections/ProgrammeChartSection.vue'
 import ItemPageSection from './sections/ItemPageSection.vue'
 import NewTrackerPageSection from './sections/NewTrackerPageSection.vue'
 import TranscriptSection from './sections/TranscriptSection.vue'
@@ -180,6 +183,13 @@ export const SECTIONS: readonly StyleGuideSection[] = [
     component: ConfirmDialogSection,
   },
   {
+    id: 'sg-change-sheet',
+    title: 'ChangeSheet',
+    summary:
+      'A change to a running programme in two steps on the Dialog: the change first, then what it does to each week, and nothing happens until Confirm change.',
+    component: ChangeSheetSection,
+  },
+  {
     id: 'sg-inline-message',
     title: 'InlineMessage',
     summary:
@@ -227,6 +237,20 @@ export const SECTIONS: readonly StyleGuideSection[] = [
     summary:
       'An item’s last eight weeks, newest first, one line a week: when, its seven marks, and the count against that week’s goal.',
     component: RecentWeeksSection,
+  },
+  {
+    id: 'sg-programme-grid',
+    title: 'ProgrammeGrid',
+    summary:
+      "A programme's plan as a table, one row per activity and one column per programme week, at every screen width: how each past week went, this week's numbers and what is still to come.",
+    component: ProgrammeGridSection,
+  },
+  {
+    id: 'sg-programme-chart',
+    title: 'ProgrammeChart',
+    summary:
+      "An activity's Programme row on its item page: a step chart of the planned value week by week, with what was done on top, and the activity's own controls.",
+    component: ProgrammeChartSection,
   },
   {
     id: 'sg-item-page',

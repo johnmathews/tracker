@@ -1,0 +1,331 @@
+<title>Paused until: red and heavier</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="tokens.css">
+<!--
+  A mockup (design-system skill, references/mockups.md). Fill in, top to bottom:
+  1. The question: one sentence, and what stays as it is.
+  2. One <section class="option"> per option, two to four, lettered A, B, C. Mark one
+     data-recommended. Each changes only what the question is about.
+  3. Every proposed value as a --candidate-* custom property on its option (see the style block); everything
+     else from the system's tokens (var(--ink)), type classes (.body, .caption) and real copy.
+  4. The stage: the real screen or component the change lands in, at its real size, once per
+     theme (the two .pane elements). Add a close-up only beside it, never instead of it.
+  5. Measures: one <li data-fg data-bg data-min> per new colour pairing; the page computes them.
+  The frame (.mockup-*) is plain on purpose; the options are the design.
+-->
+<style>
+  body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font-sans); }
+  .mockup-page {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: var(--space-8, 32px) var(--space-16, 64px);
+    max-width: 1200px; margin: 0 auto; display: grid; gap: var(--space-12, 48px);
+  }
+  .mockup-head { display: grid; gap: var(--space-2, 8px); max-width: 70ch; }
+  .mockup-head h1, .option h2 { margin: 0; text-wrap: balance; }
+  .mockup-head p, .option p { margin: 0; }
+  .mockup-meta { color: var(--ink-secondary); }
+  .option { display: grid; gap: var(--space-4, 16px); }
+  .option-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2, 8px) var(--space-3, 12px); }
+  .option-tag { color: var(--ink-secondary); }
+  .option[data-recommended] .option-tag::after { content: " · Recommended"; color: var(--ink); }
+  /* The same stage in light and in dark, side by side; stacked on a phone. Each pane is a
+     data-theme subtree, so the system's own tokens switch inside it. */
+  .panes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--space-4, 16px); }
+  .pane { min-width: 0; background: var(--canvas); color: var(--ink); border: 1px solid var(--line);
+          border-radius: var(--radius-lg, 10px); padding: var(--space-4, 16px); overflow-x: auto; }
+  .pane-label { color: var(--ink-secondary); margin: 0 0 var(--space-3, 12px); }
+  .measures { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); }
+  .measures li { border: 1px solid var(--line); border-radius: var(--radius-sm, 4px); padding: 2px var(--space-2, 8px); font-variant-numeric: tabular-nums; }
+  .measures li[data-pass="no"] { border-color: currentColor; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  
+  /* The grid, as the ProgrammeGrid card draws it (preview.html), trimmed to two rows and four weeks. */
+  .grid-wrap { position: relative; overflow-x: auto; }
+  table.og { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 19px; font-variant-numeric: tabular-nums; }
+  .og th, .og td { padding: 12px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; font-weight: 400; }
+  .og thead th { border-bottom: 1px solid var(--ink); vertical-align: bottom; }
+  .og .act { position: sticky; left: 0; z-index: 2; background: var(--canvas); width: 180px; min-width: 150px; }
+  .og .wk { min-width: 150px; }
+  .og .wn { display: block; font: 600 19px / 1.35 var(--font-sans); white-space: nowrap; }
+  .og .wd { display: block; color: var(--ink-secondary); font-size: 16px; line-height: 22px; white-space: nowrap; }
+  .og .wt { display: block; font: 600 16px / 22px var(--font-sans); white-space: nowrap; }
+  .og .an { display: block; font: 600 22px / 1.3 var(--font-sans); }
+  .og .ac { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 4px; align-items: center; }
+  .og .ac .t { color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
+  .chip { display: inline-block; font: 600 16px / 22px var(--font-sans); background: var(--tile); color: var(--ink-secondary); border-radius: var(--radius-sm); padding: 1px var(--space-2); white-space: nowrap; }
+  .cv { display: block; font: 600 21px / 1.3 var(--font-sans); white-space: nowrap; }
+  .cs { display: block; color: var(--ink-secondary); font-size: 16px; line-height: 22px; white-space: nowrap; }
+  .res.met { color: var(--ink); font-weight: 600; text-decoration: underline; text-decoration-color: var(--pen); text-decoration-thickness: 2px; text-underline-offset: 0.22em; }
+  .paused .cv { color: var(--ink-secondary); }
+  .og .past { background: var(--tile); }
+  .og .cur { box-shadow: inset 2px 0 0 var(--ink), inset -2px 0 0 var(--ink); }
+  .og thead .cur { box-shadow: inset 2px 0 0 var(--ink), inset -2px 0 0 var(--ink), inset 0 2px 0 var(--ink); }
+  .og tbody tr:last-child .cur { box-shadow: inset 2px 0 0 var(--ink), inset -2px 0 0 var(--ink), inset 0 -2px 0 var(--ink); }
+  @media (max-width: 639px) { .og .past { display: none; } .og .act { width: 130px; min-width: 130px; } .og .an { font-size: 19px; } }
+  .pu { display: flex; align-items: center; gap: 4px; }
+  .pu svg { width: 15px; height: 15px; flex: none; }
+
+  /* ---- The options: only the "Paused until" line changes. ---- */
+  #now, #now [data-theme] { --candidate-pu: var(--ink-secondary); --candidate-pu-weight: 400; }
+  #a, #a [data-theme] { --candidate-pu: #9f1d1d; --candidate-pu-weight: 600; }
+  #a [data-theme="dark"] { --candidate-pu: #f08a7e; }
+  #b, #b [data-theme] { --candidate-pu: #9f1d1d; --candidate-pu-weight: 600; }
+  #b [data-theme="dark"] { --candidate-pu: #f08a7e; }
+  #c, #c [data-theme] { --candidate-pu: var(--ink); --candidate-pu-weight: 600; }
+  .option .pu { color: var(--candidate-pu); font-weight: var(--candidate-pu-weight); }
+
+  .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+</style>
+
+<main class="mockup-page">
+  <header class="mockup-head">
+    <p class="caption mockup-meta">Mockup · 2026-11-19 · Tracker</p>
+    <h1 class="title-1">Paused until: red and heavier</h1>
+    <p class="body">How the grid's "Paused until Wed 2 Dec" line stands out. Everything else in the cell, and the rest of the grid, stays as it is.</p>
+    <p class="body mockup-meta">The system keeps each red for one thing: <code>error-ink</code> for errors, <code>pen-missed</code> for a too-difficult day, <code>caution-ink</code> for over the pick. A red pause line needs a role of its own, <code>paused-ink</code>. A and B give it error-ink's values.</p>
+  </header>
+
+  <section class="option" id="a" data-recommended aria-labelledby="a-h">
+    <div class="option-head"><h2 class="title-2" id="a-h">A. Red, semibold</h2><span class="label option-tag">Option A</span></div>
+    <p class="body">John's ask as it stands. A new role, <code>paused-ink</code>: #9f1d1d in light, #f08a7e in dark, at weight 600.</p>
+    <div class="panes"><div class="pane" data-theme="light"><p class="label pane-label">Light</p><div class="grid-wrap"><table class="og">
+  <thead><tr>
+    <th class="act" scope="col"><span class="vh">Activity</span></th>
+    <th class="wk past" scope="col"><span class="wn">Week 3</span><span class="wd">9–15 Nov</span></th>
+    <th class="wk cur" scope="col"><span class="wn">Week 4</span><span class="wd">16–22 Nov</span><span class="wt">This week</span><span class="wt">Deload</span></th>
+    <th class="wk" scope="col"><span class="wn">Week 5</span><span class="wd">23–29 Nov</span></th>
+    <th class="wk" scope="col"><span class="wn">Week 6</span><span class="wd">30 Nov–6 Dec</span></th>
+  </tr></thead>
+  <tbody>
+    <tr>
+      <th class="act" scope="row"><span class="an">Back squat</span><span class="ac"><span class="chip">5 × 5</span><span class="t">3 a week</span></span></th>
+      <td class="past"><span class="cv res met">3 of 3</span><span class="cs">45 kg</span></td>
+      <td class="cur"><span class="cv">42.5 kg</span><span class="cs">3 × 5</span><span class="cs">2 of 1 so far</span><span class="cs pu">Paused until Wed 2 Dec</span></td>
+      <td class="paused"><span class="cv">Paused</span><span class="cs">Knee</span></td>
+      <td><span class="cv">52.5 kg</span><span class="cs">5 × 5</span><span class="cs pu">Paused until Wed 2 Dec</span></td>
+    </tr>
+    <tr>
+      <th class="act" scope="row"><span class="an">Bench press</span><span class="ac"><span class="chip">5 × 5</span><span class="t">3 a week</span></span></th>
+      <td class="past"><span class="cv res met">3 of 3</span><span class="cs">35 kg</span></td>
+      <td class="cur"><span class="cv">35 kg</span><span class="cs">3 × 5</span><span class="cs">1 of 3 so far</span></td>
+      <td><span class="cv">40 kg</span><span class="cs">5 × 5</span></td>
+      <td><span class="cv">42.5 kg</span><span class="cs">5 × 5</span></td>
+    </tr>
+  </tbody></table></div></div><div class="pane" data-theme="dark"><p class="label pane-label">Dark</p><div class="grid-wrap"><table class="og">
+  <thead><tr>
+    <th class="act" scope="col"><span class="vh">Activity</span></th>
+    <th class="wk past" scope="col"><span class="wn">Week 3</span><span class="wd">9–15 Nov</span></th>
+    <th class="wk cur" scope="col"><span class="wn">Week 4</span><span class="wd">16–22 Nov</span><span class="wt">This week</span><span class="wt">Deload</span></th>
+    <th class="wk" scope="col"><span class="wn">Week 5</span><span class="wd">23–29 Nov</span></th>
+    <th class="wk" scope="col"><span class="wn">Week 6</span><span class="wd">30 Nov–6 Dec</span></th>
+  </tr></thead>
+  <tbody>
+    <tr>
+      <th class="act" scope="row"><span class="an">Back squat</span><span class="ac"><span class="chip">5 × 5</span><span class="t">3 a week</span></span></th>
+      <td class="past"><span class="cv res met">3 of 3</span><span class="cs">45 kg</span></td>
+      <td class="cur"><span class="cv">42.5 kg</span><span class="cs">3 × 5</span><span class="cs">2 of 1 so far</span><span class="cs pu">Paused until Wed 2 Dec</span></td>
+      <td class="paused"><span class="cv">Paused</span><span class="cs">Knee</span></td>
+      <td><span class="cv">52.5 kg</span><span class="cs">5 × 5</span><span class="cs pu">Paused until Wed 2 Dec</span></td>
+    </tr>
+    <tr>
+      <th class="act" scope="row"><span class="an">Bench press</span><span class="ac"><span class="chip">5 × 5</span><span class="t">3 a week</span></span></th>
+      <td class="past"><span class="cv res met">3 of 3</span><span class="cs">35 kg</span></td>
+      <td class="cur"><span class="cv">35 kg</span><span class="cs">3 × 5</span><span class="cs">1 of 3 so far</span></td>
+      <td><span class="cv">40 kg</span><span class="cs">5 × 5</span></td>
+      <td><span class="cv">42.5 kg</span><span class="cs">5 × 5</span></td>
+    </tr>
+  </tbody></table></div></div></div>
+    <ul class="measures caption"><li data-fg="var(--candidate-pu)" data-bg="var(--canvas)" data-min="4.5">Red on the page</li><li data-fg="var(--candidate-pu)" data-bg="var(--tile)" data-min="4.5">Red on a past week's tile</li></ul>
+  </section>
+
+  <section class="option" id="b" aria-labelledby="b-h">
+    <div class="option-head"><h2 class="title-2" id="b-h">B. Red, semibold, with a pause icon</h2><span class="label option-tag">Option B</span></div>
+    <p class="body">As A, with the pause icon before the words, so it never reads as an error line.</p>
+    <div class="panes"><div class="pane" data-theme="light"><p class="label pane-label">Light</p><div class="grid-wrap"><table class="og">
+  <thead><tr>
+    <th class="act" scope="col"><span class="vh">Activity</span></th>
+    <th class="wk past" scope="col"><span class="wn">Week 3</span><span class="wd">9–15 Nov</span></th>
+    <th class="wk cur" scope="col"><span class="wn">Week 4</span><span class="wd">16–22 Nov</span><span class="wt">This week</span><span class="wt">Deload</span></th>
+    <th class="wk" scope="col"><span class="wn">Week 5</span><span class="wd">23–29 Nov</span></th>
+    <th class="wk" scope="col"><span class="wn">Week 6</span><span class="wd">30 Nov–6 Dec</span></th>
+  </tr></thead>
+  <tbody>
+    <tr>
+      <th class="act" scope="row"><span class="an">Back squat</span><span class="ac"><span class="chip">5 × 5</span><span class="t">3 a week</span></span></th>
+      <td class="past"><span class="cv res met">3 of 3</span><span class="cs">45 kg</span></td>
+      <td class="cur"><span class="cv">42.5 kg</span><span class="cs">3 × 5</span><span class="cs">2 of 1 so far</span><span class="cs pu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>Paused until Wed 2 Dec</span></td>
+      <td class="paused"><span class="cv">Paused</span><span class="cs">Knee</span></td>
+      <td><span class="cv">52.5 kg</span><span class="cs">5 × 5</span><span class="cs pu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>Paused until Wed 2 Dec</span></td>
+    </tr>
+    <tr>
+      <th class="act" scope="row"><span class="an">Bench press</span><span class="ac"><span class="chip">5 × 5</span><span class="t">3 a week</span></span></th>
+      <td class="past"><span class="cv res met">3 of 3</span><span class="cs">35 kg</span></td>
+      <td class="cur"><span class="cv">35 kg</span><span class="cs">3 × 5</span><span class="cs">1 of 3 so far</span></td>
+      <td><span class="cv">40 kg</span><span class="cs">5 × 5</span></td>
+      <td><span class="cv">42.5 kg</span><span class="cs">5 × 5</span></td>
+    </tr>
+  </tbody></table></div></div><div class="pane" data-theme="dark"><p class="label pane-label">Dark</p><div class="grid-wrap"><table class="og">
+  <thead><tr>
+    <th class="act" scope="col"><span class="vh">Activity</span></th>
+    <th class="wk past" scope="col"><span class="wn">Week 3</span><span class="wd">9–15 Nov</span></th>
+    <th class="wk cur" scope="col"><span class="wn">Week 4</span><span class="wd">16–22 Nov</span><span class="wt">This week</span><span class="wt">Deload</span></th>
+    <th class="wk" scope="col"><span class="wn">Week 5</span><span class="wd">23–29 Nov</span></th>
+    <th class="wk" scope="col"><span class="wn">Week 6</span><span class="wd">30 Nov–6 Dec</span></th>
+  </tr></thead>
+  <tbody>
+    <tr>
+      <th class="act" scope="row"><span class="an">Back squat</span><span class="ac"><span class="chip">5 × 5</span><span class="t">3 a week</span></span></th>
+      <td class="past"><span class="cv res met">3 of 3</span><span class="cs">45 kg</span></td>
+      <td class="cur"><span class="cv">42.5 kg</span><span class="cs">3 × 5</span><span class="cs">2 of 1 so far</span><span class="cs pu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>Paused until Wed 2 Dec</span></td>
+      <td class="paused"><span class="cv">Paused</span><span class="cs">Knee</span></td>
+      <td><span class="cv">52.5 kg</span><span class="cs">5 × 5</span><span class="cs pu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>Paused until Wed 2 Dec</span></td>
+    </tr>
+    <tr>
+      <th class="act" scope="row"><span class="an">Bench press</span><span class="ac"><span class="chip">5 × 5</span><span class="t">3 a week</span></span></th>
+      <td class="past"><span class="cv res met">3 of 3</span><span class="cs">35 kg</span></td>
+      <td class="cur"><span class="cv">35 kg</span><span class="cs">3 × 5</span><span class="cs">1 of 3 so far</span></td>
+      <td><span class="cv">40 kg</span><span class="cs">5 × 5</span></td>
+      <td><span class="cv">42.5 kg</span><span class="cs">5 × 5</span></td>
+    </tr>
+  </tbody></table></div></div></div>
+    <ul class="measures caption"><li data-fg="var(--candidate-pu)" data-bg="var(--canvas)" data-min="4.5">Red on the page</li><li data-fg="var(--candidate-pu)" data-bg="var(--tile)" data-min="4.5">Red on a past week's tile</li></ul>
+  </section>
+
+  <section class="option" id="c" aria-labelledby="c-h">
+    <div class="option-head"><h2 class="title-2" id="c-h">C. Ink, semibold</h2><span class="label option-tag">Option C</span></div>
+    <p class="body">Heavier, in ink rather than red. Red stays for errors and too-difficult days.</p>
+    <div class="panes"><div class="pane" data-theme="light"><p class="label pane-label">Light</p><div class="grid-wrap"><table class="og">
+  <thead><tr>
+    <th class="act" scope="col"><span class="vh">Activity</span></th>
+    <th class="wk past" scope="col"><span class="wn">Week 3</span><span class="wd">9–15 Nov</span></th>
+    <th class="wk cur" scope="col"><span class="wn">Week 4</span><span class="wd">16–22 Nov</span><span class="wt">This week</span><span class="wt">Deload</span></th>
+    <th class="wk" scope="col"><span class="wn">Week 5</span><span class="wd">23–29 Nov</span></th>
+    <th class="wk" scope="col"><span class="wn">Week 6</span><span class="wd">30 Nov–6 Dec</span></th>
+  </tr></thead>
+  <tbody>
+    <tr>
+      <th class="act" scope="row"><span class="an">Back squat</span><span class="ac"><span class="chip">5 × 5</span><span class="t">3 a week</span></span></th>
+      <td class="past"><span class="cv res met">3 of 3</span><span class="cs">45 kg</span></td>
+      <td class="cur"><span class="cv">42.5 kg</span><span class="cs">3 × 5</span><span class="cs">2 of 1 so far</span><span class="cs pu">Paused until Wed 2 Dec</span></td>
+      <td class="paused"><span class="cv">Paused</span><span class="cs">Knee</span></td>
+      <td><span class="cv">52.5 kg</span><span class="cs">5 × 5</span><span class="cs pu">Paused until Wed 2 Dec</span></td>
+    </tr>
+    <tr>
+      <th class="act" scope="row"><span class="an">Bench press</span><span class="ac"><span class="chip">5 × 5</span><span class="t">3 a week</span></span></th>
+      <td class="past"><span class="cv res met">3 of 3</span><span class="cs">35 kg</span></td>
+      <td class="cur"><span class="cv">35 kg</span><span class="cs">3 × 5</span><span class="cs">1 of 3 so far</span></td>
+      <td><span class="cv">40 kg</span><span class="cs">5 × 5</span></td>
+      <td><span class="cv">42.5 kg</span><span class="cs">5 × 5</span></td>
+    </tr>
+  </tbody></table></div></div><div class="pane" data-theme="dark"><p class="label pane-label">Dark</p><div class="grid-wrap"><table class="og">
+  <thead><tr>
+    <th class="act" scope="col"><span class="vh">Activity</span></th>
+    <th class="wk past" scope="col"><span class="wn">Week 3</span><span class="wd">9–15 Nov</span></th>
+    <th class="wk cur" scope="col"><span class="wn">Week 4</span><span class="wd">16–22 Nov</span><span class="wt">This week</span><span class="wt">Deload</span></th>
+    <th class="wk" scope="col"><span class="wn">Week 5</span><span class="wd">23–29 Nov</span></th>
+    <th class="wk" scope="col"><span class="wn">Week 6</span><span class="wd">30 Nov–6 Dec</span></th>
+  </tr></thead>
+  <tbody>
+    <tr>
+      <th class="act" scope="row"><span class="an">Back squat</span><span class="ac"><span class="chip">5 × 5</span><span class="t">3 a week</span></span></th>
+      <td class="past"><span class="cv res met">3 of 3</span><span class="cs">45 kg</span></td>
+      <td class="cur"><span class="cv">42.5 kg</span><span class="cs">3 × 5</span><span class="cs">2 of 1 so far</span><span class="cs pu">Paused until Wed 2 Dec</span></td>
+      <td class="paused"><span class="cv">Paused</span><span class="cs">Knee</span></td>
+      <td><span class="cv">52.5 kg</span><span class="cs">5 × 5</span><span class="cs pu">Paused until Wed 2 Dec</span></td>
+    </tr>
+    <tr>
+      <th class="act" scope="row"><span class="an">Bench press</span><span class="ac"><span class="chip">5 × 5</span><span class="t">3 a week</span></span></th>
+      <td class="past"><span class="cv res met">3 of 3</span><span class="cs">35 kg</span></td>
+      <td class="cur"><span class="cv">35 kg</span><span class="cs">3 × 5</span><span class="cs">1 of 3 so far</span></td>
+      <td><span class="cv">40 kg</span><span class="cs">5 × 5</span></td>
+      <td><span class="cv">42.5 kg</span><span class="cs">5 × 5</span></td>
+    </tr>
+  </tbody></table></div></div></div>
+    <ul class="measures caption"><li data-fg="var(--candidate-pu)" data-bg="var(--canvas)" data-min="4.5">Ink on the page</li></ul>
+  </section>
+
+  <section class="option" id="now" aria-labelledby="now-h">
+    <div class="option-head"><h2 class="title-2" id="now-h">Today, for comparison</h2><span class="label option-tag">Now</span></div>
+    <p class="body">ink-secondary at weight 400.</p>
+    <div class="panes"><div class="pane" data-theme="light"><p class="label pane-label">Light</p><div class="grid-wrap"><table class="og">
+  <thead><tr>
+    <th class="act" scope="col"><span class="vh">Activity</span></th>
+    <th class="wk past" scope="col"><span class="wn">Week 3</span><span class="wd">9–15 Nov</span></th>
+    <th class="wk cur" scope="col"><span class="wn">Week 4</span><span class="wd">16–22 Nov</span><span class="wt">This week</span><span class="wt">Deload</span></th>
+    <th class="wk" scope="col"><span class="wn">Week 5</span><span class="wd">23–29 Nov</span></th>
+    <th class="wk" scope="col"><span class="wn">Week 6</span><span class="wd">30 Nov–6 Dec</span></th>
+  </tr></thead>
+  <tbody>
+    <tr>
+      <th class="act" scope="row"><span class="an">Back squat</span><span class="ac"><span class="chip">5 × 5</span><span class="t">3 a week</span></span></th>
+      <td class="past"><span class="cv res met">3 of 3</span><span class="cs">45 kg</span></td>
+      <td class="cur"><span class="cv">42.5 kg</span><span class="cs">3 × 5</span><span class="cs">2 of 1 so far</span><span class="cs pu">Paused until Wed 2 Dec</span></td>
+      <td class="paused"><span class="cv">Paused</span><span class="cs">Knee</span></td>
+      <td><span class="cv">52.5 kg</span><span class="cs">5 × 5</span><span class="cs pu">Paused until Wed 2 Dec</span></td>
+    </tr>
+    <tr>
+      <th class="act" scope="row"><span class="an">Bench press</span><span class="ac"><span class="chip">5 × 5</span><span class="t">3 a week</span></span></th>
+      <td class="past"><span class="cv res met">3 of 3</span><span class="cs">35 kg</span></td>
+      <td class="cur"><span class="cv">35 kg</span><span class="cs">3 × 5</span><span class="cs">1 of 3 so far</span></td>
+      <td><span class="cv">40 kg</span><span class="cs">5 × 5</span></td>
+      <td><span class="cv">42.5 kg</span><span class="cs">5 × 5</span></td>
+    </tr>
+  </tbody></table></div></div><div class="pane" data-theme="dark"><p class="label pane-label">Dark</p><div class="grid-wrap"><table class="og">
+  <thead><tr>
+    <th class="act" scope="col"><span class="vh">Activity</span></th>
+    <th class="wk past" scope="col"><span class="wn">Week 3</span><span class="wd">9–15 Nov</span></th>
+    <th class="wk cur" scope="col"><span class="wn">Week 4</span><span class="wd">16–22 Nov</span><span class="wt">This week</span><span class="wt">Deload</span></th>
+    <th class="wk" scope="col"><span class="wn">Week 5</span><span class="wd">23–29 Nov</span></th>
+    <th class="wk" scope="col"><span class="wn">Week 6</span><span class="wd">30 Nov–6 Dec</span></th>
+  </tr></thead>
+  <tbody>
+    <tr>
+      <th class="act" scope="row"><span class="an">Back squat</span><span class="ac"><span class="chip">5 × 5</span><span class="t">3 a week</span></span></th>
+      <td class="past"><span class="cv res met">3 of 3</span><span class="cs">45 kg</span></td>
+      <td class="cur"><span class="cv">42.5 kg</span><span class="cs">3 × 5</span><span class="cs">2 of 1 so far</span><span class="cs pu">Paused until Wed 2 Dec</span></td>
+      <td class="paused"><span class="cv">Paused</span><span class="cs">Knee</span></td>
+      <td><span class="cv">52.5 kg</span><span class="cs">5 × 5</span><span class="cs pu">Paused until Wed 2 Dec</span></td>
+    </tr>
+    <tr>
+      <th class="act" scope="row"><span class="an">Bench press</span><span class="ac"><span class="chip">5 × 5</span><span class="t">3 a week</span></span></th>
+      <td class="past"><span class="cv res met">3 of 3</span><span class="cs">35 kg</span></td>
+      <td class="cur"><span class="cv">35 kg</span><span class="cs">3 × 5</span><span class="cs">1 of 3 so far</span></td>
+      <td><span class="cv">40 kg</span><span class="cs">5 × 5</span></td>
+      <td><span class="cv">42.5 kg</span><span class="cs">5 × 5</span></td>
+    </tr>
+  </tbody></table></div></div></div>
+    
+  </section>
+</main>
+
+<script>
+  // Measures: for each <li data-fg data-bg data-min>, the WCAG contrast of the two colours in each
+  // theme, resolved inside the option (so --candidate-* values apply), written after the label.
+  (() => {
+    const rgb = (value, scope, theme) => {
+      const probe = document.createElement('span')
+      probe.dataset.theme = theme
+      probe.style.color = value
+      scope.append(probe)
+      const parts = getComputedStyle(probe).color.match(/[\d.]+/g).map(Number)
+      probe.remove()
+      return parts.slice(0, 3)
+    }
+    const lum = ([r, g, b]) => [r, g, b]
+      .map((c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4 })
+      .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0)
+    const ratio = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05) }
+    for (const li of document.querySelectorAll('.measures li[data-fg]')) {
+      const scope = li.closest('.option') || document.body
+      const min = Number(li.dataset.min || 0)
+      const results = ['light', 'dark'].map((theme) => {
+        const r = ratio(rgb(li.dataset.fg, scope, theme), rgb(li.dataset.bg, scope, theme))
+        return { theme, r, ok: !min || r >= min }
+      })
+      li.dataset.pass = results.every((x) => x.ok) ? 'yes' : 'no'
+      li.append(`: ${results.map((x) => `${x.theme} ${x.r.toFixed(1)}:1${x.ok ? '' : ' (below ' + min + ':1)'}`).join(', ')}`)
+    }
+  })()
+</script>

@@ -1,4 +1,4 @@
-<!-- @dsCard group="Planner" height=2900 subtitle="A programme's plan as a table, every activity against every week, at every width: past weeks on a tile, this week framed in ink, a hand-edit's pencil, pauses, deloads and split weeks; on its overview page with the Changes tab, after an open pause, and previewing a change with the bar at its foot (K142, K143, K148)" -->
+<!-- @dsCard group="Planner" height=3450 subtitle="A programme's plan as a table, every activity against every week, at every width: past weeks on a tile, this week framed in ink, a hand-edit's pencil, pauses, deloads and split weeks; on its overview page with the Changes tab, after an open pause, paused for part of the week (Paused until in paused-ink), and previewing a change with the bar at its foot (K142, K143, K148, K166)" -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -73,6 +73,8 @@
   .res { color: var(--ink-secondary); font-weight: 400; }
   .res.met { color: var(--ink); font-weight: 600; text-decoration: underline; text-decoration-color: var(--pen); text-decoration-thickness: 2px; text-underline-offset: 0.22em; }
   .paused .cv { color: var(--ink-secondary); }
+  /* "Paused until …": the cell's last line, in paused-ink at 600 so it stands out (K166). */
+  .cs.pu { color: var(--paused-ink); font-weight: 600; }
   /* Past weeks on a tile; this week framed in 2px ink, top to bottom (K143). */
   .og .past { background: var(--tile); }
   .og .cur { box-shadow: inset 2px 0 0 var(--ink), inset -2px 0 0 var(--ink); }
@@ -204,6 +206,14 @@
 </div>
 
 <div class="gap"></div>
+<p class="variant label">Paused for part of the week (K166): Deadlift paused from today, Wed 16 Dec, until Wed 30 Dec, for its knee. This week ran Monday and Tuesday, so its goal is 1. This week's cell and week 6's end on “Paused until Wed 30 Dec” in paused-ink at 600, so the pause stands out; week 5 is paused</p>
+<div class="stage">
+  <div class="page">
+    <div data-grid="part-pause"></div>
+  </div>
+</div>
+
+<div class="gap"></div>
 <p class="variant label">Previewing a change (K148): Show it in the plan, from the change sheet's step 2. Barbell row set to 45 kg from Mon 21 Dec: each changed cell reads before → after, week 6 keeps its hand-edit, and the bar at the foot holds Back to the change and Confirm change. Nothing is saved yet</p>
 <div class="stage previewing">
   <div class="page" data-testid="programme-overview" data-previewing>
@@ -237,7 +247,8 @@
   const CUR = 4
   const TARGET = 3
   const SW = ['5 × 5', '5 × 5', '5 × 5', '3 × 5', '5 × 5', '5 × 5', '5 × 5', '3 × 5']
-  // A week's value: a number, 'P' (paused), { split: [before, after, day] } or { hand, on }.
+  // A week's value: a number, 'P' (paused), { split: [before, after, day] }, { hand, on } or
+  // { v, until, goal } (a pause that starts or ends in the week: "Paused until Wed 30 Dec").
   const ACTS = [
     { key: 'squat', name: 'Back squat', chip: '5 × 5', unit: 'kg', sets: SW, w: [40, 42.5, 45, 45, 52.5, 57.5, 60, 60], done: [3, 3, 3, 1] },
     { key: 'bench', name: 'Bench press', chip: '5 × 5', unit: 'kg', sets: SW, w: [30, 32.5, { split: [35, 32.5, 'Wed'] }, 32.5, 37.5, 40, 42.5, 40], done: [3, 3, 1, 1] },
@@ -245,6 +256,10 @@
     { key: 'deadlift', name: 'Deadlift', chip: '1 × 5', unit: 'kg', sets: Array(8).fill('1 × 5'), w: [60, 65, 70, 'P', 'P', 75, 80, 77.5], done: [3, 2, 3], why: 'Knee' },
     { key: 'plank', name: 'Plank', chip: '3 sets', unit: 's', sets: Array(8).fill('3 sets'), w: [30, 30, 35, 35, 40, 40, 45, 45], done: [3, 3, 3, 1] },
   ]
+  // Paused for part of the week: Deadlift paused from Wed 16 Dec until Wed 30 Dec (K166).
+  const PART = 'Wed 30 Dec'
+  const PART_PAUSE = ACTS.filter((a) => a.key === 'squat' || a.key === 'deadlift').map((a) => a.key !== 'deadlift' ? a
+    : { ...a, w: [60, 65, 70, { v: 65, until: PART, goal: 1 }, 'P', { v: 75, until: PART }, 80, 77.5], done: [3, 2, 3, 1] })
   // The change preview: Barbell row set to 45 kg from Mon 21 Dec; week 6 keeps its hand-edit.
   const PREVIEW = { row: { 4: [40, 45], 6: [45, 50], 7: [42.5, 47.5] } }
   const fmt = (v, unit) => `${v} ${unit}`
@@ -264,7 +279,7 @@
     const past = wk.n < CUR, cur = wk.n === CUR
     const cls = ['wk', past ? 'past' : '', cur ? 'cur' : '']
     const lines = []
-    let main = '', state = past ? 'done' : cur ? 'current' : 'planned', extra = ''
+    let main = '', state = past ? 'done' : cur ? 'current' : 'planned', extra = '', until = ''
     if (v === 'P') {
       cls.push('paused'); state = 'paused'
       main = 'Paused'
@@ -275,15 +290,17 @@
       if (v.split) { lines.push(`${v.split[0]} → ${v.split[1]} kg`, `from ${v.split[2]}`); extra = ' data-split' }
       else lines.push(fmt(v, a.unit))
     } else {
-      const val = v.hand ?? v
+      const val = v.hand ?? v.v ?? v
       const pv = o.preview && o.preview[a.key] && o.preview[a.key][i]
       if (pv) { main = `<span class="chg"><span class="was">${pv[0]} →</span> ${fmt(pv[1], a.unit)}</span>`; state = 'changed' }
       else main = fmt(val, a.unit)
       if (v.hand) { main += `${ic('pencil')}<span class="vh">, set by hand on ${v.on}</span>`; extra = ` data-hand-edit="${v.on}"` }
       lines.push(a.sets[i])
-      if (cur) lines.push(`${a.done[i]} of ${TARGET} so far`)
+      if (cur) lines.push(`${a.done[i]} of ${v.goal ?? TARGET} so far`)
+      // After an open pause the weeks have no dates, so no "Paused until" either.
+      if (v.until && !o.openPause) until = `<span class="cs pu" data-testid="paused-until">Paused until ${v.until}</span>`
     }
-    const inner = `<span class="cv">${main}</span>${lines.map((l) => `<span class="cs">${l}</span>`).join('')}`
+    const inner = `<span class="cv">${main}</span>${lines.map((l) => `<span class="cs">${l}</span>`).join('')}${until}`
     const attrs = ` data-activity="${a.key}" data-week="${wk.n}" data-cell="${state}"${extra}`
     // A later week with a value is a button: Edit this week, or Change from here (a Menu).
     if (!past && !cur && v !== 'P' && !o.preview) {
@@ -294,7 +311,8 @@
   }
 
   function table(o) {
-    const acts = o.only ? ACTS.filter((a) => o.only.includes(a.key)) : ACTS
+    const all = o.acts ?? ACTS
+    const acts = o.only ? all.filter((a) => o.only.includes(a.key)) : all
     const head = `<tr><th class="act" scope="col"><span class="vh">Activity</span></th>${WEEKS.map((w) => weekHead(w, o)).join('')}</tr>`
     const rows = acts.map((a) => `<tr data-activity="${a.key}"><th class="act" scope="row"><a href="#"><span class="an">${a.name}</span></a><span class="ac"><span class="chip">${a.chip}</span><span class="t">${TARGET} a week</span></span></th>${WEEKS.map((_, i) => cell(a, i, o)).join('')}</tr>`).join('')
     return `<div class="grid-wrap" tabindex="0" role="region" aria-label="${o.label}" data-testid="programme-grid"><table class="og"><thead>${head}</thead><tbody>${rows}</tbody></table></div>`
@@ -303,6 +321,7 @@
   const GRIDS = {
     running: { label: 'The plan, week by week' },
     'open-pause': { label: 'The plan, week by week', openPause: true, only: ['squat', 'row', 'deadlift'] },
+    'part-pause': { label: 'The plan with a pause, week by week', acts: PART_PAUSE },
     preview: { label: 'The plan with the change, week by week', preview: PREVIEW },
   }
   for (const host of document.querySelectorAll('[data-grid]')) host.innerHTML = table(GRIDS[host.dataset.grid])

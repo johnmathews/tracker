@@ -141,6 +141,8 @@ type View = {
   /** Words for a screen reader after the leading line. */
   hidden: string | null
   lines: string[]
+  /** "Paused until Wed 2 Dec", after the lines, in paused-ink at 600 (K166). */
+  until: string | null
   met: boolean
   split: boolean
   hand: string | null
@@ -163,6 +165,7 @@ function view(column: Column, key: string): View {
     was: null,
     hidden: 'Not in this week',
     lines: [],
+    until: null,
     met: false,
     split: false,
     hand: null,
@@ -205,13 +208,14 @@ function view(column: Column, key: string): View {
   if (column.current && cell.target > 0) {
     lines.push(`${weekCount(cell).done} of ${cell.target} so far`)
   }
-  if (cell.until && column.week && cell.until > column.week.monday) {
-    lines.push(`Paused until ${dayText(cell.until)}`)
-  }
+  const until =
+    cell.until && column.week && cell.until > column.week.monday
+      ? `Paused until ${dayText(cell.until)}`
+      : null
   const change = changeFor(column, key, lead)
   if (change) {
     const text = changeWords(change)
-    return { ...out, state: 'changed', main: text.now, was: text.was, lines, hand }
+    return { ...out, state: 'changed', main: text.now, was: text.was, lines, until, hand }
   }
   const tap =
     props.mode === 'running' &&
@@ -225,6 +229,7 @@ function view(column: Column, key: string): View {
     main: split ? splitLines[0]! : value,
     hidden: hand ? `, set by hand on ${hand}` : null,
     lines,
+    until,
     split: !!split,
     hand,
     tap,
@@ -261,6 +266,10 @@ const FRAME_TOP =
   'shadow-[inset_2px_0_0_var(--color-ink),inset_-2px_0_0_var(--color-ink),inset_0_2px_0_var(--color-ink)]'
 const FRAME_FOOT =
   'shadow-[inset_2px_0_0_var(--color-ink),inset_-2px_0_0_var(--color-ink),inset_0_-2px_0_var(--color-ink)]'
+
+/** "Paused until …": the cell's last line, in paused-ink at 600 so it stands out (K166). */
+const UNTIL =
+  'block text-(length:--set-caption) leading-[1.35] font-semibold whitespace-nowrap text-paused-ink'
 
 function cellClass(column: Column, last: boolean): string[] {
   return [column.past ? 'bg-tile' : '', column.current ? (last ? FRAME_FOOT : FRAME_SIDES) : '']
@@ -407,6 +416,9 @@ function cellClass(column: Column, last: boolean): string[] {
                     class="block text-(length:--set-caption) leading-[1.35] font-normal whitespace-nowrap text-ink-secondary"
                     >{{ line }}</span
                   >
+                  <span v-if="v.until" :class="UNTIL" data-testid="paused-until">{{
+                    v.until
+                  }}</span>
                 </button>
               </template>
               <MenuItem @select="emit('edit', row.key, column.week!)">Edit this week</MenuItem>
@@ -441,6 +453,7 @@ function cellClass(column: Column, last: boolean): string[] {
                 class="block text-(length:--set-caption) leading-[1.35] whitespace-nowrap text-ink-secondary"
                 >{{ line }}</span
               >
+              <span v-if="v.until" :class="UNTIL" data-testid="paused-until">{{ v.until }}</span>
             </template>
             <span v-else class="sr-only">{{ v.hidden }}</span>
           </td>

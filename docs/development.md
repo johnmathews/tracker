@@ -65,6 +65,7 @@ build and coverage output. ESLint also ignores Playwright's `playwright-report/`
   The palette is switched off, so a class such as `bg-red-500` silently draws nothing.
   [brand.md](brand.md) §3 says what each role means. `pen` is for done, a met day and a met week's count, nothing else.
   `caution-ink` is kept for InlineMessage's caution tone; nothing on the planner uses it (K28).
+  `paused-ink` is for the programme grid's "Paused until …" line and nothing else (K166).
 - **Type-style classes for text.** Set text with `display`, `title-1`, `title-2`, `body-large`,
   `body`, `caption`, `label` or `note`, rather than font-size and line-height utilities. The type
   classes sit in Tailwind's `components` layer, so a utility beside one wins as it reads
@@ -94,6 +95,13 @@ its own in its section (`ItemPageSection.vue` sets one up with the card's items)
 save nowhere. Show one example at a time if two would repeat the same landmarks: ItemPage's section
 picks its state with a SegmentedControl, because two pages on one screen would repeat the same
 named regions, which axe's `landmark-unique` rule fails.
+
+A component that needs the server's data, as the programme primitives do, gets example data built
+in the browser in the shapes the API sends (`sections/programmeExamples.ts`: a run, its grid, and a
+fake server that answers the ChangeSheet's preview and confirm without a request). The web image
+leaves the root `fixtures/` out and type-checks the style guide, so a section never imports it or
+anything under `__tests__`. A test fails while a folder in `src/components/ui/` has no section
+(`src/styleguide/__tests__/complete.spec.ts`).
 
 ### 3.2 The design gate and the tokens
 
@@ -379,6 +387,11 @@ listed in [api.md](api.md) §10):
   Programme row (the step chart and its controls), all against `programmesApi.ts`, a helper.
 - `src/styleguide/__tests__/look.spec.ts`: the style guide's theme from the query string, the
   round trip back to it, and the class it sets.
+- `src/styleguide/__tests__/complete.spec.ts`: a style guide section for every folder in
+  `src/components/ui/`, and no two sections with one id.
+- `src/styleguide/__tests__/programmeSections.spec.ts`: the ProgrammeGrid, ChangeSheet and
+  ProgrammeChart sections draw each state their cards show under its id, and the fake server
+  previews, refuses and finds a stale plan as the real one does.
 - `src/stores/__tests__/planner.spec.ts`: stepping a day through its marks, totals, week navigation, goal clamping, adding,
   removal's effect on totals, settings, detail chips, editing exercises, sets, weekly plans
   (defaults, carry forward, a week getting its own plan), config mode,
