@@ -325,11 +325,10 @@
   ],
   "lastChange": {
     "by": "John Mathews",
-    "at": "2026-11-18T20:10:00Z",
+    "at": "2026-11-19T07:19:00Z",
     "via": "Claude Code",
-    "note": "K142-K162, programmes: four new cards, ProgrammeGrid (a programme's overview, a row per activity and a column per week, past weeks locked on tile, a pencil after a hand-edited value), ChangeSheet (the change in two steps, Preview change then Confirm change, and Show it in the plan), ProgrammeChart (an activity's step chart with Set weight, Set increase, Pause activity and End activity) and ProgrammesPage (Started, Library and Add, with Preview and start in place). PlannerScreen gains a programme tracker's 'Week 4 of 8', a lock by a locked day and a paused row's sentence, and Edit plan's frame on a phone is a top line only (K162). The Header carries Programmes after Settings, and Full screen is hidden below 640px (K160). Icons gains calendar-range, calendar, chevron-up, chevron-down, circle-stop, copy, lock, pause, play, skip-forward, trending-up, undo-2 and upload, and the index now records mail. The README's Never list and foundations' pen and edit rows follow."
+    "note": "K166, programmes follow-ups: a new colour role, paused-ink (#9f1d1d light, #f08a7e dark), for the ProgrammeGrid's \"Paused until\" line only, at weight 600; foundations' role table has six project roles. The ProgrammeGrid card gains a \"Paused for part of the week\" state and table, its contrast figures and the line's test hook, and its height grows to 3450."
   },
-
   "layout": "files",
   "libraries": [],
   "namespace": "Tracker",
