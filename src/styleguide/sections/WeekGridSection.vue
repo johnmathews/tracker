@@ -5,6 +5,7 @@ import { DAY_NAMES, addDays, dateKey, fullDate } from '@/lib/dates'
 import { EXERCISE_CYCLE, cycleDay, type Tracked } from '@/lib/tracker'
 import type { Log, Mark } from '@/lib/storage'
 import TrackerGrid from '@/components/TrackerGrid.vue'
+import type { PausedLine } from '@/components/TrackerRow.vue'
 import ExampleGroup from '../parts/ExampleGroup.vue'
 import StateExample from '../parts/StateExample.vue'
 
@@ -58,6 +59,25 @@ const KEYS: [string, string][] = [
 function marksFor(id: string): (Mark | null)[] {
   return week.value[id] ?? []
 }
+
+/*
+ * A programme tracker's week (PlannerScreen card, programmes spec §9.5): Back squat is paused until
+ * Mon 28 Dec for its knee, so its row says so in place of its boxes. "Paused until Mon 28 Dec." is
+ * paused-ink at 600; the reason and the icon stay ink-secondary (K169). Monday and Tuesday are
+ * locked: marks stay open for today and yesterday.
+ */
+const PROGRAMME_WEEK = 'sg-programme'
+const programmeRows: Row[] = [
+  { id: 'bs', name: 'Back squat', target: 3, chips: ['5 × 5'] },
+  { id: 'bp', name: 'Bench press', target: 3, chips: ['5 × 5', '40 kg'] },
+]
+const programmeLog = reactive<Log>({
+  [PROGRAMME_WEEK]: { bs: [_, _, _, _, _, _, _], bp: ['great', _, 'great', _, _, _, _] },
+})
+const programmeLocked = days.map((_, i) => i < TODAY - 1)
+function pausedFor(item: Tracked): PausedLine | null {
+  return item.id === 'bs' ? { lead: 'Paused until Mon 28 Dec.', reason: 'Knee.' } : null
+}
 </script>
 
 <!-- The card's grid, drawn by the app's own TrackerGrid. Edit plan has the same columns (K120), so
@@ -75,6 +95,25 @@ function marksFor(id: string): (Mark | null)[] {
           :marks-for="marksFor"
           :details-for="(item) => (item as Row).chips"
           @toggle="(id, day) => cycleDay(log, WEEK, id, day, EXERCISE_CYCLE)"
+        />
+      </div>
+    </StateExample>
+    <StateExample
+      state="A programme tracker. Back squat is paused: “Paused until Mon 28 Dec.” leads in paused-ink at 600, and “Knee.” and the icon stay ink-secondary (K169). Monday and Tuesday are locked."
+      class="w-full"
+    >
+      <div id="sg-week-grid-programme-paused" class="w-full">
+        <TrackerGrid
+          section="exercise"
+          label="Strength 5×5"
+          table-label="Strength 5×5, week of 19 October"
+          :items="programmeRows"
+          :days="days"
+          :marks-for="(id) => programmeLog[PROGRAMME_WEEK]![id] ?? []"
+          :details-for="(item) => (item as Row).chips"
+          :locked-days="programmeLocked"
+          :paused-for="pausedFor"
+          @toggle="(id, day) => cycleDay(programmeLog, PROGRAMME_WEEK, id, day, EXERCISE_CYCLE)"
         />
       </div>
     </StateExample>

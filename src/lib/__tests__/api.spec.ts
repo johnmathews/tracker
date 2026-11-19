@@ -188,7 +188,7 @@ describe('request', () => {
   })
 })
 
-describe('request DELETE', () => {
+describe('request with no body', () => {
   afterEach(() => vi.unstubAllGlobals())
 
   it('sends no body but the JSON content type, which every write must carry', async () => {
@@ -200,6 +200,22 @@ describe('request DELETE', () => {
     expect(init!.method).toBe('DELETE')
     expect(init!.body).toBeUndefined()
     expect(init!.headers).toEqual({ 'Content-Type': 'application/json' })
+  })
+
+  it('gives a POST with no body the JSON content type too, as the copy route needs', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => new Response('{}', { status: 201 }))
+    vi.stubGlobal('fetch', fetch)
+    await request('POST', '/shared-programmes/s1/copy')
+    const [, init] = fetch.mock.calls[0]!
+    expect(init!.body).toBeUndefined()
+    expect(init!.headers).toEqual({ 'Content-Type': 'application/json' })
+  })
+
+  it('leaves a GET without a content type', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => new Response('{}', { status: 200 }))
+    vi.stubGlobal('fetch', fetch)
+    await request('GET', '/shared-programmes')
+    expect(fetch.mock.calls[0]![1]!.headers).toBeUndefined()
   })
 })
 

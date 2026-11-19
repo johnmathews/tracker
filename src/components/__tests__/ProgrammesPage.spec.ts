@@ -3,15 +3,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import App from '@/App.vue'
-import { signedIn } from '@/lib/__tests__/signedIn'
+import { USER, signedIn } from '@/lib/__tests__/signedIn'
 import { withProgrammes, type Call, type Route } from './programmesApi'
 import LIBRARY_JSON from '@/lib/__tests__/programmes/library.json'
 import START_JSON from '@/lib/__tests__/programmes/start-preview.json'
 import RUN_JSON from '@/lib/__tests__/programmes/run.json'
+import SHARED_JSON from '@/lib/__tests__/programmes/shared.json'
 import { START_PREVIEW_DELAY } from '@/lib/programmes'
 
 const PID = LIBRARY_JSON.programmes[0]!.id
 const BEGINNER = readProgrammeFixture('valid/beginner-5x5.json')
+// jsdom has no scrollIntoView; a copy landing scrolls to its row (K174).
+Element.prototype.scrollIntoView ??= () => {}
 const MINIMAL_DOC = readProgrammeFixture('valid/minimal.json')
 const RECORD = { ...LIBRARY_JSON.programmes[0]!, doc: BEGINNER }
 const RUNNING = {
@@ -53,9 +56,11 @@ async function openPage(
   table: Record<string, Route> = {},
   runs: Record<string, unknown> = { t1: RUNNING, t2: PAUSED },
   today: string | null = '2026-11-12',
+  admin = false,
 ) {
   history.replaceState(null, '', '/#/programmes')
   const api = signedIn()
+  if (admin) api.admins.add(USER)
   ;({ calls, routes } = withProgrammes(
     api,
     {
@@ -75,7 +80,7 @@ async function openPage(
 const page = () => wrapper.get('[data-testid="programmes-page"]')
 const byTestId = (id: string) => page().get(`[data-testid="${id}"]`)
 
-async function openTab(name: 'running' | 'library' | 'add'): Promise<void> {
+async function openTab(name: 'running' | 'library' | 'reference' | 'add'): Promise<void> {
   await byTestId(`programmes-tab-${name}`).trigger('mousedown')
   await settle()
 }
@@ -100,7 +105,7 @@ afterEach(() => {
 })
 
 describe('the Programmes page (K147)', () => {
-  it('is a page of its own with no bar, Back to the week, and three tabs opening on Started', async () => {
+  it('is a page of its own with no bar, Back to the week, and four tabs opening on Started', async () => {
     await openPage()
     expect(wrapper.find('[data-slot="bar"]').exists()).toBe(false)
     expect(page().get('h1').text()).toBe('Programmes')
@@ -109,7 +114,7 @@ describe('the Programmes page (K147)', () => {
       page()
         .findAll('[role="tab"]')
         .map((t) => t.text()),
-    ).toEqual(['Started', 'Library', 'Add'])
+    ).toEqual(['Started', 'Library', 'Reference', 'Add'])
     expect(page().get('[role="tab"][aria-selected="true"]').text()).toBe('Started')
   })
 
@@ -551,5 +556,622 @@ describe('the start form’s edges', () => {
     button.click()
     await settle()
     expect(calls.filter((c) => c.method === 'POST' && c.path === '/programmes')).toHaveLength(1)
+  })
+})
+
+describe('the shared library on the Reference tab (K171, K177)', () => {
+  const SID = SHARED_JSON.programmes[0]!.id
+  const COPY = {
+    ...RECORD,
+    id: 'p-copy',
+    name: 'Strength 5×5',
+    description: 'Three full-body sessions a week, adding weight each week.',
+    doc: { ...BEGINNER, name: 'Strength 5×5' },
+  }
+  const section = () => page().find('[data-testid="shared-library"]')
+  const question = () => document.querySelector<HTMLElement>('[role="alertdialog"]')
+  async function answer(label: string): Promise<void> {
+    const button = [...question()!.querySelectorAll('button')].find(
+      (b) => b.textContent?.trim() === label,
+    )!
+    button.click()
+    await settle()
+  }
+  /** Copy to library on the first shared row, answered Copy (K172). */
+  async function copyFirst(): Promise<void> {
+    await byTestId('shared-copy').trigger('click')
+    await settle()
+    await answer('Copy')
+  }
+
+  it('lists the shared programmes on the Reference tab, each with Preview and Copy (K177)', async () => {
+    await openPage({ 'GET /shared-programmes': { body: SHARED_JSON } })
+    await openTab('reference')
+    const shared = byTestId('shared-library')
+    expect(shared.text()).toContain(
+      'Programmes anyone with an account can copy. A copy is yours to change and start.',
+    )
+    expect(shared.get('ul').attributes('aria-label')).toBe('Reference')
+    const rows = shared.findAll('[data-testid="shared-programme"]')
+    expect(rows.map((r) => r.attributes('data-shared'))).toEqual(
+      SHARED_JSON.programmes.map((p) => p.id),
+    )
+    // The tab has no heading of its own, so the names are h2s, as the Library's are.
+    expect(rows[0]!.get('h2').text()).toBe('Strength 5×5')
+    expect(rows[0]!.text()).toContain('Strength · 8 weeks · 5 activities')
+    expect(rows[0]!.text()).toContain('Three full-body sessions a week')
+    expect(rows[1]!.text()).toContain('Cardio · 9 weeks · 1 activity')
+    expect(rows[0]!.get('[data-testid="shared-copy"]').text()).toBe('Copy to library')
+    // The Library is the account's own: no shared programme there.
+    await openTab('library')
+    expect(byTestId('programmes-library').find('[data-testid="shared-library"]').exists()).toBe(
+      false,
+    )
+  })
+
+  it('says when there are none, and lists nothing when they can’t be read', async () => {
+    await openPage({ 'GET /shared-programmes': { body: { programmes: [] } } })
+    await openTab('reference')
+    expect(section().text()).toContain('No reference programmes yet.')
+    wrapper.unmount()
+    await openPage({ 'GET /shared-programmes': 'offline' })
+    await openTab('reference')
+    expect(section().find('[data-testid="shared-programme"]').exists()).toBe(false)
+    expect(section().text()).not.toContain('No reference programmes yet.')
+  })
+
+  it('copies a programme into the library, which then lists it first', async () => {
+    await openPage({
+      'GET /shared-programmes': { body: SHARED_JSON },
+      [`POST /shared-programmes/${SID}/copy`]: { status: 201, body: COPY },
+    })
+    await openTab('reference')
+    const scrolled = vi.spyOn(Element.prototype, 'scrollIntoView')
+    await copyFirst()
+    expect(
+      calls.some((c) => c.method === 'POST' && c.path === `/shared-programmes/${SID}/copy`),
+    ).toBe(true)
+    const own = page().findAll('[data-testid="library-programme"]')
+    expect(own.map((r) => r.attributes('data-programme'))).toEqual(['p-copy', PID])
+    // It lands (K174): the page scrolls to it, focus goes to its name, and it holds a tile. The
+    // copy itself says where it went, so no line over the library says so.
+    const landed = own[0]!
+    expect(scrolled.mock.contexts).toContain(landed.element)
+    expect(scrolled).toHaveBeenLastCalledWith({ behavior: 'smooth', block: 'start' })
+    expect(document.activeElement).toBe(landed.get('h2').element)
+    expect(landed.attributes('data-landing')).toBe('')
+    expect(landed.classes()).toContain('before:bg-tile')
+    expect(byTestId('programmes-library').find('[data-slot="inline-message"]').exists()).toBe(false)
+    scrolled.mockRestore()
+    // The copy landed in Library, so that tab opened (K177).
+    expect(page().get('[role="tab"][aria-selected="true"]').text()).toBe('Library')
+    // Back on Reference, the shared row stays, its button now Added to library (K172).
+    await openTab('reference')
+    expect(section().findAll('[data-testid="shared-programme"]')).toHaveLength(2)
+    const buttons = section().findAll('[data-testid="shared-copy"]')
+    expect(buttons.map((b) => b.text())).toEqual(['Added to library', 'Copy to library'])
+    expect(buttons[0]!.attributes('data-copied')).toBe('true')
+    // Pressed again, it asks again, and says the library already has one (S4: a second copy).
+    await buttons[0]!.trigger('click')
+    await settle()
+    expect(question()!.textContent).toContain(
+      'Your library already has a programme called Strength 5×5. Copying adds another one.',
+    )
+    await answer('Cancel')
+  })
+
+  it('lets the tile go: it holds 1.5 seconds, fades, then the row is plain again (K174)', async () => {
+    await openPage({
+      'GET /shared-programmes': { body: SHARED_JSON },
+      [`POST /shared-programmes/${SID}/copy`]: { status: 201, body: COPY },
+    })
+    await openTab('reference')
+    await copyFirst()
+    const row = () => page().get('[data-programme="p-copy"]')
+    expect(row().attributes('data-landing')).toBe('')
+    await vi.waitFor(() => expect(row().attributes('data-landing')).toBe('settled'), {
+      timeout: 2000,
+    })
+    expect(row().classes()).toContain('before:opacity-0')
+    await vi.waitFor(() => expect(row().attributes('data-landing')).toBeUndefined(), {
+      timeout: 1000,
+    })
+    expect(row().classes()).not.toContain('before:bg-tile')
+  })
+
+  it('lands at once with reduced motion (K174)', async () => {
+    const matchMedia = window.matchMedia
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes('reduce'),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })) as unknown as typeof window.matchMedia
+    try {
+      await openPage({
+        'GET /shared-programmes': { body: SHARED_JSON },
+        [`POST /shared-programmes/${SID}/copy`]: { status: 201, body: COPY },
+      })
+      await openTab('reference')
+      const scrolled = vi.spyOn(Element.prototype, 'scrollIntoView')
+      await copyFirst()
+      expect(scrolled).toHaveBeenLastCalledWith({ behavior: 'auto', block: 'start' })
+      scrolled.mockRestore()
+    } finally {
+      window.matchMedia = matchMedia
+    }
+  })
+
+  it('fills the page’s column with the lists, closed or open (K175, K176)', async () => {
+    await openPage({ 'GET /shared-programmes': { body: SHARED_JSON } })
+    await openTab('library')
+    const row = () => page().get('[data-testid="library-programme"]')
+    expect(page().get('ul[aria-label="Library"]').classes()).not.toContain('max-w-[820px]')
+    expect(row().classes()).not.toContain('max-w-[820px]')
+    await byTestId('library-start').trigger('click')
+    await settle()
+    expect(row().classes()).not.toContain('max-w-[820px]')
+  })
+
+  it('asks before copying, and copies nothing on Cancel (K172)', async () => {
+    await openPage({
+      'GET /shared-programmes': { body: SHARED_JSON },
+      [`POST /shared-programmes/${SID}/copy`]: { status: 201, body: COPY },
+    })
+    await openTab('reference')
+    await byTestId('shared-copy').trigger('click')
+    await settle()
+    expect(question()!.textContent).toContain('Copy Strength 5×5 to your library?')
+    expect(question()!.textContent).toContain('The copy is yours to change and start.')
+    await answer('Cancel')
+    expect(calls.some((c) => c.path === `/shared-programmes/${SID}/copy`)).toBe(false)
+    expect(byTestId('shared-copy').text()).toBe('Copy to library')
+  })
+
+  it('warns when the library already has a programme of that name (K172)', async () => {
+    await openPage({ 'GET /shared-programmes': { body: SHARED_JSON } })
+    await openTab('library')
+    const own = page().get('[data-testid="library-programme"] h2').text()
+    const twin = { ...SHARED_JSON.programmes[0]!, name: ` ${own.toUpperCase()} ` }
+    wrapper.unmount()
+    await openPage({ 'GET /shared-programmes': { body: { programmes: [twin] } } })
+    await openTab('reference')
+    await byTestId('shared-copy').trigger('click')
+    await settle()
+    expect(question()!.textContent).toContain(
+      `Your library already has a programme called ${twin.name}. Copying adds another one.`,
+    )
+    await answer('Cancel')
+  })
+
+  it('says why a copy failed', async () => {
+    await openPage({
+      'GET /shared-programmes': { body: SHARED_JSON },
+      [`POST /shared-programmes/${SID}/copy`]: { status: 409, body: { error: 'too-many' } },
+    })
+    await openTab('reference')
+    await copyFirst()
+    // Said on the Reference tab, which stays open; the button stays, to try again.
+    expect(section().get('[data-slot="inline-message"]').text()).toContain(
+      'There’s no room for another.',
+    )
+    expect(byTestId('shared-copy').text()).toBe('Copy to library')
+    await openTab('library')
+    expect(page().findAll('[data-testid="library-programme"]')).toHaveLength(1)
+  })
+
+  // -- Preview on a shared row (K173): a Dialog with the plan and the activities --
+  const PREVIEW = {
+    programme: { ...SHARED_JSON.programmes[0]!, doc: { ...BEGINNER, name: 'Strength 5×5' } },
+    plan: START_JSON,
+  }
+  const previewDialog = () => {
+    const el = document.querySelector<HTMLElement>('[data-slot="dialog"]')
+    return el ? new DOMWrapper(el) : null
+  }
+
+  it('opens Preview in a Dialog: the facts, the plan by week number, the activities', async () => {
+    await openPage({
+      'GET /shared-programmes': { body: SHARED_JSON },
+      [`GET /shared-programmes/${SID}/preview`]: { body: PREVIEW },
+    })
+    await openTab('reference')
+    await byTestId('shared-preview-open').trigger('click')
+    await settle()
+    const d = previewDialog()!
+    expect(d.get('h2').text()).toBe('Strength 5×5')
+    expect(d.text()).toContain('Strength · 8 weeks · 5 activities')
+    expect(d.get('[data-testid="shared-preview-line"]').text()).toBe(
+      'Eight weeks, at the programme’s own values. Deload in weeks 4 and 8. You choose your own values and start day when you start your copy.',
+    )
+    expect(d.get('th[data-week="1"]').text()).not.toMatch(/Oct|Nov/)
+    // The fixed activity column sits on the dialog's panel, not the page's canvas.
+    expect(d.get('[data-testid="programme-grid"]').attributes('style')).toContain(
+      '--grid-ground: var(--panel)',
+    )
+    expect(d.findAll('[data-testid="shared-activity"]')).toHaveLength(
+      (BEGINNER.activities as unknown[]).length,
+    )
+    expect(d.find('[data-testid="shared-preview-warning"]').exists()).toBe(false)
+    // Looking writes nothing, and Close puts it away.
+    expect(calls.filter((c) => c.method !== 'GET')).toEqual([])
+    await d
+      .findAll('button')
+      .find((b) => b.text() === 'Close')!
+      .trigger('click')
+    await settle()
+    expect(previewDialog()).toBeNull()
+    expect(byTestId('shared-copy').text()).toBe('Copy to library')
+    // The Dialog's own close (its X) puts it away too.
+    await byTestId('shared-preview-open').trigger('click')
+    await settle()
+    const x = previewDialog()!.get('[data-slot="dialog"] button[aria-label="Close"]')
+    await x.trigger('click')
+    await settle()
+    expect(previewDialog()).toBeNull()
+  })
+
+  it('copies from the Dialog without asking again, then closes it (K173)', async () => {
+    await openPage({
+      'GET /shared-programmes': { body: SHARED_JSON },
+      [`GET /shared-programmes/${SID}/preview`]: { body: PREVIEW },
+      [`POST /shared-programmes/${SID}/copy`]: { status: 201, body: COPY },
+    })
+    await openTab('reference')
+    await byTestId('shared-preview-open').trigger('click')
+    await settle()
+    await previewDialog()!.get('[data-testid="shared-preview-copy"]').trigger('click')
+    await settle()
+    expect(question()).toBeNull()
+    expect(calls.some((c) => c.path === `/shared-programmes/${SID}/copy`)).toBe(true)
+    expect(previewDialog()).toBeNull()
+    // It lands as a copy from the row does (K174), in Library, focus on its name, not on Preview.
+    const landed = page().get('[data-programme="p-copy"]')
+    expect(landed.attributes('data-landing')).toBe('')
+    expect(document.activeElement).toBe(landed.get('h2').element)
+    await openTab('reference')
+    expect(byTestId('shared-copy').text()).toBe('Added to library')
+    // Opened again, the Dialog says the library already has one.
+    await byTestId('shared-preview-open').trigger('click')
+    await settle()
+    expect(previewDialog()!.get('[data-testid="shared-preview-warning"]').text()).toBe(
+      'Your library already has a programme called Strength 5×5. Copying adds another one.',
+    )
+  })
+
+  it('says in the Dialog why a copy failed, and keeps it open', async () => {
+    await openPage({
+      'GET /shared-programmes': { body: SHARED_JSON },
+      [`GET /shared-programmes/${SID}/preview`]: { body: PREVIEW },
+      [`POST /shared-programmes/${SID}/copy`]: { status: 409, body: { error: 'too-many' } },
+    })
+    await openTab('reference')
+    await byTestId('shared-preview-open').trigger('click')
+    await settle()
+    await previewDialog()!.get('[data-testid="shared-preview-copy"]').trigger('click')
+    await settle()
+    expect(previewDialog()!.get('[data-testid="shared-preview-error"]').text()).toContain(
+      'There’s no room for another.',
+    )
+    expect(byTestId('shared-copy').text()).toBe('Copy to library')
+  })
+
+  it('says why a Preview couldn’t open', async () => {
+    await openPage({
+      'GET /shared-programmes': { body: SHARED_JSON },
+      [`GET /shared-programmes/${SID}/preview`]: 'offline',
+    })
+    await openTab('reference')
+    await byTestId('shared-preview-open').trigger('click')
+    await settle()
+    expect(previewDialog()).toBeNull()
+    expect(section().get('[data-slot="inline-message"]').text()).toContain('Can’t reach the server')
+  })
+
+  it('disables Copy to library offline, as the library’s other actions', async () => {
+    await openPage({ 'GET /shared-programmes': { body: SHARED_JSON } })
+    await openTab('reference')
+    window.dispatchEvent(new Event('offline'))
+    await settle()
+    for (const copy of section().findAll('[data-testid="shared-copy"]'))
+      expect(copy.attributes('disabled')).toBeDefined()
+    for (const preview of section().findAll('[data-testid="shared-preview-open"]'))
+      expect(preview.attributes('disabled')).toBeDefined()
+    window.dispatchEvent(new Event('online'))
+    await settle()
+  })
+})
+
+describe('publishing, for an admin (K171, option 2B)', () => {
+  const SID = SHARED_JSON.programmes[0]!.id
+  const LINKED = {
+    ...BEGINNER,
+    activities: (BEGINNER.activities as Record<string, unknown>[]).map((a) =>
+      a.key === 'squat' ? { ...a, link: 'https://www.stronglifts.com/squat' } : a,
+    ),
+  }
+  const PREVIEW = {
+    preview: true,
+    rev: 'pub1',
+    publish: {
+      programme: { ...LIBRARY_JSON.programmes[0]!, id: 'preview', doc: LINKED },
+      replaces: null as { id: string; updatedAt: number } | null,
+    },
+  }
+  const SHARED_ROW = {
+    ...LIBRARY_JSON.programmes[0]!,
+    shared: { id: SID, updatedAt: new Date(2026, 10, 17, 12).getTime() / 1000 },
+  }
+  const published = { preview: false, shared: { id: SID, updatedAt: 1794999600 } }
+
+  /** The open dialog: Reka renders it in a portal on document.body. */
+  function dialog(): DOMWrapper<HTMLElement> | null {
+    const el = document.querySelector<HTMLElement>('[data-slot="dialog"]')
+    return el ? new DOMWrapper(el) : null
+  }
+  function asked(): DOMWrapper<HTMLElement> {
+    return new DOMWrapper(document.querySelector<HTMLElement>('[role="alertdialog"]')!)
+  }
+  function items(): string[] {
+    return [...document.querySelectorAll<HTMLElement>('[data-slot="menu-item"]')].map(
+      (i) => i.textContent?.trim() ?? '',
+    )
+  }
+  async function sharedIds(): Promise<string[]> {
+    await openTab('reference')
+    const ids = page()
+      .findAll('[data-testid="shared-programme"]')
+      .map((r) => r.attributes('data-shared')!)
+    await openTab('library')
+    return ids
+  }
+  async function more(): Promise<void> {
+    await byTestId('library-more').trigger('click')
+    await settle()
+  }
+  async function choose(label: string): Promise<void> {
+    ;[...document.querySelectorAll<HTMLElement>('[data-slot="menu-item"]')]
+      .find((i) => i.textContent?.trim() === label)!
+      .click()
+    await settle()
+  }
+  async function answer(dialogEl: DOMWrapper<HTMLElement>, label: string): Promise<void> {
+    await dialogEl
+      .findAll('button')
+      .find((b) => b.text() === label)!
+      .trigger('click')
+    await settle()
+  }
+  async function openAdmin(table: Record<string, Route> = {}): Promise<void> {
+    await openPage(
+      { 'GET /shared-programmes': { body: SHARED_JSON }, ...table },
+      undefined,
+      undefined,
+      true,
+    )
+    await openTab('library')
+  }
+  const isPreview = (body: unknown) => (body as { preview: boolean }).preview
+
+  it('shows nobody else the More menu or the Published chip', async () => {
+    await openPage({
+      'GET /shared-programmes': { body: SHARED_JSON },
+      // Even were the server to send the field, a non-admin is offered nothing.
+      'GET /programmes': { body: { programmes: [SHARED_ROW] } },
+    })
+    await openTab('library')
+    expect(page().find('[data-testid="library-more"]').exists()).toBe(false)
+    expect(page().find('[data-testid="library-shared"]').exists()).toBe(false)
+    await openTab('reference')
+    expect(page().find('[data-testid="shared-library"]').exists()).toBe(true)
+  })
+
+  it('gives an admin’s row a More menu with Publish', async () => {
+    await openAdmin()
+    const button = byTestId('library-more')
+    expect(button.attributes('aria-label')).toBe('More for Beginner 5×5')
+    expect(button.attributes('aria-haspopup')).toBe('menu')
+    expect(page().find('[data-testid="library-shared"]').exists()).toBe(false)
+    await more()
+    expect(items()).toEqual(['Publish'])
+  })
+
+  it('marks a shared row with the Shared chip, and offers Publish again and Unpublish', async () => {
+    await openAdmin({ 'GET /programmes': { body: { programmes: [SHARED_ROW] } } })
+    expect(byTestId('library-shared').text()).toBe('Published')
+    await more()
+    expect(items()).toEqual(['Publish again', 'Unpublish'])
+  })
+
+  it('publishes from the preview: what everyone will see, then Publish programme', async () => {
+    await openAdmin({
+      [`POST /programmes/${PID}/publish`]: (body) =>
+        isPreview(body) ? { body: PREVIEW } : { body: published },
+    })
+    await more()
+    await choose('Publish')
+    expect(calls.find((c) => c.path === `/programmes/${PID}/publish`)!.body).toEqual({
+      preview: true,
+    })
+    const d = dialog()!
+    expect(d.get('h2').text()).toBe('Publish Beginner 5×5')
+    const seen = d.get('[data-testid="publish-preview"]')
+    expect(seen.get('h3').text()).toBe('What everyone will see')
+    expect(seen.text()).toContain('Beginner 5×5')
+    expect(seen.text()).toContain('Strength · 8 weeks · 5 activities')
+    expect(seen.text()).toContain('Three full-body sessions a week')
+    const acts = seen.findAll('[data-testid="shared-activity"]')
+    expect(acts).toHaveLength(LINKED.activities.length)
+    expect(acts[0]!.text()).toContain('Back squat')
+    expect(acts[0]!.get('[data-slot="chip"]').text()).toBe('5 × 5')
+    expect(acts[0]!.text()).toContain('Belt from week 5.')
+    const link = acts[0]!.get('a')
+    expect(link.text()).toBe('Open stronglifts.com in a new tab')
+    expect(link.attributes('href')).toBe('https://www.stronglifts.com/squat')
+    expect(link.attributes('target')).toBe('_blank')
+    expect(link.attributes('rel')).toBe('noopener noreferrer')
+    expect(acts[1]!.text()).toContain('No notes.')
+    expect(d.text()).toContain(
+      'Everyone with an account can see and copy it. Your name is not shown.',
+    )
+    expect(d.find('[data-testid="publish-replaces"]').exists()).toBe(false)
+    const confirm = d.get('[data-testid="publish-confirm"]')
+    expect(confirm.text()).toBe('Publish programme')
+    await confirm.trigger('click')
+    await settle()
+    expect(calls.filter((c) => c.path === `/programmes/${PID}/publish`).at(-1)!.body).toEqual({
+      preview: false,
+      rev: 'pub1',
+    })
+    expect(dialog()).toBeNull()
+    expect(byTestId('programmes-library').get('[data-slot="inline-message"]').text()).toBe(
+      'Beginner 5×5 is in Reference.',
+    )
+    expect(byTestId('library-shared').text()).toBe('Published')
+  })
+
+  it('says what Publish again replaces', async () => {
+    const again = { ...PREVIEW, publish: { ...PREVIEW.publish, replaces: SHARED_ROW.shared } }
+    await openAdmin({
+      'GET /programmes': { body: { programmes: [SHARED_ROW] } },
+      [`POST /programmes/${PID}/publish`]: { body: again },
+    })
+    await more()
+    await choose('Publish again')
+    const d = dialog()!
+    expect(d.get('h2').text()).toBe('Publish Beginner 5×5 again')
+    expect(d.get('[data-testid="publish-replaces"]').text()).toBe(
+      'It replaces the shared copy from Tue 17 Nov. Copies people have made stay as they are.',
+    )
+    expect(d.get('[data-testid="publish-confirm"]').text()).toBe('Publish again')
+    // The Dialog's own Close shuts it, publishing nothing.
+    await d.get('button[aria-label="Close"]').trigger('click')
+    await settle()
+    expect(dialog()).toBeNull()
+    const publishes = calls.filter((c) => c.path === `/programmes/${PID}/publish`)
+    expect(publishes.map((c) => c.body)).toEqual([{ preview: true }])
+  })
+
+  it('shows the fresh preview when the programme changed since, then publishes with its rev', async () => {
+    const fresh = {
+      ...PREVIEW,
+      rev: 'pub2',
+      publish: {
+        ...PREVIEW.publish,
+        programme: { ...PREVIEW.publish.programme, description: 'Now with a deload.' },
+      },
+    }
+    let confirms = 0
+    await openAdmin({
+      [`POST /programmes/${PID}/publish`]: (body) => {
+        if (isPreview(body)) return { body: PREVIEW }
+        confirms++
+        return confirms === 1
+          ? { status: 409, body: { error: 'conflict', rev: 'pub2', preview: fresh } }
+          : { body: published }
+      },
+    })
+    await more()
+    await choose('Publish')
+    await dialog()!.get('[data-testid="publish-confirm"]').trigger('click')
+    await settle()
+    const d = dialog()!
+    expect(d.get('[data-testid="publish-stale"]').text()).toBe(
+      'The programme changed since this preview. Check it, then publish.',
+    )
+    expect(d.get('[data-testid="publish-preview"]').text()).toContain('Now with a deload.')
+    await d.get('[data-testid="publish-confirm"]').trigger('click')
+    await settle()
+    expect(calls.filter((c) => c.path === `/programmes/${PID}/publish`).at(-1)!.body).toEqual({
+      preview: false,
+      rev: 'pub2',
+    })
+    expect(dialog()).toBeNull()
+  })
+
+  it('says why a publish failed, in the dialog, and why its preview couldn’t open', async () => {
+    await openAdmin({
+      [`POST /programmes/${PID}/publish`]: (body) =>
+        isPreview(body) ? { body: PREVIEW } : { status: 403, body: { error: 'not-admin' } },
+    })
+    await more()
+    await choose('Publish')
+    await dialog()!.get('[data-testid="publish-confirm"]').trigger('click')
+    await settle()
+    expect(dialog()!.get('[data-testid="publish-error"]').text()).toBe(
+      'Only an admin can publish to the shared library.',
+    )
+    await answer(dialog()!, 'Cancel')
+    expect(dialog()).toBeNull()
+    // Opened again, it starts from the new preview, with no line left from the last time.
+    await more()
+    await choose('Publish')
+    expect(dialog()!.find('[data-testid="publish-error"]').exists()).toBe(false)
+    await answer(dialog()!, 'Cancel')
+    routes[`POST /programmes/${PID}/publish`] = 'offline'
+    await more()
+    await choose('Publish')
+    expect(dialog()).toBeNull()
+    expect(byTestId('programmes-library').text()).toContain('Can’t reach the server')
+  })
+
+  it('publishes once, however often Publish programme is pressed', async () => {
+    await openAdmin({
+      [`POST /programmes/${PID}/publish`]: (body) =>
+        isPreview(body) ? { body: PREVIEW } : { body: published },
+    })
+    await more()
+    await choose('Publish')
+    const button = dialog()!.get('[data-testid="publish-confirm"]').element as HTMLButtonElement
+    button.click()
+    button.click()
+    await settle()
+    const confirms = calls.filter(
+      (c) => c.path === `/programmes/${PID}/publish` && !isPreview(c.body),
+    )
+    expect(confirms).toHaveLength(1)
+  })
+
+  it('asks before unpublishing, then unpublishes, and keeps it when cancelled', async () => {
+    await openAdmin({
+      'GET /programmes': { body: { programmes: [SHARED_ROW] } },
+      [`DELETE /shared-programmes/${SID}`]: { status: 204 },
+    })
+    expect(await sharedIds()).toContain(SID)
+    await more()
+    await choose('Unpublish')
+    expect(asked().text()).toContain('Unpublish Beginner 5×5?')
+    expect(asked().text()).toContain('It leaves Reference. Copies people have made stay theirs.')
+    await answer(asked(), 'Cancel')
+    expect(calls.some((c) => c.method === 'DELETE')).toBe(false)
+    await more()
+    await choose('Unpublish')
+    await answer(asked(), 'Unpublish')
+    expect(calls.some((c) => c.method === 'DELETE' && c.path === `/shared-programmes/${SID}`)).toBe(
+      true,
+    )
+    expect(page().find('[data-testid="library-shared"]').exists()).toBe(false)
+    expect(await sharedIds()).not.toContain(SID)
+  })
+
+  it('says why an unpublish failed', async () => {
+    await openAdmin({
+      'GET /programmes': { body: { programmes: [SHARED_ROW] } },
+      [`DELETE /shared-programmes/${SID}`]: 'offline',
+    })
+    await more()
+    await choose('Unpublish')
+    await answer(asked(), 'Unpublish')
+    expect(byTestId('programmes-library').text()).toContain('Can’t reach the server')
+    expect(page().find('[data-testid="library-shared"]').exists()).toBe(true)
+  })
+
+  it('disables More offline, as the library’s other actions', async () => {
+    await openAdmin()
+    window.dispatchEvent(new Event('offline'))
+    await settle()
+    expect(byTestId('library-more').attributes('disabled')).toBeDefined()
+    window.dispatchEvent(new Event('online'))
+    await settle()
   })
 })

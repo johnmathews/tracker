@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { request, type ApiError } from '@/lib/api'
 import { isRecord, parseJson, readKey, removeKey, writeKey } from '@/lib/storage'
@@ -30,8 +30,11 @@ export type AuthProblem = {
   retryAfter?: number
 }
 
-/** Who the server says is signed in; `confirmed` only for an email account while mail is on. */
-type Account = { username: string; confirmed?: boolean }
+/**
+ * Who the server says is signed in; `confirmed` only for an email account while mail is on, and
+ * `admin: true` only for an admin (shared library spec §3), absent for everyone else.
+ */
+type Account = { username: string; confirmed?: boolean; admin?: boolean }
 
 export type LinkKind = 'invite' | 'reset'
 
@@ -81,6 +84,14 @@ export const useSessionStore = defineStore('session', () => {
    * said, so the bar's Ask button neither flashes on nor off while it loads.
    */
   const ask = ref<boolean | null>(null)
+  /**
+   * Whether the server says this account is an admin, who publishes to the shared library. Off
+   * until it says so: a remembered user signs in before `/auth/me` answers, and hiding Publish
+   * from an admin for a moment is better than showing it to someone else. The server checks the
+   * flag on every publish (S1); this only decides what the page offers.
+   */
+  const admin = ref(false)
+  const isAdmin = computed(() => admin.value)
 
   function begin(name: string, account?: Account): void {
     // A different user's data must never show, even for a moment.
@@ -88,10 +99,14 @@ export const useSessionStore = defineStore('session', () => {
       planner.clear()
       trackers.clear()
     }
+    if (user.value !== name) admin.value = false
     user.value = name
     status.value = 'signed-in'
     expired.value = false
-    if (account) confirmed.value = account.confirmed ?? null
+    if (account) {
+      confirmed.value = account.confirmed ?? null
+      admin.value = account.admin === true
+    }
     writeKey(SESSION_KEY, { user: name })
     sync.start(name, lost)
     // A remembered user never sees the sign-in form, which used to be the only reader (F9).
@@ -113,7 +128,11 @@ export const useSessionStore = defineStore('session', () => {
     if (res.ok) {
       if (res.data.username !== user.value || status.value !== 'signed-in') {
         begin(res.data.username, res.data)
-      } else confirmed.value = res.data.confirmed ?? null
+      } else {
+        // The remembered user, already signed in: only the flags can have changed (F5).
+        confirmed.value = res.data.confirmed ?? null
+        admin.value = res.data.admin === true
+      }
       return
     }
     if (res.error.kind === 'auth' && remembered) lost()
@@ -205,6 +224,7 @@ export const useSessionStore = defineStore('session', () => {
     removeKey(SESSION_KEY)
     user.value = null
     confirmed.value = null
+    admin.value = false
     status.value = 'signed-out'
     expired.value = false
     return null
@@ -223,6 +243,7 @@ export const useSessionStore = defineStore('session', () => {
     trackers.clear()
     user.value = null
     confirmed.value = null
+    admin.value = false
     expired.value = false
     status.value = 'signed-out'
     if (remembered) await init()
@@ -235,6 +256,7 @@ export const useSessionStore = defineStore('session', () => {
     confirmed,
     mail,
     ask,
+    isAdmin,
     init,
     login,
     signup,

@@ -445,16 +445,20 @@ onBeforeUnmount(() => {
     <!-- Settings, Profile, Ask, an item's page and the new item page have no bar: each links back
          to the week (K52, K104, K106). -->
     <AppNavbar v-if="shown === 'planner'" :overlay="screens" />
-    <!-- Settings, an item's page and Edit plan are full width on the page's margins, like the week
-         (K51, K54, K64). Ask fills the screen beside its side panel and sets its own margins. -->
+    <!-- Every page but the week sits in one centred column, 960u wide on the page's margins
+         (K176): Settings, Profile, Programmes, an overview, an item's page and the new pages. Edit
+         plan is the week, full width on its margins (K54). Ask fills the screen beside its side
+         panel and sets its own margins. -->
     <main
       class="print:max-w-none print:p-0 full:max-w-none full:p-0 edit:pb-0"
       :class="
         shown === 'ask'
           ? undefined
-          : shown !== 'planner' || store.configMode
-            ? 'px-(--screen-pad-x) pb-[calc(var(--u)*64)]'
-            : 'mx-auto max-w-6xl px-4 pb-16 sm:px-6 lg:px-8'
+          : shown !== 'planner'
+            ? 'mx-auto w-full max-w-[calc(var(--u)*960_+_2*var(--screen-pad-x))] px-(--screen-pad-x) pb-[calc(var(--u)*64)]'
+            : store.configMode
+              ? 'px-(--screen-pad-x) pb-[calc(var(--u)*64)]'
+              : 'mx-auto max-w-6xl px-4 pb-16 sm:px-6 lg:px-8'
       "
     >
       <AskPage v-if="shown === 'ask'" />

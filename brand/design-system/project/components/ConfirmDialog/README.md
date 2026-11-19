@@ -29,7 +29,7 @@ Removing a food uses the first pattern ("Remove Fish?"). The removal touches onl
 ## Accessibility
 
 - `role="alertdialog"`, `aria-modal="true"`, `aria-labelledby` on the title and `aria-describedby` on the body, so a screen reader reads both on open.
-- Focus starts on Cancel, the safe choice; Escape cancels; focus returns to the control that asked.
+- Focus starts on Cancel, the safe choice; Escape cancels; focus returns to the control that asked, without scrolling the page (K174).
 - Built on Reka UI's AlertDialog (K1), which handles the focus trap and the inert page.
 - `on-ink` on `ink` and `control-border` on `panel` are measured by the gate.
 

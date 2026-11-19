@@ -13,6 +13,46 @@ const RUN = RUN_JSON as unknown as Run
 const PAUSED = PAUSED_JSON as unknown as Run
 const PREVIEW = PREVIEW_JSON as unknown as ChangePreview
 const AFTER: Run = { ...RUN, rev: 'after', grid: PREVIEW.grid }
+/** Ended by End programme from Mon 9 Nov, in week 3, for the knee: a re-open applies (K167). */
+const ENDED_EARLY: Run = {
+  ...RUN,
+  status: 'ended',
+  end: '2026-11-08',
+  ended: { from: '2026-11-09', reason: 'Knee', seq: 5 },
+  canReopen: true,
+}
+/** Still running, with an end set from Mon 30 Nov. */
+const ENDING: Run = {
+  ...RUN,
+  end: '2026-11-29',
+  ended: { from: '2026-11-30', reason: null, seq: 5 },
+  canReopen: true,
+}
+const REOPEN = {
+  preview: true,
+  rev: 'o1',
+  reopen: {
+    from: RUN.today,
+    reason: 'Knee is better' as string | null,
+    week: 4,
+    paused: { from: '2026-11-09', to: '2026-11-11' } as { from: string; to: string } | null,
+    end: '2026-12-20',
+    lastWeek: '2026-12-14',
+  },
+}
+const FRESH = { ...REOPEN, rev: 'o2', reopen: { ...REOPEN.reopen, from: '2026-11-13' } }
+const RESTART = {
+  preview: true,
+  rev: 'r1',
+  restart: {
+    name: 'Beginner again',
+    start: '2026-11-16',
+    firstWeek: { from: '2026-11-16', to: '2026-11-22' },
+    weeks: 8,
+    end: '2027-01-10',
+    oldEndsFrom: null,
+  },
+}
 
 let wrapper: VueWrapper
 let calls: Call[]
@@ -46,6 +86,10 @@ const overview = () => wrapper.get('[data-testid="programme-overview"]')
 const byTestId = (id: string) => overview().get(`[data-testid="${id}"]`)
 const inDoc = (id: string) => document.querySelector<HTMLElement>(`[data-testid="${id}"]`)
 const changeCalls = () => calls.filter((c) => c.path === '/runs/t1/changes')
+const controlWords = () =>
+  byTestId('programme-controls')
+    .findAll('button')
+    .map((b) => b.text())
 
 function cell(activity: string, week: number): HTMLElement {
   return document.querySelector<HTMLElement>(
@@ -168,10 +212,224 @@ describe('the programme overview (spec §9.2)', () => {
     expect(wrapper.text()).toContain('Can’t reach the server')
   })
 
-  it('has no controls once the run has ended', async () => {
-    await openOverview({ 'GET /runs/t1': { body: { ...RUN, status: 'ended' } } })
-    expect(overview().find('[data-testid="programme-controls"]').exists()).toBe(false)
+  it('offers Re-open and Restart once End programme has stopped the run part way (K168)', async () => {
+    await openOverview({ 'GET /runs/t1': { body: ENDED_EARLY } })
+    expect(byTestId('programme-meta').text()).toBe('Ended Sun 8 Nov. Knee.')
+    expect(controlWords()).toEqual(['Re-open programme', 'Restart from week 1'])
     expect(cell('squat', 6).querySelector('button')).toBeNull()
+  })
+
+  it('offers only Restart once the run has ended any other way', async () => {
+    await openOverview({ 'GET /runs/t1': { body: { ...RUN, status: 'ended', canReopen: false } } })
+    expect(controlWords()).toEqual(['Restart from week 1'])
+    expect(cell('squat', 6).querySelector('button')).toBeNull()
+  })
+
+  it('swaps End programme for Cancel the end while an end is set for a later day', async () => {
+    await openOverview({ 'GET /runs/t1': { body: ENDING } })
+    expect(controlWords()).toEqual([
+      'Pause programme',
+      'Go to week',
+      'Add activity',
+      'Cancel the end',
+    ])
+  })
+
+  it('offers neither End nor Cancel the end when a restart set the end', async () => {
+    await openOverview({ 'GET /runs/t1': { body: { ...ENDING, canReopen: false } } })
+    expect(controlWords()).toEqual(['Pause programme', 'Go to week', 'Add activity'])
+  })
+})
+
+describe('Re-open, Restart and Cancel the end (K168)', () => {
+  const sheetText = () => inDoc('run-sheet')!.textContent!.replace(/\s+/g, ' ')
+  const rows = () =>
+    [...document.querySelectorAll<HTMLElement>('[data-testid="run-preview-row"]')].map((r) =>
+      [...r.querySelectorAll('[data-part]')].map((p) => p.textContent!.trim()),
+    )
+  const reopenCalls = () => calls.filter((c) => c.path === '/runs/t1/reopen')
+
+  it('re-opens after a preview of what it does', async () => {
+    await openOverview({
+      'GET /runs/t1': { body: ENDED_EARLY },
+      'POST /runs/t1/reopen': (body) =>
+        (body as { preview?: boolean }).preview === false
+          ? { body: { preview: false, tracker: { id: 't1' }, run: RUN } }
+          : { body: REOPEN },
+    })
+    await click(inDoc('programme-reopen'))
+    expect(inDoc('run-sheet')!.querySelector('h2')!.textContent).toBe('Re-open Beginner 5×5')
+    expect(inDoc('run-step')!.textContent).toBe('Step 1 of 2')
+    expect((inDoc('run-from') as HTMLInputElement).value).toBe(RUN.today)
+    await type('run-reason', 'Knee is better')
+    await click(inDoc('run-preview-button'))
+    expect(reopenCalls()[0]!.body).toEqual({
+      from: RUN.today,
+      reason: 'Knee is better',
+      preview: true,
+    })
+    expect(inDoc('run-step')!.textContent).toBe('Step 2 of 2')
+    expect(inDoc('run-summary')!.textContent!.trim()).toBe(
+      'Carries on from Thu 12 Nov, at week 4. Knee is better.',
+    )
+    expect(rows()).toEqual([
+      ['Carries on', 'At the week it stopped in', 'Thu 12 Nov, week 4'],
+      ['Paused', 'The days since it ended count as a pause', 'Mon 9 to Wed 11 Nov'],
+      ['Last day', 'Week 8, as planned', 'Sun 20 Dec'],
+    ])
+    expect(inDoc('run-unchanged')!.textContent).toBe('Nothing before Mon 9 Nov changes.')
+    expect(reopenCalls()).toHaveLength(1)
+    expect(inDoc('run-confirm')!.textContent!.trim()).toBe('Re-open programme')
+    await click(inDoc('run-confirm'))
+    expect(reopenCalls()[1]!.body).toEqual({
+      from: RUN.today,
+      reason: 'Knee is better',
+      preview: false,
+      rev: 'o1',
+    })
+    expect(inDoc('run-sheet')).toBeNull()
+    expect(controlWords()).toEqual([
+      'Pause programme',
+      'Go to week',
+      'Add activity',
+      'End programme',
+    ])
+  })
+
+  it('shows the fresh preview, with a line, when the run changed since', async () => {
+    await openOverview({
+      'GET /runs/t1': { body: ENDED_EARLY },
+      'POST /runs/t1/reopen': (body) =>
+        (body as { preview?: boolean }).preview === false
+          ? { status: 409, body: { error: 'conflict', rev: 'o2', preview: FRESH } }
+          : { body: REOPEN },
+    })
+    await click(inDoc('programme-reopen'))
+    await click(inDoc('run-preview-button'))
+    expect(inDoc('run-stale')).toBeNull()
+    await click(inDoc('run-confirm'))
+    expect(inDoc('run-sheet')!.dataset.step).toBe('2')
+    expect(inDoc('run-stale')!.textContent).toContain('The plan changed since this preview.')
+    expect(rows()[0]![2]).toBe('Fri 13 Nov, week 4')
+    await click(inDoc('run-confirm'))
+    expect(reopenCalls().at(-1)!.body).toMatchObject({ preview: false, rev: 'o2' })
+  })
+
+  it('keeps step 1 with the server’s word on a field it refuses', async () => {
+    const errors = [{ path: 'from', message: 'the programme re-opens today or later.' }]
+    await openOverview({
+      'GET /runs/t1': { body: ENDED_EARLY },
+      'POST /runs/t1/reopen': { status: 400, body: { error: 'invalid', errors } },
+    })
+    await click(inDoc('programme-reopen'))
+    await click(inDoc('run-preview-button'))
+    expect(inDoc('run-sheet')!.dataset.step).toBe('1')
+    expect(sheetText()).toContain('The programme re-opens today or later.')
+  })
+
+  it('restarts from week 1 after a preview, then opens the new tracker', async () => {
+    await openOverview({
+      'GET /runs/t1': { body: ENDED_EARLY },
+      'GET /runs/t2': { body: { ...RUN, tracker: 't2', name: 'Beginner again' } },
+      'POST /runs/t1/restart': (body) =>
+        (body as { preview?: boolean }).preview === false
+          ? {
+              body: {
+                preview: false,
+                tracker: { id: 't2', name: 'Beginner again' },
+                run: { ...RUN, tracker: 't2' },
+                old: { id: 't1' },
+              },
+            }
+          : { body: RESTART },
+    })
+    await click(inDoc('programme-restart'))
+    expect(inDoc('run-sheet')!.querySelector('h2')!.textContent).toBe('Restart Beginner 5×5')
+    expect((inDoc('run-name') as HTMLInputElement).value).toBe('Beginner 5×5')
+    expect((inDoc('run-start') as HTMLInputElement).value).toBe(RUN.today)
+    await type('run-name', 'Beginner again')
+    await type('run-start', '2026-11-16')
+    await click(inDoc('run-preview-button'))
+    const restarts = () => calls.filter((c) => c.path === '/runs/t1/restart')
+    expect(restarts()[0]!.body).toEqual({
+      name: 'Beginner again',
+      start: '2026-11-16',
+      preview: true,
+    })
+    expect(inDoc('run-summary')!.textContent!.trim()).toBe(
+      'A new Beginner again, from week 1 on Mon 16 Nov.',
+    )
+    expect(rows()).toEqual([
+      ['New tracker', '', 'Beginner again'],
+      ['Week 1', '', '16–22 Nov'],
+      ['Last day', '8 weeks', 'Sun 10 Jan'],
+    ])
+    expect(inDoc('run-unchanged')!.textContent).toBe(
+      'This run has ended and stays as it is, with its weeks, marks, notes and changes.',
+    )
+    expect(inDoc('run-confirm')!.textContent!.trim()).toBe('Restart programme')
+    await click(inDoc('run-confirm'))
+    expect(restarts()[1]!.body).toEqual({
+      name: 'Beginner again',
+      start: '2026-11-16',
+      preview: false,
+      rev: 'r1',
+    })
+    expect(location.hash).toBe('#/programme/t2')
+    await settle()
+    expect(calls.some((c) => c.method === 'GET' && c.path === '/runs/t2')).toBe(true)
+  })
+
+  it('cancels an end set for a later day, from the end’s own day, in one step', async () => {
+    const cancel = {
+      ...REOPEN,
+      reopen: { ...REOPEN.reopen, from: '2026-11-30', reason: null, week: 6, paused: null },
+    }
+    await openOverview({
+      'GET /runs/t1': { body: ENDING },
+      'POST /runs/t1/reopen': (body) =>
+        (body as { preview?: boolean }).preview === false
+          ? { body: { preview: false, tracker: { id: 't1' }, run: RUN } }
+          : { body: cancel },
+    })
+    await click(inDoc('programme-cancel-end'))
+    expect(inDoc('run-sheet')!.querySelector('h2')!.textContent).toBe(
+      'Cancel the end of Beginner 5×5',
+    )
+    expect(inDoc('run-step')).toBeNull()
+    expect(reopenCalls()[0]!.body).toEqual({ from: '2026-11-30', preview: true })
+    expect(inDoc('run-summary')!.textContent!.trim()).toBe(
+      'Carries on past Sun 29 Nov, as planned.',
+    )
+    expect(rows()).toEqual([
+      ['Carries on', 'From the day it was to end', 'Mon 30 Nov, week 6'],
+      ['Paused', '', 'No day'],
+      ['Last day', 'Week 8, as planned', 'Sun 20 Dec'],
+    ])
+    expect(inDoc('run-unchanged')!.textContent).toBe('Nothing before Mon 30 Nov changes.')
+    await click(inDoc('run-keep'))
+    expect(inDoc('run-sheet')).toBeNull()
+    expect(reopenCalls()).toHaveLength(1)
+    await click(inDoc('programme-cancel-end'))
+    await click(inDoc('run-confirm'))
+    expect(reopenCalls().at(-1)!.body).toEqual({
+      from: '2026-11-30',
+      preview: false,
+      rev: 'o1',
+    })
+    expect(inDoc('run-sheet')).toBeNull()
+    expect(controlWords().at(-1)).toBe('End programme')
+  })
+
+  it('disables Re-open and Restart offline, as the other controls', async () => {
+    await openOverview({ 'GET /runs/t1': { body: ENDED_EARLY } })
+    window.dispatchEvent(new Event('offline'))
+    await settle()
+    expect(byTestId('programme-offline').text()).toContain('Can’t reach the server')
+    for (const b of byTestId('programme-controls').findAll('button'))
+      expect(b.attributes('disabled')).toBeDefined()
+    window.dispatchEvent(new Event('online'))
+    await settle()
   })
 })
 
@@ -250,7 +508,8 @@ describe('changing a programme from its overview', () => {
       .trigger('click')
     await settle()
     expect(calls.find((c) => c.path === '/runs/t1/end')!.body).toEqual({})
-    expect(overview().find('[data-testid="programme-controls"]').exists()).toBe(false)
+    // Ended today, from its start: nothing to re-open, so Restart alone (K168).
+    expect(controlWords()).toEqual(['Restart from week 1'])
   })
 
   it('says why ending failed', async () => {

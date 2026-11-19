@@ -29,6 +29,47 @@ export type ProgrammeSummary = {
   rev: number
   createdAt: number
   updatedAt: number
+  /**
+   * For an admin only (shared library spec §5): the shared copy this programme was last published
+   * as, or null. Nobody else's summaries carry the field.
+   */
+  shared?: SharedRef | null
+}
+/** A shared copy: its own id, and when it was last published (seconds, as `updatedAt`). */
+export type SharedRef = { id: string; updatedAt: number }
+/**
+ * A shared programme as every user sees it (`GET /api/shared-programmes`, spec §5): a library
+ * summary with no `rev`, no `createdAt` and no owner (S2).
+ */
+export type SharedSummary = {
+  id: string
+  name: string
+  description?: string | null
+  kind: ProgrammeKind
+  weeks: number
+  activities: number
+  updatedAt: number
+}
+/**
+ * Publish's preview (`POST /api/programmes/{id}/publish`, spec §5, S5): the programme as every user
+ * will see it, the shared copy it replaces (null on a first publish), and the token to confirm with.
+ */
+export type PublishPreview = {
+  preview: true
+  rev: string
+  /** A first publish has no shared id until it is confirmed, so `id` is null there. */
+  publish: {
+    programme: Omit<SharedSummary, 'id'> & { id: string | null; doc: ProgrammeDoc }
+    replaces: SharedRef | null
+  }
+}
+/**
+ * A shared programme to look at before copying it (`GET /api/shared-programmes/{id}/preview`,
+ * K173): its document, and its plan as a start's preview at its own values from today.
+ */
+export type SharedPreview = {
+  programme: SharedSummary & { doc: ProgrammeDoc }
+  plan: StartPreview
 }
 export type ProgrammeParam = {
   label: string
@@ -149,7 +190,12 @@ export type Run = {
   rev: string
   openPause: { since: string; programmeWeek: number; reason: string | null } | null
   endsShort: EndsShort[]
-  ended: { from: string; reason: string | null; seq: number } | null
+  /** The end in force. `restarted` is true when a restart wrote it, so the new run replaces this
+   * one (K167); absent from an older server. */
+  ended: { from: string; reason: string | null; seq: number; restarted?: boolean } | null
+  /** Whether a re-open applies today (K167): an end that stopped the run part way, a restart's
+   * aside. True for an end set for a later day, while `status` is still `running`. */
+  canReopen: boolean
   clock: { programmeWeek: number | null; status: string | null; until: string | null } & Record<
     string,
     unknown
@@ -410,7 +456,12 @@ export function reasonText(reason: string | null | undefined): string {
 export function runMeta(run: Run): { lead: string | null; rest: string } {
   const ends = run.end ? `, ends ${dayText(run.end)}` : ''
   if (run.status === 'ended') {
-    return { lead: null, rest: run.end ? `Ended ${dayText(run.end)}.` : 'Ended.' }
+    // The last day, then the end's reason (K168): "Ended Sun 15 Nov. Knee."
+    const why = reasonText(run.ended?.reason)
+    return {
+      lead: null,
+      rest: `${run.end ? `Ended ${dayText(run.end)}.` : 'Ended.'}${why ? ` ${why}` : ''}`,
+    }
   }
   if (run.status === 'upcoming') return { lead: null, rest: `Starts ${dayText(run.start)}${ends}.` }
   const at = `in week ${run.week} of ${run.weeks}`
@@ -481,6 +532,8 @@ export function failureText(error: ApiError): string {
       return 'This programme has ended, so it can’t change.'
     case 'not-found':
       return 'That programme is gone. It may have been deleted on another device.'
+    case 'not-admin':
+      return 'Only an admin can publish to the shared library.'
     default:
       return 'The server refused it, so nothing changed. Try again.'
   }
@@ -537,7 +590,8 @@ export function logSentence(change: LogRow, from: string, names: Names, log: Log
     case 'go-to-week':
       return `Programme moved to week ${change.week}${on}`
     case 'end-programme':
-      return `Programme ended${on}`
+      // A restart's marker on a run already ended (K167) reads as the restart, not a second end.
+      return change.restarted ? `Restarted from week 1${on}` : `Programme ended${on}`
     case 'reopen-programme':
       return `Programme re-opened${on}`
     case 'set-parameter':
@@ -854,13 +908,17 @@ export function startLine(preview: StartPreview): string {
   const span = preview.end
     ? `${numberWord(preview.weeks, true)} weeks, ${dayText(preview.start)} to ${dayText(preview.end)}.`
     : `${numberWord(preview.weeks, true)} weeks from ${dayText(preview.start)}.`
+  return [span, ...labelLines(preview.grid)].join(' ')
+}
+
+/** A plan's week labels, one sentence each: "Deload in weeks 4 and 8." */
+export function labelLines(grid: Grid): string[] {
   const labels = new Map<string, number[]>()
-  for (const week of preview.grid.weeks) {
+  for (const week of grid.weeks) {
     if (week.label)
       labels.set(week.label, [...(labels.get(week.label) ?? []), ...week.programmeWeeks])
   }
-  const tags = [...labels].map(
+  return [...labels].map(
     ([label, weeks]) => `${label} in ${weekName({ programmeWeeks: weeks }).toLowerCase()}.`,
   )
-  return [span, ...tags].join(' ')
 }

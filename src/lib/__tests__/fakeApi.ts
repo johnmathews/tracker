@@ -220,6 +220,8 @@ export class FakeApi {
   mail = false
   /** Email accounts whose address is confirmed. */
   confirmed = new Set<string>()
+  /** Accounts with the admin flag (shared library spec §3): `admin: true`, else no field. */
+  admins = new Set<string>()
   /** Live confirmation links: token → username. */
   confirmLinks = new Map<string, string>()
   /** Every address a reset link was asked for, sent or not. */
@@ -442,10 +444,11 @@ export class FakeApi {
     return this.route(method, path, body as Record<string, unknown>, expectedUser)
   }
 
-  /** What the API says about a signed-in account: the name, and the flag when it applies. */
+  /** What the API says about a signed-in account: the name, and each flag when it applies. */
   private account(name: string): Response {
     const flag = this.mail && name.includes('@') ? { confirmed: this.confirmed.has(name) } : {}
-    return Response.json({ username: name, ...flag })
+    const admin = this.admins.has(name) ? { admin: true } : {}
+    return Response.json({ username: name, ...flag, ...admin })
   }
 
   private route(

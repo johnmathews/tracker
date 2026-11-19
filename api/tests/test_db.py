@@ -39,14 +39,15 @@ LIMITS_STEP = "ADD COLUMN limits"
 TRACKERS_STEP = "CREATE TABLE trackers"
 WEEK_TITLE_STEP = "ADD COLUMN week_title"
 PROGRAMMES_STEP = "CREATE TABLE IF NOT EXISTS programmes"
+SHARED_STEP = "CREATE TABLE shared_programmes"
 
 
 def test_steps_are_numbered_as_the_docs_say() -> None:
     """Schema 6 adds API tokens, 7 item details, 8 the item pages' arrangement, 9 My goals,
     10 Ask's caps, 11 Ask's history, 12 OAuth connections, 13 Daily goal, 14 plans and ticks
     without a CHECK on the section, for Cardio, 15 the limits note, 16 the trackers, 17 the
-    week title and 18 the programmes (docs/api.md §2)."""
-    assert SCHEMA_VERSION == 18
+    week title, 18 the programmes and 19 the shared library (docs/api.md §2)."""
+    assert SCHEMA_VERSION == 19
     steps = (
         TOKENS_STEP,
         DETAILS_STEP,
@@ -61,8 +62,9 @@ def test_steps_are_numbered_as_the_docs_say() -> None:
         TRACKERS_STEP,
         WEEK_TITLE_STEP,
         PROGRAMMES_STEP,
+        SHARED_STEP,
     )
-    assert [_step_of(m) + 1 for m in steps] == [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+    assert [_step_of(m) + 1 for m in steps] == [*range(6, 20)]
 
 
 def test_section_check_step_keeps_plans_and_ticks_and_takes_cardio(
@@ -1160,13 +1162,17 @@ def test_programmes_migration_keeps_every_row_of_a_dirty_database(
 ) -> None:
     """Step 18 only adds the five programme tables, empty: every row and every table, index and
     trigger already there stays as it was, and the state still reads."""
+    from tracker_api import db
     from tracker_api.data import load_trackers, usage
 
     c = before_programmes(tmp_path / "f.db", monkeypatch)
     before = all_rows(c)
     assert sum(len(v) for k, v in before.items() if k != "sqlite_master") == 44
+    # Up to step 18 alone: step 19 adds a column to `users` (its own test below).
+    monkeypatch.setattr(db, "MIGRATIONS", db.MIGRATIONS[: _step_of(PROGRAMMES_STEP) + 1])
     migrate(c)
-    assert c.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION == 18
+    monkeypatch.undo()
+    assert c.execute("PRAGMA user_version").fetchone()[0] == 18
     assert all_rows(c) == before
     for table in PROGRAMME_TABLES:
         assert c.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0  # noqa: S608
@@ -1201,8 +1207,10 @@ def test_programmes_migration_reruns_from_a_partial_state(
         "INSERT INTO programmes VALUES (1, 'xp1', 'Beginner', '{}', 2, 10, 20)",
     )
     before = all_rows(c)
+    monkeypatch.setattr(db, "MIGRATIONS", db.MIGRATIONS[: _step_of(PROGRAMMES_STEP) + 1])
     migrate(c)
-    assert c.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
+    monkeypatch.undo()
+    assert c.execute("PRAGMA user_version").fetchone()[0] == 18
     assert all_rows(c) == before
     assert table_rows(c, "programmes")["programmes"] == [(1, "xp1", "Beginner", "{}", 2, 10, 20)]
     c.executescript(step)  # and once more changes nothing
@@ -1377,3 +1385,118 @@ def test_programme_rows_go_with_their_user(conn: sqlite3.Connection) -> None:
         "programme_days": [],
         "mark_events": [(2, 1)],
     }
+
+
+# --- step 19: the shared library (docs/specs/2026-11-19-shared-library.md §3, §4) ---------------
+
+
+def before_shared(path: Path, monkeypatch: pytest.MonkeyPatch) -> sqlite3.Connection:
+    """`before_programmes`' dirty database brought to schema 18, with a library programme."""
+    from tracker_api import db
+
+    c = before_programmes(path, monkeypatch)
+    monkeypatch.setattr(db, "MIGRATIONS", db.MIGRATIONS[: _step_of(SHARED_STEP)])
+    db.migrate(c)
+    monkeypatch.undo()
+    assert c.execute("PRAGMA user_version").fetchone()[0] == 18
+    c.execute("INSERT INTO programmes VALUES (1, 'xp1', 'Beginner', '{}', 2, 10, 20)")
+    return c
+
+
+def schema_but(c: sqlite3.Connection, *tables: str) -> list[tuple[object, ...]]:
+    """Every table, index and trigger's SQL but those of `tables`."""
+    return sorted(
+        tuple(r)
+        for r in c.execute("SELECT type, name, tbl_name, sql FROM sqlite_master")
+        if r[2] not in tables
+    )
+
+
+def test_shared_migration_keeps_every_row_and_makes_nobody_an_admin(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Step 19 adds `users.admin` (0 for every account there) and an empty `shared_programmes`;
+    every other row, table, index and trigger stays as it was."""
+    c = before_shared(tmp_path / "f.db", monkeypatch)
+    names = [r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type = 'table'")]
+    rows = table_rows(c, *names)
+    schema = schema_but(c, "users")
+    migrate(c)
+    assert c.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION == 19
+    after = table_rows(c, *names)
+    # Each account's row gains admin = 0 at its end; nothing else in it changes.
+    assert after.pop("users") == [(*row, 0) for row in rows.pop("users")]
+    assert after == rows
+    assert schema_but(c, "users", "shared_programmes") == schema
+    assert c.execute("SELECT count(*) FROM shared_programmes").fetchone()[0] == 0
+    assert c.execute("PRAGMA foreign_key_check").fetchall() == []
+    assert c.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    c.close()
+
+
+def test_shared_table_has_the_specs_columns(conn: sqlite3.Connection) -> None:
+    assert columns_of(conn, "users")[-1] == ("admin", "INTEGER", 1)
+    assert columns_of(conn, "shared_programmes") == [
+        # A STRICT table's primary key is NOT NULL.
+        ("id", "TEXT", 1),
+        ("name", "TEXT", 1),
+        ("doc_json", "TEXT", 1),
+        ("rev", "INTEGER", 1),
+        ("published_by", "INTEGER", 0),
+        ("source_id", "TEXT", 0),
+        ("published_at", "INTEGER", 1),
+        ("updated_at", "INTEGER", 1),
+    ]
+
+    def columns(index: str) -> list[str]:
+        return [i["name"] for i in conn.execute(f"PRAGMA index_info({index})")]
+
+    indexes = {
+        r["name"]: (r["unique"], columns(r["name"]))
+        for r in conn.execute("PRAGMA index_list(shared_programmes)")
+        if not r["name"].startswith("sqlite_autoindex")
+    }
+    assert indexes == {
+        "shared_programmes_by_source": (1, ["published_by", "source_id"]),
+        "shared_programmes_by_time": (0, ["updated_at"]),
+    }
+
+
+def test_shared_rows_are_checked(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        "INSERT INTO users (id, username, password_hash, created_at) VALUES (1, 'a', 'h', 0)"
+    )
+    assert conn.execute("SELECT admin FROM users").fetchone()[0] == 0
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute("UPDATE users SET admin = 2")
+    conn.execute("INSERT INTO shared_programmes VALUES ('xs1', 'B', '{}', 1, 1, 'xp1', 5, 5)")
+    for bad in [
+        "('xs2', 'B', '{}', 1, 1, 'xp1', 5, 5)",  # the same library programme twice
+        "('xs2', 'B', '{}', 0, 1, 'xp2', 5, 5)",  # rev 0
+        "('xs2', 'B', '{}', 1, 9, 'xp2', 5, 5)",  # no such user
+        "('xs1', 'B', '{}', 1, 1, 'xp2', 5, 5)",  # the id taken
+    ]:
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(f"INSERT INTO shared_programmes VALUES {bad}")  # noqa: S608
+    # Rows whose admin is gone may share a source: NULLs are distinct in a unique index.
+    conn.execute("INSERT INTO shared_programmes VALUES ('xs3', 'B', '{}', 1, NULL, 'xp1', 5, 5)")
+    conn.execute("INSERT INTO shared_programmes VALUES ('xs4', 'B', '{}', 1, NULL, 'xp1', 5, 5)")
+
+
+def test_deleting_the_admins_account_keeps_the_shared_library(conn: sqlite3.Connection) -> None:
+    """`ON DELETE SET NULL` fires with the connection's foreign keys on: the snapshot stays,
+    named by no one, and the admin's own library goes."""
+    conn.executescript(
+        """
+        INSERT INTO users (id, username, password_hash, created_at, admin)
+            VALUES (1, 'a', 'h', 0, 1), (2, 'b', 'h', 0, 0);
+        INSERT INTO programmes VALUES (1, 'xp1', 'Beginner', '{}', 1, 0, 0);
+        INSERT INTO shared_programmes VALUES ('xs1', 'Beginner', '{}', 3, 1, 'xp1', 5, 9);
+        """
+    )
+    conn.execute("DELETE FROM users WHERE id = 1")
+    assert table_rows(conn, "shared_programmes")["shared_programmes"] == [
+        ("xs1", "Beginner", "{}", 3, None, "xp1", 5, 9)
+    ]
+    assert conn.execute("SELECT count(*) FROM programmes").fetchone()[0] == 0
+    assert conn.execute("PRAGMA foreign_key_check").fetchall() == []

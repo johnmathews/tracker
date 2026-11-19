@@ -1,0 +1,15 @@
+{
+  "preview": true,
+  "rev": "fe5508b60014d40f",
+  "restart": {
+    "name": "Beginner 5×5",
+    "start": "2026-11-12",
+    "firstWeek": {
+      "from": "2026-11-12",
+      "to": "2026-11-15"
+    },
+    "weeks": 8,
+    "end": "2027-01-03",
+    "oldEndsFrom": null
+  }
+}

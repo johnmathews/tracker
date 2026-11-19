@@ -10,7 +10,21 @@ import {
   useTemplateRef,
   watch,
 } from 'vue'
-import { ChevronLeft, ChevronRight, Copy, Play, Trash2, Upload } from '@lucide/vue'
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  CopyPlus,
+  Ellipsis,
+  Eye,
+  EyeOff,
+  Play,
+  RefreshCw,
+  Share,
+  Trash2,
+  Upload,
+} from '@lucide/vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { backToWeek, programmeHref } from '@/lib/routes'
 import {
@@ -24,11 +38,21 @@ import {
   type Problem,
   type ProgrammeRecord,
   type ProgrammeSummary,
+  type PublishPreview,
+  type SharedPreview,
+  type SharedSummary,
   type StartPreview,
 } from '@/lib/programmes'
+import { COPIED_LABEL, SHARED_LEAD, copyQuestion, factsLine } from '@/lib/sharedLibrary'
 import { useProgrammesStore } from '@/stores/programmes'
+import { useSessionStore } from '@/stores/session'
+import PublishDialog from '@/components/PublishDialog.vue'
+import SharedPreviewDialog from '@/components/SharedPreviewDialog.vue'
 import { Button } from '@/components/ui/button'
+import { Chip } from '@/components/ui/chip'
+import { IconButton } from '@/components/ui/icon-button'
 import { InlineMessage } from '@/components/ui/inline-message'
+import { Menu, MenuItem } from '@/components/ui/menu'
 import { ProgrammeGrid } from '@/components/ui/programme-grid'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { TextField } from '@/components/ui/text-field'
@@ -37,15 +61,16 @@ import { TextLink } from '@/components/ui/text-link'
 const TABS = [
   ['running', 'Started'],
   ['library', 'Library'],
+  ['reference', 'Reference'],
   ['add', 'Add'],
 ] as const
 type Tab = (typeof TABS)[number][0]
 
-const KIND_NAMES = { strength: 'Strength', mobility: 'Mobility', cardio: 'Cardio' } as const
 const OFFLINE =
   'Can’t reach the server, so programmes can’t be added or started now. Try again when you’re online.'
 
 const store = useProgrammesStore()
+const session = useSessionStore()
 const { confirm } = useConfirm()
 const root = useTemplateRef<HTMLElement>('root')
 const heading = useTemplateRef<HTMLHeadingElement>('heading')
@@ -61,6 +86,7 @@ const openTab = computed({
 onMounted(() => {
   heading.value!.focus()
   void store.loadPage()
+  void store.loadShared()
 })
 
 /** The runs still going: running, paused or yet to start. */
@@ -69,12 +95,6 @@ const live = computed(() =>
     .filter(([, run]) => run.status !== 'ended')
     .map(([tracker, run]) => ({ tracker, run, line: runLine(run) })),
 )
-
-function facts(p: ProgrammeSummary): string {
-  const weeks = p.weeks === 1 ? '1 week' : `${p.weeks} weeks`
-  const activities = p.activities === 1 ? '1 activity' : `${p.activities} activities`
-  return `${KIND_NAMES[p.kind]} · ${weeks} · ${activities}`
-}
 
 /** A line over the library: an action that failed, or a programme just added. */
 const libraryNote = ref<{ tone: 'error' | 'success'; text: string } | null>(null)
@@ -196,6 +216,151 @@ async function remove(p: ProgrammeSummary): Promise<void> {
   if (!res.ok) libraryNote.value = { tone: 'error', text: res.message! }
 }
 
+// -- The shared library (K171, docs/specs/2026-11-19-shared-library.md §7) --
+
+/** Why a copy or a Preview on the Reference tab failed, said on that tab (K177). */
+const referenceNote = ref<string | null>(null)
+
+/** The shared programmes copied on this visit: each one's button reads Added to library (K172). */
+const copied = ref<ReadonlySet<string>>(new Set())
+
+/**
+ * Copy to library: asks first, then makes a plain copy of the user's own (S4), listed first above
+ * (K172). The row's button then reads Added to library. It still copies, after the question, which
+ * now says the library already has one.
+ */
+async function copyShared(p: SharedSummary): Promise<void> {
+  referenceNote.value = null
+  if (!(await confirm(copyQuestion(p.name, store.library ?? [])))) return
+  const res = await store.copyShared(p.id)
+  if (!res.ok) {
+    referenceNote.value = res.message!
+    return
+  }
+  await copiedNow(p.id, res.data.id)
+}
+
+/** The copy just made, landing in the library (K174): its row holds a tile, then lets it fade. */
+const landing = ref<{ id: string; settled: boolean } | null>(null)
+let landingTimers: ReturnType<typeof setTimeout>[] = []
+/** How long the tile holds, then how long it fades (K174, option A). */
+const LAND_HOLD = 1500
+const LAND_FADE = 600
+
+/**
+ * A copy made: the row's button reads Added to library, and the page scrolls to the copy, first in
+ * the library, with focus on its name (K174). A dialog that asked has already closed, and gives
+ * focus back without scrolling, so the scroll isn't cut short.
+ */
+async function copiedNow(sharedId: string, copyId: string): Promise<void> {
+  copied.value = new Set(copied.value).add(sharedId)
+  // Copied from the Reference tab: the copy lands in Library, so that tab opens (K177).
+  tab.value = 'library'
+  for (const t of landingTimers) clearTimeout(t)
+  landing.value = { id: copyId, settled: false }
+  await nextTick()
+  // After the dialog's own focus return, which waits a task.
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  const row = root.value?.querySelector<HTMLElement>(`[data-programme="${copyId}"]`)
+  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  row?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
+  row?.querySelector<HTMLElement>('h2')?.focus({ preventScroll: true })
+  landingTimers = [
+    setTimeout(() => {
+      if (landing.value?.id === copyId) landing.value = { id: copyId, settled: true }
+    }, LAND_HOLD),
+    setTimeout(() => {
+      if (landing.value?.id === copyId) landing.value = null
+    }, LAND_HOLD + LAND_FADE),
+  ]
+}
+onBeforeUnmount(() => {
+  for (const t of landingTimers) clearTimeout(t)
+})
+
+// -- Preview on a shared row (K173): a Dialog with the plan and the activities --
+
+/** The shared programme Preview opened, with the server's preview; shown while `previewOpen`. */
+const previewing = ref<SharedPreview | null>(null)
+const previewOpen = ref(false)
+const previewError = ref<string | null>(null)
+const previewBusy = ref(false)
+/** Said in the Dialog when the library already has a programme of that name (K172). */
+const previewWarning = computed(() => {
+  const p = previewing.value?.programme
+  if (!p) return null
+  const asked = copyQuestion(p.name, store.library ?? [])
+  return asked.message.startsWith('Your library') ? asked.message : null
+})
+
+async function openPreview(p: SharedSummary): Promise<void> {
+  referenceNote.value = null
+  const res = await store.previewShared(p.id)
+  if (!res.ok) {
+    referenceNote.value = res.message!
+    return
+  }
+  previewing.value = res.data
+  previewError.value = null
+  previewOpen.value = true
+}
+
+/** Copy to library from the Dialog: the Dialog was the look, so it copies without asking again. */
+async function copyFromPreview(): Promise<void> {
+  const p = previewing.value?.programme
+  if (!p || previewBusy.value) return
+  previewBusy.value = true
+  const res = await store.copyShared(p.id)
+  previewBusy.value = false
+  if (!res.ok) {
+    previewError.value = res.message!
+    return
+  }
+  previewOpen.value = false
+  await copiedNow(p.id, res.data.id)
+}
+
+/** The programme Publish opened, with the server's preview; the dialog shows while `publishOpen`. */
+const publishing = ref<{ id: string; preview: PublishPreview } | null>(null)
+const publishOpen = ref(false)
+
+/** Publish or Publish again, from the More menu: the dialog opens on the server's preview (S5). */
+async function openPublish(p: ProgrammeSummary): Promise<void> {
+  libraryNote.value = null
+  const res = await store.previewPublish(p.id)
+  if (!res.ok) {
+    libraryNote.value = { tone: 'error', text: res.message! }
+    return
+  }
+  publishing.value = { id: p.id, preview: res.data }
+  publishOpen.value = true
+}
+
+function onPublished(name: string): void {
+  libraryNote.value = { tone: 'success', text: `${name} is in Reference.` }
+}
+
+/** The row's More button, where focus goes back after the Unpublish question. */
+function moreButton(id: string): HTMLElement | null {
+  return root.value!.querySelector<HTMLElement>(
+    `[data-programme="${CSS.escape(id)}"] [data-testid="library-more"]`,
+  )
+}
+
+/** Unpublish asks first; copies people made stay theirs. */
+async function unpublish(p: ProgrammeSummary): Promise<void> {
+  libraryNote.value = null
+  const yes = await confirm({
+    title: `Unpublish ${p.name}?`,
+    message: 'It leaves Reference. Copies people have made stay theirs.',
+    confirmLabel: 'Unpublish',
+    returnFocus: () => moreButton(p.id),
+  })
+  if (!yes) return
+  const res = await store.unpublish(p.shared!.id)
+  if (!res.ok) libraryNote.value = { tone: 'error', text: res.message! }
+}
+
 // -- Add --
 
 const json = ref('')
@@ -240,10 +405,14 @@ const TWO =
 
 <!--
   The Programmes page (brand/design-system/project/components/ProgrammesPage, K147, spec §9.1), at
-  #/programmes, with no bar: Back to the week, the heading, then three tabs. Started (K161: "Running" is also an activity's name) lists each
-  live run as a link to its overview. Library lists the account's programmes; Preview and start
-  opens one in place, framed in ink, with its name, start day and parameters and the server's plan
-  as a live preview. Add takes pasted JSON (or a file) to the validator, listing every problem with
+  #/programmes, with no bar, in the page's centred column (K176): Back to the week, the heading,
+  then four tabs. Started (K161: "Running" is also an activity's name) lists each live run as a
+  link to its overview. Library lists the account's programmes; Preview and start opens one in
+  place, framed in ink, with its name, start day and parameters and the server's plan as a live
+  preview. Reference (K177) lists the shared library: each shared programme with Preview (K173) and
+  Copy to library (asked first, K172), after which the copy lands first in Library (K174). An
+  admin's rows add a More menu (Publish, or Publish again and Unpublish) and a Published chip;
+  Publish opens PublishDialog on the server's preview. Add takes pasted JSON (or a file) to the validator, listing every problem with
   its path. Offline, what needs the server is disabled, with one line saying why; the lists still
   show what was last loaded.
 -->
@@ -295,12 +464,7 @@ const TWO =
       >
 
       <TabsContent value="running" class="pt-2">
-        <ul
-          v-if="live.length"
-          aria-label="Started"
-          class="max-w-[820px]"
-          data-testid="programmes-running"
-        >
+        <ul v-if="live.length" aria-label="Started" data-testid="programmes-running">
           <li
             v-for="r in live"
             :key="r.tracker"
@@ -342,18 +506,39 @@ const TWO =
           <p v-if="store.library?.length === 0" :class="META" class="py-3.5">
             The library is empty. Add a programme on the Add tab.
           </p>
-          <ul v-else aria-label="Library" class="max-w-[820px]">
+          <ul v-else aria-label="Library">
             <li
               v-for="p in store.library ?? []"
               :key="p.id"
               class="flex flex-col gap-3 border-b border-line py-4"
-              :class="opened?.id === p.id && 'gap-5'"
+              :class="[
+                opened?.id === p.id && 'gap-5',
+                landing?.id === p.id && [
+                  'relative isolate motion-safe:animate-land-in',
+                  'before:absolute before:inset-y-0 before:-right-4 before:-left-4 before:-z-10 before:rounded-md before:bg-tile',
+                  'motion-safe:before:transition-opacity motion-safe:before:duration-600 motion-safe:before:ease-out',
+                  landing.settled && 'before:opacity-0',
+                ],
+              ]"
               data-testid="library-programme"
               :data-programme="p.id"
+              :data-landing="landing?.id === p.id ? (landing.settled ? 'settled' : '') : undefined"
             >
               <div>
-                <h2 :id="`${ids.heading}-${p.id}`" :class="NAME">{{ p.name }}</h2>
-                <p :class="META">{{ facts(p) }}</p>
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <h2
+                    :id="`${ids.heading}-${p.id}`"
+                    :class="NAME"
+                    class="focus:outline-none"
+                    tabindex="-1"
+                  >
+                    {{ p.name }}
+                  </h2>
+                  <Chip v-if="session.isAdmin && p.shared" data-testid="library-shared"
+                    >Published</Chip
+                  >
+                </div>
+                <p :class="META">{{ factsLine(p) }}</p>
                 <p
                   v-if="p.description"
                   class="body mt-1 max-w-[60ch] text-(length:--set-text) leading-[1.45] text-ink"
@@ -363,7 +548,12 @@ const TWO =
               </div>
               <div
                 v-if="opened?.id !== p.id"
-                class="flex flex-wrap gap-2 folded:grid folded:grid-cols-2 folded:[&>*:first-child]:col-span-2"
+                class="flex flex-wrap gap-2 folded:grid folded:[&>*:first-child]:col-span-full"
+                :class="
+                  session.isAdmin
+                    ? 'folded:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]'
+                    : 'folded:grid-cols-2'
+                "
               >
                 <Button
                   aria-expanded="false"
@@ -386,6 +576,28 @@ const TWO =
                   @click="remove(p)"
                   ><Trash2 :stroke-width="1.5" />Delete</Button
                 >
+                <Menu v-if="session.isAdmin">
+                  <template #trigger>
+                    <IconButton
+                      :label="`More for ${p.name}`"
+                      :disabled="store.offline"
+                      class="size-(--set-control) [&_svg]:size-(--set-icon)"
+                      data-testid="library-more"
+                      ><Ellipsis
+                    /></IconButton>
+                  </template>
+                  <template v-if="p.shared">
+                    <MenuItem data-testid="library-publish-again" @select="openPublish(p)"
+                      ><template #icon><RefreshCw /></template>Publish again</MenuItem
+                    >
+                    <MenuItem data-testid="library-unpublish" @select="unpublish(p)"
+                      ><template #icon><EyeOff /></template>Unpublish</MenuItem
+                    >
+                  </template>
+                  <MenuItem v-else data-testid="library-publish" @select="openPublish(p)"
+                    ><template #icon><Share /></template>Publish</MenuItem
+                  >
+                </Menu>
               </div>
               <div
                 v-else
@@ -464,6 +676,58 @@ const TWO =
         </div>
       </TabsContent>
 
+      <TabsContent value="reference" class="pt-2">
+        <div data-testid="shared-library">
+          <InlineMessage v-if="referenceNote" tone="error" class="mt-2">{{
+            referenceNote
+          }}</InlineMessage>
+          <p :class="META" class="border-b border-line py-3">{{ SHARED_LEAD }}</p>
+          <p v-if="store.shared?.length === 0" :class="META" class="py-3.5">
+            No reference programmes yet.
+          </p>
+          <ul v-else-if="store.shared" aria-label="Reference">
+            <li
+              v-for="p in store.shared"
+              :key="p.id"
+              class="flex flex-col gap-3 border-b border-line py-4"
+              data-testid="shared-programme"
+              :data-shared="p.id"
+            >
+              <div>
+                <h2 :class="NAME">{{ p.name }}</h2>
+                <p :class="META">{{ factsLine(p) }}</p>
+                <p
+                  v-if="p.description"
+                  class="body mt-1 max-w-[60ch] text-(length:--set-text) leading-[1.45] text-ink"
+                >
+                  {{ p.description }}
+                </p>
+              </div>
+              <div class="flex flex-wrap gap-2 folded:grid folded:grid-cols-2">
+                <Button
+                  :disabled="store.offline"
+                  data-testid="shared-preview-open"
+                  aria-haspopup="dialog"
+                  @click="openPreview(p)"
+                  ><Eye :stroke-width="1.5" />Preview</Button
+                >
+                <Button
+                  :disabled="store.offline"
+                  data-testid="shared-copy"
+                  :data-copied="copied.has(p.id) || undefined"
+                  @click="copyShared(p)"
+                >
+                  <template v-if="copied.has(p.id)"
+                    ><Check :stroke-width="1.5" />{{ COPIED_LABEL }}</template
+                  >
+                  <template v-else><CopyPlus :stroke-width="1.5" />Copy to library</template>
+                </Button>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </TabsContent>
+
       <TabsContent value="add">
         <div class="flex max-w-[820px] flex-col gap-5 pt-4" data-testid="programme-add">
           <div class="flex flex-col gap-1">
@@ -531,5 +795,22 @@ const TWO =
         </div>
       </TabsContent>
     </Tabs>
+    <PublishDialog
+      v-if="publishing"
+      v-model:open="publishOpen"
+      :programme-id="publishing.id"
+      :preview="publishing.preview"
+      @published="onPublished"
+    />
+    <SharedPreviewDialog
+      v-if="previewing"
+      v-model:open="previewOpen"
+      :preview="previewing"
+      :warning="previewWarning"
+      :error="previewError"
+      :busy="previewBusy"
+      :offline="store.offline"
+      @copy="copyFromPreview"
+    />
   </div>
 </template>

@@ -1,0 +1,510 @@
+<title>Shared library: the Shared tab and Publish</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="tokens.css">
+<!--
+  A mockup (design-system skill, references/mockups.md). Two questions on one page, each with
+  lettered options, one recommended. Every stage is drawn by the script at the foot from the cards'
+  own markup and styles (ProgrammesPage, Tabs, Button, Chip, InlineMessage, TextLink, Dialog,
+  ConfirmDialog, Menu, IconButton, ProgrammeGrid), once per theme (the .pane elements). No colour
+  here is new: every option uses the system's tokens, so there is no --candidate-* value.
+  Measures: one <li data-fg data-bg data-min> per colour pairing an option uses in a new place.
+  Spec: docs/specs/2026-11-19-shared-library.md (§2 S2 and S5, §5, §7).
+-->
+<style>
+  body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font-sans); }
+  .mockup-page {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: var(--space-8, 32px) var(--space-16, 64px);
+    max-width: 1200px; margin: 0 auto; display: grid; gap: var(--space-12, 48px);
+  }
+  .mockup-head { display: grid; gap: var(--space-2, 8px); max-width: 70ch; }
+  .mockup-head h1, .option h3, .question h2 { margin: 0; text-wrap: balance; }
+  .mockup-head p, .option > p, .q-head p { margin: 0; }
+  .mockup-head ol { margin: 0; padding-left: 1.4em; }
+  .mockup-meta { color: var(--ink-secondary); }
+  .option { display: grid; gap: var(--space-4, 16px); min-width: 0; }
+  .option-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2, 8px) var(--space-3, 12px); }
+  .option-tag { color: var(--ink-secondary); }
+  .option[data-recommended] .option-tag::after { content: " · Recommended"; color: var(--ink); }
+  /* The same stage in light and in dark, side by side; stacked on a phone. Each pane is a
+     data-theme subtree, so the system's own tokens switch inside it. A page or a Dialog takes the
+     page's whole width, light over dark, at its real desktop size. */
+  .panes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--space-4, 16px); }
+  .panes.wide { grid-template-columns: minmax(0, 1fr); }
+  .pane { min-width: 0; background: var(--canvas); color: var(--ink); border: 1px solid var(--line);
+          border-radius: var(--radius-lg, 10px); padding: var(--space-4, 16px); overflow-x: auto; }
+  .pane-label { color: var(--ink-secondary); margin: 0 0 var(--space-3, 12px); }
+  .measures { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); }
+  .measures li { border: 1px solid var(--line); border-radius: var(--radius-sm, 4px); padding: 2px var(--space-2, 8px); font-variant-numeric: tabular-nums; }
+  .measures li[data-pass="no"] { border-color: currentColor; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  /* The page's own frame: a question, its options, and a label over each stage. */
+  .question { display: grid; gap: var(--space-10, 40px); padding-top: var(--space-8, 32px); border-top: 2px solid var(--ink); }
+  .q-head { display: grid; gap: var(--space-2, 8px); max-width: 75ch; }
+  .q-num { color: var(--ink-secondary); }
+  .sub { margin: var(--space-2, 8px) 0 0; }
+  .stage-cap { margin: 0 0 var(--space-2, 8px); color: var(--ink-secondary); }
+
+  /* ---- Shared by the cards, at the page's size (u = 1, a 1280×800 screen; K55). ---- */
+  .pane * { box-sizing: border-box; }
+  .pane { font-variant-numeric: tabular-nums; }
+  .pane button, .pane input { font: inherit; color: inherit; }
+  .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  svg.i { width: 1em; height: 1em; flex: none; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 60px; padding: 0 22px; border: 1px solid var(--control-border); border-radius: var(--radius-md);
+    background: transparent; color: var(--ink); font: 600 19px / 25px var(--font-sans); cursor: pointer; white-space: nowrap; }
+  .btn svg { width: 26px; height: 26px; }
+  .btn:hover { background: var(--tile); }
+  .btn.quiet { border-color: transparent; }
+  .btn.primary { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+  .btn.primary:hover { background: color-mix(in srgb, var(--ink) 82%, var(--canvas)); }
+  .ib { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 52px; height: 52px; padding: 0; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); cursor: pointer; }
+  .ib svg { width: 28px; height: 28px; }
+  .ib:hover, .ib[aria-expanded="true"] { background: var(--tile); }
+  .chip { display: inline-block; font: 600 16px / 22px var(--font-sans); background: var(--tile); color: var(--ink-secondary); border-radius: var(--radius-sm); padding: 1px var(--space-2); white-space: nowrap; }
+  /* InlineMessage: caption text, a 16px icon, no box. Success is ink, info ink-secondary. */
+  .im { display: flex; align-items: flex-start; gap: var(--space-2); margin: 0; font-size: 16px; line-height: 22px; }
+  .im svg { width: 16px; height: 16px; margin-top: 3px; flex: none; }
+  .im.success { color: var(--ink); }
+  .im.info { color: var(--ink-secondary); }
+  /* TextLink: ink, a 1px underline at 3px, 2px under the pointer. */
+  .pane a.tl { color: var(--ink); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  .pane a.tl:hover { text-decoration-thickness: 2px; }
+
+  /* ---- The Programmes page (ProgrammesPage card), at u = 1, with no bar. ---- */
+  .pp { border: 1px solid var(--line); border-radius: var(--radius-lg); min-width: 0; }
+  .pp .page { padding: 28px 48px 48px; display: flex; flex-direction: column; min-width: 0; }
+  .pp .back { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-size: 19px; line-height: 26px; text-decoration: underline; text-underline-offset: 4px; }
+  .pp .back svg { width: 26px; height: 26px; }
+  .pp h4.ttl { margin: 4px 0 0; font: 600 40px / 46px var(--font-serif); }
+  .tabs { display: flex; flex-wrap: wrap; column-gap: 32px; margin-top: 24px; border-bottom: 1px solid var(--line); }
+  .tabs button { display: inline-flex; align-items: center; min-height: 44px; padding: var(--space-2) 0; border: 0; background: transparent; color: var(--ink-secondary); font: 600 19px / 26px var(--font-sans); cursor: pointer; }
+  .tabs button:hover { color: var(--ink); }
+  .tabs button[aria-selected="true"] { color: var(--ink); box-shadow: inset 0 -3px 0 var(--ink); }
+  .tp { padding-top: 8px; }
+  .tp > .im { margin-top: 8px; }
+  .plist { list-style: none; margin: 0; padding: 0; max-width: 820px; }
+  .plist > li { border-bottom: 1px solid var(--line); }
+  .pn { margin: 0; font: 600 22px / 1.3 var(--font-sans); }
+  .pm { margin: 0; color: var(--ink-secondary); font-size: 19px; line-height: 1.45; }
+  .empty { margin: 0; padding: 14px 0; color: var(--ink-secondary); font-size: 19px; line-height: 1.45; }
+  .lib { display: flex; flex-direction: column; gap: 12px; padding: 16px 0; }
+  .lib .pd { margin: 4px 0 0; font-size: 19px; line-height: 1.45; max-width: 60ch; }
+  .acts { display: flex; flex-wrap: wrap; gap: 12px; }
+  .acts.end { justify-content: flex-end; }
+  .lib .pa { gap: 8px; }
+  .lib .pa .btn { height: 52px; padding: 0 16px; }
+  .lib .pa .btn.quiet { padding: 0 10px; }
+  /* Option 2A: the "Shared" Chip after the name, on its line. */
+  .namel { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+  /* Option 1B: the shared programmes as a section at the foot of the Library tab. */
+  .sect { margin: 40px 0 0; max-width: 820px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .sect h4 { margin: 0; font: 600 27px / 34px var(--font-sans); }
+  .sect p { margin: 4px 0 0; color: var(--ink-secondary); font-size: 19px; line-height: 1.45; }
+  .sect + .plist .pn, .lib h5.pn { font: 600 22px / 1.3 var(--font-sans); }
+  /* Option 1C: a shared programme opened in place to look at it, framed as Preview and start is (K147). */
+  .lib.open { gap: 20px; }
+  .xp { display: flex; flex-direction: column; gap: 20px; padding: 16px; margin: 0 -16px; border: 2px solid var(--ink); border-radius: var(--radius-lg); min-width: 0; }
+  .spv { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .spv h5 { margin: 0; font: 600 19px / 25px var(--font-sans); }
+  /* Option 2B: a row's overflow Menu, open under its IconButton, right edges aligned. */
+  .anchor { position: relative; display: inline-flex; }
+  .menu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 5; width: 288px; padding: var(--space-2); background: var(--panel); color: var(--ink);
+    border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-overlay); text-align: left; }
+  .menu ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .menu .item { display: flex; align-items: center; gap: var(--space-3); width: 100%; min-height: 48px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-md);
+    background: transparent; color: var(--ink); font: 600 16px / 22px var(--font-sans); cursor: pointer; text-align: left; }
+  .menu .item svg { width: 22px; height: 22px; }
+  .menu .item:hover, .menu .item[data-highlighted] { background: var(--tile); }
+  .room { padding-bottom: 150px; }
+
+  /* ---- The grid (ProgrammeGrid card), as the start's preview: no week framed, no tile. ---- */
+  .grid-wrap { position: relative; margin-top: 8px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
+  table.og { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 19px; }
+  .og th, .og td { padding: 12px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; font-weight: 400; }
+  .og thead th { border-bottom: 1px solid var(--ink); vertical-align: bottom; }
+  .og .act { position: sticky; left: 0; z-index: 2; background: var(--canvas); width: 216px; min-width: 216px; }
+  .og .wk { min-width: 108px; }
+  .og .wn { display: block; font: 600 19px / 1.35 var(--font-sans); white-space: nowrap; }
+  .og .wt { display: block; font: 600 16px / 22px var(--font-sans); white-space: nowrap; }
+  .og .an { display: block; font: 600 22px / 1.3 var(--font-sans); overflow-wrap: anywhere; }
+  .og .ac { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 4px; align-items: center; }
+  .og .ac .t { color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
+  .cv { display: block; font: 600 21px / 1.3 var(--font-sans); white-space: nowrap; }
+  .cs { display: block; color: var(--ink-secondary); font-size: 16px; line-height: 22px; white-space: nowrap; }
+
+  /* ---- Dialog and ConfirmDialog: the page behind, the scrim, the panel. ---- */
+  .dstage { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 64px var(--space-4) var(--space-6); }
+  .behind { position: absolute; inset: 0; padding: var(--space-6) 48px; }
+  .behind b { display: block; margin: 0 0 var(--space-6); font: 600 40px / 46px var(--font-serif); }
+  .behind span { display: block; padding: var(--space-3) 0; border-bottom: 1px solid var(--line); font-weight: 600; font-size: 19px; }
+  .scrim { position: absolute; inset: 0; background: var(--scrim); opacity: 0.4; }
+  .dlg { position: relative; margin: 0 auto; width: min(720px, 100%); display: flex; flex-direction: column; gap: 20px; padding: 32px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-overlay); }
+  .dlg.confirm { width: min(600px, 100%); gap: 0; }
+  .dlg-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin: -12px -12px 0 0; }
+  .dlg-head h4, .dlg.confirm h4 { margin: 12px 0 0; font: 600 27px / 34px var(--font-sans); }
+  .dlg.confirm h4 { margin: 0; }
+  .dlg.confirm p { margin: 8px 0 0; font-size: 19px; line-height: 28px; }
+  .dlg.confirm .actions { margin-top: 24px; }
+  .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; padding-top: 4px; }
+  .dlg .lead { margin: 0; font-size: 19px; line-height: 28px; }
+  .dlg .who { margin: 0; font-size: 19px; line-height: 28px; }
+  /* Publish's preview (S5): the programme as the shared library shows it, on the page's own canvas. */
+  .seen { display: flex; flex-direction: column; gap: 8px; }
+  .seen h5 { margin: 0; font: 600 19px / 25px var(--font-sans); }
+  .doc { background: var(--canvas); border: 1px solid var(--line); border-radius: var(--radius-md); padding: 16px 20px; }
+  .doc .pd { margin: 4px 0 0; font-size: 19px; line-height: 1.45; }
+  .doc ol { list-style: none; margin: 16px 0 0; padding: 0; border-top: 1px solid var(--line); }
+  .doc li { display: flex; flex-direction: column; gap: 4px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .doc li:last-child { border-bottom: 0; padding-bottom: 0; }
+  .doc .an { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font: 600 19px / 25px var(--font-sans); }
+  .doc .note { margin: 0; font: italic 400 19px / 28px var(--font-serif); color: var(--ink); max-width: 60ch; }
+  .doc .none { margin: 0; color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
+  .doc a.tl { font-size: 16px; line-height: 22px; align-self: flex-start; }
+
+  @media (prefers-reduced-motion: no-preference) { .btn, .tabs button, .ib, .menu .item { transition: background-color 120ms, color 120ms, border-color 120ms; } }
+
+  /* Folded (a phone): the cards' own rules, on n = 1. The stage takes the pane's whole width, as
+     the ProgrammesPage card's preview does, so the page inside is the phone's own width less the
+     mockup's frame. */
+  @media (max-width: 639px) {
+    .question { gap: var(--space-8, 32px); }
+    .pane { padding: var(--space-3, 12px) 0 0; }
+    .pane-label { padding: 0 var(--space-3, 12px); }
+    .pane .stage-cap { padding: 0 var(--space-3, 12px); }
+    .pp, .dstage { border-width: 1px 0 0; border-radius: 0; }
+    .btn, .lib .pa .btn { height: 48px; padding: 0 16px; font-size: 16px; line-height: 22px; }
+    .btn svg { width: 22px; height: 22px; }
+    .pp .page { padding: 20px 16px 32px; }
+    .pp .back, .pm, .lib .pd, .empty, .sect p { font-size: 18px; line-height: 26px; }
+    .pp .back svg { width: 22px; height: 22px; }
+    .pp h4.ttl { font-size: 30px; line-height: 36px; }
+    .tabs { margin-top: 20px; }
+    .tabs button { font-size: 18px; }
+    .pn, .sect + .plist .pn, .lib h5.pn { font-size: 18px; }
+    .sect { margin-top: 32px; }
+    .sect h4 { font-size: 22px; line-height: 28px; }
+    .lib .pa { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .lib .pa .btn:first-child { grid-column: 1 / -1; }
+    .lib .pa.one { grid-template-columns: minmax(0, 1fr); }
+    .lib .pa.two { display: flex; }
+    .lib .pa.two .btn { flex: 1 1 auto; }
+    .lib .pa.trail { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+    .lib .pa.trail .btn:first-child { grid-column: 1 / -1; }
+    .ib { width: 44px; height: 48px; }
+    .ib svg { width: 24px; height: 24px; }
+    .menu { width: min(288px, calc(100vw - 32px)); }
+    .xp { margin: 0 -8px; padding: 12px 8px; }
+    .spv h5 { font-size: 16px; line-height: 22px; }
+    .acts.end .btn { flex: 1 1 auto; }
+    table.og { font-size: 18px; }
+    .og th, .og td { padding: 10px 8px; }
+    .og .act { width: 132px; min-width: 132px; box-shadow: 1px 0 0 var(--line); }
+    .og .wk { min-width: 104px; }
+    .og .wn { font-size: 16px; }
+    .og .an, .cv { font-size: 18px; }
+    .dstage { padding: 48px 16px 16px; }
+    .behind { padding: var(--space-4); }
+    .behind b { font-size: 30px; line-height: 36px; }
+    .dlg { padding: 16px; gap: 16px; }
+    .dlg-head h4, .dlg.confirm h4 { font-size: 22px; line-height: 28px; }
+    .ib.close { width: 44px; height: 44px; }
+    .dlg .lead, .dlg .who, .dlg.confirm p { font-size: 18px; line-height: 26px; }
+    .seen h5 { font-size: 16px; line-height: 22px; }
+    .doc { padding: 12px; }
+    .doc .pd, .doc .note { font-size: 18px; line-height: 26px; }
+    .doc .an { font-size: 18px; }
+    .actions .btn { flex: 1 1 auto; }
+  }
+</style>
+
+<main class="mockup-page">
+  <header class="mockup-head">
+    <p class="caption mockup-meta">Mockup · 2026-11-19 · Tracker</p>
+    <h1 class="title-1">Shared library: the Shared tab and Publish</h1>
+    <p class="body">Two questions about the shared library (#88), from the approved spec. Each has its own options, and each is answered on its own. Everything else on the Programmes page stays as it is.</p>
+    <ol class="body">
+      <li><a href="#q1">The Shared tab: where the shared programmes sit, and what a row offers</a></li>
+      <li><a href="#q2">Publish: how an admin publishes, publishes again and unpublishes</a></li>
+    </ol>
+    <p class="body mockup-meta">Today is Thu 19 Nov 2026. The shared library holds Strength 5×5, Couch to 5K and Desk mobility. A shared programme names no one (S2). No option adds a colour: each uses the system's tokens and its existing cards.</p>
+  </header>
+
+  <!-- ===================================== Question 1 ===================================== -->
+  <section class="question" id="q1" aria-labelledby="q1-h">
+    <header class="q-head">
+      <p class="label q-num">Question 1 of 2 · any user</p>
+      <h2 class="title-1" id="q1-h">1. The Shared tab</h2>
+      <p class="body">Every signed-in user can see the shared library and copy a programme from it into their own library. The copy is theirs (S4): they adjust it with the start options or an agent, and start it from the Library as today. Each shared row shows the name, “Kind · N weeks · N activities” and the description, as a library row does.</p>
+    </header>
+
+    <section class="option" id="q1a" data-recommended aria-labelledby="q1a-h">
+      <div class="option-head"><h3 class="title-2" id="q1a-h">A. A fourth tab, Shared, between Library and Add</h3><span class="label option-tag">Option 1A</span></div>
+      <p class="body">Each row has one action, <b>Copy to library</b> (secondary, Lucide <code>copy-plus</code>). After a copy, an InlineMessage (success) at the top of the tab says “Strength 5×5 is in your library.”, with a TextLink, <b>Open in Library</b>, that opens the Library tab. The row stays as it was: copying again makes a second copy. The copy keeps the shared programme's name.</p>
+      <p class="label sub">The Shared tab, just after copying Strength 5×5</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="shared" data-opt="a"></div><div class="pane" data-theme="dark" data-draw="shared" data-opt="a"></div></div>
+      <p class="label sub">An empty shared library</p>
+      <div class="panes"><div class="pane" data-theme="light" data-draw="shared" data-opt="empty"></div><div class="pane" data-theme="dark" data-draw="shared" data-opt="empty"></div></div>
+      <ul class="measures caption">
+        <li data-fg="var(--ink)" data-bg="var(--canvas)" data-min="4.5">The message and its link</li>
+        <li data-fg="var(--ink-secondary)" data-bg="var(--canvas)" data-min="4.5">The facts line and the empty line</li>
+        <li data-fg="var(--control-border)" data-bg="var(--canvas)" data-min="3">Copy to library's outline</li>
+      </ul>
+    </section>
+
+    <section class="option" id="q1b" aria-labelledby="q1b-h">
+      <div class="option-head"><h3 class="title-2" id="q1b-h">B. No new tab: a section at the foot of the Library</h3><span class="label option-tag">Option 1B</span></div>
+      <p class="body">The Library tab lists the account's own programmes, then a section, <b>From the shared library</b>, with a line under it and the same rows as A, each with Copy to library. The page keeps three tabs. A copy appears in the list above, with the same InlineMessage at the top of the tab (no link: it is already in view). The section's heading is an <code>h2</code> beside the programmes' names, so the shared names become <code>h3</code>s.</p>
+      <p class="label sub">The Library tab, two programmes of the user's own, then the shared ones</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="shared" data-opt="b"></div><div class="pane" data-theme="dark" data-draw="shared" data-opt="b"></div></div>
+      <ul class="measures caption">
+        <li data-fg="var(--ink)" data-bg="var(--canvas)" data-min="4.5">The section's heading</li>
+        <li data-fg="var(--ink-secondary)" data-bg="var(--canvas)" data-min="4.5">The section's line</li>
+      </ul>
+    </section>
+
+    <section class="option" id="q1c" aria-labelledby="q1c-h">
+      <div class="option-head"><h3 class="title-2" id="q1c-h">C. As A, with Preview before copying</h3><span class="label option-tag">Option 1C</span></div>
+      <p class="body">The Shared tab as in A, and each row gains <b>Preview</b> (secondary, Lucide <code>eye</code>) before Copy to library. Preview opens the programme in place, framed in 2px <code>ink</code> as Preview and start is, with its plan: the ProgrammeGrid as the start's preview, weeks by number with no dates, at the programme's own values. <b>Close</b> and <b>Copy to library</b> (primary) end it. It costs a second action on every row, and a grid the Library's Preview and start shows anyway after the copy.</p>
+      <p class="label sub">The Shared tab, Strength 5×5 opened (Desk mobility trimmed)</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="shared" data-opt="c"></div><div class="pane" data-theme="dark" data-draw="shared" data-opt="c"></div></div>
+      <ul class="measures caption">
+        <li data-fg="var(--ink)" data-bg="var(--canvas)" data-min="3">The open frame</li>
+        <li data-fg="var(--on-ink)" data-bg="var(--ink)" data-min="4.5">Copy to library, primary</li>
+      </ul>
+    </section>
+  </section>
+
+  <!-- ===================================== Question 2 ===================================== -->
+  <section class="question" id="q2" aria-labelledby="q2-h">
+    <header class="q-head">
+      <p class="label q-num">Question 2 of 2 · the admin only (John)</p>
+      <h2 class="title-1" id="q2-h">2. Publish, on the admin's Library tab</h2>
+      <p class="body">Only an admin publishes, and the server checks it every time (S1). Publishing copies the programme as it is now (S3); editing or deleting it in the library later changes nothing shared. Nobody else sees any of these controls. John's library holds Strength 5×5 and Couch to 5K, both shared, and Hip mobility, which isn't.</p>
+    </header>
+
+    <section class="option" id="q2a" data-recommended aria-labelledby="q2a-h">
+      <div class="option-head"><h3 class="title-2" id="q2a-h">A. Publish on each row; a shared row says so</h3><span class="label option-tag">Option 2A</span></div>
+      <p class="body">Each row gains <b>Publish</b> (quiet, Lucide <code>share</code>) after Delete. A shared row shows a “Shared” Chip after its name and offers <b>Publish again</b> (<code>refresh-cw</code>) and <b>Unpublish</b> (<code>eye-off</code>) in place of Publish. After a publish, an InlineMessage (success) at the top of the tab says “Strength 5×5 is in the shared library.” Folded, the row's buttons sit two to a row, as Duplicate and Delete do now.</p>
+      <p class="label sub">John's Library tab, just after publishing Strength 5×5</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="admin" data-opt="a"></div><div class="pane" data-theme="dark" data-draw="admin" data-opt="a"></div></div>
+      <p class="label sub">Publish, from Strength 5×5 before it was shared: the server's preview, then Publish programme</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="publish"></div><div class="pane" data-theme="dark" data-draw="publish"></div></div>
+      <p class="body">The Dialog opens on the server's preview (<code>preview</code> by default), so what it shows is what will be shared: the name, the facts, the description, then each activity with its chip, notes and link (S5). Nothing is shared until <b>Publish programme</b>, which sends the preview's <code>rev</code>. If the programme changed since, the Dialog shows the fresh preview with an InlineMessage (info), “The programme changed since this preview. Check it, then publish.” <b>Publish again</b> opens the same Dialog titled “Publish Strength 5×5 again”, with the line “It replaces the shared copy from Tue 17 Nov. Copies people have made stay as they are.” and the button <b>Publish again</b>.</p>
+      <p class="label sub">Unpublish, later, on Strength 5×5: the ConfirmDialog</p>
+      <div class="panes"><div class="pane" data-theme="light" data-draw="unpublish"></div><div class="pane" data-theme="dark" data-draw="unpublish"></div></div>
+      <ul class="measures caption">
+        <li data-fg="var(--ink-secondary)" data-bg="var(--tile)" data-min="4.5">The Shared Chip</li>
+        <li data-fg="var(--ink)" data-bg="var(--canvas)" data-min="4.5">The quiet buttons and the message</li>
+        <li data-fg="var(--ink)" data-bg="var(--panel)" data-min="4.5">The Dialog's words</li>
+        <li data-fg="var(--ink)" data-bg="var(--canvas)" data-min="4.5">The preview's notes and links, on canvas</li>
+        <li data-fg="var(--ink-secondary)" data-bg="var(--canvas)" data-min="4.5">The preview's facts and “No notes.”</li>
+        <li data-fg="var(--ink-secondary)" data-bg="var(--tile)" data-min="4.5">An activity's chip in the preview</li>
+        <li data-fg="var(--on-ink)" data-bg="var(--ink)" data-min="4.5">Publish programme and Unpublish</li>
+        <li data-fg="var(--control-border)" data-bg="var(--panel)" data-min="3">Cancel's outline</li>
+      </ul>
+    </section>
+
+    <section class="option" id="q2b" aria-labelledby="q2b-h">
+      <div class="option-head"><h3 class="title-2" id="q2b-h">B. Publish in a row's overflow Menu</h3><span class="label option-tag">Option 2B</span></div>
+      <p class="body">Each row gains a quiet IconButton, <b>More</b> (Lucide <code>ellipsis</code>, named “More for Couch to 5K”), after Delete. It opens a Menu with <b>Publish</b>, or <b>Publish again</b> and <b>Unpublish</b> for a shared row. The Chip, the Dialog and the ConfirmDialog are as in A. The row looks as it does today, and the publish controls are one press further away. This is the first Menu on a row; the Menu card covers only the account menu today.</p>
+      <p class="label sub">John's Library tab, Couch to 5K's Menu open (Hip mobility trimmed)</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="admin" data-opt="b"></div><div class="pane" data-theme="dark" data-draw="admin" data-opt="b"></div></div>
+      <ul class="measures caption">
+        <li data-fg="var(--ink)" data-bg="var(--panel)" data-min="4.5">The Menu's items</li>
+        <li data-fg="var(--ink)" data-bg="var(--tile)" data-min="4.5">The highlighted item, and More while open</li>
+      </ul>
+    </section>
+  </section>
+</main>
+
+<script>
+// Every stage is drawn here, once per pane, so light and dark show the same thing. The markup and
+// the sizes are the cards' (ProgrammesPage, Tabs, Button, Chip, InlineMessage, TextLink, Dialog,
+// ConfirmDialog, Menu, ProgrammeGrid); the words follow src/components/ProgrammesPage.vue and the
+// spec (docs/specs/2026-11-19-shared-library.md).
+(() => {
+  const P = {
+    left: '<path d="m15 18-6-6 6-6"/>',
+    x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    play: '<polygon points="6 3 20 12 6 21 6 3"/>',
+    copy: '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+    copyplus: '<line x1="15" x2="15" y1="12" y2="18"/><line x1="12" x2="18" y1="15" y2="15"/><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+    trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
+    eye: '<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>',
+    eyeoff: '<path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/>',
+    share: '<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" x2="12" y1="2" y2="15"/>',
+    refresh: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+    ellipsis: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+    check: '<path d="M20 6 9 17l-5-5"/>',
+  }
+  const ic = (name, cls = 'i') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name]}</svg>`
+  const btn = (icon, words, cls = '', attrs = '') => `<button type="button" class="btn${cls ? ' ' + cls : ''}"${attrs}>${icon ? ic(icon) : ''}${words}</button>`
+  let uid = 0
+  const id = (p) => `${p}${++uid}`
+
+  // ------------------------------------------------------------------------------- the data
+  const SHARED = [
+    { id: 's55', name: 'Strength 5×5', meta: 'Strength · 8 weeks · 5 activities', desc: 'Three full-body sessions a week, adding weight each week.' },
+    { id: 'c25', name: 'Couch to 5K', meta: 'Cardio · 9 weeks · 1 activity', desc: 'Three runs a week, from run-walk intervals to 5 km.' },
+    { id: 'desk', name: 'Desk mobility', meta: 'Mobility · 4 weeks · 6 activities', desc: 'Six short stretches for the neck, shoulders and hips, between meetings.' },
+  ]
+  const OWN = [
+    { id: 'hip', name: 'Hip mobility', meta: 'Mobility · 6 weeks · 4 activities', desc: 'Short daily holds and drills for the hips and lower back, a little longer each week.' },
+    { id: 'ul', name: 'Upper and lower', meta: 'Strength · 10 weeks · 6 activities', desc: 'Four days a week: two upper, two lower.' },
+  ]
+  // John's library (question 2): Strength 5×5 and Couch to 5K shared, Hip mobility not.
+  const ADMIN = [
+    { ...SHARED[0], shared: true },
+    { ...SHARED[1], shared: true },
+    { ...OWN[0], shared: false },
+  ]
+
+  // ------------------------------------------------------------------------ the page's frame
+  const TABS4 = [['running', 'Started'], ['library', 'Library'], ['shared', 'Shared'], ['add', 'Add']]
+  const TABS3 = [['running', 'Started'], ['library', 'Library'], ['add', 'Add']]
+  function page(tabs, open, body, extra = '') {
+    const pid = id('pp')
+    return `<div class="pp${extra ? ' ' + extra : ''}"><div class="page"><a class="back" href="#">${ic('left')}<span>Back to the week</span></a><h4 class="ttl" id="${pid}-h">Programmes</h4>
+      <div class="tabs" role="tablist" aria-labelledby="${pid}-h">${tabs.map(([k, l]) => `<button type="button" role="tab" id="${pid}-${k}" aria-selected="${k === open}" tabindex="${k === open ? 0 : -1}">${l}</button>`).join('')}</div>
+      <div class="tp" role="tabpanel" aria-labelledby="${pid}-${open}">${body}</div></div></div>`
+  }
+  const ROW_OWN = [btn('play', 'Preview and start', '', ' aria-expanded="false"'), btn('copy', 'Duplicate', 'quiet'), btn('trash', 'Delete', 'quiet')]
+  function row(p, actions, opts = {}) {
+    const h = opts.h || 'h5'
+    const chip = p.shared && opts.chip ? '<span class="chip">Shared</span>' : ''
+    const name = chip ? `<div class="namel"><${h} class="pn">${p.name}</${h}>${chip}</div>` : `<${h} class="pn">${p.name}</${h}>`
+    return `<li class="lib${opts.open ? ' open' : ''}"><div>${name}<p class="pm">${p.meta}</p><p class="pd">${p.desc}</p></div>${actions ? `<div class="acts pa${opts.paCls ? ' ' + opts.paCls : ''}">${actions.join('')}</div>` : ''}${opts.after || ''}</li>`
+  }
+  const success = (words) => `<p class="im success" role="status">${ic('check')}<span>${words}</span></p>`
+  const COPY = btn('copyplus', 'Copy to library')
+
+  // ------------------------------------------------------- question 1: the Shared tab, A to C
+  function sharedA() {
+    const body = `${success('Strength 5×5 is in your library. <a class="tl" href="#">Open in Library</a>')}<ul class="plist" aria-label="Shared">${SHARED.map((p) => row(p, [COPY], { paCls: 'one' })).join('')}</ul>`
+    return page(TABS4, 'shared', body)
+  }
+  function sharedEmpty() {
+    return page(TABS4, 'shared', '<p class="empty">No shared programmes yet.</p>')
+  }
+  function sharedB() {
+    const body = `<ul class="plist" aria-label="Library">${OWN.map((p) => row(p, ROW_OWN)).join('')}</ul>
+      <div class="sect"><h4>From the shared library</h4><p>Programmes anyone with an account can copy. A copy is yours to change and start.</p></div>
+      <ul class="plist" aria-label="From the shared library">${SHARED.map((p) => row(p, [COPY], { paCls: 'one' })).join('')}</ul>`
+    return page(TABS3, 'library', body)
+  }
+
+  // The plan of Strength 5×5 at its own values: weeks by number, weeks 4 and 8 lighter.
+  const WEEKS = [1, 2, 3, 4, 5, 6, 7, 8]
+  const DELOAD = [4, 8]
+  const ACTS = [
+    { name: 'Back squat', chip: '5 × 5', t: '3 a week', w: [40, 42.5, 45, 40, 47.5, 50, 52.5, 47.5] },
+    { name: 'Bench press', chip: '5 × 5', t: '2 a week', w: [30, 32.5, 35, 30, 35, 37.5, 40, 35] },
+    { name: 'Barbell row', chip: '5 × 5', t: '2 a week', w: [30, 32.5, 35, 30, 35, 37.5, 40, 35] },
+    { name: 'Overhead press', chip: '5 × 5', t: '1 a week', w: [20, 22.5, 22.5, 20, 25, 25, 27.5, 22.5] },
+    { name: 'Deadlift', chip: '1 × 5', t: '1 a week', w: [50, 55, 57.5, 50, 60, 62.5, 67.5, 60] },
+  ]
+  const kg = (v) => `${String(v)} kg`
+  function plan(label) {
+    const head = `<tr><th class="act" scope="col"><span class="vh">Activity</span></th>${WEEKS.map((n) => `<th class="wk" scope="col"><span class="wn">Week ${n}</span>${DELOAD.includes(n) ? '<span class="wt">Deload</span>' : ''}</th>`).join('')}</tr>`
+    const rows = ACTS.map((a) => `<tr><th class="act" scope="row"><span class="an">${a.name}</span><span class="ac"><span class="chip">${a.chip}</span><span class="t">${a.t}</span></span></th>${a.w.map((v, i) => {
+      const sets = DELOAD.includes(i + 1) && a.chip === '5 × 5' ? '3 × 5' : a.chip
+      return `<td class="wk"><span class="cv">${kg(v)}</span><span class="cs">${sets}</span></td>`
+    }).join('')}</tr>`).join('')
+    return `<div class="grid-wrap" tabindex="0" role="region" aria-label="${label}"><table class="og"><thead>${head}</thead><tbody>${rows}</tbody></table></div>`
+  }
+  function sharedC() {
+    const xid = id('xp')
+    const open = `<div class="xp" role="group" aria-label="Strength 5×5"><div class="spv"><h6 class="vh">Preview</h6><p class="pm" id="${xid}">Eight weeks, at the programme's own values. Weeks 4 and 8 are lighter. You choose your own values and start day when you start your copy.</p>${plan('The plan, week by week')}</div>
+      <div class="acts end">${btn('', 'Close')}${btn('copyplus', 'Copy to library', 'primary')}</div></div>`
+    const rows = [
+      row(SHARED[0], null, { open: true, after: open }),
+      row(SHARED[1], [btn('eye', 'Preview', '', ' aria-expanded="false"'), COPY], { paCls: 'two' }),
+    ]
+    return page(TABS4, 'shared', `<ul class="plist" aria-label="Shared">${rows.join('')}</ul>`)
+  }
+
+  // ------------------------------------------------- question 2: John's Library tab, A and B
+  function adminA() {
+    const rows = ADMIN.map((p) => row(p, [...ROW_OWN, ...(p.shared ? [btn('refresh', 'Publish again', 'quiet'), btn('eyeoff', 'Unpublish', 'quiet')] : [btn('share', 'Publish', 'quiet')])], { chip: true }))
+    return page(TABS4, 'library', `${success('Strength 5×5 is in the shared library.')}<ul class="plist" aria-label="Library">${rows.join('')}</ul>`)
+  }
+  function adminB() {
+    const more = (p, open) => `<span class="anchor"><button type="button" class="ib" aria-label="More for ${p.name}" aria-haspopup="menu" aria-expanded="${open}">${ic('ellipsis')}</button>${open ? `<div class="menu" role="menu" aria-label="More for ${p.name}"><ul>
+      <li><button type="button" class="item" role="menuitem" data-highlighted>${ic('refresh')}Publish again</button></li>
+      <li><button type="button" class="item" role="menuitem">${ic('eyeoff')}Unpublish</button></li></ul></div>` : ''}</span>`
+    const rows = ADMIN.slice(0, 2).map((p, i) => row(p, [...ROW_OWN, more(p, i === 1)], { chip: true, paCls: 'trail' }))
+    return page(TABS4, 'library', `<ul class="plist" aria-label="Library">${rows.join('')}</ul>`, 'room')
+  }
+
+  // ------------------------------------------- question 2: Publish (Dialog) and Unpublish (ConfirmDialog)
+  const BEHIND = '<div class="behind" aria-hidden="true" inert><b>Programmes</b><span>Strength 5×5</span><span>Couch to 5K</span><span>Hip mobility</span></div><div class="scrim" aria-hidden="true"></div>'
+  const DOC = [
+    { name: 'Back squat', chip: '5 × 5', note: 'Belt from week 5. Hip crease below the knee at the bottom.', link: 'stronglifts.com' },
+    { name: 'Bench press', chip: '5 × 5', note: 'Pause each rep on the chest.' },
+    { name: 'Barbell row', chip: '5 × 5' },
+    { name: 'Overhead press', chip: '5 × 5', note: 'Squeeze your glutes. Don’t lean back.' },
+    { name: 'Deadlift', chip: '1 × 5', note: 'One set of five, after the squats.', link: 'youtube.com' },
+  ]
+  function publish() {
+    const h = id('h'), d = id('d'), s = SHARED[0]
+    const acts = DOC.map((a) => `<li><span class="an">${a.name}<span class="chip">${a.chip}</span></span>${a.note ? `<p class="note">${a.note}</p>` : '<p class="none">No notes.</p>'}${a.link ? `<a class="tl" href="#">Open ${a.link} in a new tab</a>` : ''}</li>`).join('')
+    return `<div class="dstage">${BEHIND}<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="${h}" aria-describedby="${d}">
+      <div class="dlg-head"><h4 id="${h}">Publish ${s.name}</h4><button type="button" class="ib close" aria-label="Close">${ic('x')}</button></div>
+      <section class="seen" aria-labelledby="${h}s"><h5 id="${h}s">What everyone will see</h5><div class="doc"><p class="pn">${s.name}</p><p class="pm">${s.meta}</p><p class="pd">${s.desc}</p><ol aria-label="Activities">${acts}</ol></div></section>
+      <p class="who" id="${d}">Everyone with an account can see and copy it. Your name is not shown.</p>
+      <div class="actions">${btn('', 'Cancel')}${btn('', 'Publish programme', 'primary')}</div></div></div>`
+  }
+  function unpublish() {
+    const h = id('h'), d = id('d')
+    return `<div class="dstage">${BEHIND}<div class="dlg confirm" role="alertdialog" aria-modal="true" aria-labelledby="${h}" aria-describedby="${d}">
+      <h4 id="${h}">Unpublish Strength 5×5?</h4><p id="${d}">It leaves the shared library. Copies people have made stay theirs.</p>
+      <div class="actions">${btn('', 'Cancel')}${btn('', 'Unpublish', 'primary')}</div></div></div>`
+  }
+
+  // ------------------------------------------------------------------------------------ drawing
+  const DRAW = {
+    shared: (el) => ({ a: sharedA, empty: sharedEmpty, b: sharedB, c: sharedC })[el.dataset.opt](),
+    admin: (el) => ({ a: adminA, b: adminB })[el.dataset.opt](),
+    publish: () => publish(),
+    unpublish: () => unpublish(),
+  }
+  for (const pane of document.querySelectorAll('.pane[data-draw]')) {
+    pane.innerHTML = `<p class="label pane-label">${pane.dataset.theme === 'dark' ? 'Dark' : 'Light'}</p>${DRAW[pane.dataset.draw](pane)}`
+  }
+  for (const a of document.querySelectorAll('.pane a[href="#"]')) a.addEventListener('click', (e) => e.preventDefault())
+})()
+</script>
+
+<script>
+  // Measures: for each <li data-fg data-bg data-min>, the WCAG contrast of the two colours in each
+  // theme, resolved inside the option (so --candidate-* values apply), written after the label.
+  (() => {
+    const rgb = (value, scope, theme) => {
+      const probe = document.createElement('span')
+      probe.dataset.theme = theme
+      probe.style.color = value
+      scope.append(probe)
+      const parts = getComputedStyle(probe).color.match(/[\d.]+/g).map(Number)
+      probe.remove()
+      return parts.slice(0, 3)
+    }
+    const lum = ([r, g, b]) => [r, g, b]
+      .map((c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4 })
+      .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0)
+    const ratio = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05) }
+    for (const li of document.querySelectorAll('.measures li[data-fg]')) {
+      const scope = li.closest('.option') || document.body
+      const min = Number(li.dataset.min || 0)
+      const results = ['light', 'dark'].map((theme) => {
+        const r = ratio(rgb(li.dataset.fg, scope, theme), rgb(li.dataset.bg, scope, theme))
+        return { theme, r, ok: !min || r >= min }
+      })
+      li.dataset.pass = results.every((x) => x.ok) ? 'yes' : 'no'
+      li.append(`: ${results.map((x) => `${x.theme} ${x.r.toFixed(1)}:1${x.ok ? '' : ' (below ' + min + ':1)'}`).join(', ')}`)
+    }
+  })()
+</script>

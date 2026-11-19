@@ -109,36 +109,37 @@ Every reader keeps these rules:
 
 ## 2. Data model
 
-| Table               | Key                                 | Columns                                                                                                                                                                                                            |
-| ------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `users`             | `id`                                | `username` (unique, case-insensitive; the lower-cased email for a signed-up account), `password_hash`, `disabled`, lockout counters, `created_at`, `email_confirmed_at`                                            |
-| `sessions`          | `token_hash`                        | `user_id`, `created_at`, `last_seen`, `expires_at`                                                                                                                                                                 |
-| `invites`           | `token_hash`                        | `kind` (`invite` or `reset`), `username`, `user_id` (resets), `expires_at`, `used_at`, `mailed` (a reset sent by email)                                                                                            |
-| `confirmations`     | `token_hash`                        | `user_id`, `created_at`, `expires_at`, `used_at`: confirm-your-email links                                                                                                                                         |
-| `mail_log`          | `id`                                | `user_id`, `kind` (`confirm` or `reset`), `sent_at`: one row per email attempted (a failed send still counts), for the limits                                                                                      |
-| `api_tokens`        | `token_hash`                        | `user_id`, `name`, `prefix` (unique per user), `scope` (`read` or `write`), `created_at`, `last_used_at`: personal API tokens (§4)                                                                                 |
-| `oauth_requests`    | `id_hash`                           | `client_id`, `client_name`, `client_host`, `redirect_uri`, `code_challenge`, `resource`, `scope`, `state`, `created_at`, `expires_at`: a request waiting for the consent screen. No `user_id`: it exists before anyone signs in (§3.3) |
-| `oauth_grants`      | `id`                                | `user_id`, `client_id`, `client_name`, `client_host`, `scope` (`read` or `write`), `resource`, `created_at`, `expires_at`, `last_used_at`, `refresh_hash`, `prev_refresh_hash`, `grace_until`, `grace_pair`, `generation`: a connection (§3.3) |
-| `oauth_retired`     | `(grant_id, refresh_hash)`          | the hashes of a grant's replaced refresh tokens, kept so a reused one is recognised |
-| `oauth_codes`       | `code_hash`                         | `grant_id`, `client_id`, `redirect_uri`, `code_challenge`, `resource`, `expires_at`, `redeemed_at`: one authorization code |
-| `oauth_access`      | `token_hash`                        | `grant_id`, `created_at`, `expires_at`: an access token |
-| `settings`          | `user_id`                           | `accent`, `daily_pick`, `food_pick` (K57), `item_sections` (JSON or NULL, K66), `goals` (My goals, `''` for none), `limits` (the limits note, `''` for none)                                                    |
-| `plans`             | `(user_id, section, week)`          | `items_json`, `rev`                                                                                                                                                                                                |
-| `ticks`             | `(user_id, section, week, item_id)` | `days`, `partial`, `missed`, `solid`, `hatch`: 7-bit masks (bit 0 is Monday); see below                                                                                                                            |
-| `ask_log`           | `id`                                | `user_id`, `asked_at`: one row per question claimed (a failed answer still counts), for Ask's caps. It holds nothing of the question or the answer                                                                 |
-| `ask_conversations` | `(user_id, id)`                     | `title` (the first question, trimmed and cut to 80 characters), `created_at`, `updated_at`: Ask's history (§3.2). The id is the account's own                                                                      |
-| `ask_turns`         | `(user_id, conversation_id, seq)`   | `question`, `answer`, `stop` (`end_turn`, `max_tokens`, `refused`, `error` or `cancelled`), `asked_at`: one question and its answer, text only. Only `end_turn` and `max_tokens` keep an answer; any other is `''` |
-| `item_details`      | `(user_id, section, item_id)`       | `details_json` (one document per item for every week: `{notes?, fields?}`), `rev`                                                                                                                                  |
-| `trackers`          | `(user_id, id)`                     | `kind`, `name`, `position`, `daily_target` (NULL for a kind without one), `start_week` and `end_week` (a Monday, `YYYY-MM-DD`, or NULL), `rev`: the account's trackers (K123, §3)                                  |
-| `programmes`        | `(user_id, id)`                     | `name` (the document's), `doc_json` (the document as sent, compact), `rev`, `created_at`, `updated_at`: the programme library (§3.4) |
-| `programme_runs`    | `(user_id, tracker_id)`             | `programme_id` (the library programme it started from, which may be gone), `doc_json` (the run's own copy), `params_json`, `start_date`, `status` (`upcoming`, `running`, `paused` or `ended`, as at the last write or seal), `rev`: one per programme tracker |
-| `run_changes`       | `(user_id, tracker_id, seq)`        | `made_at`, `from_date`, `change_json`, `reason` (`''` for none), `source` (`app`, or a connection's name), `undone_by` (the undo's `seq`, above `seq`): a run's log |
-| `programme_days`    | `(user_id, tracker_id, date)`       | `programme_week` (NULL before the start), `items_json` (the day's plan as sealed, with its activity weeks), `sealed_at`: a run's sealed days |
-| `mark_events`       | `id`                                | `user_id`, `tracker_id`, `date`, `item_id`, `mark` (NULL for a cleared day), `entered_at`, `source`, `late` (0 or 1): every mark on a programme tracker, indexed by user, tracker and date |
+| Table               | Key                                 | Columns                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `users`             | `id`                                | `username` (unique, case-insensitive; the lower-cased email for a signed-up account), `password_hash`, `disabled`, lockout counters, `created_at`, `email_confirmed_at`, `admin` (0 or 1: may publish to the shared library, §3.5)                                                                                                                             |
+| `sessions`          | `token_hash`                        | `user_id`, `created_at`, `last_seen`, `expires_at`                                                                                                                                                                                                                                                                                                             |
+| `invites`           | `token_hash`                        | `kind` (`invite` or `reset`), `username`, `user_id` (resets), `expires_at`, `used_at`, `mailed` (a reset sent by email)                                                                                                                                                                                                                                        |
+| `confirmations`     | `token_hash`                        | `user_id`, `created_at`, `expires_at`, `used_at`: confirm-your-email links                                                                                                                                                                                                                                                                                     |
+| `mail_log`          | `id`                                | `user_id`, `kind` (`confirm` or `reset`), `sent_at`: one row per email attempted (a failed send still counts), for the limits                                                                                                                                                                                                                                  |
+| `api_tokens`        | `token_hash`                        | `user_id`, `name`, `prefix` (unique per user), `scope` (`read` or `write`), `created_at`, `last_used_at`: personal API tokens (§4)                                                                                                                                                                                                                             |
+| `oauth_requests`    | `id_hash`                           | `client_id`, `client_name`, `client_host`, `redirect_uri`, `code_challenge`, `resource`, `scope`, `state`, `created_at`, `expires_at`: a request waiting for the consent screen. No `user_id`: it exists before anyone signs in (§3.3)                                                                                                                         |
+| `oauth_grants`      | `id`                                | `user_id`, `client_id`, `client_name`, `client_host`, `scope` (`read` or `write`), `resource`, `created_at`, `expires_at`, `last_used_at`, `refresh_hash`, `prev_refresh_hash`, `grace_until`, `grace_pair`, `generation`: a connection (§3.3)                                                                                                                 |
+| `oauth_retired`     | `(grant_id, refresh_hash)`          | the hashes of a grant's replaced refresh tokens, kept so a reused one is recognised                                                                                                                                                                                                                                                                            |
+| `oauth_codes`       | `code_hash`                         | `grant_id`, `client_id`, `redirect_uri`, `code_challenge`, `resource`, `expires_at`, `redeemed_at`: one authorization code                                                                                                                                                                                                                                     |
+| `oauth_access`      | `token_hash`                        | `grant_id`, `created_at`, `expires_at`: an access token                                                                                                                                                                                                                                                                                                        |
+| `settings`          | `user_id`                           | `accent`, `daily_pick`, `food_pick` (K57), `item_sections` (JSON or NULL, K66), `goals` (My goals, `''` for none), `limits` (the limits note, `''` for none)                                                                                                                                                                                                   |
+| `plans`             | `(user_id, section, week)`          | `items_json`, `rev`                                                                                                                                                                                                                                                                                                                                            |
+| `ticks`             | `(user_id, section, week, item_id)` | `days`, `partial`, `missed`, `solid`, `hatch`: 7-bit masks (bit 0 is Monday); see below                                                                                                                                                                                                                                                                        |
+| `ask_log`           | `id`                                | `user_id`, `asked_at`: one row per question claimed (a failed answer still counts), for Ask's caps. It holds nothing of the question or the answer                                                                                                                                                                                                             |
+| `ask_conversations` | `(user_id, id)`                     | `title` (the first question, trimmed and cut to 80 characters), `created_at`, `updated_at`: Ask's history (§3.2). The id is the account's own                                                                                                                                                                                                                  |
+| `ask_turns`         | `(user_id, conversation_id, seq)`   | `question`, `answer`, `stop` (`end_turn`, `max_tokens`, `refused`, `error` or `cancelled`), `asked_at`: one question and its answer, text only. Only `end_turn` and `max_tokens` keep an answer; any other is `''`                                                                                                                                             |
+| `item_details`      | `(user_id, section, item_id)`       | `details_json` (one document per item for every week: `{notes?, fields?}`), `rev`                                                                                                                                                                                                                                                                              |
+| `trackers`          | `(user_id, id)`                     | `kind`, `name`, `position`, `daily_target` (NULL for a kind without one), `start_week` and `end_week` (a Monday, `YYYY-MM-DD`, or NULL), `rev`: the account's trackers (K123, §3)                                                                                                                                                                              |
+| `programmes`        | `(user_id, id)`                     | `name` (the document's), `doc_json` (the document as sent, compact), `rev`, `created_at`, `updated_at`: the programme library (§3.4)                                                                                                                                                                                                                           |
+| `programme_runs`    | `(user_id, tracker_id)`             | `programme_id` (the library programme it started from, which may be gone), `doc_json` (the run's own copy), `params_json`, `start_date`, `status` (`upcoming`, `running`, `paused` or `ended`, as at the last write or seal), `rev`: one per programme tracker                                                                                                 |
+| `run_changes`       | `(user_id, tracker_id, seq)`        | `made_at`, `from_date`, `change_json`, `reason` (`''` for none), `source` (`app`, or a connection's name), `undone_by` (the undo's `seq`, above `seq`): a run's log                                                                                                                                                                                            |
+| `programme_days`    | `(user_id, tracker_id, date)`       | `programme_week` (NULL before the start), `items_json` (the day's plan as sealed, with its activity weeks), `sealed_at`: a run's sealed days                                                                                                                                                                                                                   |
+| `mark_events`       | `id`                                | `user_id`, `tracker_id`, `date`, `item_id`, `mark` (NULL for a cleared day), `entered_at`, `source`, `late` (0 or 1): every mark on a programme tracker, indexed by user, tracker and date                                                                                                                                                                     |
+| `shared_programmes` | `id`                                | `name` (the document's), `doc_json` (the snapshot), `rev` (bumped by each publish), `published_by` (the admin's user id, `ON DELETE SET NULL`), `source_id` (the admin's library programme), `published_at` (first publish), `updated_at` (last publish): the shared library (§3.5). `(published_by, source_id)` is unique, and an index lists by `updated_at` |
 
 `section` in `plans`, `ticks` and `item_details` holds a tracker id: `exercise`, `cardio` or
 `diet` for each account's first three trackers, or a random id for one the person made. No table
-CHECKs it since version 14: every write checks the id against the user's `trackers` rows. Every row cascades from its user, and an Ask turn from its conversation. Tokens and session ids are
+CHECKs it since version 14: every write checks the id against the user's `trackers` rows. Every row cascades from its user, and an Ask turn from its conversation. The one exception is `shared_programmes`: it is no account's data, so deleting the admin's account sets `published_by` to NULL and keeps the row. Tokens and session ids are
 stored only as SHA-256 hashes. A database lookup with a stolen copy of the file cannot recover a
 working cookie or link. Times are Unix seconds. The theme is not stored: it belongs to the device.
 
@@ -218,6 +219,14 @@ an account takes them all through its trackers. `programme_id` references nothin
 library programme can be deleted while its runs go on. `status`, `source` and `mark` have no
 CHECK: the API checks them, so a new value needs no table rebuild.
 
+Version 19 adds the shared library (§3.5). `users` gains `admin`, 0 or 1 with a CHECK, default 0,
+so no account is an admin until `tracker-admin admin` makes it one. The new `STRICT` table
+`shared_programmes` holds each published snapshot. A unique index on `(published_by, source_id)`
+finds the row a publish replaces, and an index on `updated_at` serves the list.
+`published_by` references `users` with `ON DELETE SET NULL`, so deleting the admin's account
+leaves the shared library as it is. The step only adds a column and a table, so rolling the code
+back leaves them unused.
+
 Version 12 adds OAuth's five tables: `oauth_requests`, `oauth_grants`, `oauth_retired`, `oauth_codes` and `oauth_access` (§3.3). It only adds, so it reshapes no data. Every code and token is stored as its SHA-256 only. `oauth_grants` cascades from its user, and the other three grant tables from the grant, so removing a grant removes its codes, access tokens and retired refresh tokens. Rolling the API back leaves the tables unused.
 
 Migrations are a list in `db.py`, and the version is its length. A step is appended, never
@@ -245,48 +254,56 @@ whole), counted as they stream in, so a chunked body is cut off at the limit rat
 whole. A body with nothing to send, such as logout's, is `{}`. A `DELETE` sends no body at all,
 but the same `Content-Type` header.
 
-| Method and path                            | Auth    | Does                                                                                                                  |
-| ------------------------------------------ | ------- | --------------------------------------------------------------------------------------------------------------------- |
-| `GET /healthz`                             | no      | `SELECT 1`; `{"ok": true}`                                                                                            |
-| `POST /auth/login`                         | no      | `{username, password}` → the account and the session cookie                                                           |
-| `POST /auth/signup`                        | no      | `{email, password}` creates an account → the account and the cookie                                                   |
-| `POST /auth/logout`                        | session | ends this session and clears the cookie; 204                                                                          |
-| `GET /auth/me`                             | session | the account: `{username}`, plus `confirmed` (below)                                                                   |
-| `GET /auth/options`                        | no      | `{mail, ask}`: whether this API sends email (§4.1) and answers questions (§3.2)                                       |
-| `POST /auth/forgot`                        | no      | `{email}` → 202 `{}` for any well-formed email; a reset link goes to a matching account (§4.1)                        |
-| `POST /auth/confirm`                       | no      | `{token}` confirms the email → the account; 410 `gone` otherwise                                                      |
-| `POST /auth/confirm/resend`                | session | a new confirm link → 202 `{}`; refusals in §4.1                                                                       |
-| `POST /invites/lookup`                     | no      | `{token}` → `{kind, username}` for a live link; 410 `gone` otherwise                                                  |
-| `POST /invites/redeem`                     | no      | `{token, password}` sets the password, consumes the link, signs in                                                    |
-| `GET /state`                               | session | everything the client renders (below)                                                                                 |
-| `GET /trackers`                            | session | `{trackers: [...]}`, the account's trackers, ended ones included (below)                                              |
-| `POST /trackers`                           | session | `{name, kind, id?, week?}` → 201 the new tracker; 200 and the stored one for an id it has (below)                     |
-| `PATCH /trackers/{id}`                     | session | `{rev, name?, position?, dailyTarget?}` → the tracker; 409 `conflict` with the server copy                           |
-| `POST /trackers/{id}/end`                  | session | `{week?}` → the tracker, ended from that week (Delete tracker, K122); a programme tracker's run ends (§3.4)            |
-| `PUT /plans/{section}/{week}`              | session | `{items, rev}` → `{rev}`; 409 `conflict` with the server copy. `section` is a tracker id; 409 `programme-tracker` for a programme tracker |
-| `PUT /ticks/{section}/{week}/{item}/{day}` | session | `{mark}` → `{days}`, the week's seven marks for that item; 409 `locked-day` for a programme tracker's day before yesterday |
-| `PUT /details/{section}/{item}`            | session | `{details, rev}` → `{rev}`; 409 `conflict` with the server copy (below)                                               |
+| Method and path                            | Auth    | Does                                                                                                                                                |
+| ------------------------------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /healthz`                             | no      | `SELECT 1`; `{"ok": true}`                                                                                                                          |
+| `POST /auth/login`                         | no      | `{username, password}` → the account and the session cookie                                                                                         |
+| `POST /auth/signup`                        | no      | `{email, password}` creates an account → the account and the cookie                                                                                 |
+| `POST /auth/logout`                        | session | ends this session and clears the cookie; 204                                                                                                        |
+| `GET /auth/me`                             | session | the account: `{username}`, plus `admin` and `confirmed` (below)                                                                                     |
+| `GET /auth/options`                        | no      | `{mail, ask}`: whether this API sends email (§4.1) and answers questions (§3.2)                                                                     |
+| `POST /auth/forgot`                        | no      | `{email}` → 202 `{}` for any well-formed email; a reset link goes to a matching account (§4.1)                                                      |
+| `POST /auth/confirm`                       | no      | `{token}` confirms the email → the account; 410 `gone` otherwise                                                                                    |
+| `POST /auth/confirm/resend`                | session | a new confirm link → 202 `{}`; refusals in §4.1                                                                                                     |
+| `POST /invites/lookup`                     | no      | `{token}` → `{kind, username}` for a live link; 410 `gone` otherwise                                                                                |
+| `POST /invites/redeem`                     | no      | `{token, password}` sets the password, consumes the link, signs in                                                                                  |
+| `GET /state`                               | session | everything the client renders (below)                                                                                                               |
+| `GET /trackers`                            | session | `{trackers: [...]}`, the account's trackers, ended ones included (below)                                                                            |
+| `POST /trackers`                           | session | `{name, kind, id?, week?}` → 201 the new tracker; 200 and the stored one for an id it has (below)                                                   |
+| `PATCH /trackers/{id}`                     | session | `{rev, name?, position?, dailyTarget?}` → the tracker; 409 `conflict` with the server copy                                                          |
+| `POST /trackers/{id}/end`                  | session | `{week?}` → the tracker, ended from that week (Delete tracker, K122); a programme tracker's run ends (§3.4)                                         |
+| `PUT /plans/{section}/{week}`              | session | `{items, rev}` → `{rev}`; 409 `conflict` with the server copy. `section` is a tracker id; 409 `programme-tracker` for a programme tracker           |
+| `PUT /ticks/{section}/{week}/{item}/{day}` | session | `{mark}` → `{days}`, the week's seven marks for that item; 409 `locked-day` for a programme tracker's day before yesterday                          |
+| `PUT /details/{section}/{item}`            | session | `{details, rev}` → `{rev}`; 409 `conflict` with the server copy (below)                                                                             |
 | `PUT /settings`                            | session | `{accent, dailyPick, foodPick, dailyGoal, weekTitle, goals, limits, itemSections}` → the stored settings; a missing key keeps the saved one (below) |
-| `GET /export`                              | session | the export file (`architecture.md` §4)                                                                                |
-| `POST /import`                             | session | an export file, merged in; → `{trackers, weeks, ticks, details, settings, conversations}` added, and `programmes` and `runs` for a file with them |
-| `GET /programme.schema.json`               | no      | the programme format's JSON Schema (§3.4)                                                                             |
-| `GET /programmes`                          | session | `{programmes: [...]}`, the library without its documents, the one changed last first (§3.4)                          |
-| `POST /programmes`                         | session | `{doc}` → 201 the stored programme; 400 `invalid` with every problem in `errors`                                      |
-| `POST /programmes/validate`                | session | `{doc}` → `{errors}`, every problem an add would refuse it for; stores nothing                                        |
-| `GET /programmes/{id}`                     | session | one programme with its document                                                                                       |
-| `PUT /programmes/{id}`                     | session | `{doc, rev}` → the programme at its next rev; 409 `conflict` with the server copy                                     |
-| `DELETE /programmes/{id}`                  | session | deletes it; 204. Runs started from it keep their copy                                                                 |
-| `POST /programmes/{id}/preview`            | session | `{params?, start?}` → what a start would write; writes nothing                                                        |
-| `POST /programmes/{id}/start`              | session | `{params?, start?, name?}` → 201 `{tracker, run}`: a programme tracker and its run                                    |
-| `GET /runs/{tracker}`                      | session | the run: its state, clocks, log and overview grid                                                                     |
-| `POST /runs/{tracker}/changes`             | session | `{change, from, reason?, preview?, rev?}` → a change's preview, or the change applied with the preview's `rev`        |
-| `POST /runs/{tracker}/end`                 | session | `{from?, reason?}` → `{tracker, run}`: End programme                                                                  |
-| `GET /ask`                                 | session | `{remaining, limit}`: questions left today, and the per-account cap (§3.2)                                            |
-| `POST /ask`                                | session | `{question, conversation?, today}` → Claude's answer as a stream of events (§3.2)                                     |
-| `GET /ask/conversations`                   | session | `{conversations: [{id, title, updatedAt, turns}]}`, the one updated last first (§3.2)                                 |
-| `GET /ask/conversations/{id}`              | session | `{id, title, createdAt, updatedAt, turns: [{question, answer, stop, askedAt}]}`                                       |
-| `DELETE /ask/conversations/{id}`           | session | deletes the conversation and its turns; 204                                                                           |
-| `DELETE /ask/conversations`                | session | deletes every conversation of the account; 204, also when there are none                                              |
+| `GET /export`                              | session | the export file (`architecture.md` §4)                                                                                                              |
+| `POST /import`                             | session | an export file, merged in; → `{trackers, weeks, ticks, details, settings, conversations}` added, and `programmes` and `runs` for a file with them   |
+| `GET /programme.schema.json`               | no      | the programme format's JSON Schema (§3.4)                                                                                                           |
+| `GET /programmes`                          | session | `{programmes: [...]}`, the library without its documents, the one changed last first (§3.4); an admin's carry `shared` (§3.5)                       |
+| `POST /programmes`                         | session | `{doc}` → 201 the stored programme; 400 `invalid` with every problem in `errors`                                                                    |
+| `POST /programmes/validate`                | session | `{doc}` → `{errors}`, every problem an add would refuse it for; stores nothing                                                                      |
+| `GET /programmes/{id}`                     | session | one programme with its document                                                                                                                     |
+| `PUT /programmes/{id}`                     | session | `{doc, rev}` → the programme at its next rev; 409 `conflict` with the server copy                                                                   |
+| `DELETE /programmes/{id}`                  | session | deletes it; 204. Runs started from it keep their copy                                                                                               |
+| `POST /programmes/{id}/preview`            | session | `{params?, start?}` → what a start would write; writes nothing                                                                                      |
+| `POST /programmes/{id}/start`              | session | `{params?, start?, name?}` → 201 `{tracker, run}`: a programme tracker and its run                                                                  |
+| `GET /runs/{tracker}`                      | session | the run: its state, clocks, log and overview grid                                                                                                   |
+| `POST /runs/{tracker}/changes`             | session | `{change, from, reason?, preview?, rev?}` → a change's preview, or the change applied with the preview's `rev`                                      |
+| `POST /runs/{tracker}/end`                 | session | `{from?, reason?}` → `{tracker, run}`: End programme                                                                                                |
+| `POST /runs/{tracker}/restart`             | session | `{start?, name?, preview?, rev?}` → a restart's preview, or the new tracker and run, and the old tracker (K164)                                     |
+| `POST /runs/{tracker}/reopen`              | session | `{from?, reason?, preview?, rev?}` → a re-open's preview, or `{tracker, run}` re-opened (K165)                                                      |
+| `GET /shared-programmes`                   | session | `{programmes: [...]}`, the shared library, the newest publish first (§3.5)                                                                          |
+| `GET /shared-programmes/{id}`              | session | `{programme}`: one shared programme with its document                                                                                               |
+| `GET /shared-programmes/{id}/preview`      | session | `{programme, plan}`: the document, and a start's preview at its own values from today (K173)                                                        |
+| `POST /shared-programmes/{id}/copy`        | session | → 201 a copy in the account's library, as `POST /programmes` answers                                                                                |
+| `POST /programmes/{id}/publish`            | admin   | `{preview?, rev?}` → a publish's preview, or `{preview: false, shared}` published with the preview's `rev`                                          |
+| `DELETE /shared-programmes/{id}`           | admin   | takes it out of the shared library; 204. Copies stay                                                                                                |
+| `GET /ask`                                 | session | `{remaining, limit}`: questions left today, and the per-account cap (§3.2)                                                                          |
+| `POST /ask`                                | session | `{question, conversation?, today}` → Claude's answer as a stream of events (§3.2)                                                                   |
+| `GET /ask/conversations`                   | session | `{conversations: [{id, title, updatedAt, turns}]}`, the one updated last first (§3.2)                                                               |
+| `GET /ask/conversations/{id}`              | session | `{id, title, createdAt, updatedAt, turns: [{question, answer, stop, askedAt}]}`                                                                     |
+| `DELETE /ask/conversations/{id}`           | session | deletes the conversation and its turns; 204                                                                                                         |
+| `DELETE /ask/conversations`                | session | deletes every conversation of the account; 204, also when there are none                                                                            |
 | `POST /mcp`                                | token   | one MCP request, answered as JSON (§3.1); a personal or an OAuth token                                                                              |
 | `GET /tokens`                              | session | `{tokens: [{name, prefix, scope, createdAt, lastUsedAt}]}`, the account's personal tokens (§4)                        |
 | `POST /tokens`                             | session | `{name, scope}` → 201 `{token, info}`; the one response that holds the token (§4)                                    |
@@ -301,9 +318,11 @@ but the same `Content-Type` header.
 | `POST /oauth/revoke`                       | no      | Claude's servers: RFC 7009 revocation (§3.3)                                                                          |
 
 **The account** is `{username}`: the account's email (the field keeps its old name, so older
-tabs and clients work unchanged). While mail is on it also carries `confirmed`, true once the
-address is confirmed. A legacy account still named by a username (below), and every account while
-mail is off, has no such key.
+tabs and clients work unchanged). An admin's also carries `admin: true` (§3.5); every other
+account's has no such key. The flag is read from `users` on every request, so a remembered session
+sees a change at its next `/auth/me`. While mail is on the account also carries `confirmed`, true
+once the address is confirmed. A legacy account still named by a username (below), and every
+account while mail is off, has no such key.
 
 `GET /state` returns `{trackers, sections, details, detailRevs, settings, today, runs}`, plus
 the keys of the version 5 state, below:
@@ -749,21 +768,24 @@ is recorded as late, with `late` in the result. Its week is never copied, since 
 every week. Every mark and change an agent makes records the connection's name as its `source`:
 the token's name, or the OAuth app's ("Claude").
 
-**Programme tools.** Nine tools write, save, start, change, end, restart and re-open programmes.
+**Programme tools.** Eleven tools write, save, start, change, end, restart and re-open programmes,
+and browse and copy the shared library (§3.5).
 [mcp.md](mcp.md) §1.1 gives each one's results and refusals, and [programmes.md](programmes.md)
 §10 the loop an agent follows.
 
-| Tool                | Scope | Arguments (defaults)                                                                       | Annotations      |
-| ------------------- | ----- | ------------------------------------------------------------------------------------------ | ---------------- |
-| `programme_format`  | read  | none                                                                                       | `readOnlyHint`   |
-| `list_programmes`   | read  | none                                                                                       | `readOnlyHint`   |
-| `get_programme`     | read  | `programme` (a library id) or `tracker` (a programme tracker's id or name), one of the two | `readOnlyHint`   |
-| `save_programme`    | write | `doc`; `programme` and `rev` to replace one                                                | not idempotent   |
-| `start_programme`   | write | `programme`, `start` (today), `params` (the defaults), `name` (the programme's)            | not idempotent   |
-| `change_programme`  | write | `tracker`, `change`, `from_date` (today), `reason`, `confirm` (false), `rev`               | `idempotentHint` |
-| `end_programme`     | write | `tracker`, `from_date` (today), `reason`, `confirm` (false), `rev`                         | `idempotentHint` |
-| `restart_programme` | write | `tracker`, `start` (today), `name` (the old tracker's), `confirm` (false), `rev`           | not idempotent   |
-| `reopen_programme`  | write | `tracker`, `from_date` (today), `reason`, `confirm` (false), `rev`                         | `idempotentHint` |
+| Tool                     | Scope | Arguments (defaults)                                                                       | Annotations      |
+| ------------------------ | ----- | ------------------------------------------------------------------------------------------ | ---------------- |
+| `programme_format`       | read  | none                                                                                       | `readOnlyHint`   |
+| `list_programmes`        | read  | none                                                                                       | `readOnlyHint`   |
+| `get_programme`          | read  | `programme` (a library id) or `tracker` (a programme tracker's id or name), one of the two | `readOnlyHint`   |
+| `list_shared_programmes` | read  | `programme` (a shared id, for one with its document; all of them without it)               | `readOnlyHint`   |
+| `save_programme`         | write | `doc`; `programme` and `rev` to replace one                                                | not idempotent   |
+| `copy_programme`         | write | `programme` (a shared id)                                                                  | not idempotent   |
+| `start_programme`        | write | `programme`, `start` (today), `params` (the defaults), `name` (the programme's)            | not idempotent   |
+| `change_programme`       | write | `tracker`, `change`, `from_date` (today), `reason`, `confirm` (false), `rev`               | `idempotentHint` |
+| `end_programme`          | write | `tracker`, `from_date` (today), `reason`, `confirm` (false), `rev`                         | `idempotentHint` |
+| `restart_programme`      | write | `tracker`, `start` (today), `name` (the old tracker's), `confirm` (false), `rev`           | not idempotent   |
+| `reopen_programme`       | write | `tracker`, `from_date` (today), `reason`, `confirm` (false), `rev`                         | `idempotentHint` |
 
 The run objects they return keep REST's camelCase (§3.4), and `get_programme`'s, `start_programme`'s
 and `change_programme`'s carry the grid's weeks from this one on. A preview from
@@ -773,7 +795,10 @@ with the preview's `rev`. `restart_programme` starts a new run from week 1 as a 
 the old run's `doc_json` and `params_json`, after a preview confirmed the same way. A run still
 going on the new start day ends from it in the same transaction, as End programme ends it (K164).
 `reopen_programme` re-opens a run End programme stopped part way, after a preview confirmed the
-same way (K165). No REST route restarts or re-opens a run.
+same way (K165). No REST route restarts or re-opens a run. `copy_programme` copies a shared
+programme as `POST /shared-programmes/{id}/copy` does, and `list_shared_programmes` reads the
+shared library as its two `GET` routes do. No tool publishes: an MCP token carries no admin
+rights.
 
 ### 3.2 Ask
 
@@ -1061,18 +1086,19 @@ the HTTP contract. Every route but the schema needs a session. A programme id or
 account doesn't have, another account's included, gets 404 `not-found`, and so does a tracker
 that isn't a programme tracker on the run routes. JSON keys are camelCase, as elsewhere.
 
-| Status and code        | When                                                                                                                                   |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| 400 `invalid`          | A document, start, change or end with problems: `{"error": "invalid", "errors": [{path, message}]}`, every problem at once, in order |
-| 404 `not-found`        | No such programme, or no such programme tracker                                                                                        |
-| 409 `conflict`         | A stale `rev`: the library's `{programme, rev}` with the server's copy; a change's `{rev, preview}`, the change sent previewed again   |
-| 409 `too-many`         | An add past 100 library programmes, or a start past 100 trackers                                                                       |
-| 409 `ended`            | A change to a run End programme ended, or a second end                                                                                 |
-| 409 `programme-tracker` | A generic plan write (`PUT /plans`) to a programme tracker                                                                            |
-| 409 `locked-day`       | A mark on a programme tracker's day before yesterday: `{"error": "locked-day", "date": "2026-11-16"}`                                  |
-| 413 `too-large`        | A document over 128 KiB as stored (compact JSON, UTF-8)                                                                                |
-| 413 `quota`            | An add, replace, start or change that would take the account over its quota (§3)                                                       |
-| 500 `run-unreadable`   | A stored run fails to load, seal or replay: the server's fault, logged with its cause                                                  |
+| Status and code         | When                                                                                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 400 `invalid`           | A document, start, change or end with problems: `{"error": "invalid", "errors": [{path, message}]}`, every problem at once, in order              |
+| 404 `not-found`         | No such programme, or no such programme tracker                                                                                                   |
+| 409 `conflict`          | A stale `rev`: the library's `{programme, rev}` with the server's copy; a change's, restart's or re-open's `{rev, preview}`, sent previewed again |
+| 409 `too-many`          | An add past 100 library programmes, or a start or restart past 100 trackers                                                                       |
+| 409 `ended`             | A change to a run End programme ended, or a second end                                                                                            |
+| 409 `cant-reopen`       | A re-open of a run End programme didn't stop part way: `{"error": "cant-reopen", "finished": f, "restarted": r}` (below)                          |
+| 409 `programme-tracker` | A generic plan write (`PUT /plans`) to a programme tracker                                                                                        |
+| 409 `locked-day`        | A mark on a programme tracker's day before yesterday: `{"error": "locked-day", "date": "2026-11-16"}`                                             |
+| 413 `too-large`         | A document over 128 KiB as stored (compact JSON, UTF-8)                                                                                           |
+| 413 `quota`             | An add, replace, start, change, restart or re-open that would take the account over its quota (§3)                                                |
+| 500 `run-unreadable`    | A stored run fails to load, seal or replay: the server's fault, logged with its cause                                                             |
 
 **The library.** A programme's summary is `{id, name, description, kind, weeks, activities, rev,
 createdAt, updatedAt}`: `name`, `description` (or null), `kind` and `weeks` from its document,
@@ -1117,24 +1143,25 @@ endsShort, grid}`.
 
 **The run.** `GET /runs/{tracker}` returns the run object, sealed up to yesterday first:
 
-| Key            | Holds                                                                                                                               |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `tracker`      | The tracker's id                                                                                                                    |
-| `programmeId`  | The library programme it started from, which may be gone                                                                            |
-| `name`, `kind` | The programme's                                                                                                                     |
-| `doc`          | The run's own copy of the document                                                                                                  |
-| `params`       | The parameters in force, after any Set parameter                                                                                    |
-| `start`, `end` | The first day, and the last (null while the programme is paused with no end date)                                                   |
-| `status`       | `upcoming`, `running`, `paused` or `ended`                                                                                          |
-| `today`        | The date in `TIMEZONE`                                                                                                              |
-| `week`         | Today's programme week, null unless running or paused; `weeks` is the programme's                                                   |
-| `rev`          | The log's revision: 16 hex characters of a SHA-256 over the log. It shows the run changed, and never confirms a change              |
-| `openPause`    | `{since, programmeWeek, reason}` while the programme is paused with no end date, else null                                          |
-| `endsShort`    | Each activity that ends before its last week: `{key, name, week, of, message}`                                                      |
-| `ended`        | `{from, reason, seq}` after End programme, else null; null again after a re-open (K165)                                             |
-| `clock`        | Today: `{programmeWeek, status, until, reason, activities}`, each activity `{state, activityWeek, until, reason}`                   |
-| `log`          | Every row, newest first: `{seq, madeAt, from, change, reason, source, undoneBy, undoable}`. `change` is a change's body, `{"type": "end-programme"}` or `{"type": "reopen-programme"}`. `undoable` is true while Undo applies |
-| `grid`         | The overview: `{activities, weeks, whenResumed}`                                                                                    |
+| Key            | Holds                                                                                                                                                                                                                                                                            |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tracker`      | The tracker's id                                                                                                                                                                                                                                                                 |
+| `programmeId`  | The library programme it started from, which may be gone                                                                                                                                                                                                                         |
+| `name`, `kind` | The programme's                                                                                                                                                                                                                                                                  |
+| `doc`          | The run's own copy of the document                                                                                                                                                                                                                                               |
+| `params`       | The parameters in force, after any Set parameter                                                                                                                                                                                                                                 |
+| `start`, `end` | The first day, and the last (null while the programme is paused with no end date)                                                                                                                                                                                                |
+| `status`       | `upcoming`, `running`, `paused` or `ended`                                                                                                                                                                                                                                       |
+| `today`        | The date in `TIMEZONE`                                                                                                                                                                                                                                                           |
+| `week`         | Today's programme week, null unless running or paused; `weeks` is the programme's                                                                                                                                                                                                |
+| `rev`          | The log's revision: 16 hex characters of a SHA-256 over the log. It shows the run changed, and never confirms a change                                                                                                                                                           |
+| `openPause`    | `{since, programmeWeek, reason}` while the programme is paused with no end date, else null                                                                                                                                                                                       |
+| `endsShort`    | Each activity that ends before its last week: `{key, name, week, of, message}`                                                                                                                                                                                                   |
+| `ended`        | `{from, reason, seq, restarted}` after End programme, else null; null again after a re-open (K165). `restarted` is true when a restart wrote the end (K167)                                                                                                                      |
+| `canReopen`    | True when a re-open applies today: an end that stopped the run part way, not a restart's (K167). An end set for a later day leaves `status` at `running` and `canReopen` true                                                                                                    |
+| `clock`        | Today: `{programmeWeek, status, until, reason, activities}`, each activity `{state, activityWeek, until, reason}`                                                                                                                                                                |
+| `log`          | Every row, newest first: `{seq, madeAt, from, change, reason, source, undoneBy, undoable}`. `change` is a change's body, `{"type": "end-programme"}` (with `"restarted": true` when a restart wrote it) or `{"type": "reopen-programme"}`. `undoable` is true while Undo applies |
+| `grid`         | The overview: `{activities, weeks, whenResumed}`                                                                                                                                                                                                                                 |
 
 A day's `status` is `before-start`, `running` or `paused`, and an activity's `state` is `running`,
 `paused`, `ended` or `not-started`. In `grid`:
@@ -1197,8 +1224,38 @@ end gets 409 `ended`. End programme is a route of its own, not a change type (K1
 already ended returns the tracker as it is. The MCP's `end_programme` ends a run this way too,
 after a preview confirmed with its `rev` (§3.1).
 
-**Re-open.** The MCP's `reopen_programme` lifts an end that stopped a run part way, after a
-preview confirmed with its `rev` (§3.1, K165). It goes into the log as
+**Restart.** `POST /runs/{tracker}/restart` takes `{start?, name?, preview?, rev?}` and starts
+the run again from week 1 as a new tracker (K164). `start` is today, the default, or a later day.
+`name` is the new tracker's, the old one's when left out. The new run takes the run's own copy of
+the document and the parameters it started with.
+
+- **A preview** (`preview` true, the default) writes nothing but the sealing. It returns
+  `{preview: true, rev, restart: {name, start, firstWeek: {from, to}, weeks, end,
+oldEndsFrom}}`. `oldEndsFrom` is the day the old run ends from, null when it has ended by then.
+  The `rev` covers the old run's log, the start, the name and the account's trackers.
+- **A confirm** is the same body with `preview: false` and the preview's `rev`. It returns
+  `{preview: false, tracker, run, old}`: the new tracker and its run, and the old tracker. An old
+  run still going on the new start ends from it, as End programme ends it, with the reason
+  "Restarted from week 1.". Its log row is `{"type": "end-programme", "restarted": true}`, so the
+  old run can't be re-opened beside the new one (K167). An old run End programme had already
+  ended gains only that row, from its end's own day: its weeks, marks, notes and sealed days stay
+  as they are.
+
+A stale `rev` gets 409 `{"error": "conflict", "rev": r, "preview": p}`, with the restart previewed
+again. A start before today, a bad name or a confirm without a `rev` gets 400 `invalid`. A restart
+past 100 trackers gets 409 `too-many`, and one past the quota 413 `quota`. Either writes nothing.
+
+**Re-open.** `POST /runs/{tracker}/reopen` takes `{from?, reason?, preview?, rev?}` and lifts an
+end that stopped a run part way (K165). `from` is today, the default, or a later day, and no
+earlier than the end's own day: an end set for a later day re-opens from that day. A preview (the
+default) returns `{preview: true, rev, reopen: {from, reason, week, paused, end, lastWeek}}`:
+`week` is the programme week it resumes at, `paused` the paused days `{from, to}` (null for none),
+and `lastWeek` the Monday of the run's new last week. A confirm with `preview: false` and the
+preview's `rev` returns `{preview: false, tracker, run}`. A stale `rev` gets 409 `conflict` as a
+restart's does. A run End programme didn't stop part way gets 409 `cant-reopen`: `finished` is
+false for a run not ended, and true for one that ran to its end, was ended before it started, or
+was ended by a restart. `restarted` is true for the last. The MCP's `reopen_programme` does the
+same, after a preview confirmed with its `rev` (§3.1). The re-open goes into the log as
 `{"type": "reopen-programme"}` with its from day, reason and source. The replay then reads the end
 and the re-open as a pause of the whole programme from the end's day to the re-open's, resumed at
 the paused programme week. The run's `ended` is null again, and its status follows the replay.
@@ -1214,7 +1271,7 @@ last day, later than before. Undo never applies to it. A run with a re-open can 
   is recorded as late. An earlier day gets 409 `locked-day` with its `date`. Each mark, a cleared
   day included, also goes into `mark_events` with when it was entered, its `source` (`app`, or the
   MCP connection's name) and `late`. Ticks stay the fast path every reader uses.
-- **Sealing.** Before every start, change, end and restart, and on the first read each day
+- **Sealing.** Before every start, change, end, restart and re-open, and on the first read each day
   (`/state`, `GET /runs/{tracker}`, `/export`, Ask's context, and the MCP's `list_programmes`,
   `get_programme`, `change_programme`, `end_programme` and `restart_programme`), every unsealed
   day up to yesterday is copied into `programme_days`. A read with nothing to seal takes no write
@@ -1225,6 +1282,65 @@ last day, later than before. Undo never applies to it. A run with a re-open can 
   and log it, and `/export` leaves it unsealed and exports its stored rows as they are. The MCP's
   `get_programme`, `change_programme`, `end_programme` and `restart_programme` refuse it in a
   sentence ([mcp.md](mcp.md) §1.1), and `list_programmes` lists the other runs.
+
+### 3.5 Shared library
+
+The spec is [specs/2026-11-19-shared-library.md](specs/2026-11-19-shared-library.md) (K171). The
+shared library holds programmes every signed-in user can see and copy into their own library.
+Only an admin publishes to it. Every route needs a session. `admin` in the table above means a
+session of an account whose `users.admin` is 1. The server reads the flag with the session on
+every request, before it looks at the id, so anyone else gets 403 `not-admin`, whatever the id.
+An unknown id gets 404 `not-found`.
+
+**No owner.** A username is an email address, so no shared response carries an owner, a user id
+or a username (S2). `published_by` and `source_id` never leave the server, except as the admin's
+own `shared` field below.
+
+**The summary.** A shared programme's summary is `{id, name, description, kind, weeks, activities,
+updatedAt}`: a library summary (§3.4) with no `rev`, no `createdAt` and no owner. `updatedAt` is
+the last publish, in Unix seconds. Its record is the summary plus `doc`.
+
+- `GET /shared-programmes` returns `{programmes: [summary]}`, the newest publish first.
+- `GET /shared-programmes/{id}` returns `{programme: record}`.
+- `GET /shared-programmes/{id}/preview` returns `{programme: record, plan}`, `plan` shaped as
+  `POST /programmes/{id}/preview` answers with no body: the programme's own values, from today.
+  It writes nothing (K173).
+- `POST /shared-programmes/{id}/copy` takes `{}` and returns 201 with the new library programme,
+  the record `POST /programmes` returns. The copy goes through the library's own add, so 409
+  `too-many` past 100 programmes and 413 `quota` past the account's quota apply. It keeps the
+  shared programme's name, takes a new id and starts at `rev` 1. It keeps no link to the shared
+  programme, and a later publish never changes it (S4).
+- `DELETE /shared-programmes/{id}` is for an admin. It takes the programme out of the shared
+  library and returns 204. Any admin may unpublish any shared programme. Copies already made stay.
+
+**Publish.** `POST /programmes/{id}/publish` is for an admin and takes `{preview?, rev?}`. `id` is
+one of the admin's own library programmes. `preview` is a boolean, true when left out. Publishing
+copies a snapshot of the document into `shared_programmes`, so a later edit or delete in the
+admin's library changes nothing shared (S3).
+
+- **A preview** writes nothing. It returns `{preview: true, rev, publish: {programme, replaces}}`.
+  `programme` is the summary and `doc` as every user will see them (S5). Its `id` is the shared id
+  it replaces, or null for a first publish, and its `updatedAt` is now. `replaces` is `{id,
+updatedAt}` of the shared copy a publish of this programme replaces, or null. `rev` is the
+  token that confirms it: 16 hex characters of a SHA-256 over the library programme's id and
+  `rev` and the replaced copy's id and `rev`.
+- **A confirm** is `{preview: false, rev}` with the preview's `rev`. The server checks it under the
+  write lock (P2). It returns `{preview: false, shared: {id, updatedAt}}`. A first publish adds a
+  row at `rev` 1 under a new id (`edits.new_id`). Publishing the same library programme again
+  replaces its row: the id and `published_at` stay, `rev` goes up by one, and `updated_at`, the
+  name and the document follow.
+
+A stale `rev` gets 409 `{"error": "conflict", "rev": r, "preview": p}`, with the publish previewed
+again: the library programme changed since the preview, or its shared copy was published or
+unpublished since. A confirm without a string `rev` gets 400 `invalid` at `rev`, and a `preview`
+that isn't a boolean 400 `invalid` at `preview`.
+
+**The admin's library.** For an admin, each summary from `GET /programmes` carries `shared`:
+`{id, updatedAt}` of the shared programme it was last published as, or null. It names only the
+admin's own publishes. Nobody else's summaries carry the field, and neither do the MCP's.
+
+**No account's data.** The shared library counts towards no account's quota. Export leaves it
+out, an admin's export included, and import never writes it.
 
 ## 4. Accounts and sessions
 
@@ -1260,6 +1376,10 @@ last day, later than before. Undo never applies to it. A run with a re-open can 
   name it, but it has no email to confirm or reset by. Renaming it to its owner's email (one
   `UPDATE users SET username` while nobody needs its unsynced changes) gives it all of that; the
   planner's one such account, `john`, was renamed that way on 2026-10-25.
+- **Admin.** `tracker-admin admin <email>` sets an account's admin flag, and `tracker-admin admin
+--off <email>` clears it. An admin publishes to the shared library (§3.5). Sign-up and invites
+  never set it. Its sessions read the flag on every request, so a change needs no new sign-in. An
+  MCP token carries no admin rights: publishing is in the app only.
 - **Passwords** are hashed with argon2id at argon2-cffi's defaults (64 MiB, 3 passes,
   parallelism 4). One hash runs at a time (a process-wide semaphore), so concurrent logins queue
   instead of multiplying memory. At most eight requests hold a place (one hashing, seven waiting,
@@ -1339,7 +1459,9 @@ resets are `tracker-admin`'s, as before.
 ```sh
 docker compose exec fitness-api tracker-admin invite alice@example.com   # prints the invite link
 docker compose exec fitness-api tracker-admin reset alice@example.com    # prints a reset link
-docker compose exec fitness-api tracker-admin users            # email, created, disabled, sessions, tokens
+docker compose exec fitness-api tracker-admin users            # email, active or disabled, admin or user, created, sessions, tokens
+docker compose exec fitness-api tracker-admin admin alice@example.com        # may publish to the shared library
+docker compose exec fitness-api tracker-admin admin --off alice@example.com  # may no longer
 docker compose exec fitness-api tracker-admin disable alice@example.com  # blocks login, ends sessions, tokens and connections
 docker compose exec fitness-api tracker-admin enable alice@example.com
 docker compose exec fitness-api tracker-admin revoke-sessions alice@example.com  # ends sessions, tokens and connections
@@ -1386,6 +1508,12 @@ Beginner 5×5 to the library." when the library gained it, and "Started a run of
 the Monday 3 weeks back, as the tracker beginner-5x5-run. Its overview:
 http://localhost:5173/#/programme/beginner-5x5-run" when the run is new. It prints "Nothing to
 add" when the account already has all of it.
+
+When the shared library is empty, it also gains one programme (§3.5), so its section has
+something to show: Base miles, the cardio programme of `fixtures/programmes/valid/cardio.json`,
+under the id `base-miles`. It names no publisher and no source, so no account's library marks it
+as shared. The command then prints "Added the programme Base miles to the shared library.". A
+shared library with any programme in it is left as it is.
 
 ## 6. Configuration
 
@@ -1601,7 +1729,8 @@ Tests sit in `api/tests/`:
   adding nothing, Cardio added to an account seeded before it, and what the CLI prints. For
   programmes: the library programme and a run started weeks back, a second run adding no run, an
   account from before it getting both, a deleted library programme put back without a second run,
-  and the CLI printing the run's overview address.
+  and the CLI printing the run's overview address. For the shared library: one programme added to
+  an empty shared library and none to one with programmes, and the CLI saying so.
 - `test_programme.py`: the programme format: parsing and validation against the fixtures in
   `fixtures/programmes/` (every error with its path), the committed JSON Schema, the parameters,
   and the expansion of values: rounding, `add` and `rate` steps, the cap, scales, overrides, and
@@ -1645,8 +1774,18 @@ Tests sit in `api/tests/`:
   moving the arrangement's key, passing over what it can't read, the trigger for new users, and
   `REVERT_TRACKERS` giving back version 15, and step 18's five programme tables: added empty to
   a dirty version 17 database with every row kept, rerun from a partial state, the spec's columns,
-  the checks on a run's rows, and a run's rows going with their user), configuration from the environment (`TIMEZONE`, and the
-  week turning over at local midnight), daily copies, `tracker-admin`.
+  the checks on a run's rows, and a run's rows going with their user, and step 19's admin flag
+  and shared table: every row kept with nobody an admin, the columns and indexes, the checks, and
+  the shared rows kept with `published_by` NULL when the admin's account goes), configuration from the environment (`TIMEZONE`, and the
+  week turning over at local midnight), daily copies, `tracker-admin` (`admin` and `admin --off`
+  with `users` showing the flag included).
+- `test_shared_api.py`: the shared library over REST: the admin flag on `/auth/me` and login,
+  read on every request; 401 without a session; 403 `not-admin` on publish and unpublish for
+  anyone else, an unknown id included; publish's preview, confirm, publish again, a stale `rev`
+  and a confirm without one; the snapshot unchanged by the admin's edits and deletes; the list,
+  newest first, and one programme; no owner, user id or source in any response a second user
+  reads; copy as a plain copy that starts, with the library cap and the quota; unpublish; the
+  admin's `shared` field; and export and import leaving the shared library out.
 - `test_mcp.py`: the MCP endpoint through `TestClient`: `initialize`, `tools/list` and `whoami`
   with a token, on both protocol kinds, and each refusal (no, bad, revoked or disabled token; a
   cookie alone; a token in the query string; a foreign `Origin` or `Host`; a method other than
@@ -1665,7 +1804,9 @@ Tests sit in `api/tests/`:
   ended tracker refused), `end_programme` (a preview that changes nothing, a confirm that ends the
   run with the connection as its source, a stale `rev` previewed again, an ordinary or ended
   tracker and a past day refused), the item tools refusing a programme tracker, and `mark_day` following
-  the lock.
+  the lock. For the shared library: `list_shared_programmes` (newest first, one with its document,
+  no owner, an unknown id refused) and `copy_programme` (a copy to adjust and start, the library
+  cap, the quota, and a stored document the format no longer takes).
 - `test_oauth.py`, `test_oauth_api.py`, `test_tokens_api.py`: OAuth's storage and rules (clients and
   redirects, codes, rotation and its grace, reuse, expiry, the caps, sweeping, ending credentials
   together), then its routes (discovery, authorize and each of its errors, the consent calls, the

@@ -64,7 +64,8 @@ function onDismiss(): void {
 function onCloseAutoFocus(event: Event): void {
   event.preventDefault()
   // Reka closes before the answer's work renders, so wait a task before choosing the target.
-  setTimeout(() => (props.returnFocus?.() ?? opener).focus(), 0)
+  // Without scrolling: the answer's work may be scrolling the page to what it made (K174).
+  setTimeout(() => (props.returnFocus?.() ?? opener).focus({ preventScroll: true }), 0)
 }
 </script>
 

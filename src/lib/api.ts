@@ -82,7 +82,7 @@ type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
 /**
  * The fetch options for a call. A write sends `Content-Type: application/json` even with no body
- * (a DELETE), because the API refuses a write without it (docs/api.md §3); the browser adds the
+ * (a DELETE, a bodyless POST), because the API refuses a write without it (docs/api.md §3); the browser adds the
  * `Origin` header to every write itself.
  */
 function initFor(
@@ -95,7 +95,8 @@ function initFor(
   if (body !== undefined) {
     headers = { ...headers, 'Content-Type': 'application/json' }
     init.body = JSON.stringify(body)
-  } else if (method === 'DELETE') {
+  } else if (method !== 'GET') {
+    // A write with no body (a DELETE, or a POST such as a shared programme's copy) still carries it.
     headers = { ...headers, 'Content-Type': 'application/json' }
   }
   if (Object.keys(headers).length) init.headers = headers

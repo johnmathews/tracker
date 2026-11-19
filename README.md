@@ -179,6 +179,9 @@ It runs only against a local stack, and never overwrites a mark or a note. It al
 programme Beginner 5×5 to the library, and a running programme from it, started three weeks back.
 The Programmes page and the week then show one. When it starts the run, it prints the run's
 overview address, `#/programme/beginner-5x5-run` ([docs/programmes.md](docs/programmes.md)).
+An empty shared library gains one programme, Base miles, so its section has something to show.
+To publish to the shared library yourself, make your account an admin:
+`uv run tracker-admin admin you@example.com` ([docs/api.md](docs/api.md) §3.5).
 The database lives in `api/.data` (git-ignored). Accounts and data survive restarts, rebuilds and
 branch switches. Deleting that folder, or `git clean -x`, starts over.
 

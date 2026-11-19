@@ -1,0 +1,22 @@
+{
+  "programmes": [
+    {
+      "id": "shstrength55a",
+      "name": "Strength 5×5",
+      "description": "Three full-body sessions a week, adding weight each week.",
+      "kind": "strength",
+      "weeks": 8,
+      "activities": 5,
+      "updatedAt": 1794913200
+    },
+    {
+      "id": "shcouchto5ka",
+      "name": "Couch to 5K",
+      "description": "Three runs a week, from run-walk intervals to 5 km.",
+      "kind": "cardio",
+      "weeks": 9,
+      "activities": 1,
+      "updatedAt": 1794826800
+    }
+  ]
+}

@@ -359,6 +359,14 @@ class ProgrammeSaved(TypedDict):
     programme: data.ProgrammeRecord
 
 
+class SharedRead(TypedDict):
+    """The shared library's summaries, or one shared programme with its document; the other
+    None."""
+
+    programmes: list[data.SharedSummary] | None
+    programme: data.SharedRecord | None
+
+
 class ProgrammeStarted(TypedDict):
     tracker: Tracker
     run: dict[str, Any]
@@ -554,7 +562,9 @@ PROGRAMMES_HELP = (
     "with `end_programme`, which previews the end first. `restart_programme` starts a run again "
     "from week 1 as a new tracker, after a preview too, and `reopen_programme` carries on a run "
     "End programme stopped, where it stopped. Its days before today are locked, and its marks "
-    "stay open for today and yesterday."
+    "stay open for today and yesterday. `list_shared_programmes` lists the shared library, "
+    "programmes anyone with an account can copy, and `copy_programme` copies one into the "
+    "person's library, to adjust with `save_programme` and start like any other."
 )
 PROGRAMME_TRACKER_HELP = (
     "A programme tracker's items are refused: its plan comes from its programme, so change it "
@@ -742,6 +752,20 @@ def _upcoming(run: dict[str, Any], today: date) -> dict[str, Any]:
 def _no_programme(programme_id: str) -> ToolError:
     return ToolError(
         f"programme: no programme {programme_id} in the library; list_programmes lists them"
+    )
+
+
+def _no_shared(shared_id: str) -> ToolError:
+    return ToolError(
+        f"programme: no programme {shared_id} in the shared library; list_shared_programmes "
+        "lists them"
+    )
+
+
+def _library_full(field: str) -> ToolError:
+    held = _count(data.MAX_PROGRAMMES, "programme")
+    return ToolError(
+        f"{field}: the library holds {held}, the most it can; delete one in the app first"
     )
 
 
@@ -1025,6 +1049,32 @@ def _add_tools(server: MCPServer, config: Config) -> None:
 
         return _reading(config, read)
 
+    @server.tool(
+        title="List shared programmes",
+        description="The shared library: programmes anyone with an account can copy into their "
+        "own library, which an admin publishes in the app. Without `programme`, `programmes` "
+        "lists each one's `id`, `name`, `description`, `kind`, `weeks`, number of `activities` "
+        "and `updatedAt`, the newest first. With `programme`, a shared programme's id, "
+        "`programme` is that one with its document (`doc`). `copy_programme` copies one into "
+        "the person's library.",
+        annotations=READ_ONLY,
+    )
+    def list_shared_programmes(
+        programme: Annotated[
+            str | None,
+            Field(description="A shared programme's id, from list_shared_programmes."),
+        ] = None,
+    ) -> SharedRead:
+        def read(c: sqlite3.Connection, uid: int, today: date) -> SharedRead:
+            if programme is None:
+                return {"programmes": data.list_shared(c), "programme": None}
+            found = data.load_shared(c, programme)
+            if found is None:
+                raise _no_shared(programme)
+            return {"programmes": None, "programme": found}
+
+        return _reading(config, read)
+
     # --- writes: each needs a write token, and changes one thing as the app would ---
 
     @server.tool(
@@ -1251,10 +1301,7 @@ def _add_tools(server: MCPServer, config: Config) -> None:
                     c, uid, programme, document, rev, config.clock(), quota=config.user_quota_bytes
                 )
             except data.TooManyProgrammes:
-                held = _count(data.MAX_PROGRAMMES, "programme")
-                raise ToolError(
-                    f"doc: the library holds {held}, the most it can; delete one in the app first"
-                ) from None
+                raise _library_full("doc") from None
             except data.QuotaExceeded:
                 raise ToolError(QUOTA.format("saved")) from None
             if result is None:
@@ -1266,6 +1313,42 @@ def _add_tools(server: MCPServer, config: Config) -> None:
                     "document again with that rev"
                 )
             return {"programme": result.programme}
+
+        return _writing(config, write)
+
+    @server.tool(
+        title="Copy programme",
+        description="Copy a shared programme, from list_shared_programmes, into the person's "
+        "library. The copy is theirs: a new library programme with its own `id`, at rev 1, "
+        "with the shared programme's name, and no link back, so later publishes don't change "
+        "it. Adjust it with `save_programme` and start it with `start_programme`, as any "
+        "library programme. The result is the stored programme. Needs a write token.",
+        annotations=ADDING,
+    )
+    def copy_programme(
+        programme: Annotated[
+            str, Field(description="The shared programme's id, from list_shared_programmes.")
+        ],
+    ) -> ProgrammeSaved:
+        def write(c: sqlite3.Connection, uid: int) -> ProgrammeSaved:
+            try:
+                record = data.copy_shared(
+                    c,
+                    uid,
+                    programme,
+                    config.clock(),
+                    quota=config.user_quota_bytes,
+                    make_id=edits.new_id,
+                )
+            except ProgrammeInvalid as e:
+                raise _problems("programme", "programme", "copied", e.errors) from None
+            except data.TooManyProgrammes:
+                raise _library_full("programme") from None
+            except data.QuotaExceeded:
+                raise ToolError(QUOTA.format("copied")) from None
+            if record is None:
+                raise _no_shared(programme)
+            return {"programme": record}
 
         return _writing(config, write)
 
@@ -1624,7 +1707,8 @@ def _add_tools(server: MCPServer, config: Config) -> None:
         "to the day before count as a pause of the whole programme, and the run resumes at the "
         "programme week it stopped in. Days before the end stay as they are, and the run takes "
         "changes again. A run that ran to its last week has nothing to re-open: restart_programme "
-        "starts it again. It previews first: the result's `reopen` gives the day, the reason, "
+        "starts it again. Nor has a run a restart ended, since the new run replaces it. It "
+        "previews first: the result's `reopen` gives the day, the reason, "
         "`week` (the programme week it resumes at), `paused` (the paused days, null for none), "
         "the run's new last day and `lastWeek`, the Monday of its last week. Show the person the "
         "preview; nothing changes until the same call comes back with `confirm` true and the "
@@ -1686,6 +1770,11 @@ def _add_tools(server: MCPServer, config: Config) -> None:
                     "tracker", "re-open", "re-opened", e.errors, {"from": "from_date"}
                 ) from None
             except data.CantReopen as e:
+                if e.restarted:
+                    raise ToolError(
+                        f"tracker: {name} was restarted from week 1 as a new tracker, which "
+                        "replaces this run, so there is nothing to re-open"
+                    ) from None
                 raise ToolError(
                     f"tracker: {name} ran to its end, or was ended before it started, so there "
                     "is nothing to re-open. restart_programme starts it again from week 1"
@@ -1766,7 +1855,8 @@ def _restart_previewed(old: str, preview: dict[str, Any], *, stale: bool) -> Pro
     ends = restart["oldEndsFrom"]
     before = date.fromisoformat(ends) - timedelta(days=1) if ends is not None else None
     stops = (
-        f"{old}, the run now, has ended and stays as it is."
+        f"{old}, the run now, has ended. Its marks, weeks, notes and log stay, and the new run "
+        "replaces it, so it can't be re-opened."
         if before is None
         else f"{old}, the run now, ends from {ends}, so its last day is {before.isoformat()}. "
         "Its marks, weeks, notes and log stay."

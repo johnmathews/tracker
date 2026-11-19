@@ -75,6 +75,7 @@ describe('the chart’s data, from the run’s grid', () => {
 
   it('says this week’s plan and how it goes up', () => {
     expect(chart('squat').lede).toEqual({
+      lead: null,
       before: 'This week is a deload: ',
       value: '42.5 kg',
       after: ', 3 × 5. It goes up 5% a week.',
@@ -84,6 +85,7 @@ describe('the chart’s data, from the run’s grid', () => {
     const plank = chart('plank')
     expect([plank.field, plank.unit]).toEqual(['duration', 's'])
     expect(plank.lede).toEqual({
+      lead: null,
       before: 'This week is a deload: ',
       value: '35 s',
       after: ', 3 sets. It goes up 5 s every 2 weeks.',
@@ -148,8 +150,10 @@ describe('the chart’s data, from the run’s grid', () => {
     expect(c.weeks[4]).toMatchObject({ state: 'paused', value: null, segments: [] })
     expect(c.weeks[4]!.plan).toBe('Paused, knee')
     expect(c.pauses).toEqual([{ from: 4, to: 4, reason: 'Knee' }])
+    // K169: "Paused until …" leads, in paused-ink; the reason and the value follow.
     expect(c.lede).toEqual({
-      before: 'Paused since Thu 12 Nov. Knee. It comes back on Thu 26 Nov at ',
+      lead: 'Paused until Thu 26 Nov.',
+      before: ' Knee. It comes back at ',
       value: '80 kg',
       after: '.',
     })
@@ -163,29 +167,49 @@ describe('the chart’s data, from the run’s grid', () => {
       clock.activities.deadlift!.until = null
       r.log[1] = { ...r.log[1]!, reason: null }
     })
+    // K169: with no end day, "Paused." alone leads.
     expect(chart('deadlift', run).lede).toEqual({
-      before: 'Paused since Thu 12 Nov. Knee. It comes back at ',
+      lead: 'Paused.',
+      before: ' Knee. It comes back at ',
       value: '67.5 kg',
       after: ' when you resume it.',
     })
-    // A pause the log doesn't hold (an older run) says only that it is paused.
+    // A pause the log doesn't hold (an older run) reads the same: the clock has the end day.
     const unlogged = runWith((r) => {
       r.log = r.log.filter((e) => e.change.type !== 'pause-activity')
     })
-    expect(chart('deadlift', unlogged).lede.before).toBe(
-      'Paused. Knee. It comes back on Thu 26 Nov at ',
-    )
+    expect(chart('deadlift', unlogged).lede).toMatchObject({
+      lead: 'Paused until Thu 26 Nov.',
+      before: ' Knee. It comes back at ',
+    })
+    // A pause with no reason goes straight from the lead to when it comes back.
+    const bare = runWith((r) => {
+      const clock = r.clock as unknown as { activities: Record<string, { reason: unknown }> }
+      clock.activities.deadlift!.reason = null
+    })
+    expect(chart('deadlift', bare).lede.before).toBe(' It comes back at ')
   })
 
   it('says the programme is paused while it is, with the reason', () => {
     const c = chart('squat', PAUSED)
-    expect(c.lede).toEqual({ before: 'The programme is paused. A cold.', value: null, after: '' })
+    // The whole programme's pause leads in paused-ink too (K169), its reason after.
+    expect(c.lede).toEqual({
+      lead: 'The programme is paused.',
+      before: ' A cold.',
+      value: null,
+      after: '',
+    })
     expect(c.pauses).toEqual([{ from: 4, to: 7, reason: 'A cold' }])
     const until = runWith((r) => {
       r.clock.until = '2026-11-30'
       ;(r.clock as Record<string, unknown>).reason = null
     }, PAUSED)
-    expect(chart('squat', until).lede.before).toBe('The programme is paused until Mon 30 Nov.')
+    expect(chart('squat', until).lede).toEqual({
+      lead: 'The programme is paused until Mon 30 Nov.',
+      before: '',
+      value: null,
+      after: '',
+    })
   })
 
   it('says when an upcoming run starts, every week still to come', () => {
@@ -200,7 +224,12 @@ describe('the chart’s data, from the run’s grid', () => {
     const c = chart('squat', run)
     expect(c.now).toBe(-1)
     expect(c.weeks.every((w) => w.done === null)).toBe(true)
-    expect(c.lede).toEqual({ before: 'It starts on Fri 23 Oct at ', value: '40 kg', after: '.' })
+    expect(c.lede).toEqual({
+      lead: null,
+      before: 'It starts on Fri 23 Oct at ',
+      value: '40 kg',
+      after: '.',
+    })
   })
 
   it('draws an ended run solid to its end, and says when it ended', () => {
@@ -215,12 +244,13 @@ describe('the chart’s data, from the run’s grid', () => {
     const c = chart('squat', run)
     expect(c.now).toBe(7)
     expect(c.weeks[7]!.doneText).toBe('0 of 3')
-    expect(c.lede).toEqual({ before: 'The programme ended on Sun 13 Dec.', value: null, after: '' })
+    // K168: an end reads by its last day, as the overview's line does.
+    expect(c.lede).toEqual({ lead: null, before: 'Ended Sun 13 Dec.', value: null, after: '' })
     const early = runWith((r) => {
-      r.end = null
+      r.end = '2026-11-30'
       r.ended = { from: '2026-12-01', reason: null, seq: 9 }
     }, run)
-    expect(chart('squat', early).lede.before).toBe('The programme ended on Tue 1 Dec.')
+    expect(chart('squat', early).lede.before).toBe('Ended Mon 30 Nov.')
   })
 
   it('says when an activity ended, and draws its weeks after as nothing', () => {
@@ -229,7 +259,8 @@ describe('the chart’s data, from the run’s grid', () => {
       for (const w of r.grid.weeks.slice(4)) w.cells.row = { ...w.cells.row!, state: 'ended' }
     })
     const c = chart('row', run)
-    expect(c.lede).toEqual({ before: 'It ended on Tue 10 Nov.', value: null, after: '' })
+    // K168: by its last day, the day before its end took effect.
+    expect(c.lede).toEqual({ lead: null, before: 'Ended Mon 9 Nov.', value: null, after: '' })
     expect(c.weeks[5]).toMatchObject({ value: null, plan: 'Ended', done: null })
     expect(c.pauses).toEqual([])
   })
@@ -242,7 +273,12 @@ describe('the chart’s data, from the run’s grid', () => {
     })
     const c = chart('plank', run)
     expect(c.weeks[0]).toMatchObject({ plan: 'Not started', value: null, done: null })
-    expect(c.lede).toEqual({ before: 'It starts on Mon 23 Nov at ', value: '40 s', after: '.' })
+    expect(c.lede).toEqual({
+      lead: null,
+      before: 'It starts on Mon 23 Nov at ',
+      value: '40 s',
+      after: '.',
+    })
   })
 
   it('charts a cardio session’s time in minutes, and its distance when it has no time', () => {
@@ -272,7 +308,12 @@ describe('the chart’s data, from the run’s grid', () => {
     expect([c.field, c.unit]).toEqual(['duration', 'min'])
     expect(c.weeks[1]!.value).toBe(25)
     expect(c.weeks[1]!.plan).toBe('25 min')
-    expect(c.lede).toEqual({ before: 'This week is a deload: ', value: '35 min', after: '.' })
+    expect(c.lede).toEqual({
+      lead: null,
+      before: 'This week is a deload: ',
+      value: '35 min',
+      after: '.',
+    })
     const far = runWith((r) => {
       r.grid.weeks.forEach((w) => (w.cells = { run: cell({ distance: 5, target: 2 }) }))
     }, run)
@@ -325,10 +366,12 @@ describe('the chart’s data, from the run’s grid', () => {
     expect(c.weeks[0]).toMatchObject({ state: 'not-started', plan: 'Not started', value: null })
     expect(c.weeks[1]!.number).toBe('–')
     expect(c.weeks[4]!.plan).toBe('Paused')
+    // With no value to come back at, the lede stops after the reason.
     expect(c.lede).toEqual({
-      before: 'Paused since Thu 12 Nov. Knee. It comes back on Mon 1 Feb at ',
+      lead: 'Paused until Mon 1 Feb.',
+      before: ' Knee.',
       value: null,
-      after: '.',
+      after: '',
     })
     // An activity with no values in any week has no lede and charts its goal.
     const empty = runWith((r) => {
@@ -336,7 +379,7 @@ describe('the chart’s data, from the run’s grid', () => {
         w.cells.plank = { ...w.cells.plank!, state: 'ended', values: null }
     })
     expect(chart('plank', empty).field).toBe('target')
-    expect(chart('plank', empty).lede).toEqual({ before: '', value: null, after: '' })
+    expect(chart('plank', empty).lede).toEqual({ lead: null, before: '', value: null, after: '' })
     // A run whose clock lists no activities reads each as running.
     const bare = runWith((r) => {
       delete (r.clock as Record<string, unknown>).activities

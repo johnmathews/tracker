@@ -1247,7 +1247,7 @@ def test_end_programme_ends_the_run_from_a_day_and_keeps_its_history(
     # The week holding the end day still shows; the tracker shows in no later week.
     assert ended["tracker"]["endWeek"] == "2026-11-02"
     run = ended["run"]
-    assert run["ended"] == {"from": "2026-10-28", "reason": "Moving", "seq": 1}
+    assert run["ended"] == {"from": "2026-10-28", "reason": "Moving", "seq": 1, "restarted": False}
     assert (run["status"], run["end"]) == ("running", "2026-10-27")
     assert run["log"][0] == {
         "seq": 1,
@@ -1330,6 +1330,335 @@ def test_the_data_layer_ends_a_programme_tracker_only_with_today(
     finally:
         conn.close()
     assert run_of(client, made["tracker"]["id"])["ended"] is None
+
+
+# --- restart and re-open (K164, K165, K167) ------------------------------------------------------
+
+
+def restart(client: TestClient, tracker: str, **body: Any) -> Any:
+    return client.post(f"/api/runs/{tracker}/restart", json=body)
+
+
+def reopen(client: TestClient, tracker: str, **body: Any) -> Any:
+    return client.post(f"/api/runs/{tracker}/reopen", json=body)
+
+
+def end_from(client: TestClient, tracker: str, on: str | None = None) -> dict[str, Any]:
+    r = client.post(f"/api/runs/{tracker}/end", json={} if on is None else {"from": on})
+    assert r.status_code == 200, r.text
+    run: dict[str, Any] = r.json()["run"]
+    return run
+
+
+def tracker_ids(config: Config) -> list[str]:
+    return [r[0] for r in rows(config, "SELECT id FROM trackers ORDER BY id")]
+
+
+#: What a re-open of a run a restart ended answers (K167).
+REPLACED = {"error": "cant-reopen", "finished": True, "restarted": True}
+
+
+def test_a_restart_previews_by_default_and_writes_nothing(
+    client: TestClient, config: Config
+) -> None:
+    made = started(client, config, on=TODAY)
+    tracker = made["tracker"]["id"]
+    before, ids = run_of(client, tracker), tracker_ids(config)
+    r = restart(client, tracker, start=NEXT_MONDAY, name="Again")
+    assert r.status_code == 200, r.text
+    preview = r.json()
+    assert preview == {
+        "preview": True,
+        "rev": preview["rev"],
+        "restart": {
+            "name": "Again",
+            "start": NEXT_MONDAY,
+            "firstWeek": {"from": NEXT_MONDAY, "to": "2026-11-01"},
+            "weeks": 8,
+            "end": "2026-12-20",
+            "oldEndsFrom": NEXT_MONDAY,
+        },
+    }
+    assert (run_of(client, tracker), tracker_ids(config)) == (before, ids)
+
+
+def test_a_restart_confirmed_with_the_previews_rev_starts_a_new_tracker(
+    client: TestClient, config: Config, clock: Clock
+) -> None:
+    made = started(client, config, on=TODAY)
+    old = made["tracker"]["id"]
+    preview = restart(client, old, start=NEXT_MONDAY).json()
+    r = restart(client, old, start=NEXT_MONDAY, preview=False, rev=preview["rev"])
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert sorted(out) == ["old", "preview", "run", "tracker"]
+    assert out["preview"] is False
+    new = out["tracker"]
+    assert new["id"] != old and out["run"]["tracker"] == new["id"]
+    assert (new["name"], new["startWeek"]) == (NAME, NEXT_MONDAY)
+    assert (out["run"]["status"], out["run"]["start"], out["run"]["log"]) == (
+        "upcoming",
+        NEXT_MONDAY,
+        [],
+    )
+    # The old run ends from the new start, and the new run replaces it: no re-open (K167).
+    assert (out["old"]["id"], out["old"]["endWeek"]) == (old, NEXT_MONDAY)
+    run = run_of(client, old)
+    assert run["ended"] == {
+        "from": NEXT_MONDAY,
+        "reason": data.RESTARTED,
+        "seq": 1,
+        "restarted": True,
+    }
+    assert run["log"][0]["change"] == {"type": "end-programme", "restarted": True}
+    assert (run["status"], run["canReopen"]) == ("running", False)
+    for body in ({}, {"from": NEXT_MONDAY}):
+        r = reopen(client, old, **body)
+        assert (r.status_code, r.json()) == (409, REPLACED)
+    go_to(clock, NEXT_MONDAY)
+    run = run_of(client, old)
+    assert (run["status"], run["canReopen"]) == ("ended", False)
+    r = reopen(client, old, preview=False, rev="0123456789abcdef")
+    assert (r.status_code, r.json()) == (409, REPLACED)
+    assert len(run_of(client, old)["log"]) == 1
+
+
+def history(config: Config, tracker: str) -> tuple[list[tuple[Any, ...]], ...]:
+    """A run's sealed days, its weeks' plans, its tracker's end week, and its item details."""
+    return (
+        rows(config, "SELECT * FROM programme_days WHERE tracker_id = ? ORDER BY date", tracker),
+        rows(config, "SELECT * FROM plans WHERE section = ? ORDER BY week", tracker),
+        rows(config, "SELECT end_week FROM trackers WHERE id = ?", tracker),
+        rows(config, "SELECT * FROM item_details WHERE section = ? ORDER BY item_id", tracker),
+        rows(config, "SELECT * FROM ticks WHERE section = ? ORDER BY week, item_id", tracker),
+    )
+
+
+def test_a_restart_of_a_run_ended_early_leaves_it_unable_to_reopen(
+    client: TestClient, config: Config, clock: Clock
+) -> None:
+    """Ended part way, then restarted: the old run gains only the marker row, its days as they
+    were, and the new run replaces it, so it can't be re-opened (K167)."""
+    made = started(client, config, on=TODAY)
+    old = made["tracker"]["id"]
+    go_to(clock, "2026-11-04")  # a Wednesday, in programme week 3
+    end_from(client, old)
+    go_to(clock, "2026-11-11")
+    before = run_of(client, old)
+    assert (before["canReopen"], before["ended"]["restarted"]) == (True, False)
+    stored = history(config, old)
+    preview = restart(client, old).json()
+    assert preview["restart"]["oldEndsFrom"] is None
+    out = restart(client, old, preview=False, rev=preview["rev"]).json()
+    assert out["old"]["endWeek"] == stored[2][0][0]
+    run = run_of(client, old)
+    assert run["ended"] == {
+        "from": "2026-11-04",
+        "reason": data.RESTARTED,
+        "seq": 2,
+        "restarted": True,
+    }
+    assert (run["status"], run["end"], run["canReopen"]) == ("ended", before["end"], False)
+    assert [(e["from"], e["change"], e["reason"]) for e in run["log"]] == [
+        ("2026-11-04", {"type": "end-programme", "restarted": True}, data.RESTARTED),
+        ("2026-11-04", {"type": "end-programme"}, None),
+    ]
+    assert run["grid"] == before["grid"]
+    assert history(config, old) == stored
+    for body in ({}, {"preview": False, "rev": "0123456789abcdef"}):
+        r = reopen(client, old, **body)
+        assert (r.status_code, r.json()) == (409, REPLACED)
+    assert run_of(client, out["tracker"]["id"])["status"] == "running"
+
+
+def test_a_stale_restart_is_409_with_the_restart_previewed_again(
+    client: TestClient, config: Config
+) -> None:
+    made = started(client, config, on=TODAY)
+    tracker = made["tracker"]["id"]
+    first = restart(client, tracker).json()
+    apply(client, tracker, SQUAT_50, NEXT_MONDAY)
+    ids = tracker_ids(config)
+    r = restart(client, tracker, preview=False, rev=first["rev"])
+    assert r.status_code == 409
+    fresh = restart(client, tracker).json()
+    assert r.json() == {"error": "conflict", "rev": fresh["rev"], "preview": fresh}
+    assert fresh["rev"] != first["rev"]
+    assert tracker_ids(config) == ids
+
+
+def test_a_restart_confirm_needs_a_rev_and_a_good_body(client: TestClient, config: Config) -> None:
+    made = started(client, config, on=TODAY)
+    tracker = made["tracker"]["id"]
+    for body, path, message in (
+        ({"preview": False}, "rev", "give the rev of the preview."),
+        ({"preview": "no"}, "preview", "give true or false."),
+        ({"start": "2026-10-22"}, "start", "a programme starts today or later."),
+    ):
+        r = restart(client, tracker, **body)
+        assert (r.status_code, r.json()) == (
+            400,
+            {"error": "invalid", "errors": [{"path": path, "message": message}]},
+        )
+
+
+def test_a_restart_past_the_tracker_cap_is_409(
+    client: TestClient, config: Config, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    made = started(client, config, on=TODAY)
+    tracker = made["tracker"]["id"]
+    preview = restart(client, tracker).json()
+    monkeypatch.setattr(data, "MAX_TRACKERS", 4)
+    r = restart(client, tracker, preview=False, rev=preview["rev"])
+    assert (r.status_code, r.json()) == (409, {"error": "too-many"})
+    assert run_of(client, tracker)["ended"] is None
+
+
+def test_a_restart_past_the_quota_is_413_and_writes_nothing(
+    client: TestClient, config: Config
+) -> None:
+    made = started(client, config, on=TODAY)
+    tracker = made["tracker"]["id"]
+    preview = restart(client, tracker).json()
+    tiny = create_app(replace(config, user_quota_bytes=3000), run_backups=False)
+    with TestClient(tiny, base_url=ORIGIN, headers={"Origin": ORIGIN}) as small:
+        small.cookies = client.cookies
+        r = restart(small, tracker, preview=False, rev=preview["rev"])
+    assert (r.status_code, r.json()) == (413, {"error": "quota"})
+    assert run_of(client, tracker)["ended"] is None
+
+
+@pytest.mark.parametrize("path", ["restart", "reopen"])
+@pytest.mark.parametrize("body", [{}, {"preview": False, "rev": "0123456789abcdef"}])
+def test_restart_and_reopen_need_a_programme_tracker_of_the_account(
+    client: TestClient, config: Config, path: str, body: dict[str, Any]
+) -> None:
+    made = started(client, config, on=TODAY)
+    for tracker in ("exercise", "nope"):
+        r = client.post(f"/api/runs/{tracker}/{path}", json=body)
+        assert (r.status_code, r.json()) == (404, {"error": "not-found"})
+    with other_client(config) as bob:
+        sign_up(bob, config, "bob@example.com")
+        r = bob.post(f"/api/runs/{made['tracker']['id']}/{path}", json=body)
+        assert (r.status_code, r.json()) == (404, {"error": "not-found"})
+
+
+def test_a_reopen_previews_by_default_then_carries_the_run_on(
+    client: TestClient, config: Config, clock: Clock
+) -> None:
+    made = started(client, config, on=TODAY)
+    tracker = made["tracker"]["id"]
+    go_to(clock, "2026-11-04")  # a Wednesday, in programme week 3
+    ended = end_from(client, tracker)
+    assert (ended["status"], ended["canReopen"]) == ("ended", True)
+    go_to(clock, "2026-11-11")
+    before = run_of(client, tracker)
+    r = reopen(client, tracker, reason="Knee is better")
+    assert r.status_code == 200, r.text
+    preview = r.json()
+    assert preview == {
+        "preview": True,
+        "rev": preview["rev"],
+        "reopen": {
+            "from": "2026-11-11",
+            "reason": "Knee is better",
+            "week": 3,
+            "paused": {"from": "2026-11-04", "to": "2026-11-10"},
+            "end": "2026-12-20",
+            "lastWeek": "2026-12-14",
+        },
+    }
+    assert run_of(client, tracker) == before
+    r = reopen(client, tracker, reason="Knee is better", preview=False, rev=preview["rev"])
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert sorted(out) == ["preview", "run", "tracker"]
+    assert (out["preview"], out["tracker"]["id"], out["tracker"]["endWeek"]) == (
+        False,
+        tracker,
+        "2026-12-21",
+    )
+    run = out["run"]
+    assert (run["status"], run["week"], run["ended"], run["canReopen"]) == (
+        "running",
+        3,
+        None,
+        False,
+    )
+    assert (run["log"][0]["change"], run["log"][0]["source"]) == (
+        {"type": "reopen-programme"},
+        "app",
+    )
+
+
+def test_a_stale_reopen_is_409_with_the_reopen_previewed_again(
+    client: TestClient, config: Config
+) -> None:
+    made = started(client, config, on=TODAY)
+    tracker = made["tracker"]["id"]
+    end_from(client, tracker, NEXT_MONDAY)
+    first = reopen(client, tracker, **{"from": NEXT_MONDAY}).json()
+    body = {"from": NEXT_MONDAY, "reason": "Another reason"}
+    r = reopen(client, tracker, preview=False, rev=first["rev"], **body)
+    assert r.status_code == 409
+    fresh = reopen(client, tracker, **body).json()
+    assert r.json() == {"error": "conflict", "rev": fresh["rev"], "preview": fresh}
+    assert run_of(client, tracker)["ended"] is not None
+
+
+def test_a_reopen_before_the_ends_day_is_400(client: TestClient, config: Config) -> None:
+    """An end set for a later day re-opens from that day, so the app sends the end's own day."""
+    made = started(client, config, on=TODAY)
+    tracker = made["tracker"]["id"]
+    end_from(client, tracker, NEXT_MONDAY)
+    r = reopen(client, tracker)
+    message = f"the programme ends from {NEXT_MONDAY}, so it re-opens from that day or later."
+    assert (r.status_code, r.json()) == (
+        400,
+        {"error": "invalid", "errors": [{"path": "from", "message": message}]},
+    )
+
+
+@pytest.mark.parametrize("body", [{}, {"preview": False, "rev": "0123456789abcdef"}])
+def test_a_reopen_of_a_run_not_ended_or_run_to_its_end_is_409(
+    client: TestClient, config: Config, clock: Clock, body: dict[str, Any]
+) -> None:
+    made = started(client, config, on=TODAY)
+    going = made["tracker"]["id"]
+    assert run_of(client, going)["canReopen"] is False
+    r = reopen(client, going, **body)
+    assert (r.status_code, r.json()) == (
+        409,
+        {"error": "cant-reopen", "finished": False, "restarted": False},
+    )
+    r = start(client, library(client, "minimal"), start=TODAY)
+    finished = r.json()["tracker"]["id"]
+    go_to(clock, "2026-10-28")
+    run = run_of(client, finished)
+    assert (run["status"], run["ended"], run["canReopen"]) == ("ended", None, False)
+    r = reopen(client, finished, **body)
+    assert (r.status_code, r.json()) == (
+        409,
+        {"error": "cant-reopen", "finished": True, "restarted": False},
+    )
+
+
+def test_can_reopen_follows_the_end_not_the_status(client: TestClient, config: Config) -> None:
+    """An end set for a later day leaves the run `running`, and a re-open applies to it (F8)."""
+    made = started(client, config, on=TODAY)
+    tracker = made["tracker"]["id"]
+    run = end_from(client, tracker, NEXT_MONDAY)
+    assert (run["status"], run["ended"]["from"], run["canReopen"]) == (
+        "running",
+        NEXT_MONDAY,
+        True,
+    )
+    assert run_of(client, tracker)["canReopen"] is True
+    # Ended before it started: nothing to re-open.
+    r = start(client, library(client, "minimal"), start=NEXT_MONDAY)
+    upcoming = r.json()["tracker"]["id"]
+    run = end_from(client, upcoming)
+    assert (run["status"], run["canReopen"]) == ("ended", False)
 
 
 # --- export and import --------------------------------------------------------------------------

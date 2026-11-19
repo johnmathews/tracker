@@ -165,6 +165,7 @@ def test_a_second_run_changes_nothing(local: Config, conn: sqlite3.Connection) -
         "details": 0,
         "programmes": 0,
         "runs": 0,
+        "shared": 0,
     }
     assert export_file(conn, user_id(conn, seed.DEMO_EMAIL), local.clock()) == before
 
@@ -342,6 +343,59 @@ def test_adds_the_programme_to_an_account_from_before_it(
         (uid, seed.DEMO_RUN),
     ).fetchone()[0]
     assert result["ticks"] == marks > 0
+
+
+SHARED_FIXTURE = FIXTURE.with_name("cardio.json")
+
+
+def shared_rows(conn: sqlite3.Connection) -> list[tuple[object, ...]]:
+    return [tuple(r) for r in conn.execute("SELECT * FROM shared_programmes ORDER BY id")]
+
+
+def test_adds_one_shared_programme_to_an_empty_shared_library(
+    local: Config, conn: sqlite3.Connection
+) -> None:
+    """Shared library §9: so the shared section has something to show locally. It names no one,
+    and a second run adds nothing."""
+    assert json.loads(SHARED_FIXTURE.read_text()) == seed.SHARED_PROGRAMME
+    result = seed.seed(conn, local, seed.DEMO_EMAIL, None)
+    assert result["shared"] == 1
+    (row,) = conn.execute("SELECT * FROM shared_programmes").fetchall()
+    assert dict(row) == {
+        "id": seed.DEMO_SHARED,
+        "name": "Base miles",
+        "doc_json": json.dumps(seed.SHARED_PROGRAMME, ensure_ascii=False, separators=(",", ":")),
+        "rev": 1,
+        "published_by": None,
+        "source_id": None,
+        "published_at": local.clock(),
+        "updated_at": local.clock(),
+    }
+    before = shared_rows(conn)
+    assert seed.seed(conn, local, "alice@example.com", None)["shared"] == 0
+    assert shared_rows(conn) == before
+
+
+def test_leaves_a_shared_library_that_has_programmes_alone(
+    local: Config, conn: sqlite3.Connection
+) -> None:
+    conn.execute(
+        "INSERT INTO shared_programmes VALUES ('xs1', 'Mine', ?, 4, NULL, NULL, 1, 2)",
+        (json.dumps(seed.PROGRAMME),),
+    )
+    before = shared_rows(conn)
+    assert seed.seed(conn, local, seed.DEMO_EMAIL, None)["shared"] == 0
+    assert shared_rows(conn) == before
+
+
+def test_cli_prints_the_shared_programme_it_added(
+    local: Config, capsys: pytest.CaptureFixture[str]
+) -> None:
+    env = {"DATA_DIR": str(local.data_dir), "PUBLIC_ORIGIN": LOCAL, "COOKIE_SECURE": "false"}
+    assert main(["seed-demo"], env, clock=Clock()) == 0
+    assert "Added the programme Base miles to the shared library." in capsys.readouterr().out
+    assert main(["seed-demo"], env, clock=Clock()) == 0
+    assert "shared library" not in capsys.readouterr().out
 
 
 def test_puts_back_a_deleted_library_programme_without_a_second_run(

@@ -3,7 +3,7 @@ An activity's Programme row on its item page: a step chart of the planned value 
 ## Use
 
 - **Where:** the ItemPage of an item in a programme tracker, as its first row, where "This week's plan" sits for an ordinary item (spec §9.4). The row is ItemPage's (K65): the heading "Programme" in the 320u name column, the content at its right; folded, the heading over the content. The rows after it (Notes and the rest) are ItemPage's, unchanged.
-- **The lede,** in `body` `ink-secondary`, with the value in `ink` at 600: "This week is a deload: **45 kg**, 3 × 5. It goes up 7.5% a week." Paused: "Paused since Mon 14 Dec. Knee. It comes back on Mon 28 Dec at **75 kg**."
+- **The lede,** in `body` `ink-secondary`, with the value in `ink` at 600: "This week is a deload: **45 kg**, 3 × 5. It goes up 7.5% a week." Paused, it leads as the grid and the week view do (K169): "Paused until Mon 28 Dec. Knee. It comes back at **75 kg**.", its first sentence in `paused-ink` at 600; with no end day, "Paused. Knee. It comes back at **75 kg** when you resume it.", with "Paused." in `paused-ink`. A whole programme paused reads "The programme is paused until Mon 28 Dec. A cold.", its first sentence in `paused-ink` too. An end says its last day, as the overview's line does (K168): "Ended Sun 13 Dec."
 - **The legend** over the chart, in `caption` `ink-secondary`: Planned (a solid `ink` line), Still to come (a dashed `ink-secondary` line), Goal met (a `pen` dot), Goal not met (a ring in `ink-secondary` on `canvas`).
 - **The step chart** (K145), as an SVG drawn at the chart's own width, so its text stays 16px at every size. 290px tall, 240px folded.
   - One column per programme week, numbered under the plot ("Wk", then 1 to 8), this week's number in `ink` at 600. This week's column sits on a `tile` band (`radius-sm`).
@@ -21,14 +21,14 @@ An activity's Programme row on its item page: a step chart of the planned value 
 
 ## States
 
-| State | Look |
-| --- | --- |
-| Running | The line solid to this week, dashed after; dots for the weeks done |
-| A change of value or increase | A labelled dashed line where it took effect |
-| Paused | A gap with "Paused" and the reason; Resume activity in place of Pause activity; the lede says when it comes back |
-| Ends short | The InlineMessage under the chart |
-| This week | The `tile` band; "1 of 3" under its dot until the goal is met, then a `pen` dot |
-| Pointer over a week | Its column tinted, its numbers in the panel |
+| State                         | Look                                                                                                                                                         |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Running                       | The line solid to this week, dashed after; dots for the weeks done                                                                                           |
+| A change of value or increase | A labelled dashed line where it took effect                                                                                                                  |
+| Paused                        | A gap with "Paused" and the reason; Resume activity in place of Pause activity; the lede leads with "Paused until Mon 28 Dec." in `paused-ink` at 600 (K169) |
+| Ends short                    | The InlineMessage under the chart                                                                                                                            |
+| This week                     | The `tile` band; "1 of 3" under its dot until the goal is met, then a `pen` dot                                                                              |
+| Pointer over a week           | Its column tinted, its numbers in the panel                                                                                                                  |
 
 ## Accessibility
 
@@ -36,19 +36,20 @@ An activity's Programme row on its item page: a step chart of the planned value 
 - **A screen reader gets a table** with the same numbers: a caption ("Back squat, week by week") and a row per week (Week 4, 14–20 Dec · 45 kg, 3 × 5 · 1 of 3 so far). It sits in a visually hidden box. A table ignores a 1px width of its own, so the box, not the table, carries the hiding.
 - The panel on pointing is for a pointer only and is never needed: the table and the grid on the overview carry every number.
 - The legend's swatches are `aria-hidden`; its words stay.
-- Contrast, measured by the gate in both themes: the `pen` dot on `canvas` and on the `tile` band (3:1 as a mark), `ink-secondary` for the ring and the dashed line, `control-border` for the change lines (3:1), `ink` on `tile` for the line across this week's band.
+- The lede is one sentence read aloud: its red lead adds no words. `paused-ink` on `canvas` is 7.4:1 light and 7.2:1 dark.
+- Contrast, measured by the gate in both themes: the `paused-ink` lead on `canvas`, the `pen` dot on `canvas` and on the `tile` band (3:1 as a mark), `ink-secondary` for the ring and the dashed line, `control-border` for the change lines (3:1), `ink` on `tile` for the line across this week's band.
 
 ## For the app
 
-`src/components/ui/programme-chart/` (W8), and the ItemPage's Programme section. Test ids, as in the preview:
+`src/components/ui/programme-chart/` (W8): `ProgrammeChart` and `ProgrammeLede`, the lede's line, and the ItemPage's Programme section. Test ids, as in the preview:
 
-| Element | Test id |
-| --- | --- |
-| The row | `programme-section` |
-| The lede, the legend | `programme-lede`, `programme-chart-legend` |
-| The SVG, its table, the panel | `programme-chart`, `programme-chart-table`, `programme-chart-tip` |
-| The ends-short line | `activity-ends-short` |
-| The controls | `activity-controls`, `activity-set-value`, `activity-set-increase`, `activity-pause`, `activity-resume`, `activity-end` |
+| Element                               | Test id                                                                                                                 |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| The row                               | `programme-section`                                                                                                     |
+| The lede, its paused lead, the legend | `programme-lede`, `programme-lede-lead`, `programme-chart-legend`                                                       |
+| The SVG, its table, the panel         | `programme-chart`, `programme-chart-table`, `programme-chart-tip`                                                       |
+| The ends-short line                   | `activity-ends-short`                                                                                                   |
+| The controls                          | `activity-controls`, `activity-set-value`, `activity-set-increase`, `activity-pause`, `activity-resume`, `activity-end` |
 
 ## You provide
 

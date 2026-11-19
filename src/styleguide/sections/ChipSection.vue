@@ -16,7 +16,8 @@ const FORMS = [
 ]
 </script>
 
-<!-- The card's forms (components/Chip/preview.html), then chips under a name as WeekGrid sets them. -->
+<!-- The card's forms (components/Chip/preview.html), then chips under a name as WeekGrid sets them,
+     then the one state a chip names: "Shared", after a library programme's name (K171). -->
 <template>
   <div class="flex flex-col gap-8">
     <ExampleGroup title="Every form the detail takes">
@@ -42,6 +43,12 @@ const FORMS = [
           <span class="body block font-semibold">Back extensions</span>
         </li>
       </ul>
+    </ExampleGroup>
+    <ExampleGroup title="A state, after a name (the admin's Library)">
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span class="body font-semibold">Strength 5×5</span>
+        <Chip id="sg-chip-shared">Shared</Chip>
+      </div>
     </ExampleGroup>
   </div>
 </template>

@@ -98,6 +98,35 @@ def test_inviting_an_existing_user(
     assert code == 1 and "already exists; use reset" in err
 
 
+def test_admin_sets_and_clears_the_flag_and_users_shows_it(
+    env: dict[str, str],
+    config: Config,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Shared library §3: `admin <email>` sets it, `admin --off <email>` clears it, and the
+    session reads it on its next request, with no sign-in again."""
+    uid = auth.signup(conn, config, "alice@example.com", PASSWORD)
+    auth.signup(conn, config, "bob@example.com", PASSWORD)
+    token = auth.create_session(conn, config, uid)
+    code, out, _ = run(env, capsys, "admin", "Alice@example.com")
+    assert code == 0
+    assert out == "Alice@example.com is now an admin: it can publish to the shared library.\n"
+    assert auth.session_user(conn, config, token).admin  # type: ignore[union-attr]
+    users = run(env, capsys, "users")[1].splitlines()
+    assert re.match(r"alice@example\.com +active +admin +since ", users[0]), users
+    assert re.match(r"bob@example\.com +active +user +since ", users[1]), users
+    code, out, _ = run(env, capsys, "admin", "--off", "alice@example.com")
+    assert (code, out) == (0, "alice@example.com is no longer an admin.\n")
+    assert not auth.session_user(conn, config, token).admin  # type: ignore[union-attr]
+    assert "admin" not in run(env, capsys, "users")[1]
+    # Clearing it twice is harmless; an unknown account is an error.
+    assert run(env, capsys, "admin", "--off", "alice@example.com")[0] == 0
+    code, out, err = run(env, capsys, "admin", "nobody@example.com")
+    assert (code, out) == (1, "")
+    assert "no user named 'nobody@example.com'" in err
+
+
 def test_no_users_yet(env: dict[str, str], capsys: pytest.CaptureFixture[str]) -> None:
     assert run(env, capsys, "users")[1].strip() == "No users yet."
 

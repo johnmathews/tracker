@@ -63,6 +63,8 @@ class SessionUser:
     username: str
     #: True when this request moved the expiry forward, so the cookie should be sent again.
     refreshed: bool
+    #: The account's admin flag, read with the session on every request (shared library §3).
+    admin: bool
 
 
 @dataclass(frozen=True)
@@ -242,7 +244,7 @@ def session_user(conn: sqlite3.Connection, config: Config, token: str) -> Sessio
     now = config.clock()
     th = token_hash(token)
     row = conn.execute(
-        "SELECT s.user_id, s.last_seen, s.expires_at, u.username, u.disabled"
+        "SELECT s.user_id, s.last_seen, s.expires_at, u.username, u.disabled, u.admin"
         " FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?",
         (th,),
     ).fetchone()
@@ -257,7 +259,7 @@ def session_user(conn: sqlite3.Connection, config: Config, token: str) -> Sessio
             "UPDATE sessions SET last_seen = ?, expires_at = ? WHERE token_hash = ?",
             (now, now + config.session_days * DAY, th),
         )
-    return SessionUser(int(row["user_id"]), row["username"], refreshed)
+    return SessionUser(int(row["user_id"]), row["username"], refreshed, bool(row["admin"]))
 
 
 def end_session(conn: sqlite3.Connection, token: str) -> None:
@@ -298,6 +300,13 @@ def set_disabled(conn: sqlite3.Connection, username: str, disabled: bool) -> Non
         if disabled:
             conn.execute("DELETE FROM sessions WHERE user_id = ?", (uid,))
             end_credentials(conn, uid)
+
+
+def set_admin(conn: sqlite3.Connection, username: str, admin: bool) -> None:
+    """Set or clear the account's admin flag (`tracker-admin admin`). It takes effect on the
+    account's next request: every session reads it afresh."""
+    uid = _user_id(conn, username)
+    conn.execute("UPDATE users SET admin = ? WHERE id = ?", (int(admin), uid))
 
 
 def create_token(

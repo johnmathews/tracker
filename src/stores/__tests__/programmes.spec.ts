@@ -9,6 +9,7 @@ import RUN_JSON from '@/lib/__tests__/programmes/run.json'
 import PREVIEW_JSON from '@/lib/__tests__/programmes/change-preview.json'
 import START_JSON from '@/lib/__tests__/programmes/start-preview.json'
 import LIBRARY_JSON from '@/lib/__tests__/programmes/library.json'
+import SHARED_JSON from '@/lib/__tests__/programmes/shared.json'
 
 const RUN = RUN_JSON as unknown as Run
 const PREVIEW = PREVIEW_JSON as unknown as ChangePreview
@@ -362,5 +363,294 @@ describe('each programme tracker’s run (the week view and the item page)', () 
     await store.confirmChange('t1', { change: { type: 'undo', change: 1 }, from: RUN.today }, 'r')
     expect(store.byTracker.t1).toEqual(RUN)
     expect(store.run).toEqual(RUN)
+  })
+})
+
+describe('restarting and re-opening a run (K167, K168)', () => {
+  const RESTART = {
+    preview: true,
+    rev: 'r1',
+    restart: {
+      name: 'Beginner 5×5',
+      start: '2026-11-16',
+      firstWeek: { from: '2026-11-16', to: '2026-11-22' },
+      weeks: 8,
+      end: '2027-01-10',
+      oldEndsFrom: null,
+    },
+  }
+  const REOPEN = {
+    preview: true,
+    rev: 'o1',
+    reopen: {
+      from: '2026-11-12',
+      reason: 'Knee is better',
+      week: 4,
+      paused: { from: '2026-11-09', to: '2026-11-11' },
+      end: '2026-12-20',
+      lastWeek: '2026-12-14',
+    },
+  }
+
+  it('previews a restart, writing nothing', async () => {
+    serve({ 'POST /runs/t1/restart': { body: RESTART } })
+    const store = useProgrammesStore()
+    const body = { name: 'Beginner 5×5', start: '2026-11-16' }
+    expect(await store.previewRestart('t1', body)).toEqual({ ok: true, data: RESTART })
+    expect(calls[0]!.body).toEqual({ ...body, preview: true })
+    expect(store.run).toBeNull()
+  })
+
+  it('restarts with the preview’s rev, keeping both runs, and reads the state again', async () => {
+    const fresh = { ...RUN, tracker: 't2', rev: 'new' }
+    const done = { preview: false, tracker: { id: 't2', name: 'Again' }, run: fresh, old: {} }
+    serve({ 'POST /runs/t1/restart': { body: done } })
+    const store = useProgrammesStore()
+    store.byTracker = { t1: RUN }
+    const refresh = vi.spyOn(useSyncStore(), 'refresh').mockResolvedValue()
+    const res = await store.restart('t1', { name: 'Again', start: '2026-11-16' }, 'r1')
+    expect(res).toMatchObject({ ok: true, data: { tracker: { id: 't2' }, run: fresh } })
+    expect(calls[0]!.body).toEqual({
+      name: 'Again',
+      start: '2026-11-16',
+      preview: false,
+      rev: 'r1',
+    })
+    expect(store.run).toEqual(fresh)
+    expect(store.byTracker).toEqual({ t1: RUN, t2: fresh })
+    expect(refresh).toHaveBeenCalled()
+  })
+
+  it('hands back a restart’s fresh preview when its rev is stale, and its problems', async () => {
+    const fresh = { ...RESTART, rev: 'r2' }
+    serve({
+      'POST /runs/t1/restart': {
+        status: 409,
+        body: { error: 'conflict', rev: 'r2', preview: fresh },
+      },
+    })
+    const store = useProgrammesStore()
+    expect(await store.restart('t1', {}, 'r1')).toEqual({ ok: false, stale: fresh })
+    const errors = [{ path: 'start', message: 'the programme starts today or later.' }]
+    serve({ 'POST /runs/t1/restart': { status: 400, body: { error: 'invalid', errors } } })
+    expect(await store.previewRestart('t1', { start: '2026-11-01' })).toEqual({
+      ok: false,
+      problems: errors,
+      message: null,
+    })
+    serve({ 'POST /runs/t1/restart': { status: 409, body: { error: 'too-many' } } })
+    expect(await store.restart('t1', {}, 'r1')).toMatchObject({
+      ok: false,
+      message: expect.stringContaining('There’s no room for another.'),
+    })
+  })
+
+  it('previews a re-open, then re-opens with its rev and takes the run back', async () => {
+    const reopened = { ...RUN, rev: 'reopened' }
+    const store = useProgrammesStore()
+    const refresh = vi.spyOn(useSyncStore(), 'refresh').mockResolvedValue()
+    const body = { from: '2026-11-12', reason: 'Knee is better' }
+    serve({ 'POST /runs/t1/reopen': { body: REOPEN } })
+    expect(await store.previewReopen('t1', body)).toEqual({ ok: true, data: REOPEN })
+    expect(calls[0]!.body).toEqual({ ...body, preview: true })
+    expect(store.run).toBeNull()
+    const done = { preview: false, tracker: { id: 't1' }, run: reopened }
+    serve({ 'POST /runs/t1/reopen': { body: done } })
+    expect(await store.reopen('t1', body, 'o1')).toEqual({ ok: true, data: reopened })
+    expect(calls[1]!.body).toEqual({ ...body, preview: false, rev: 'o1' })
+    expect(store.run).toEqual(reopened)
+    expect(store.byTracker.t1).toEqual(reopened)
+    expect(refresh).toHaveBeenCalled()
+  })
+
+  it('hands back a re-open’s fresh preview when its rev is stale', async () => {
+    const fresh = { ...REOPEN, rev: 'o2' }
+    serve({
+      'POST /runs/t1/reopen': {
+        status: 409,
+        body: { error: 'conflict', rev: 'o2', preview: fresh },
+      },
+    })
+    expect(await useProgrammesStore().reopen('t1', {}, 'o1')).toEqual({ ok: false, stale: fresh })
+    serve({ 'POST /runs/t1/reopen': 'offline' })
+    expect(await useProgrammesStore().reopen('t1', {}, 'o1')).toEqual({
+      ok: false,
+      problems: [],
+      message: 'Can’t reach the server, so nothing changed. Try again when you’re online.',
+    })
+  })
+
+  it('says a run that can’t re-open any more can’t, and reads the run again', async () => {
+    const ended = { ...RUN, status: 'ended', canReopen: false }
+    serve({
+      'POST /runs/t1/reopen': {
+        status: 409,
+        body: { error: 'cant-reopen', finished: true, restarted: true },
+      },
+      'GET /runs/t1': { body: ended },
+    })
+    const store = useProgrammesStore()
+    expect(await store.previewReopen('t1', {})).toEqual({
+      ok: false,
+      problems: [],
+      message: 'This programme changed since its page opened, so it can’t be re-opened now.',
+    })
+    expect(calls.map((c) => c.path)).toEqual(['/runs/t1/reopen', '/runs/t1'])
+    expect(store.run).toEqual(ended)
+  })
+})
+
+describe('the shared library (shared library spec §5)', () => {
+  const SID = SHARED_JSON.programmes[0]!.id
+  const SHARED_DOC = { ...BEGINNER, name: 'Strength 5×5' }
+  const COPY = { ...RECORD, id: 'p-copy', name: 'Strength 5×5', doc: SHARED_DOC }
+  const PREVIEW = {
+    preview: true,
+    rev: 'pub1',
+    publish: { programme: { ...SHARED_JSON.programmes[0]!, doc: SHARED_DOC }, replaces: null },
+  }
+
+  it('loads the shared programmes, as the signed-in user', async () => {
+    serve({ 'GET /shared-programmes': { body: SHARED_JSON } })
+    const store = useProgrammesStore()
+    expect(store.shared).toBeNull()
+    await store.loadShared()
+    expect(store.shared).toEqual(SHARED_JSON.programmes)
+    expect(calls[0]).toMatchObject({ method: 'GET', path: '/shared-programmes', user: 'alice' })
+  })
+
+  it('keeps what it had when the shared library can’t load, saying nothing', async () => {
+    serve({ 'GET /shared-programmes': 'offline' })
+    const store = useProgrammesStore()
+    await store.loadShared()
+    expect(store.shared).toBeNull()
+    expect(store.loadFailure).toBeNull()
+    serve({ 'GET /shared-programmes': { body: SHARED_JSON } })
+    await store.loadShared()
+    serve({ 'GET /shared-programmes': { status: 500, body: {} } })
+    await store.loadShared()
+    expect(store.shared).toEqual(SHARED_JSON.programmes)
+  })
+
+  it('copies a shared programme into the library, newest first, without its document', async () => {
+    serve({
+      'GET /programmes': { body: LIBRARY_JSON },
+      'GET /state': { body: {} },
+      [`POST /shared-programmes/${SID}/copy`]: { status: 201, body: COPY },
+    })
+    const store = useProgrammesStore()
+    await store.loadPage()
+    expect(await store.copyShared(SID)).toEqual({ ok: true, data: COPY })
+    expect(calls.at(-1)).toMatchObject({ method: 'POST', path: `/shared-programmes/${SID}/copy` })
+    const { doc: _doc, ...summary } = COPY
+    expect(store.library).toEqual([summary, ...LIBRARY_JSON.programmes])
+  })
+
+  it('copies before the library has loaded, and says why a copy failed', async () => {
+    serve({ [`POST /shared-programmes/${SID}/copy`]: { status: 201, body: COPY } })
+    const store = useProgrammesStore()
+    await store.copyShared(SID)
+    expect(store.library!.map((p) => p.id)).toEqual(['p-copy'])
+    serve({ [`POST /shared-programmes/${SID}/copy`]: { status: 409, body: { error: 'too-many' } } })
+    expect(await store.copyShared(SID)).toMatchObject({
+      ok: false,
+      message: expect.stringContaining('There’s no room for another.'),
+    })
+    serve({ [`POST /shared-programmes/${SID}/copy`]: { status: 413, body: { error: 'quota' } } })
+    expect(await store.copyShared(SID)).toMatchObject({
+      message: 'Your account is full, so nothing was saved.',
+    })
+    serve({
+      [`POST /shared-programmes/${SID}/copy`]: { status: 404, body: { error: 'not-found' } },
+    })
+    expect(await store.copyShared(SID)).toMatchObject({
+      message: 'That programme is gone. It may have been deleted on another device.',
+    })
+    expect(store.library).toHaveLength(1)
+  })
+
+  it('previews a publish, writing nothing', async () => {
+    serve({ [`POST /programmes/${PID}/publish`]: { body: PREVIEW } })
+    expect(await useProgrammesStore().previewPublish(PID)).toEqual({ ok: true, data: PREVIEW })
+    expect(calls[0]).toMatchObject({ body: { preview: true }, user: 'alice' })
+  })
+
+  it('publishes with the preview’s rev, marks the row shared, and reads the shared library again', async () => {
+    const shared = { id: SID, updatedAt: 1794999600 }
+    serve({
+      'GET /programmes': { body: LIBRARY_JSON },
+      'GET /state': { body: {} },
+      [`POST /programmes/${PID}/publish`]: { body: { preview: false, shared } },
+      'GET /shared-programmes': { body: SHARED_JSON },
+    })
+    const store = useProgrammesStore()
+    await store.loadPage()
+    expect(await store.publish(PID, 'pub1')).toEqual({ ok: true, data: shared })
+    expect(calls.find((c) => c.path.endsWith('/publish'))!.body).toEqual({
+      preview: false,
+      rev: 'pub1',
+    })
+    expect(store.library![0]!.shared).toEqual(shared)
+    expect(store.shared).toEqual(SHARED_JSON.programmes)
+  })
+
+  it('hands back the fresh preview when the programme changed since (409, a stale rev)', async () => {
+    const fresh = { ...PREVIEW, rev: 'pub2' }
+    serve({
+      [`POST /programmes/${PID}/publish`]: {
+        status: 409,
+        body: { error: 'conflict', rev: 'pub2', preview: fresh },
+      },
+    })
+    expect(await useProgrammesStore().publish(PID, 'pub1')).toEqual({ ok: false, stale: fresh })
+  })
+
+  it('says why a publish was refused: not an admin, or offline', async () => {
+    const store = useProgrammesStore()
+    serve({ [`POST /programmes/${PID}/publish`]: { status: 403, body: { error: 'not-admin' } } })
+    expect(await store.previewPublish(PID)).toEqual({
+      ok: false,
+      problems: [],
+      message: 'Only an admin can publish to the shared library.',
+    })
+    expect(await store.publish(PID, 'pub1')).toMatchObject({
+      message: 'Only an admin can publish to the shared library.',
+    })
+    serve({ [`POST /programmes/${PID}/publish`]: 'offline' })
+    expect(await store.publish(PID, 'pub1')).toMatchObject({
+      message: 'Can’t reach the server, so nothing changed. Try again when you’re online.',
+    })
+  })
+
+  it('unpublishes, unmarking the row and dropping it from the shared library', async () => {
+    serve({
+      'GET /programmes': {
+        body: {
+          programmes: [{ ...LIBRARY_JSON.programmes[0]!, shared: { id: SID, updatedAt: 1 } }],
+        },
+      },
+      'GET /state': { body: {} },
+      'GET /shared-programmes': { body: SHARED_JSON },
+      [`DELETE /shared-programmes/${SID}`]: { status: 204 },
+    })
+    const store = useProgrammesStore()
+    await store.loadPage()
+    await store.loadShared()
+    expect(await store.unpublish(SID)).toEqual({ ok: true, data: null })
+    expect(store.library![0]!.shared).toBeNull()
+    expect(store.shared!.map((p) => p.id)).toEqual([SHARED_JSON.programmes[1]!.id])
+    serve({ [`DELETE /shared-programmes/${SID}`]: { status: 403, body: { error: 'not-admin' } } })
+    expect(await store.unpublish(SID)).toMatchObject({
+      ok: false,
+      message: 'Only an admin can publish to the shared library.',
+    })
+  })
+
+  it('unpublishes before either list has loaded', async () => {
+    serve({ [`DELETE /shared-programmes/${SID}`]: { status: 204 } })
+    const store = useProgrammesStore()
+    expect(await store.unpublish(SID)).toEqual({ ok: true, data: null })
+    expect(store.library).toBeNull()
+    expect(store.shared).toBeNull()
   })
 })

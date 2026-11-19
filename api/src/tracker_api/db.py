@@ -470,6 +470,26 @@ MIGRATIONS = [
     ) STRICT;
     CREATE INDEX IF NOT EXISTS mark_events_by_day ON mark_events (user_id, tracker_id, date);
     """,
+    # The shared library (docs/specs/2026-11-19-shared-library.md §3, §4). An account with
+    # `admin` publishes a snapshot of one of its programmes; publishing the same one again
+    # replaces it, by (published_by, source_id). The snapshot is no account's data: deleting the
+    # admin's account keeps it, with `published_by` NULL.
+    """
+    ALTER TABLE users ADD COLUMN admin INTEGER NOT NULL DEFAULT 0 CHECK (admin IN (0, 1));
+
+    CREATE TABLE shared_programmes (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        doc_json TEXT NOT NULL,
+        rev INTEGER NOT NULL CHECK (rev > 0),
+        published_by INTEGER REFERENCES users (id) ON DELETE SET NULL,
+        source_id TEXT,
+        published_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE UNIQUE INDEX shared_programmes_by_source ON shared_programmes (published_by, source_id);
+    CREATE INDEX shared_programmes_by_time ON shared_programmes (updated_at);
+    """,
 ]
 SCHEMA_VERSION = len(MIGRATIONS)
 

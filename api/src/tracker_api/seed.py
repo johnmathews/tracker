@@ -13,7 +13,11 @@ happened. The start, a pause, a change and each mark happen on their own day; ea
 the days before it, and a last seal covers the days up to yesterday. Nothing writes a past day
 directly. The run is added whole, only while
 the account has no tracker with its id; the library programme only while the library has no
-programme with its id."""
+programme with its id.
+
+When the shared library is empty, it gains one programme, `fixtures/programmes/valid/cardio.json`
+(docs/specs/2026-11-19-shared-library.md §9), so its section has something to show. A shared
+library with any programme is left as it is."""
 
 import json
 import sqlite3
@@ -29,6 +33,7 @@ from .data import (
     When,
     add_programme,
     change_run,
+    encode_programme,
     import_data,
     load_programme,
     load_tracker,
@@ -36,6 +41,7 @@ from .data import (
     set_tick,
     start_programme,
 )
+from .db import transaction
 from .validate import EXPORT_FORMAT, EXPORT_VERSION, Mark, parse_export
 
 DEMO_EMAIL = "demo@example.com"
@@ -56,6 +62,8 @@ class SeedResult(TypedDict):
     #: Library programmes added, and programme runs started.
     programmes: int
     runs: int
+    #: Shared programmes added: 1 into an empty shared library, else 0.
+    shared: int
 
 
 # The ids match the app's default plan (defaultExercises and defaultFoods in src/lib/storage.ts),
@@ -234,6 +242,45 @@ PROGRAMME: dict[str, Any] = {
     ],
 }
 
+#: The shared library's demo programme (shared library spec §9), and its id there.
+DEMO_SHARED = "base-miles"
+#: fixtures/programmes/valid/cardio.json, kept here as PROGRAMME is; tests/test_seed.py checks
+#: the two match.
+SHARED_PROGRAMME: dict[str, Any] = {
+    "format": "tracker-programme/1",
+    "name": "Base miles",
+    "description": "Two runs and a long ride, with an easy week.",
+    "kind": "cardio",
+    "weeks": 6,
+    "params": {"ride": {"label": "Long ride", "unit": "km", "default": 20, "min": 5}},
+    "activities": [
+        {
+            "key": "run",
+            "name": "Easy run",
+            "target": 2,
+            "duration": {"start": 1200, "rate": 10, "step": 60, "max": 1800},
+            "distance": {"start": 3, "add": 0.5, "max": 6},
+        },
+        {
+            "key": "long-ride",
+            "name": "Long ride",
+            "target": 1,
+            "duration": {"start": 3600, "add": 600, "every": 2},
+            "distance": {"start": "$ride", "rate": 10},
+        },
+    ],
+    "overrides": [
+        {
+            "weeks": [4],
+            "label": "Easy week",
+            "activities": {
+                "*": {"duration": {"scale": 0.8}},
+                "long-ride": {"distance": 15},
+            },
+        }
+    ],
+}
+
 #: The run's changes, each made at 07:00 on its own day: (days after the start, the change, the
 #: reason). The deadlift pauses on week 2's Wednesday for a week, so it comes back on week 3's;
 #: the squat's increase goes up on week 3's Monday.
@@ -365,9 +412,32 @@ def seed(conn: sqlite3.Connection, config: Config, email: str, password: str | N
         "details": added["details"],
         "programmes": 0,
         "runs": 0,
+        "shared": 0,
     }
     _seed_programme(conn, config, user_id, result)
+    result["shared"] = _seed_shared(conn, config)
     return result
+
+
+def _seed_shared(conn: sqlite3.Connection, config: Config) -> int:
+    """Add SHARED_PROGRAMME to the shared library when it has none; how many were added. It
+    names no publisher and no source, as a programme whose admin's account is gone."""
+    with transaction(conn):
+        if conn.execute("SELECT 1 FROM shared_programmes LIMIT 1").fetchone() is not None:
+            return 0
+        now = config.clock()
+        conn.execute(
+            "INSERT INTO shared_programmes (id, name, doc_json, rev, published_by, source_id,"
+            " published_at, updated_at) VALUES (?, ?, ?, 1, NULL, NULL, ?, ?)",
+            (
+                DEMO_SHARED,
+                SHARED_PROGRAMME["name"],
+                encode_programme(SHARED_PROGRAMME),
+                now,
+                now,
+            ),
+        )
+    return 1
 
 
 def _fixed(new: str) -> Callable[[Container[str]], str]:

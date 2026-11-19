@@ -7,6 +7,12 @@ export const CELL = {
   /** A row's rule, on screen and on paper alike. */
   rule: 'screen:border-b screen:border-line',
 }
+
+/**
+ * A paused activity's sentence (spec §9.5) in its two parts (K169): the lead, "Paused until Mon 28
+ * Dec." or "Paused.", in paused-ink at 600, then the reason, "Knee.", in the row's ink-secondary.
+ */
+export type PausedLine = { lead: string; reason: string | null }
 </script>
 
 <script setup lang="ts">
@@ -38,7 +44,7 @@ const props = defineProps<{
   /** Which days are locked (a programme tracker's, programmes spec §8): they don't press. */
   locked?: boolean[]
   /** A paused activity's sentence (spec §9.5), read in place of its seven boxes. */
-  paused?: string | null
+  paused?: PausedLine | null
 }>()
 const emit = defineEmits<{
   toggle: [day: number]
@@ -125,7 +131,9 @@ const lines = computed(() => ({
         </div>
       </div>
     </th>
-    <!-- A paused activity says so across its seven days (PlannerScreen card, K146). -->
+    <!-- A paused activity says so across its seven days (PlannerScreen card, K146). Its lead is
+         paused-ink at 600 (K169); the reason and the icon stay ink-secondary at 400. One span
+         holds the sentence, so it reads as one line beside the icon. -->
     <td
       v-if="paused"
       role="gridcell"
@@ -135,7 +143,12 @@ const lines = computed(() => ({
       data-testid="paused-row"
     >
       <Pause :stroke-width="1.5" aria-hidden="true" class="inline size-[18px] flex-none" />
-      {{ paused }}
+      <span
+        ><span class="font-semibold text-paused-ink" data-testid="paused-lead">{{
+          paused.lead
+        }}</span
+        >{{ paused.reason ? ` ${paused.reason}` : '' }}</span
+      >
     </td>
     <td
       v-for="(d, i) in paused ? [] : days"

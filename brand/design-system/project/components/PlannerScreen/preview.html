@@ -1,666 +1,1529 @@
-<!-- @dsCard group="Planner" height=2600 subtitle="A screen per tracker (Strength, Cardio, Food), the scroll sprinting, the bar out of sight: a desktop and a phone held upright; a programme tracker's screen with its week link, a locked day and a paused row (K146)" -->
+<!-- @dsCard group="Planner" height=2600 subtitle="A screen per tracker (Strength, Cardio, Food), the scroll sprinting, the bar out of sight: a desktop and a phone held upright; a programme tracker's screen with its week link, a locked day and a paused row, its lead in paused-ink (K146, K169)" -->
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<title>PlannerScreen — preview</title>
-<style>
-  body { margin: 0; padding: var(--space-6); background: var(--canvas); color: var(--ink); font-family: var(--font-sans); }
-  .variant { margin: 0 0 var(--space-3); color: var(--ink-secondary); }
-  .gap { height: var(--space-8); }
-  /* A device: the screen at its real size in pixels, scaled to the card (the script sets the scale). */
-  .device { position: relative; width: 100%; }
-  .device > .fs { position: absolute; top: 0; left: 0; transform-origin: 0 0; border: 1px solid var(--line); border-radius: var(--radius-lg); }
-  .device.phone { max-width: 300px; }
-  .device.phone > .fs { border-radius: 28px; border-width: 2px; }
-  @media (max-width: 639px) { body { padding: var(--space-4); } }
-/*
+  <head>
+    <meta charset="utf-8" />
+    <title>PlannerScreen — preview</title>
+    <style>
+      body {
+        margin: 0;
+        padding: var(--space-6);
+        background: var(--canvas);
+        color: var(--ink);
+        font-family: var(--font-sans);
+      }
+      .variant {
+        margin: 0 0 var(--space-3);
+        color: var(--ink-secondary);
+      }
+      .gap {
+        height: var(--space-8);
+      }
+      /* A device: the screen at its real size in pixels, scaled to the card (the script sets the scale). */
+      .device {
+        position: relative;
+        width: 100%;
+      }
+      .device > .fs {
+        position: absolute;
+        top: 0;
+        left: 0;
+        transform-origin: 0 0;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+      }
+      .device.phone {
+        max-width: 300px;
+      }
+      .device.phone > .fs {
+        border-radius: 28px;
+        border-width: 2px;
+      }
+      @media (max-width: 639px) {
+        body {
+          padding: var(--space-4);
+        }
+      }
+      /*
   The full-screen planner, as a prototype. One frame (.fs) is one screen: a desktop, an iPad, a
   phone. Every size comes from the frame's own width and height (container units), so the same
   markup fills a 1440×900 desktop, a 390×844 phone and a scaled-down picture of either.
   Colours, fonts and type come from the system's tokens; the proposed sizes are --candidate-*.
 */
-.fs {
-  position: relative; overflow: hidden; box-sizing: border-box;
-  container: fs / size;
-  background: var(--canvas); color: var(--ink);
-  font-family: var(--font-sans); font-variant-numeric: tabular-nums;
-  -webkit-tap-highlight-color: transparent;
-  /* The scale: 1 on a 1280×800 screen, up to 1.6 on a large one, never below 0.75. Read where
+      .fs {
+        position: relative;
+        overflow: hidden;
+        box-sizing: border-box;
+        container: fs / size;
+        background: var(--canvas);
+        color: var(--ink);
+        font-family: var(--font-sans);
+        font-variant-numeric: tabular-nums;
+        -webkit-tap-highlight-color: transparent;
+        /* The scale: 1 on a 1280×800 screen, up to 1.6 on a large one, never below 0.75. Read where
      it is used, so the container units measure the frame. */
-  --candidate-u: clamp(0.75px, min(calc(100cqw / 1280), calc(100cqh / 800)), 1.6px);
-  --u: var(--candidate-u);
-  /* Proposed sizes at u = 1. The type grows with the screen, never below the system's 16px. */
-  --candidate-pad: calc(var(--u) * 48);
-  --candidate-title: calc(var(--u) * 40);
-  --candidate-name: max(18px, calc(var(--u) * 24));
-  --candidate-chip: max(16px, calc(var(--u) * 17));
-  --candidate-day: max(16px, calc(var(--u) * 20));
-  --candidate-figure: max(18px, calc(var(--u) * 26));
-  --candidate-name-col: calc(var(--u) * 280);
-  --candidate-week-col: calc(var(--u) * 150);
-}
-.fs *, .fs *::before, .fs *::after { box-sizing: border-box; }
-.fs button { font: inherit; color: inherit; }
-.fs .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.fs :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+        --candidate-u: clamp(0.75px, min(calc(100cqw / 1280), calc(100cqh / 800)), 1.6px);
+        --u: var(--candidate-u);
+        /* Proposed sizes at u = 1. The type grows with the screen, never below the system's 16px. */
+        --candidate-pad: calc(var(--u) * 48);
+        --candidate-title: calc(var(--u) * 40);
+        --candidate-name: max(18px, calc(var(--u) * 24));
+        --candidate-chip: max(16px, calc(var(--u) * 17));
+        --candidate-day: max(16px, calc(var(--u) * 20));
+        --candidate-figure: max(18px, calc(var(--u) * 26));
+        --candidate-name-col: calc(var(--u) * 280);
+        --candidate-week-col: calc(var(--u) * 150);
+      }
+      .fs *,
+      .fs *::before,
+      .fs *::after {
+        box-sizing: border-box;
+      }
+      .fs button {
+        font: inherit;
+        color: inherit;
+      }
+      .fs .vh {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
+      .fs :focus-visible {
+        outline: 2px solid var(--focus);
+        outline-offset: 2px;
+      }
 
-/* ---- The screens: one section per screen, the scroll snapping to each. ---- */
-.fs .scroller { position: absolute; inset: 0; overflow-y: auto; overscroll-behavior: contain;
-  scroll-snap-type: y mandatory; scrollbar-width: none; }
-.fs .scroller::-webkit-scrollbar { display: none; }
-.fs .screen { position: relative; min-height: 100cqh; scroll-snap-align: start;
-  display: flex; flex-direction: column; justify-content: center;
-  padding: calc(var(--u) * 28) var(--candidate-pad) calc(var(--u) * 20); }
+      /* ---- The screens: one section per screen, the scroll snapping to each. ---- */
+      .fs .scroller {
+        position: absolute;
+        inset: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scroll-snap-type: y mandatory;
+        scrollbar-width: none;
+      }
+      .fs .scroller::-webkit-scrollbar {
+        display: none;
+      }
+      .fs .screen {
+        position: relative;
+        min-height: 100cqh;
+        scroll-snap-align: start;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: calc(var(--u) * 28) var(--candidate-pad) calc(var(--u) * 20);
+      }
 
-/* The heading line: the section's name and week, its one figure at the right. */
-.fs .head { display: flex; align-items: baseline; justify-content: space-between; gap: 4px 24px;
-  flex-wrap: wrap; padding-bottom: calc(var(--u) * 20); }
-.fs .head h2 { margin: 0; font: 600 var(--candidate-title) / 1.15 var(--font-serif); }
-.fs .head .wk { margin-left: calc(var(--u) * 16); font: 400 var(--candidate-day) / 1.3 var(--font-sans); color: var(--ink-secondary); }
-.fs .stat { margin: 0; display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
-.fs .stat .fig { font-size: var(--candidate-figure); line-height: 1.2; font-weight: 600; }
-.fs .stat .rest { font-size: max(18px, calc(var(--u) * 22)); color: var(--ink-secondary); }
-.fs .stat.met .fig { color: var(--pen); }
-.fs .stat.zero .fig { color: var(--ink-secondary); font-weight: 400; }
+      /* The heading line: the section's name and week, its one figure at the right. */
+      .fs .head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 4px 24px;
+        flex-wrap: wrap;
+        padding-bottom: calc(var(--u) * 20);
+      }
+      .fs .head h2 {
+        margin: 0;
+        font: 600 var(--candidate-title) / 1.15 var(--font-serif);
+      }
+      .fs .head .wk {
+        margin-left: calc(var(--u) * 16);
+        font: 400 var(--candidate-day) / 1.3 var(--font-sans);
+        color: var(--ink-secondary);
+      }
+      .fs .stat {
+        margin: 0;
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        white-space: nowrap;
+      }
+      .fs .stat .fig {
+        font-size: var(--candidate-figure);
+        line-height: 1.2;
+        font-weight: 600;
+      }
+      .fs .stat .rest {
+        font-size: max(18px, calc(var(--u) * 22));
+        color: var(--ink-secondary);
+      }
+      .fs .stat.met .fig {
+        color: var(--pen);
+      }
+      .fs .stat.zero .fig {
+        color: var(--ink-secondary);
+        font-weight: 400;
+      }
 
-/* ---- The week grid, filling what the heading leaves. ---- */
-.fs .grid { flex: 1 1 auto; min-height: 0; display: grid;
-  grid-template-columns: var(--candidate-name-col) repeat(7, minmax(0, 1fr));
-  grid-template-rows: auto repeat(var(--rows), minmax(56px, 1fr));
-  /* Rows stop at 1.25 × a day's width rather than stretching; the app also stops them at 82u (K110). */
-  max-height: calc(var(--rows) * (100cqw - 2 * var(--candidate-pad) - var(--candidate-name-col)) / 7 * 1.25 + var(--u) * 240); }
-.fs .grid > * { min-width: 0; }
-.fs .hd { display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
-  padding: calc(var(--u) * 12) 0; border-bottom: 1px solid var(--ink); }
-.fs .hd .dn { font-size: max(20px, calc(var(--u) * 27)); line-height: 1.25; font-weight: 600; }
-.fs .hd .dt { font-size: max(16px, calc(var(--u) * 18)); line-height: 1.3; color: var(--ink-secondary); }
-.fs .hd.today .dt { color: var(--ink); font-weight: 600; }
-.fs .hd.corner { align-items: flex-start; justify-content: flex-end; }
-.fs .hd.wkh { color: var(--ink-secondary); font-size: var(--candidate-day); font-weight: 600; justify-content: center; }
-/* No band for today (K36). */
-.fs .nm, .fs .d, .fs .tot { border-bottom: 1px solid var(--line); }
-.fs .nm { display: flex; flex-direction: column; justify-content: center; gap: 6px; padding-right: 12px; }
-.fs .nm .n { font-size: var(--candidate-name); line-height: 1.25; font-weight: 600; overflow-wrap: anywhere; }
-.fs .chips { display: flex; flex-wrap: wrap; gap: 6px 8px; }
-.fs .chip { font-size: var(--candidate-chip); line-height: 1.35; font-weight: 600; background: var(--tile); color: var(--ink-secondary);
-  border-radius: var(--radius-sm); padding: 0 8px; white-space: nowrap; }
-.fs .tot { display: flex; align-items: center; justify-content: center; white-space: nowrap; font-size: max(18px, calc(var(--u) * 24)); }
-.fs .tot .fig { font-weight: 600; font-size: var(--candidate-figure); }
-.fs .tot .fig.met { color: var(--pen); }
-.fs .tot .of { color: var(--ink-secondary); margin-left: 0.25em; }
+      /* ---- The week grid, filling what the heading leaves. ---- */
+      .fs .grid {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: grid;
+        grid-template-columns: var(--candidate-name-col) repeat(7, minmax(0, 1fr));
+        grid-template-rows: auto repeat(var(--rows), minmax(56px, 1fr));
+        /* Rows stop at 1.25 × a day's width rather than stretching; the app also stops them at 82u (K110). */
+        max-height: calc(
+          var(--rows) * (100cqw - 2 * var(--candidate-pad) - var(--candidate-name-col)) / 7 * 1.25 +
+            var(--u) * 240
+        );
+      }
+      .fs .grid > * {
+        min-width: 0;
+      }
+      .fs .hd {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-end;
+        padding: calc(var(--u) * 12) 0;
+        border-bottom: 1px solid var(--ink);
+      }
+      .fs .hd .dn {
+        font-size: max(20px, calc(var(--u) * 27));
+        line-height: 1.25;
+        font-weight: 600;
+      }
+      .fs .hd .dt {
+        font-size: max(16px, calc(var(--u) * 18));
+        line-height: 1.3;
+        color: var(--ink-secondary);
+      }
+      .fs .hd.today .dt {
+        color: var(--ink);
+        font-weight: 600;
+      }
+      .fs .hd.corner {
+        align-items: flex-start;
+        justify-content: flex-end;
+      }
+      .fs .hd.wkh {
+        color: var(--ink-secondary);
+        font-size: var(--candidate-day);
+        font-weight: 600;
+        justify-content: center;
+      }
+      /* No band for today (K36). */
+      .fs .nm,
+      .fs .d,
+      .fs .tot {
+        border-bottom: 1px solid var(--line);
+      }
+      .fs .nm {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 6px;
+        padding-right: 12px;
+      }
+      .fs .nm .n {
+        font-size: var(--candidate-name);
+        line-height: 1.25;
+        font-weight: 600;
+        overflow-wrap: anywhere;
+      }
+      .fs .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 8px;
+      }
+      .fs .chip {
+        font-size: var(--candidate-chip);
+        line-height: 1.35;
+        font-weight: 600;
+        background: var(--tile);
+        color: var(--ink-secondary);
+        border-radius: var(--radius-sm);
+        padding: 0 8px;
+        white-space: nowrap;
+      }
+      .fs .tot {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        white-space: nowrap;
+        font-size: max(18px, calc(var(--u) * 24));
+      }
+      .fs .tot .fig {
+        font-weight: 600;
+        font-size: var(--candidate-figure);
+      }
+      .fs .tot .fig.met {
+        color: var(--pen);
+      }
+      .fs .tot .of {
+        color: var(--ink-secondary);
+        margin-left: 0.25em;
+      }
 
-/* A day: its own size container, so the box (--candidate) takes 86% of the cell's shorter side, up to 128px. */
-.fs .d { container-type: size; display: grid; place-items: center; }
-.fs .mark { display: grid; place-items: center; width: min(86cqw, 86cqh, 128px);
-  aspect-ratio: 1; padding: 0; border: 0; border-radius: var(--radius-md); background: transparent; cursor: pointer; touch-action: manipulation; }
-.fs .mark svg { width: 94%; height: 94%; overflow: visible; }
-.fs .mark .bx { stroke: var(--control-border); }
-.fs .mark:not([data-mark]):hover .bx { stroke: var(--ink); }
-.fs .mark[data-mark="great"] .ink { fill: var(--pen); }
-.fs .mark[data-mark="partial"] .ink { fill: var(--pen-partial); }
-.fs .mark[data-mark="missed"] .ink { fill: var(--pen-missed); }
-.fs .mark .sym { stroke: var(--canvas); }
-@media (prefers-reduced-motion: no-preference) { .fs .mark .bx, .fs .mark .ink { transition: stroke 120ms, fill 120ms; } }
+      /* A day: its own size container, so the box (--candidate) takes 86% of the cell's shorter side, up to 128px. */
+      .fs .d {
+        container-type: size;
+        display: grid;
+        place-items: center;
+      }
+      .fs .mark {
+        display: grid;
+        place-items: center;
+        width: min(86cqw, 86cqh, 128px);
+        aspect-ratio: 1;
+        padding: 0;
+        border: 0;
+        border-radius: var(--radius-md);
+        background: transparent;
+        cursor: pointer;
+        touch-action: manipulation;
+      }
+      .fs .mark svg {
+        width: 94%;
+        height: 94%;
+        overflow: visible;
+      }
+      .fs .mark .bx {
+        stroke: var(--control-border);
+      }
+      .fs .mark:not([data-mark]):hover .bx {
+        stroke: var(--ink);
+      }
+      .fs .mark[data-mark='great'] .ink {
+        fill: var(--pen);
+      }
+      .fs .mark[data-mark='partial'] .ink {
+        fill: var(--pen-partial);
+      }
+      .fs .mark[data-mark='missed'] .ink {
+        fill: var(--pen-missed);
+      }
+      .fs .mark .sym {
+        stroke: var(--canvas);
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        .fs .mark .bx,
+        .fs .mark .ink {
+          transition:
+            stroke 120ms,
+            fill 120ms;
+        }
+      }
 
+      /* A short screen (a phone on its side): the title sits in the grid's corner. */
+      .fs .corner h2 {
+        margin: 0;
+        font: 600 var(--candidate-title) / 1.1 var(--font-serif);
+      }
+      .fs .corner .wk {
+        font-size: max(16px, calc(var(--u) * 18));
+        color: var(--ink-secondary);
+        line-height: 1.3;
+      }
+      .fs .corner .stat {
+        margin-top: 4px;
+      }
+      .fs .corner .stat .fig {
+        font-size: max(18px, calc(var(--u) * 22));
+      }
+      .fs .corner .stat .rest {
+        font-size: max(16px, calc(var(--u) * 18));
+      }
 
-/* A short screen (a phone on its side): the title sits in the grid's corner. */
-.fs .corner h2 { margin: 0; font: 600 var(--candidate-title) / 1.1 var(--font-serif); }
-.fs .corner .wk { font-size: max(16px, calc(var(--u) * 18)); color: var(--ink-secondary); line-height: 1.3; }
-.fs .corner .stat { margin-top: 4px; }
-.fs .corner .stat .fig { font-size: max(18px, calc(var(--u) * 22)); }
-.fs .corner .stat .rest { font-size: max(16px, calc(var(--u) * 18)); }
+      /* The arrows between the screens (K42): no words. */
+      .fs .cue {
+        align-self: center;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: calc(var(--u) * 10);
+        width: 44px;
+        height: 44px;
+        padding: 0;
+        border: 0;
+        border-radius: var(--radius-md);
+        background: transparent;
+        color: var(--ink-secondary);
+        cursor: pointer;
+      }
+      .fs .cue:hover {
+        background: var(--tile);
+        color: var(--ink);
+      }
+      .fs .cue svg {
+        width: 24px;
+        height: 24px;
+      }
+      /* On Food the arrow sits 48px from the top, below the bar's handle. */
+      .fs .cue-up {
+        position: absolute;
+        top: 48px;
+        left: 50%;
+        translate: -50% 0;
+        margin: 0;
+      }
 
-/* The arrows between the screens (K42): no words. */
-.fs .cue { align-self: center; display: inline-flex; align-items: center; justify-content: center; margin-top: calc(var(--u) * 10);
-  width: 44px; height: 44px; padding: 0; border: 0; border-radius: var(--radius-md); background: transparent;
-  color: var(--ink-secondary); cursor: pointer; }
-.fs .cue:hover { background: var(--tile); color: var(--ink); }
-.fs .cue svg { width: 24px; height: 24px; }
-/* On Food the arrow sits 48px from the top, below the bar's handle. */
-.fs .cue-up { position: absolute; top: 48px; left: 50%; translate: -50% 0; margin: 0; }
-
-/* ---- The bar: the Header card, out of sight until it is wanted. ---- */
-.fs .bar { position: absolute; z-index: 20; top: 0; left: 0; right: 0;
-  display: flex; justify-content: space-between; align-items: center; gap: 8px 16px;
-  min-height: 56px; padding: 4px var(--candidate-pad); background: var(--canvas); border-bottom: 1px solid var(--line);
-  box-shadow: var(--shadow-overlay); transform: translateY(-105%); visibility: hidden; }
-@media (prefers-reduced-motion: no-preference) { .fs .bar { transition: transform 160ms ease-out, visibility 160ms; } }
-.fs[data-bar="shown"] .bar, .fs .bar:focus-within { transform: none; visibility: visible; }
-/* Edit plan, from a long press or the handle (K80): the bar sits above the page, which moves down
+      /* ---- The bar: the Header card, out of sight until it is wanted. ---- */
+      .fs .bar {
+        position: absolute;
+        z-index: 20;
+        top: 0;
+        left: 0;
+        right: 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px 16px;
+        min-height: 56px;
+        padding: 4px var(--candidate-pad);
+        background: var(--canvas);
+        border-bottom: 1px solid var(--line);
+        box-shadow: var(--shadow-overlay);
+        transform: translateY(-105%);
+        visibility: hidden;
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        .fs .bar {
+          transition:
+            transform 160ms ease-out,
+            visibility 160ms;
+        }
+      }
+      .fs[data-bar='shown'] .bar,
+      .fs .bar:focus-within {
+        transform: none;
+        visibility: visible;
+      }
+      /* Edit plan, from a long press or the handle (K80): the bar sits above the page, which moves down
    under it, so it covers nothing. Edit plan's own rows are the app's; this shows where the bar goes. */
-.fs[data-bar="docked"] .bar { transform: none; visibility: visible; box-shadow: none; }
-.fs[data-bar="docked"] .scroller { top: var(--docked-bar, 57px); }
-.fs[data-bar="docked"] .grab { display: none; }
-/* Edit plan's frame (K112): 8px of `edit` round the screen, over the bar, every press going through. */
-.fs[data-bar="docked"]::after { content: ""; position: absolute; inset: 0; z-index: 40; pointer-events: none;
-  border: 8px solid var(--edit); }
-.fs .bar .wordmark { display: block; height: 20px; width: auto; fill: var(--ink); justify-self: start; }
-.fs .bar .wordmark { height: 20px; }
-.fs .bar .start { justify-self: start; }
-.fs .bar .end { justify-self: end; display: flex; align-items: center; gap: 8px; }
-.fs .bar .week { display: flex; align-items: center; }
-.fs .bar .week-label { min-width: 116px; padding-inline: 8px; text-align: center; font: 600 16px/24px var(--font-sans); white-space: nowrap; }
-/* As built (K47): full width on the page's margins, the week and its arrows at the week's size, and
+      .fs[data-bar='docked'] .bar {
+        transform: none;
+        visibility: visible;
+        box-shadow: none;
+      }
+      .fs[data-bar='docked'] .scroller {
+        top: var(--docked-bar, 57px);
+      }
+      .fs[data-bar='docked'] .grab {
+        display: none;
+      }
+      /* Edit plan's frame (K112): 8px of `edit` round the screen, over the bar, every press going through. */
+      .fs[data-bar='docked']::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        z-index: 40;
+        pointer-events: none;
+        border: 8px solid var(--edit);
+      }
+      .fs .bar .wordmark {
+        display: block;
+        height: 20px;
+        width: auto;
+        fill: var(--ink);
+        justify-self: start;
+      }
+      .fs .bar .wordmark {
+        height: 20px;
+      }
+      .fs .bar .start {
+        justify-self: start;
+      }
+      .fs .bar .end {
+        justify-self: end;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .fs .bar .week {
+        display: flex;
+        align-items: center;
+      }
+      .fs .bar .week-label {
+        min-width: 116px;
+        padding-inline: 8px;
+        text-align: center;
+        font: 600 16px/24px var(--font-sans);
+        white-space: nowrap;
+      }
+      /* As built (K47): full width on the page's margins, the week and its arrows at the week's size, and
    the actions as BarActions (a Lucide icon over its name). */
-.fs .bar { padding: calc(var(--u) * 14) calc(var(--u) * 48); }
-.fs .bar .wordmark, .fs .bar .start svg { height: max(26px, calc(var(--u) * 32)); width: auto; }
-.fs .bar .week-label { min-width: 6.5em; font: 600 max(30px, calc(var(--u) * 40)) / 1.1 var(--font-serif); } /* K81: the page's title */
-.fs .bar .week .icon-btn { width: max(48px, calc(var(--u) * 60)); height: max(48px, calc(var(--u) * 60)); }
-.fs .bar .week .icon-btn svg { width: max(28px, calc(var(--u) * 32)); height: max(28px, calc(var(--u) * 32)); }
-.fs .bar .end { align-items: stretch; gap: calc(var(--u) * 8); }
-.fs .ba { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--u) * 6);
-  min-width: max(76px, calc(var(--u) * 96)); padding: calc(var(--u) * 10) calc(var(--u) * 12); border: 0; border-radius: var(--radius-md);
-  background: transparent; color: var(--ink); cursor: pointer; }
-.fs .ba svg { width: max(26px, calc(var(--u) * 32)); height: max(26px, calc(var(--u) * 32)); }
-.fs .ba span { font: 600 max(16px, calc(var(--u) * 17)) / 1.3 var(--font-sans); white-space: nowrap; }
-.fs .ba:hover { background: var(--tile); }
-.fs .ba.done { display: none; background: var(--ink); color: var(--on-ink); } /* K82: Done, only in Edit plan */
-.fs[data-bar="docked"] .ba.done { display: inline-flex; }
-.fs .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border: 0;
-  border-radius: var(--radius-md); background: transparent; color: var(--ink); cursor: pointer; }
-.fs .icon-btn svg { width: 20px; height: 20px; }
-.fs .icon-btn:hover, .fs .btn:hover, .fs .switch:hover { background: var(--tile); }
-.fs .btn { display: inline-flex; align-items: center; height: 36px; padding: 0 12px; border: 0; border-radius: var(--radius-md);
-  background: transparent; color: var(--ink); font: 600 14px/20px var(--font-sans); cursor: pointer; white-space: nowrap; }
-.fs .switch { display: inline-flex; align-items: center; gap: 12px; height: 44px; padding: 0 8px; border: 0; border-radius: var(--radius-md);
-  background: transparent; color: var(--ink); font: 400 16px/24px var(--font-sans); cursor: pointer; white-space: nowrap; }
-.fs .track { position: relative; flex: none; width: 40px; height: 24px; border: 1px solid var(--control-border); border-radius: var(--radius-full); }
-.fs .thumb { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: var(--radius-full); background: var(--ink-secondary); }
-.fs .seg { display: inline-flex; border: 1px solid var(--control-border); border-radius: var(--radius-md); }
-.fs .seg button { height: 42px; padding: 0 16px; border: 0; border-radius: var(--radius-sm); background: transparent; font: 600 14px/20px var(--font-sans); cursor: pointer; }
-.fs .seg button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
+      .fs .bar {
+        padding: calc(var(--u) * 14) calc(var(--u) * 48);
+      }
+      .fs .bar .wordmark,
+      .fs .bar .start svg {
+        height: max(26px, calc(var(--u) * 32));
+        width: auto;
+      }
+      .fs .bar .week-label {
+        min-width: 6.5em;
+        font: 600 max(30px, calc(var(--u) * 40)) / 1.1 var(--font-serif);
+      } /* K81: the page's title */
+      .fs .bar .week .icon-btn {
+        width: max(48px, calc(var(--u) * 60));
+        height: max(48px, calc(var(--u) * 60));
+      }
+      .fs .bar .week .icon-btn svg {
+        width: max(28px, calc(var(--u) * 32));
+        height: max(28px, calc(var(--u) * 32));
+      }
+      .fs .bar .end {
+        align-items: stretch;
+        gap: calc(var(--u) * 8);
+      }
+      .fs .ba {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: calc(var(--u) * 6);
+        min-width: max(76px, calc(var(--u) * 96));
+        padding: calc(var(--u) * 10) calc(var(--u) * 12);
+        border: 0;
+        border-radius: var(--radius-md);
+        background: transparent;
+        color: var(--ink);
+        cursor: pointer;
+      }
+      .fs .ba svg {
+        width: max(26px, calc(var(--u) * 32));
+        height: max(26px, calc(var(--u) * 32));
+      }
+      .fs .ba span {
+        font: 600 max(16px, calc(var(--u) * 17)) / 1.3 var(--font-sans);
+        white-space: nowrap;
+      }
+      .fs .ba:hover {
+        background: var(--tile);
+      }
+      .fs .ba.done {
+        display: none;
+        background: var(--ink);
+        color: var(--on-ink);
+      } /* K82: Done, only in Edit plan */
+      .fs[data-bar='docked'] .ba.done {
+        display: inline-flex;
+      }
+      .fs .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 44px;
+        height: 44px;
+        padding: 0;
+        border: 0;
+        border-radius: var(--radius-md);
+        background: transparent;
+        color: var(--ink);
+        cursor: pointer;
+      }
+      .fs .icon-btn svg {
+        width: 20px;
+        height: 20px;
+      }
+      .fs .icon-btn:hover,
+      .fs .btn:hover,
+      .fs .switch:hover {
+        background: var(--tile);
+      }
+      .fs .btn {
+        display: inline-flex;
+        align-items: center;
+        height: 36px;
+        padding: 0 12px;
+        border: 0;
+        border-radius: var(--radius-md);
+        background: transparent;
+        color: var(--ink);
+        font: 600 14px/20px var(--font-sans);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .fs .switch {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        height: 44px;
+        padding: 0 8px;
+        border: 0;
+        border-radius: var(--radius-md);
+        background: transparent;
+        color: var(--ink);
+        font: 400 16px/24px var(--font-sans);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .fs .track {
+        position: relative;
+        flex: none;
+        width: 40px;
+        height: 24px;
+        border: 1px solid var(--control-border);
+        border-radius: var(--radius-full);
+      }
+      .fs .thumb {
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 16px;
+        height: 16px;
+        border-radius: var(--radius-full);
+        background: var(--ink-secondary);
+      }
+      .fs .seg {
+        display: inline-flex;
+        border: 1px solid var(--control-border);
+        border-radius: var(--radius-md);
+      }
+      .fs .seg button {
+        height: 42px;
+        padding: 0 16px;
+        border: 0;
+        border-radius: var(--radius-sm);
+        background: transparent;
+        font: 600 14px/20px var(--font-sans);
+        cursor: pointer;
+      }
+      .fs .seg button[aria-pressed='true'] {
+        background: var(--ink);
+        color: var(--on-ink);
+      }
 
-/* Every way in: a long press anywhere (K79). A held press selects no text and opens no callout. */
-.fs { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
-/* The finger's way in: a handle at the top centre. Press it, or pull it down. */
-.fs .grab { position: absolute; z-index: 19; top: 0; left: 50%; transform: translateX(-50%); display: none;
-  width: 88px; height: 28px; padding: 0; border: 0; background: transparent; cursor: pointer; touch-action: none; }
-.fs .grab span { display: block; width: 40px; height: 5px; margin: 8px auto 0; border-radius: 3px; background: var(--control-border); }
-.fs[data-input="touch"] .grab { display: block; }
+      /* Every way in: a long press anywhere (K79). A held press selects no text and opens no callout. */
+      .fs {
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+      }
+      /* The finger's way in: a handle at the top centre. Press it, or pull it down. */
+      .fs .grab {
+        position: absolute;
+        z-index: 19;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        display: none;
+        width: 88px;
+        height: 28px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        cursor: pointer;
+        touch-action: none;
+      }
+      .fs .grab span {
+        display: block;
+        width: 40px;
+        height: 5px;
+        margin: 8px auto 0;
+        border-radius: 3px;
+        background: var(--control-border);
+      }
+      .fs[data-input='touch'] .grab {
+        display: block;
+      }
 
-/* ---- Phone, held upright ---- */
-.fs[data-layout="narrow"] { --candidate-pad: 16px;
-  /* The narrow scale: 1 on a phone, up to 1.4 on an iPad held upright. */
-  --candidate-n: clamp(1px, calc(100cqw / 600), 1.4px); --n: var(--candidate-n); }
-.fs[data-layout="narrow"] .screen { padding: calc(var(--n) * 34) calc(var(--n) * 16) 12px; justify-content: flex-start; }
-.fs[data-layout="narrow"][data-device="tablet"] .screen { justify-content: center; }
-/* Folded: the week across the first row, the actions sharing the second (K47). */
-.fs[data-layout="narrow"] .bar { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; padding: 8px 12px 10px; }
-.fs[data-layout="narrow"] .bar .start { display: none; }
-.fs[data-layout="narrow"] .bar .week { flex-basis: 100%; justify-content: center; }
-.fs[data-layout="narrow"] .bar .week-label { font-size: 20px; }
-.fs[data-layout="narrow"] .bar .end { display: contents; }
-.fs[data-layout="narrow"] .ba { flex: 1 1 0; min-width: 0; padding: 8px 4px; gap: 4px; }
-.fs[data-layout="narrow"] .ba svg { width: 26px; height: 26px; }
-.fs[data-layout="narrow"] .ba span { font-size: 16px; }
-.fs[data-layout="narrow"] .head { padding-bottom: 12px; }
-.fs[data-layout="narrow"] .head h2 { font-size: calc(var(--n) * 30); }
-.fs[data-layout="narrow"] .head .wk { display: none; }
-.fs[data-layout="narrow"] .stat .fig { font-size: calc(var(--n) * 20); }
-.fs[data-layout="narrow"] .stat .rest { font-size: calc(var(--n) * 18); }
+      /* ---- Phone, held upright ---- */
+      .fs[data-layout='narrow'] {
+        --candidate-pad: 16px;
+        /* The narrow scale: 1 on a phone, up to 1.4 on an iPad held upright. */
+        --candidate-n: clamp(1px, calc(100cqw / 600), 1.4px);
+        --n: var(--candidate-n);
+      }
+      .fs[data-layout='narrow'] .screen {
+        padding: calc(var(--n) * 34) calc(var(--n) * 16) 12px;
+        justify-content: flex-start;
+      }
+      .fs[data-layout='narrow'][data-device='tablet'] .screen {
+        justify-content: center;
+      }
+      /* Folded: the week across the first row, the actions sharing the second (K47). */
+      .fs[data-layout='narrow'] .bar {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 6px;
+        padding: 8px 12px 10px;
+      }
+      .fs[data-layout='narrow'] .bar .start {
+        display: none;
+      }
+      .fs[data-layout='narrow'] .bar .week {
+        flex-basis: 100%;
+        justify-content: center;
+      }
+      .fs[data-layout='narrow'] .bar .week-label {
+        font-size: 20px;
+      }
+      .fs[data-layout='narrow'] .bar .end {
+        display: contents;
+      }
+      .fs[data-layout='narrow'] .ba {
+        flex: 1 1 0;
+        min-width: 0;
+        padding: 8px 4px;
+        gap: 4px;
+      }
+      .fs[data-layout='narrow'] .ba svg {
+        width: 26px;
+        height: 26px;
+      }
+      .fs[data-layout='narrow'] .ba span {
+        font-size: 16px;
+      }
+      .fs[data-layout='narrow'] .head {
+        padding-bottom: 12px;
+      }
+      .fs[data-layout='narrow'] .head h2 {
+        font-size: calc(var(--n) * 30);
+      }
+      .fs[data-layout='narrow'] .head .wk {
+        display: none;
+      }
+      .fs[data-layout='narrow'] .stat .fig {
+        font-size: calc(var(--n) * 20);
+      }
+      .fs[data-layout='narrow'] .stat .rest {
+        font-size: calc(var(--n) * 18);
+      }
 
-/* P2: the week, narrow. A row's name line spans the seven days; its seven boxes sit beneath. */
-.fs .ngrid { flex: 1 1 auto; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
-  grid-template-rows: auto; grid-auto-rows: auto; align-content: start; }
-.fs .ngrid .hd { padding: 6px 0; }
-.fs .ngrid .hd .dn, .fs .ngrid .hd .dt { font-size: calc(var(--n) * 20); }
-.fs .ngrid .line { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 8px; padding: calc(var(--n) * 10) 0 2px; }
-.fs .ngrid .line .n { font-size: calc(var(--n) * 18); line-height: 1.45; font-weight: 600; }
-.fs .ngrid .line .chip { font-size: calc(var(--n) * 16); }
-.fs .ngrid .line .tot { margin-left: auto; border: 0; font-size: calc(var(--n) * 18); }
-.fs .ngrid .line .tot .fig { font-size: calc(var(--n) * 18); }
-/* A row of boxes takes a share of the screen's height, so a tall phone spreads the week instead of leaving the foot empty. */
-.fs .ngrid .d { height: clamp(48px, min(19cqw, 7.5cqh), 110px); border-bottom: 1px solid var(--line); }
+      /* P2: the week, narrow. A row's name line spans the seven days; its seven boxes sit beneath. */
+      .fs .ngrid {
+        flex: 1 1 auto;
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        grid-template-rows: auto;
+        grid-auto-rows: auto;
+        align-content: start;
+      }
+      .fs .ngrid .hd {
+        padding: 6px 0;
+      }
+      .fs .ngrid .hd .dn,
+      .fs .ngrid .hd .dt {
+        font-size: calc(var(--n) * 20);
+      }
+      .fs .ngrid .line {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        padding: calc(var(--n) * 10) 0 2px;
+      }
+      .fs .ngrid .line .n {
+        font-size: calc(var(--n) * 18);
+        line-height: 1.45;
+        font-weight: 600;
+      }
+      .fs .ngrid .line .chip {
+        font-size: calc(var(--n) * 16);
+      }
+      .fs .ngrid .line .tot {
+        margin-left: auto;
+        border: 0;
+        font-size: calc(var(--n) * 18);
+      }
+      .fs .ngrid .line .tot .fig {
+        font-size: calc(var(--n) * 18);
+      }
+      /* A row of boxes takes a share of the screen's height, so a tall phone spreads the week instead of leaving the foot empty. */
+      .fs .ngrid .d {
+        height: clamp(48px, min(19cqw, 7.5cqh), 110px);
+        border-bottom: 1px solid var(--line);
+      }
 
-/* P1: today, full screen. One row per exercise, its mark at the right, sized to fill the screen. */
-.fs .band { margin: 0 -16px 8px; padding: 14px 16px; background: var(--tile); }
-.fs .band h2 { margin: 0; font: 600 22px/28px var(--font-sans); }
-.fs .band p { margin: 2px 0 0; font-size: 18px; line-height: 26px; }
-.fs .tl { flex: 1 1 auto; display: grid; grid-auto-rows: minmax(72px, 1fr); max-height: calc(var(--rows) * 120px); }
-.fs .tl .row { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); }
-.fs .tl .row:first-child { border-top: 1px solid var(--line); }
-.fs .tl .text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.fs .tl .n { font-size: 20px; line-height: 26px; font-weight: 600; }
-.fs .tl .sub { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; font-size: 16px; color: var(--ink-secondary); }
-.fs .tl .sub .met { color: var(--pen); font-weight: 600; }
-.fs .tl .d { flex: none; width: 96px; height: 100%; max-height: 96px; border: 0; }
-.fs .tl h3 { margin: 0; padding: 4px 0 8px; font-size: 16px; font-weight: 600; color: var(--ink-secondary); }
+      /* P1: today, full screen. One row per exercise, its mark at the right, sized to fill the screen. */
+      .fs .band {
+        margin: 0 -16px 8px;
+        padding: 14px 16px;
+        background: var(--tile);
+      }
+      .fs .band h2 {
+        margin: 0;
+        font: 600 22px/28px var(--font-sans);
+      }
+      .fs .band p {
+        margin: 2px 0 0;
+        font-size: 18px;
+        line-height: 26px;
+      }
+      .fs .tl {
+        flex: 1 1 auto;
+        display: grid;
+        grid-auto-rows: minmax(72px, 1fr);
+        max-height: calc(var(--rows) * 120px);
+      }
+      .fs .tl .row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border-bottom: 1px solid var(--line);
+      }
+      .fs .tl .row:first-child {
+        border-top: 1px solid var(--line);
+      }
+      .fs .tl .text {
+        flex: 1 1 auto;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .fs .tl .n {
+        font-size: 20px;
+        line-height: 26px;
+        font-weight: 600;
+      }
+      .fs .tl .sub {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 8px;
+        align-items: center;
+        font-size: 16px;
+        color: var(--ink-secondary);
+      }
+      .fs .tl .sub .met {
+        color: var(--pen);
+        font-weight: 600;
+      }
+      .fs .tl .d {
+        flex: none;
+        width: 96px;
+        height: 100%;
+        max-height: 96px;
+        border: 0;
+      }
+      .fs .tl h3 {
+        margin: 0;
+        padding: 4px 0 8px;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--ink-secondary);
+      }
 
-/* A short screen (a phone on its side): the chips, the hint lines and the way on drop out, so five rows fit. Last, so it wins. */
-@container fs (max-height: 540px) {
-  .fs .screen { padding-top: 8px; padding-bottom: 6px; }
-  .fs .chips { display: none; }
-  .fs .corner h2 { font-size: 26px; }
-  .fs .corner .wk { display: none; }
-  .fs .hd { padding: 4px 0; }
-  .fs .cue { display: none; }
-}
+      /* A short screen (a phone on its side): the chips, the hint lines and the way on drop out, so five rows fit. Last, so it wins. */
+      @container fs (max-height: 540px) {
+        .fs .screen {
+          padding-top: 8px;
+          padding-bottom: 6px;
+        }
+        .fs .chips {
+          display: none;
+        }
+        .fs .corner h2 {
+          font-size: 26px;
+        }
+        .fs .corner .wk {
+          display: none;
+        }
+        .fs .hd {
+          padding: 4px 0;
+        }
+        .fs .cue {
+          display: none;
+        }
+      }
 
-/* A day that meets the daily pick (K30, K60): its name in pen, underlined. Nothing else. */
-.fs .hd.met .dn { color: var(--pen); text-decoration: underline; text-decoration-thickness: max(2px, calc(var(--u) * 3)); text-underline-offset: 0.22em; }
+      /* A day that meets the daily pick (K30, K60): its name in pen, underlined. Nothing else. */
+      .fs .hd.met .dn {
+        color: var(--pen);
+        text-decoration: underline;
+        text-decoration-thickness: max(2px, calc(var(--u) * 3));
+        text-underline-offset: 0.22em;
+      }
 
-/* ---- A programme tracker's screen (K146): its programme week at the end of the title's line, a
+      /* ---- A programme tracker's screen (K146): its programme week at the end of the title's line, a
    lock by a locked day's name, and a paused row's sentence in place of its boxes. ---- */
-/* "Week 4 of 8", a link to the programme's overview, where Edit plan puts Add (SectionHeader). */
-.fs .head .prog { display: inline-flex; align-items: center; gap: 4px; color: var(--ink); font: 600 max(18px, calc(var(--u) * 19)) / 1.4 var(--font-sans);
-  text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 1px; white-space: nowrap; }
-.fs .head .prog svg { width: 20px; height: 20px; }
-.fs .head .prog:hover { text-decoration-thickness: 2px; }
-/* Folded, the title at the SectionHeader card's 24n, as the mockup drew it, so the link keeps to its line. */
-.fs[data-layout="narrow"] .prog-screen .head h2 { font-size: calc(var(--n) * 24); }
-/* A locked day (before yesterday, spec §8): a lock by its name; its boxes stay as they are and don't press. */
-.fs .hd .dl { display: inline-flex; align-items: center; gap: 4px; }
-.fs .hd .lk { flex: none; width: 16px; height: 16px; color: var(--ink-secondary); }
-.fs .ngrid .hd .lk { width: 14px; height: 14px; }
-.fs .d.locked .mark { cursor: default; }
-.fs .d.locked .mark:not([data-mark]):hover .bx { stroke: var(--control-border); }
-/* A paused activity says so across its seven days. */
-.fs .pz { grid-column: span 7; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0 8px; border-bottom: 1px solid var(--line);
-  color: var(--ink-secondary); font-size: max(18px, calc(var(--u) * 19)); line-height: 1.4; text-align: center; }
-.fs .pz svg { flex: none; width: 18px; height: 18px; }
-.fs .ngrid .pz { grid-column: 1 / -1; min-height: 48px; font-size: 16px; }
-</style>
-</head>
-<body>
-<p class="variant label">A 1280×800 desktop, at rest. Press and hold anywhere for Edit plan and its bar, and again to go back; scroll for Cardio, then Food; press a box to mark it.</p>
-<div class="device" data-w="1280" data-h="800" data-input="mouse"></div>
-<div class="gap"></div>
-<p class="variant label">A 390×844 phone held upright, folded, Edit plan opened with the handle: the bar above the week</p>
-<div class="device phone" data-w="390" data-h="844" data-input="touch" data-bar="docked"></div>
-<div class="gap"></div>
-<p class="variant label">A programme tracker's screen (K146): Beginner 5×5 in the week of 14–20 December, today Wednesday. “Week 4 of 8” at the end of the title's line opens the programme; Monday is locked, since marks stay open for one day and Tuesday can still be marked; Deadlift is paused. A 390×844 phone, then a 1280×800 desktop; press a box</p>
-<div class="device phone" data-w="390" data-h="844" data-input="touch" data-programme></div>
-<div class="gap"></div>
-<div class="device" data-w="1280" data-h="800" data-input="mouse" data-programme></div>
-<script>
-// The app's own drawings (src/components/ui/day-mark, the Header card), for the mockup.
-// Generated from the source; not hand-edited.
-window.FP_ART = {"box": "M6.5 4.8C12.5 4.3 23.5 4.6 30.2 4.9C31.4 5 31.6 6.1 31.5 7.2C31.2 13.5 31.4 22.5 31.2 29.4C31.2 30.6 30.3 31.3 29.1 31.3C22.5 31.6 13 31.2 6.6 31.4C5.4 31.4 4.7 30.6 4.7 29.4C4.6 22.8 4.9 13 4.6 6.8C4.6 5.6 5.4 4.9 6.5 4.8Z", "stamp": "M5.8 33.2C5.2 33 4.9 32.7 4.9 32.4C4.9 31.9 4.6 31.8 3.3 31.7C2 31.6 1.9 31.6 1.6 31.1C1.4 30.8 1.3 30.2 1.3 29.7C1.2 29.4 1.6 29.1 2.2 29C2.5 29 2.7 29 2.8 28.9C2.9 28.8 3.1 28.7 3.2 28.7C3.6 28.7 3.7 28.5 3.5 27.6C3.4 26.8 3.5 23.7 3.6 23.3C3.6 23.3 3.7 23 3.7 22.7C3.8 22.2 3.8 22 3.9 21.3C4 20.8 4.1 20.7 4.3 20.6C4.4 20.5 4.5 20.4 4.5 20.1C4.5 19.8 4.5 19.7 4.8 19.6C5.2 19.4 5.2 17.9 4.8 17.3C4.7 17.1 4.6 16.2 4.6 16C4.7 15.9 4.7 15.8 4.6 15.7C4.6 15.5 4.6 15.2 4.6 14C4.6 12.5 4.5 12.3 4.3 12.3C4 12.3 3.4 9.5 3.5 8.4C3.5 8.2 3.5 7.9 3.4 7.2C3.3 6.3 3.3 6 3.5 5.6C3.7 5 4.1 4.8 4.5 5C4.8 5.3 6 5.3 6.2 5C6.4 4.9 6.4 4.9 6.7 4.8C6.9 4.8 7 4.8 7.2 4.7C7.4 4.6 7.4 4.6 7.9 4.6C8.2 4.6 9 4.7 9.7 4.7C10.3 4.7 11 4.7 11.2 4.7C11.4 4.7 11.9 4.8 12.3 4.8C12.7 4.8 13.3 4.8 13.6 4.8C14 4.9 14.4 4.9 14.9 4.9C15.6 4.8 16.1 4.9 16.3 5.1C16.4 5.1 16.6 5.2 16.7 5.2C16.9 5.2 17 5.3 17.1 5.3C17.4 5.5 18.1 5.5 18.3 5.3C18.6 5.1 18.8 5.1 19.1 5.3C19.4 5.5 21.7 5.5 23.8 5.2C25.2 5.1 25.5 5.1 26.9 5.1C27.8 5.1 28.9 5.1 29.5 5.1C30.5 5.1 30.5 5.1 30.8 5.2C30.9 5.3 31.1 5.4 31.2 5.4C31.2 5.3 31.4 5.4 31.5 5.5C31.6 5.6 31.7 5.8 31.8 5.8C32.1 6 32.2 6.9 32.1 7.6C31.9 8.1 31.9 8.3 32 8.6C32.1 8.6 32.2 8.9 32.3 9.1C32.7 9.9 33.2 12.2 33.1 13.3C33.1 13.8 33 14.8 33 15.4C32.9 16.1 32.9 16.7 32.9 16.9C32.8 17 32.8 17.6 32.7 18.1C32.6 18.7 32.6 19.2 32.5 19.3C32.5 19.4 32.4 20.2 32.3 21C32.2 21.9 32.1 22.6 32.1 22.7C32.1 22.8 32 23.3 32 23.8C32 24.2 31.9 24.7 31.9 24.8C31.8 25 31.7 25.5 31.7 26.1C31.6 26.5 31.6 26.8 31.5 27C31.2 27.7 31.2 27.7 31 27.8C30.6 27.9 30.5 28.6 30.7 29.1C31.1 29.8 31 31.1 30.5 31.1C30.4 31.1 30.3 31.3 30.2 31.5C30.2 31.6 30 32.1 29.9 32.2C29.4 32.5 27.6 32.4 26.2 32.1C25.9 32 25.6 32 25.4 31.9C24.5 31.8 24.3 31.8 23.8 31.8C23.4 31.7 23 31.7 22.9 31.7C22.7 31.6 22.3 31.6 22 31.6C21.6 31.6 21.2 31.5 21.1 31.5C20.9 31.4 20.8 31.4 20.3 31.5C19.9 31.5 19.7 31.5 19.4 31.5C18.9 31.3 18.7 31.3 18.1 31.4C17.3 31.5 17.2 31.5 16.8 31.3C16.5 31.2 16.5 31.2 15.6 31.2C14.4 31.3 14.4 31.3 14.2 31.1C14 31 12.6 30.9 11.6 31.1C11.3 31.1 10.7 31.1 10.3 31.2C9.3 31.2 8.9 31.2 8.6 31.4C8.5 31.4 8.3 31.5 8.2 31.5C8 31.5 8 31.5 7.7 31.8C7.7 31.9 7.6 31.9 7.6 32C7.6 32 7.5 32.1 7.5 32.2C7.4 32.6 7.1 33 6.7 33.2C6.3 33.4 6.3 33.4 5.8 33.2Z", "ticks": {"great": "M8.6 18.2C10.6 19.9 12.6 22.4 14.6 25.9C15 26.6 15.6 26.6 16 25.9C19.4 19.2 24.6 11.6 31.6 5.2", "partial": "M8.2 20.6C9.6 15.2 13.8 14.4 17.4 18C21 21.6 25.6 21.8 27.8 15.6", "missed": "M8.2 20.6C9.6 15.2 13.8 14.4 17.4 18C21 21.6 25.6 21.8 27.8 15.6"}, "wordmark": "<svg class=\"wordmark\" viewBox=\"36 -737 7347 751\" role=\"img\" aria-label=\"Tracker\"><path d=\"M156.0 0V-59L299.0 -66H350.0L495.0 -59V0ZM256.0 0Q257.0 -51 257.5 -102.0Q258.0 -153 258.0 -204.0Q258.0 -255 258.0 -306V-359Q258.0 -409 258.0 -460.0Q258.0 -511 257.5 -562.5Q257.0 -614 256.0 -664H395.0Q395.0 -614 394.5 -563.0Q394.0 -512 394.0 -461.0Q394.0 -410 394.0 -359V-307Q394.0 -256 394.0 -204.5Q394.0 -153 394.5 -102.0Q395.0 -51 395.0 0ZM22.0 -476 28.0 -664H622.0L628.0 -476H558.0L525.0 -651L578.0 -604H73.0L127.0 -651L92.0 -476ZM678.0 0V-53L787.0 -63H846.0L967.0 -53V0ZM748.0 0Q748.0 -30 748.5 -67.0Q749.0 -104 749.0 -143.0Q749.0 -182 749.0 -215V-270Q749.0 -295 749.0 -315.5Q749.0 -336 748.5 -355.0Q748.0 -374 748.0 -395L672.0 -399V-447L827.0 -502L858.0 -497L868.0 -365L875.0 -364V-215Q875.0 -182 875.0 -143.0Q875.0 -104 875.5 -67.0Q876.0 -30 876.0 0ZM864.0 -279 851.0 -360H880.0Q896.0 -407 917.0 -439.5Q938.0 -472 964.5 -489.0Q991.0 -506 1022.0 -506Q1054.0 -506 1075.5 -489.0Q1097.0 -472 1104.0 -447Q1102.0 -412 1084.0 -389.0Q1066.0 -366 1032.0 -366Q1009.0 -366 992.0 -376.0Q975.0 -386 960.0 -403L939.0 -426L989.0 -425Q944.0 -404 912.5 -365.5Q881.0 -327 864.0 -279ZM1283.0 14Q1225.0 14 1186.0 -19.5Q1147.0 -53 1147.0 -116Q1147.0 -154 1163.5 -183.0Q1180.0 -212 1218.5 -235.0Q1257.0 -258 1324.0 -275Q1351.0 -283 1378.5 -290.0Q1406.0 -297 1433.0 -304.5Q1460.0 -312 1486.0 -319V-277Q1454.0 -267 1420.5 -256.5Q1387.0 -246 1354.0 -235Q1319.0 -225 1300.0 -210.5Q1281.0 -196 1273.5 -178.5Q1266.0 -161 1266.0 -140Q1266.0 -105 1287.5 -86.0Q1309.0 -67 1345.0 -67Q1366.0 -67 1383.5 -74.0Q1401.0 -81 1421.5 -95.5Q1442.0 -110 1468.0 -131L1474.0 -76H1434.0Q1415.0 -52 1395.0 -31.0Q1375.0 -10 1348.5 2.0Q1322.0 14 1283.0 14ZM1552.0 13Q1504.0 13 1476.0 -14.5Q1448.0 -42 1443.0 -94L1440.0 -96V-340Q1440.0 -383 1430.0 -408.0Q1420.0 -433 1398.5 -443.5Q1377.0 -454 1343.0 -454Q1319.0 -454 1296.5 -450.5Q1274.0 -447 1250.0 -437L1297.0 -480L1287.0 -397Q1283.0 -356 1265.5 -338.5Q1248.0 -321 1222.0 -321Q1195.0 -321 1180.0 -334.0Q1165.0 -347 1160.0 -369Q1171.0 -433 1229.0 -471.0Q1287.0 -509 1380.0 -509Q1439.0 -509 1480.5 -490.5Q1522.0 -472 1543.0 -433.0Q1564.0 -394 1564.0 -330V-109Q1564.0 -85 1573.0 -74.0Q1582.0 -63 1599.0 -63Q1611.0 -63 1620.0 -66.5Q1629.0 -70 1638.0 -77L1655.0 -40Q1639.0 -16 1613.5 -1.5Q1588.0 13 1552.0 13ZM1941.0 13Q1865.0 13 1808.5 -18.0Q1752.0 -49 1721.5 -106.0Q1691.0 -163 1691.0 -241Q1691.0 -323 1724.0 -382.5Q1757.0 -442 1815.0 -475.5Q1873.0 -509 1945.0 -509Q2002.0 -509 2044.0 -491.5Q2086.0 -474 2112.0 -445.5Q2138.0 -417 2146.0 -383Q2141.0 -358 2126.5 -343.0Q2112.0 -328 2087.0 -328Q2058.0 -328 2041.0 -346.5Q2024.0 -365 2018.0 -397L1999.0 -482L2065.0 -433Q2043.0 -443 2019.5 -449.0Q1996.0 -455 1965.0 -455Q1924.0 -455 1892.0 -432.5Q1860.0 -410 1841.5 -366.0Q1823.0 -322 1823.0 -258Q1823.0 -195 1843.0 -153.5Q1863.0 -112 1897.0 -90.5Q1931.0 -69 1976.0 -69Q2006.0 -69 2029.5 -77.5Q2053.0 -86 2072.5 -99.5Q2092.0 -113 2108.0 -132L2146.0 -99Q2128.0 -68 2101.5 -42.5Q2075.0 -17 2036.0 -2.0Q1997.0 13 1941.0 13ZM2200.0 0V-53L2309.0 -63H2361.0L2471.0 -53V0ZM2272.0 0Q2273.0 -25 2273.0 -51.5Q2273.0 -78 2273.5 -106.5Q2274.0 -135 2274.0 -162.5Q2274.0 -190 2274.0 -215V-632L2196.0 -647V-693L2369.0 -729L2401.0 -724L2399.0 -592V-217Q2399.0 -191 2399.0 -163.0Q2399.0 -135 2399.0 -106.5Q2399.0 -78 2399.5 -51.5Q2400.0 -25 2400.0 0ZM2342.0 -142V-225H2379.0L2508.0 -363L2638.0 -493H2725.0ZM2598.0 0 2451.0 -271 2535.0 -352 2707.0 -61 2773.0 -52V0ZM2494.0 -443V-495H2752.0V-443L2630.0 -430L2606.0 -428ZM3066.0 13Q2989.0 13 2932.5 -17.5Q2876.0 -48 2845.0 -105.0Q2814.0 -162 2814.0 -242Q2814.0 -322 2846.0 -382.0Q2878.0 -442 2933.5 -475.5Q2989.0 -509 3060.0 -509Q3124.0 -509 3171.5 -484.0Q3219.0 -459 3245.5 -413.0Q3272.0 -367 3272.0 -305Q3272.0 -285 3269.5 -268.5Q3267.0 -252 3264.0 -239H2891.0V-289H3122.0Q3142.0 -297 3148.0 -310.5Q3154.0 -324 3154.0 -346Q3154.0 -382 3142.5 -406.0Q3131.0 -430 3110.0 -442.0Q3089.0 -454 3060.0 -454Q3027.0 -454 3000.5 -434.5Q2974.0 -415 2959.0 -372.0Q2944.0 -329 2944.0 -257Q2944.0 -196 2964.0 -153.5Q2984.0 -111 3020.0 -89.5Q3056.0 -68 3101.0 -68Q3150.0 -68 3182.5 -85.0Q3215.0 -102 3241.0 -132L3277.0 -103Q3255.0 -69 3226.5 -42.0Q3198.0 -15 3159.5 -1.0Q3121.0 13 3066.0 13ZM3341.0 0V-53L3450.0 -63H3509.0L3630.0 -53V0ZM3411.0 0Q3411.0 -30 3411.5 -67.0Q3412.0 -104 3412.0 -143.0Q3412.0 -182 3412.0 -215V-270Q3412.0 -295 3412.0 -315.5Q3412.0 -336 3411.5 -355.0Q3411.0 -374 3411.0 -395L3335.0 -399V-447L3490.0 -502L3521.0 -497L3531.0 -365L3538.0 -364V-215Q3538.0 -182 3538.0 -143.0Q3538.0 -104 3538.5 -67.0Q3539.0 -30 3539.0 0ZM3527.0 -279 3514.0 -360H3543.0Q3559.0 -407 3580.0 -439.5Q3601.0 -472 3627.5 -489.0Q3654.0 -506 3685.0 -506Q3717.0 -506 3738.5 -489.0Q3760.0 -472 3767.0 -447Q3765.0 -412 3747.0 -389.0Q3729.0 -366 3695.0 -366Q3672.0 -366 3655.0 -376.0Q3638.0 -386 3623.0 -403L3602.0 -426L3652.0 -425Q3607.0 -404 3575.5 -365.5Q3544.0 -327 3527.0 -279Z\"/></svg>", "gear": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/></svg>"};
-
-// The PlannerScreen, drawn live from the mockup's prototype (mockups/261025-full-screen-week). PlannerScreen.mount(el, options) draws one screen
-// into el: the bar, then Exercises, Cardio and Food, a screen each (K90). Options:
-//   option  'a' | 'b' | 'c'   how the bar and the titles behave (the mockup's question 1)
-//   phone   'p1' | 'p2'       a phone held upright: today, or the week narrow (question 2)
-//   input   'mouse' | 'touch' how Edit plan is reached: a long press, and on touch the handle too
-//   start   'exercises' | 'cardio' | 'food'   bar  'shown'   for the stills on the mockup page
-// The week is John's own from his screenshots: 19–25 October, today Sunday, three a day.
-(() => {
-  const ART = window.FP_ART
-  const DAYS = [['Mon', 'Monday', 19], ['Tue', 'Tuesday', 20], ['Wed', 'Wednesday', 21], ['Thu', 'Thursday', 22],
-    ['Fri', 'Friday', 23], ['Sat', 'Saturday', 24], ['Sun', 'Sunday', 25]]
-  const TODAY = 6
-  const PICK = 3
-  const WEEK = '19–25 October'
-  const g = 'great', p = 'partial', x = 'missed', _ = null
-  const EXERCISES = [
-    { name: 'Push-ups', chips: ['3 × 12'], goal: 4, marks: [g, _, g, p, g, _, _] },
-    { name: 'Squats', chips: ['3 × 15', '16 kg'], goal: 3, marks: [_, g, x, _, g, _, _] },
-    { name: 'Plank', chips: ['3 × 45 s'], goal: 3, marks: [g, p, _, g, _, g, _] },
-    { name: 'Kettlebell halos', chips: ['8 each side', '12 kg'], goal: 2, marks: [_, _, g, _, _, _, _] },
-    { name: 'Pull-ups', chips: ['3 × 5'], goal: 3, marks: [x, g, _, _, p, _, _] },
-  ]
-  // Cardio (K90): a time or a distance as its chip, marked like an exercise, no daily target.
-  const CARDIO = [
-    { name: 'Cycling', chips: ['30 min'], goal: 2, marks: [g, _, _, _, _, _, _] },
-    { name: 'Running', chips: ['5 km'], goal: 3, marks: [_, _, g, _, p, _, _] },
-  ]
-  const FOODS = [
-    { name: 'Vegetables', goal: 7, marks: [g, g, g, _, g, g, _] },
-    { name: 'Fruit', goal: 5, marks: [_, g, _, g, _, _, _] },
-    { name: 'Fish', goal: 2, marks: [_, _, _, g, _, _, _] },
-    { name: 'Nuts', goal: 3, marks: [g, _, _, _, _, _, _] },
-  ]
-  const WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight']
-  const KIND_WORDS = { great: '', partial: ', partly done', missed: ", too difficult" }
-  const icon = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`
-  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
-
-  // The Stamped ticks set, as John's screenshots draw it: the box filled solid in the pen, the
-  // symbol in paper, the hand-drawn box over both.
-  function markSvg(kind) {
-    const ink = kind
-      ? `<path class="ink" d="${ART.stamp}" fill-rule="evenodd"/><path class="sym" d="${ART.ticks[kind]}" fill="none" stroke-width="3.25"/>`
-      : ''
-    return `<svg viewBox="0 0 36 36" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ink}<path class="bx" d="${ART.box}" stroke-width="1.75"/></svg>`
-  }
-  function markButton(row, i, section) {
-    const kind = row.marks[i]
-    const [, full, date] = DAYS[i]
-    const label = `${row.name}, ${full} ${date} October${i === TODAY ? ', today' : ''}${kind ? KIND_WORDS[kind] : ''}`
-    return `<button type="button" class="mark" data-s="${section}" data-r="${row.i}" data-c="${i}"${kind ? ` data-mark="${kind}"` : ''} aria-pressed="${Boolean(kind)}" aria-label="${esc(label)}">${markSvg(kind)}</button>`
-  }
-
-  const count = (row) => row.marks.filter(Boolean).length
-  const TITLES = { exercises: 'Strength', cardio: 'Cardio', food: 'Food' }
-  const ITEM = { exercises: 'Exercise', cardio: 'Cardio', food: 'Food' }
-  const ORDER = ['exercises', 'cardio', 'food']
-  /** Round 3: a day whose marked exercises reach the daily pick. Only the Exercises screen shows it. */
-  const dayMet = (rows, i, section) => section === 'exercises' && rows.filter((r) => r.marks[i]).length >= PICK
-  const metHead = (met) => (met ? ' met' : '')
-  const METWORDS = '<span class="vh">, three picked</span>'
-
-  // The arrows between the screens (K42): no words, named for where they go. A screen has one
-  // back to the screen before it, on its title's line, and one on to the next, at its foot.
-  const cueFor = (state, section) => {
-    if (state.option === 'b' || state.short) return ''
-    const at = ORDER.indexOf(section)
-    const before = ORDER[at - 1], after = ORDER[at + 1]
-    const up = before ? `<button type="button" class="cue cue-up" data-go="${before}" aria-label="Back to ${TITLES[before]}">${icon('m18 15-6-6-6 6')}</button>` : ''
-    const down = after ? `<button type="button" class="cue" data-go="${after}" aria-label="Go to ${TITLES[after]}">${icon('m6 9 6 6 6-6')}</button>` : ''
-    return up + down
-  }
-
-  // ---- The week grid, wide: a desktop, an iPad, a phone on its side. ----
-  function wideScreen(state, section, rows) {
-    const corner = state.option === 'b' || state.short
-    const head = corner ? '' : `<header class="head"><h2>${TITLES[section]}<span class="wk">${WEEK}</span></h2></header>`
-    const cornerCell = corner
-      ? `<div class="hd corner"><h2>${TITLES[section]}</h2><span class="wk">${WEEK}</span></div>`
-      : `<div class="hd corner"><span class="vh">${ITEM[section]}</span></div>`
-    let cells = cornerCell
-    DAYS.forEach(([short, , date], i) => {
-      const met = dayMet(rows, i, section)
-      cells += `<div class="hd${i === TODAY ? ' today' : ''}${metHead(met)}"><span class="dn">${short}</span><span class="vh"> ${date}</span>${met ? METWORDS : ''}</div>`
-    })
-    for (const row of rows) {
-      const chips = row.chips?.length ? `<span class="chips">${row.chips.map((c) => `<span class="chip">${esc(c)}</span>`).join('')}</span>` : ''
-      cells += `<div class="nm"><span class="n">${esc(row.name)}</span>${chips}</div>`
-      const last = row.i === rows.length - 1 ? ' last' : ''
-      row.marks.forEach((_, i) => {
-        const met = dayMet(rows, i, section)
-        cells += `<div class="d${i === TODAY ? ' today' : ''}${metHead(met)}${last}">${markButton(row, i, section)}</div>`
-      })
-    }
-    const cue = cueFor(state, section)
-    return `<section class="screen" data-section="${section}" aria-label="${TITLES[section]}">${head}<div class="grid" style="--rows:${rows.length}">${cells}</div>${cue}</section>`
-  }
-
-  // ---- P2: the week, narrow. ----
-  function narrowWeek(state, section, rows) {
-    let cells = ''
-    DAYS.forEach(([short, , date], i) => {
-      const met = dayMet(rows, i, section)
-      cells += `<div class="hd${i === TODAY ? ' today' : ''}${metHead(met)}"><span class="dn">${short}</span><span class="vh"> ${date}</span>${met ? METWORDS : ''}</div>`
-    })
-    for (const row of rows) {
-      const chips = (row.chips || []).slice(0, 1).map((c) => `<span class="chip">${esc(c)}</span>`).join('')
-      cells += `<div class="line"><span class="n">${esc(row.name)}</span>${chips}</div>`
-      const last = row.i === rows.length - 1 ? ' last' : ''
-      row.marks.forEach((_, i) => {
-        const met = dayMet(rows, i, section)
-        cells += `<div class="d${i === TODAY ? ' today' : ''}${metHead(met)}${last}">${markButton(row, i, section)}</div>`
-      })
-    }
-    return `<section class="screen" data-section="${section}" aria-label="${TITLES[section]}"><header class="head"><h2>${TITLES[section]}</h2></header><div class="ngrid" style="--t:${TODAY}">${cells}</div>${cueFor(state, section)}</section>`
-  }
-
-  // ---- P1: today, full screen. ----
-  function todayScreen(state, section, rows) {
-    const done = rows.filter((r) => r.marks[TODAY]).length
-    const band = section === 'exercises'
-      ? `<div class="band"><h2>Today, Sunday 25 October</h2><p>${done === 0 ? 'None' : WORDS[done][0].toUpperCase() + WORDS[done].slice(1)} of ${WORDS[PICK]} picked.</p></div>`
-      : ''
-    const list = rows.map((r) => {
-      const chips = (r.chips || []).map((c) => `<span class="chip">${esc(c)}</span>`).join('')
-      const n = count(r)
-      return `<div class="row"><div class="text"><span class="n">${esc(r.name)}</span><span class="sub">${chips}<span class="${n >= r.goal ? 'met' : ''}" data-tot="${section}-${r.i}">${n} of ${r.goal} this week</span></span></div><div class="d">${markButton(r, TODAY, section)}</div></div>`
-    }).join('')
-    return `<section class="screen" data-section="${section}" aria-label="${TITLES[section]}">${band}<h3>${TITLES[section]}</h3><div class="tl" style="--rows:${rows.length}">${list}</div></section>`
-  }
-
-  // ---- The bar (the Header card). ----
-  const ICONS = {
-    fullscreen: 'M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3',
-    print: 'M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z',
-    logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
-  }
-  /** The browser's full screen, where it exists (not on an iPhone). */
-  const canFullscreen = () => document.fullscreenEnabled !== false
-  const fsButton = () => canFullscreen()
-    ? `<button class="icon-btn" type="button" data-action="fullscreen" aria-label="Full screen">${icon(ICONS.fullscreen)}</button>` : ''
-
-  // ---- The sidebar (round 4, N2): hidden, or expanded with an icon and a name per item. ----
-  function sidebar() {
-    const item = (label, d, action) => `<button class="item" type="button"${action ? ` data-action="${action}"` : ''}>${d.startsWith('<svg') ? d : icon(d)}<span>${label}</span></button>`
-    const week = `<nav class="week" aria-label="Week"><button class="icon-btn" type="button" aria-label="Previous week">${icon('m15 18-6-6 6-6')}</button><span class="week-label">${WEEK}</span><button class="icon-btn" type="button" aria-label="Next week">${icon('m9 18 6-6-6-6')}</button></nav>`
-    const sw = `<button class="switch" type="button" role="switch" aria-checked="false"><span>Edit plan</span><span class="track" aria-hidden="true"><span class="thumb"></span></span></button>`
-    return `<aside class="side" aria-label="Menu"><span class="brand">${ART.wordmark}</span>${week}${sw}<div class="items">${item('Settings', ART.gear)}${item('Print…', ICONS.print)}${canFullscreen() ? item('Full screen', ICONS.fullscreen, 'fullscreen') : ''}</div><div class="room" aria-hidden="true"></div><div class="items foot">${item('Log out', ICONS.logout)}</div></aside><div class="scrim" aria-hidden="true"></div>`
-  }
-
-  // The bar as built (K47–K50): BarActions, a Lucide icon over its name, at the week's size.
-  const CHECK = '<path d="M20 6 9 17l-5-5"/>'
-  const tile = (label, glyph, attrs = '') => `<button class="ba" type="button"${attrs}>${glyph}<span>${label}</span></button>`
-  function bar(state) {
-    if (state.nav === 'side') return sidebar()
-    const week = `<nav class="week" aria-label="Week"><button class="icon-btn" type="button" aria-label="Previous week">${icon('m15 18-6-6 6-6')}</button><span class="week-label">${WEEK}</span><button class="icon-btn" type="button" aria-label="Next week">${icon('m9 18 6-6-6-6')}</button></nav>`
-    // No wordmark and no Edit plan button (K81, K82): the week first, and Done in Edit plan.
-    const done = tile('Done', `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${CHECK}</svg>`, ' data-done').replace('class="ba"', 'class="ba done"')
-    const gear = tile('Settings', ART.gear)
-    const full = canFullscreen() ? tile('Full screen', icon(ICONS.fullscreen), ' data-action="fullscreen"') : ''
-    if (state.layout === 'narrow') {
-      return `<header class="bar">${week}<span class="end">${gear}${full}${done}</span></header>`
-    }
-    return `<header class="bar">${week}<span class="end">${gear}${tile('Print…', icon(ICONS.print))}${full}${done}</span></header>`
-  }
-
-  function render(state) {
-    const screen = state.layout === 'narrow' ? (state.phone === 'p1' && state.device === 'phone' ? todayScreen : narrowWeek) : wideScreen
-    const dots = `<nav class="dots" aria-label="Screens">${ORDER.map((s) => `<button type="button" data-go="${s}" aria-label="${TITLES[s]}"><span></span></button>`).join('')}</nav>`
-    state.el.innerHTML = `<button type="button" class="grab" aria-label="Show the menu"><span></span></button>${bar(state)}<div class="scroller">${ORDER.map((s) => screen(state, s, state.rows[s])).join('')}</div>${dots}`
-    syncDots(state)
-  }
-
-  /** The screen that fills most of the scroller. */
-  const onScreen = (sc) => ORDER[Math.min(ORDER.length - 1, Math.round(sc.scrollTop / sc.clientHeight))]
-
-  function syncDots(state) {
-    const sc = state.el.querySelector('.scroller')
-    if (!sc) return
-    const at = onScreen(sc)
-    state.el.querySelectorAll('.dots button').forEach((b) => b.setAttribute('aria-current', String(b.dataset.go === at)))
-  }
-
-  function mount(el, opts = {}) {
-    const clone = (rows) => rows.map((r, i) => ({ ...r, i, marks: [...r.marks] }))
-    const state = { el, option: opts.option || 'a', phone: opts.phone || 'p2', affirm: opts.affirm || 'g2', nav: opts.nav || 'bar', layout: '', short: false }
-    state.rows = { exercises: clone(EXERCISES), cardio: clone(CARDIO), food: clone(FOODS) }
-    el.classList.add('fs')
-    el.dataset.option = state.option
-    el.dataset.affirm = state.affirm
-    el.dataset.nav = state.nav
-    el.dataset.input = opts.input || (matchMedia('(hover: none)').matches ? 'touch' : 'mouse')
-    let pinned = opts.bar === 'shown'
-    if (pinned) el.dataset.bar = 'shown'
-    // Edit plan (K80): the bar docked above the page, Edit plan pressed.
-    const syncDock = () => {
-      const docked = el.dataset.bar === 'docked'
-      if (docked) el.style.setProperty('--docked-bar', `${el.querySelector('.bar').offsetHeight}px`)
-    }
-    const dock = (on) => { if (on) el.dataset.bar = 'docked'; else delete el.dataset.bar; syncDock() }
-
-    const measure = () => {
-      const w = el.offsetWidth, h = el.offsetHeight
-      // Held upright, a phone or an iPad folds the week; a phone may show today instead (P1).
-      const layout = h > w && w < 1000 ? 'narrow' : 'wide'
-      el.dataset.device = w < 640 || h < 640 ? 'phone' : 'tablet'
-      state.device = el.dataset.device
-      const short = layout === 'wide' && h <= 540
-      if (layout === state.layout && short === state.short) return
-      const sc = el.querySelector('.scroller')
-      const was = sc ? onScreen(sc) : 'exercises'
-      state.layout = layout; state.short = short
-      el.dataset.layout = layout
-      render(state)
-      syncDock()
-      if (was !== 'exercises') go(was, false)
-    }
-    const go = (section, smooth = true) => {
-      const target = el.querySelector(`.screen[data-section="${section}"]`)
-      el.querySelector('.scroller').scrollTo({ top: target.offsetTop, behavior: smooth && !matchMedia('(prefers-reduced-motion: reduce)').matches ? 'smooth' : 'auto' })
-    }
-
-    // The bar: a long press anywhere, or the handle, opens Edit plan with the bar docked above the
-    // page (K80), and another long press goes back. Focus alone floats it over the screen.
-    let hideTimer, hold = null, swallow = false
-    if (opts.bar === 'docked') requestAnimationFrame(() => dock(true))
-    const show = () => { clearTimeout(hideTimer); el.dataset.bar = 'shown' }
-    const hideSoon = (ms = 500) => {
-      if (state.option === 'c' || pinned || el.dataset.bar === 'docked') return
-      clearTimeout(hideTimer)
-      hideTimer = setTimeout(() => { if (!el.querySelector('.bar, .side')?.matches(':focus-within')) delete el.dataset.bar }, ms)
-    }
-    el.addEventListener('pointerover', (e) => {
-      if (e.pointerType === 'touch') return
-      if (el.dataset.bar === 'shown' && e.target.closest('.bar, .side')) show()
-    })
-    el.addEventListener('pointerout', (e) => {
-      if (e.pointerType === 'touch') return
-      if (e.target.closest('.bar, .side') && !e.relatedTarget?.closest?.('.bar, .side')) { pinned = false; hideSoon() }
-    })
-    el.addEventListener('pointerleave', () => { if (pinned) { pinned = false; hideSoon(900) } })
-    el.addEventListener('focusout', () => hideSoon(200))
-    el.addEventListener('keydown', (e) => { if (e.key === 'Escape' && el.dataset.bar !== 'docked') { pinned = false; delete el.dataset.bar } })
-    let pull
-    // A long press: held 500ms within 10px, the primary button. The click that ends it is
-    // swallowed, so the box held is not marked.
-    const endHold = () => { if (hold) clearTimeout(hold.timer); hold = null }
-    el.addEventListener('pointerdown', (e) => {
-      swallow = false
-      endHold()
-      if (e.target.closest('.grab')) { pull = e.clientY; return }
-      if (e.target.closest('.bar, .side')) return
-      if (e.button === 0 && e.isPrimary !== false) {
-        hold = { x: e.clientX, y: e.clientY, timer: setTimeout(() => { hold = null; swallow = true; dock(el.dataset.bar !== 'docked') }, 500) }
+      /* "Week 4 of 8", a link to the programme's overview, where Edit plan puts Add (SectionHeader). */
+      .fs .head .prog {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        color: var(--ink);
+        font: 600 max(18px, calc(var(--u) * 19)) / 1.4 var(--font-sans);
+        text-decoration: underline;
+        text-underline-offset: 4px;
+        text-decoration-thickness: 1px;
+        white-space: nowrap;
       }
-      if (el.dataset.input === 'touch' || el.dataset.bar === 'shown' || e.target.closest('.scrim')) { pinned = false; hideSoon(0) }
-    })
-    el.addEventListener('pointermove', (e) => {
-      if (pull != null && e.clientY - pull > 12) { dock(true); pull = null }
-      if (hold && Math.hypot(e.clientX - hold.x, e.clientY - hold.y) > 10) endHold()
-    })
-    el.addEventListener('pointerup', () => { pull = null; endHold(); if (swallow) setTimeout(() => { swallow = false }, 300) })
-    el.addEventListener('pointercancel', () => { pull = null; endHold() })
-    el.addEventListener('contextmenu', (e) => { if (e.pointerType === 'touch' || el.dataset.input === 'touch') e.preventDefault() })
-    el.addEventListener('click', (e) => { if (swallow) { swallow = false; e.preventDefault(); e.stopImmediatePropagation() } }, true)
-
-    el.addEventListener('click', (e) => {
-      if (e.target.closest('.grab')) { dock(true); return }
-      if (e.target.closest('.bar .done')) { dock(false); return }
-      if (e.target.closest('[data-action="fullscreen"]')) {
-        if (document.fullscreenElement) document.exitFullscreen?.()
-        else el.requestFullscreen?.().catch(() => {})
-        return
+      .fs .head .prog svg {
+        width: 20px;
+        height: 20px;
       }
-      const goto = e.target.closest('[data-go]')
-      if (goto) { go(goto.dataset.go); return }
-      const btn = e.target.closest('.mark')
-      if (!btn) return
-      const rows = state.rows[btn.dataset.s]
-      const row = rows[Number(btn.dataset.r)]
-      const c = Number(btn.dataset.c)
-      // A press steps an exercise or cardio great, partial, missed, then empty; a food great, then empty.
-      const cycle = btn.dataset.s === 'food' ? [null, g] : [null, g, p, x]
-      row.marks[c] = cycle[(cycle.indexOf(row.marks[c]) + 1) % cycle.length]
-      const sc = el.querySelector('.scroller'), top = sc.scrollTop
-      render(state)
-      syncDock()
-      el.querySelector('.scroller').scrollTop = top
-      el.querySelector(`.mark[data-s="${btn.dataset.s}"][data-r="${btn.dataset.r}"][data-c="${c}"]`)?.focus({ preventScroll: true })
-    })
-    el.addEventListener('scroll', () => syncDots(state), true)
+      .fs .head .prog:hover {
+        text-decoration-thickness: 2px;
+      }
+      /* Folded, the title at the SectionHeader card's 24n, as the mockup drew it, so the link keeps to its line. */
+      .fs[data-layout='narrow'] .prog-screen .head h2 {
+        font-size: calc(var(--n) * 24);
+      }
+      /* A locked day (before yesterday, spec §8): a lock by its name; its boxes stay as they are and don't press. */
+      .fs .hd .dl {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .fs .hd .lk {
+        flex: none;
+        width: 16px;
+        height: 16px;
+        color: var(--ink-secondary);
+      }
+      .fs .ngrid .hd .lk {
+        width: 14px;
+        height: 14px;
+      }
+      .fs .d.locked .mark {
+        cursor: default;
+      }
+      .fs .d.locked .mark:not([data-mark]):hover .bx {
+        stroke: var(--control-border);
+      }
+      /* A paused activity says so across its seven days. */
+      .fs .pz {
+        grid-column: span 7;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 8px;
+        border-bottom: 1px solid var(--line);
+        color: var(--ink-secondary);
+        font-size: max(18px, calc(var(--u) * 19));
+        line-height: 1.4;
+        text-align: center;
+      }
+      .fs .pz svg {
+        flex: none;
+        width: 18px;
+        height: 18px;
+      }
+      /* Its lead, "Paused until Mon 28 Dec.", in paused-ink at 600 (K169); the reason and icon stay. */
+      .fs .pz .pu {
+        color: var(--paused-ink);
+        font-weight: 600;
+      }
+      .fs .ngrid .pz {
+        grid-column: 1 / -1;
+        min-height: 48px;
+        font-size: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <p class="variant label">
+      A 1280×800 desktop, at rest. Press and hold anywhere for Edit plan and its bar, and again to
+      go back; scroll for Cardio, then Food; press a box to mark it.
+    </p>
+    <div class="device" data-w="1280" data-h="800" data-input="mouse"></div>
+    <div class="gap"></div>
+    <p class="variant label">
+      A 390×844 phone held upright, folded, Edit plan opened with the handle: the bar above the week
+    </p>
+    <div class="device phone" data-w="390" data-h="844" data-input="touch" data-bar="docked"></div>
+    <div class="gap"></div>
+    <p class="variant label">
+      A programme tracker's screen (K146): Beginner 5×5 in the week of 14–20 December, today
+      Wednesday. “Week 4 of 8” at the end of the title's line opens the programme; Monday is locked,
+      since marks stay open for one day and Tuesday can still be marked; Deadlift is paused, “Paused
+      until Mon 28 Dec.” in paused-ink at 600 and its reason in ink-secondary (K169). A 390×844
+      phone, then a 1280×800 desktop; press a box
+    </p>
+    <div class="device phone" data-w="390" data-h="844" data-input="touch" data-programme></div>
+    <div class="gap"></div>
+    <div class="device" data-w="1280" data-h="800" data-input="mouse" data-programme></div>
+    <script>
+      // The app's own drawings (src/components/ui/day-mark, the Header card), for the mockup.
+      // Generated from the source; not hand-edited.
+      window.FP_ART = {
+        box: 'M6.5 4.8C12.5 4.3 23.5 4.6 30.2 4.9C31.4 5 31.6 6.1 31.5 7.2C31.2 13.5 31.4 22.5 31.2 29.4C31.2 30.6 30.3 31.3 29.1 31.3C22.5 31.6 13 31.2 6.6 31.4C5.4 31.4 4.7 30.6 4.7 29.4C4.6 22.8 4.9 13 4.6 6.8C4.6 5.6 5.4 4.9 6.5 4.8Z',
+        stamp:
+          'M5.8 33.2C5.2 33 4.9 32.7 4.9 32.4C4.9 31.9 4.6 31.8 3.3 31.7C2 31.6 1.9 31.6 1.6 31.1C1.4 30.8 1.3 30.2 1.3 29.7C1.2 29.4 1.6 29.1 2.2 29C2.5 29 2.7 29 2.8 28.9C2.9 28.8 3.1 28.7 3.2 28.7C3.6 28.7 3.7 28.5 3.5 27.6C3.4 26.8 3.5 23.7 3.6 23.3C3.6 23.3 3.7 23 3.7 22.7C3.8 22.2 3.8 22 3.9 21.3C4 20.8 4.1 20.7 4.3 20.6C4.4 20.5 4.5 20.4 4.5 20.1C4.5 19.8 4.5 19.7 4.8 19.6C5.2 19.4 5.2 17.9 4.8 17.3C4.7 17.1 4.6 16.2 4.6 16C4.7 15.9 4.7 15.8 4.6 15.7C4.6 15.5 4.6 15.2 4.6 14C4.6 12.5 4.5 12.3 4.3 12.3C4 12.3 3.4 9.5 3.5 8.4C3.5 8.2 3.5 7.9 3.4 7.2C3.3 6.3 3.3 6 3.5 5.6C3.7 5 4.1 4.8 4.5 5C4.8 5.3 6 5.3 6.2 5C6.4 4.9 6.4 4.9 6.7 4.8C6.9 4.8 7 4.8 7.2 4.7C7.4 4.6 7.4 4.6 7.9 4.6C8.2 4.6 9 4.7 9.7 4.7C10.3 4.7 11 4.7 11.2 4.7C11.4 4.7 11.9 4.8 12.3 4.8C12.7 4.8 13.3 4.8 13.6 4.8C14 4.9 14.4 4.9 14.9 4.9C15.6 4.8 16.1 4.9 16.3 5.1C16.4 5.1 16.6 5.2 16.7 5.2C16.9 5.2 17 5.3 17.1 5.3C17.4 5.5 18.1 5.5 18.3 5.3C18.6 5.1 18.8 5.1 19.1 5.3C19.4 5.5 21.7 5.5 23.8 5.2C25.2 5.1 25.5 5.1 26.9 5.1C27.8 5.1 28.9 5.1 29.5 5.1C30.5 5.1 30.5 5.1 30.8 5.2C30.9 5.3 31.1 5.4 31.2 5.4C31.2 5.3 31.4 5.4 31.5 5.5C31.6 5.6 31.7 5.8 31.8 5.8C32.1 6 32.2 6.9 32.1 7.6C31.9 8.1 31.9 8.3 32 8.6C32.1 8.6 32.2 8.9 32.3 9.1C32.7 9.9 33.2 12.2 33.1 13.3C33.1 13.8 33 14.8 33 15.4C32.9 16.1 32.9 16.7 32.9 16.9C32.8 17 32.8 17.6 32.7 18.1C32.6 18.7 32.6 19.2 32.5 19.3C32.5 19.4 32.4 20.2 32.3 21C32.2 21.9 32.1 22.6 32.1 22.7C32.1 22.8 32 23.3 32 23.8C32 24.2 31.9 24.7 31.9 24.8C31.8 25 31.7 25.5 31.7 26.1C31.6 26.5 31.6 26.8 31.5 27C31.2 27.7 31.2 27.7 31 27.8C30.6 27.9 30.5 28.6 30.7 29.1C31.1 29.8 31 31.1 30.5 31.1C30.4 31.1 30.3 31.3 30.2 31.5C30.2 31.6 30 32.1 29.9 32.2C29.4 32.5 27.6 32.4 26.2 32.1C25.9 32 25.6 32 25.4 31.9C24.5 31.8 24.3 31.8 23.8 31.8C23.4 31.7 23 31.7 22.9 31.7C22.7 31.6 22.3 31.6 22 31.6C21.6 31.6 21.2 31.5 21.1 31.5C20.9 31.4 20.8 31.4 20.3 31.5C19.9 31.5 19.7 31.5 19.4 31.5C18.9 31.3 18.7 31.3 18.1 31.4C17.3 31.5 17.2 31.5 16.8 31.3C16.5 31.2 16.5 31.2 15.6 31.2C14.4 31.3 14.4 31.3 14.2 31.1C14 31 12.6 30.9 11.6 31.1C11.3 31.1 10.7 31.1 10.3 31.2C9.3 31.2 8.9 31.2 8.6 31.4C8.5 31.4 8.3 31.5 8.2 31.5C8 31.5 8 31.5 7.7 31.8C7.7 31.9 7.6 31.9 7.6 32C7.6 32 7.5 32.1 7.5 32.2C7.4 32.6 7.1 33 6.7 33.2C6.3 33.4 6.3 33.4 5.8 33.2Z',
+        ticks: {
+          great:
+            'M8.6 18.2C10.6 19.9 12.6 22.4 14.6 25.9C15 26.6 15.6 26.6 16 25.9C19.4 19.2 24.6 11.6 31.6 5.2',
+          partial: 'M8.2 20.6C9.6 15.2 13.8 14.4 17.4 18C21 21.6 25.6 21.8 27.8 15.6',
+          missed: 'M8.2 20.6C9.6 15.2 13.8 14.4 17.4 18C21 21.6 25.6 21.8 27.8 15.6',
+        },
+        wordmark:
+          '<svg class="wordmark" viewBox="36 -737 7347 751" role="img" aria-label="Tracker"><path d="M156.0 0V-59L299.0 -66H350.0L495.0 -59V0ZM256.0 0Q257.0 -51 257.5 -102.0Q258.0 -153 258.0 -204.0Q258.0 -255 258.0 -306V-359Q258.0 -409 258.0 -460.0Q258.0 -511 257.5 -562.5Q257.0 -614 256.0 -664H395.0Q395.0 -614 394.5 -563.0Q394.0 -512 394.0 -461.0Q394.0 -410 394.0 -359V-307Q394.0 -256 394.0 -204.5Q394.0 -153 394.5 -102.0Q395.0 -51 395.0 0ZM22.0 -476 28.0 -664H622.0L628.0 -476H558.0L525.0 -651L578.0 -604H73.0L127.0 -651L92.0 -476ZM678.0 0V-53L787.0 -63H846.0L967.0 -53V0ZM748.0 0Q748.0 -30 748.5 -67.0Q749.0 -104 749.0 -143.0Q749.0 -182 749.0 -215V-270Q749.0 -295 749.0 -315.5Q749.0 -336 748.5 -355.0Q748.0 -374 748.0 -395L672.0 -399V-447L827.0 -502L858.0 -497L868.0 -365L875.0 -364V-215Q875.0 -182 875.0 -143.0Q875.0 -104 875.5 -67.0Q876.0 -30 876.0 0ZM864.0 -279 851.0 -360H880.0Q896.0 -407 917.0 -439.5Q938.0 -472 964.5 -489.0Q991.0 -506 1022.0 -506Q1054.0 -506 1075.5 -489.0Q1097.0 -472 1104.0 -447Q1102.0 -412 1084.0 -389.0Q1066.0 -366 1032.0 -366Q1009.0 -366 992.0 -376.0Q975.0 -386 960.0 -403L939.0 -426L989.0 -425Q944.0 -404 912.5 -365.5Q881.0 -327 864.0 -279ZM1283.0 14Q1225.0 14 1186.0 -19.5Q1147.0 -53 1147.0 -116Q1147.0 -154 1163.5 -183.0Q1180.0 -212 1218.5 -235.0Q1257.0 -258 1324.0 -275Q1351.0 -283 1378.5 -290.0Q1406.0 -297 1433.0 -304.5Q1460.0 -312 1486.0 -319V-277Q1454.0 -267 1420.5 -256.5Q1387.0 -246 1354.0 -235Q1319.0 -225 1300.0 -210.5Q1281.0 -196 1273.5 -178.5Q1266.0 -161 1266.0 -140Q1266.0 -105 1287.5 -86.0Q1309.0 -67 1345.0 -67Q1366.0 -67 1383.5 -74.0Q1401.0 -81 1421.5 -95.5Q1442.0 -110 1468.0 -131L1474.0 -76H1434.0Q1415.0 -52 1395.0 -31.0Q1375.0 -10 1348.5 2.0Q1322.0 14 1283.0 14ZM1552.0 13Q1504.0 13 1476.0 -14.5Q1448.0 -42 1443.0 -94L1440.0 -96V-340Q1440.0 -383 1430.0 -408.0Q1420.0 -433 1398.5 -443.5Q1377.0 -454 1343.0 -454Q1319.0 -454 1296.5 -450.5Q1274.0 -447 1250.0 -437L1297.0 -480L1287.0 -397Q1283.0 -356 1265.5 -338.5Q1248.0 -321 1222.0 -321Q1195.0 -321 1180.0 -334.0Q1165.0 -347 1160.0 -369Q1171.0 -433 1229.0 -471.0Q1287.0 -509 1380.0 -509Q1439.0 -509 1480.5 -490.5Q1522.0 -472 1543.0 -433.0Q1564.0 -394 1564.0 -330V-109Q1564.0 -85 1573.0 -74.0Q1582.0 -63 1599.0 -63Q1611.0 -63 1620.0 -66.5Q1629.0 -70 1638.0 -77L1655.0 -40Q1639.0 -16 1613.5 -1.5Q1588.0 13 1552.0 13ZM1941.0 13Q1865.0 13 1808.5 -18.0Q1752.0 -49 1721.5 -106.0Q1691.0 -163 1691.0 -241Q1691.0 -323 1724.0 -382.5Q1757.0 -442 1815.0 -475.5Q1873.0 -509 1945.0 -509Q2002.0 -509 2044.0 -491.5Q2086.0 -474 2112.0 -445.5Q2138.0 -417 2146.0 -383Q2141.0 -358 2126.5 -343.0Q2112.0 -328 2087.0 -328Q2058.0 -328 2041.0 -346.5Q2024.0 -365 2018.0 -397L1999.0 -482L2065.0 -433Q2043.0 -443 2019.5 -449.0Q1996.0 -455 1965.0 -455Q1924.0 -455 1892.0 -432.5Q1860.0 -410 1841.5 -366.0Q1823.0 -322 1823.0 -258Q1823.0 -195 1843.0 -153.5Q1863.0 -112 1897.0 -90.5Q1931.0 -69 1976.0 -69Q2006.0 -69 2029.5 -77.5Q2053.0 -86 2072.5 -99.5Q2092.0 -113 2108.0 -132L2146.0 -99Q2128.0 -68 2101.5 -42.5Q2075.0 -17 2036.0 -2.0Q1997.0 13 1941.0 13ZM2200.0 0V-53L2309.0 -63H2361.0L2471.0 -53V0ZM2272.0 0Q2273.0 -25 2273.0 -51.5Q2273.0 -78 2273.5 -106.5Q2274.0 -135 2274.0 -162.5Q2274.0 -190 2274.0 -215V-632L2196.0 -647V-693L2369.0 -729L2401.0 -724L2399.0 -592V-217Q2399.0 -191 2399.0 -163.0Q2399.0 -135 2399.0 -106.5Q2399.0 -78 2399.5 -51.5Q2400.0 -25 2400.0 0ZM2342.0 -142V-225H2379.0L2508.0 -363L2638.0 -493H2725.0ZM2598.0 0 2451.0 -271 2535.0 -352 2707.0 -61 2773.0 -52V0ZM2494.0 -443V-495H2752.0V-443L2630.0 -430L2606.0 -428ZM3066.0 13Q2989.0 13 2932.5 -17.5Q2876.0 -48 2845.0 -105.0Q2814.0 -162 2814.0 -242Q2814.0 -322 2846.0 -382.0Q2878.0 -442 2933.5 -475.5Q2989.0 -509 3060.0 -509Q3124.0 -509 3171.5 -484.0Q3219.0 -459 3245.5 -413.0Q3272.0 -367 3272.0 -305Q3272.0 -285 3269.5 -268.5Q3267.0 -252 3264.0 -239H2891.0V-289H3122.0Q3142.0 -297 3148.0 -310.5Q3154.0 -324 3154.0 -346Q3154.0 -382 3142.5 -406.0Q3131.0 -430 3110.0 -442.0Q3089.0 -454 3060.0 -454Q3027.0 -454 3000.5 -434.5Q2974.0 -415 2959.0 -372.0Q2944.0 -329 2944.0 -257Q2944.0 -196 2964.0 -153.5Q2984.0 -111 3020.0 -89.5Q3056.0 -68 3101.0 -68Q3150.0 -68 3182.5 -85.0Q3215.0 -102 3241.0 -132L3277.0 -103Q3255.0 -69 3226.5 -42.0Q3198.0 -15 3159.5 -1.0Q3121.0 13 3066.0 13ZM3341.0 0V-53L3450.0 -63H3509.0L3630.0 -53V0ZM3411.0 0Q3411.0 -30 3411.5 -67.0Q3412.0 -104 3412.0 -143.0Q3412.0 -182 3412.0 -215V-270Q3412.0 -295 3412.0 -315.5Q3412.0 -336 3411.5 -355.0Q3411.0 -374 3411.0 -395L3335.0 -399V-447L3490.0 -502L3521.0 -497L3531.0 -365L3538.0 -364V-215Q3538.0 -182 3538.0 -143.0Q3538.0 -104 3538.5 -67.0Q3539.0 -30 3539.0 0ZM3527.0 -279 3514.0 -360H3543.0Q3559.0 -407 3580.0 -439.5Q3601.0 -472 3627.5 -489.0Q3654.0 -506 3685.0 -506Q3717.0 -506 3738.5 -489.0Q3760.0 -472 3767.0 -447Q3765.0 -412 3747.0 -389.0Q3729.0 -366 3695.0 -366Q3672.0 -366 3655.0 -376.0Q3638.0 -386 3623.0 -403L3602.0 -426L3652.0 -425Q3607.0 -404 3575.5 -365.5Q3544.0 -327 3527.0 -279Z"/></svg>',
+        gear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>',
+      }
 
-    new ResizeObserver(measure).observe(el)
-    measure()
-    if (opts.start && opts.start !== 'exercises') requestAnimationFrame(() => go(opts.start, false))
-    return state
-  }
+      // The PlannerScreen, drawn live from the mockup's prototype (mockups/261025-full-screen-week). PlannerScreen.mount(el, options) draws one screen
+      // into el: the bar, then Exercises, Cardio and Food, a screen each (K90). Options:
+      //   option  'a' | 'b' | 'c'   how the bar and the titles behave (the mockup's question 1)
+      //   phone   'p1' | 'p2'       a phone held upright: today, or the week narrow (question 2)
+      //   input   'mouse' | 'touch' how Edit plan is reached: a long press, and on touch the handle too
+      //   start   'exercises' | 'cardio' | 'food'   bar  'shown'   for the stills on the mockup page
+      // The week is John's own from his screenshots: 19–25 October, today Sunday, three a day.
+      ;(() => {
+        const ART = window.FP_ART
+        const DAYS = [
+          ['Mon', 'Monday', 19],
+          ['Tue', 'Tuesday', 20],
+          ['Wed', 'Wednesday', 21],
+          ['Thu', 'Thursday', 22],
+          ['Fri', 'Friday', 23],
+          ['Sat', 'Saturday', 24],
+          ['Sun', 'Sunday', 25],
+        ]
+        const TODAY = 6
+        const PICK = 3
+        const WEEK = '19–25 October'
+        const g = 'great',
+          p = 'partial',
+          x = 'missed',
+          _ = null
+        const EXERCISES = [
+          { name: 'Push-ups', chips: ['3 × 12'], goal: 4, marks: [g, _, g, p, g, _, _] },
+          { name: 'Squats', chips: ['3 × 15', '16 kg'], goal: 3, marks: [_, g, x, _, g, _, _] },
+          { name: 'Plank', chips: ['3 × 45 s'], goal: 3, marks: [g, p, _, g, _, g, _] },
+          {
+            name: 'Kettlebell halos',
+            chips: ['8 each side', '12 kg'],
+            goal: 2,
+            marks: [_, _, g, _, _, _, _],
+          },
+          { name: 'Pull-ups', chips: ['3 × 5'], goal: 3, marks: [x, g, _, _, p, _, _] },
+        ]
+        // Cardio (K90): a time or a distance as its chip, marked like an exercise, no daily target.
+        const CARDIO = [
+          { name: 'Cycling', chips: ['30 min'], goal: 2, marks: [g, _, _, _, _, _, _] },
+          { name: 'Running', chips: ['5 km'], goal: 3, marks: [_, _, g, _, p, _, _] },
+        ]
+        const FOODS = [
+          { name: 'Vegetables', goal: 7, marks: [g, g, g, _, g, g, _] },
+          { name: 'Fruit', goal: 5, marks: [_, g, _, g, _, _, _] },
+          { name: 'Fish', goal: 2, marks: [_, _, _, g, _, _, _] },
+          { name: 'Nuts', goal: 3, marks: [g, _, _, _, _, _, _] },
+        ]
+        const WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight']
+        const KIND_WORDS = { great: '', partial: ', partly done', missed: ', too difficult' }
+        const icon = (d) =>
+          `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`
+        const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
 
-  // ---- A programme tracker's screen (K146), from the mockup (mockups/261117-programmes, 5A). ----
-  // One screen, the week of 14–20 December, today Wednesday. Plans lock at midnight, marks a day
-  // later (spec §8): Tuesday can still be marked, so only Monday is locked.
-  const PDAYS = [['Mon', 'Monday', 14], ['Tue', 'Tuesday', 15], ['Wed', 'Wednesday', 16], ['Thu', 'Thursday', 17],
-    ['Fri', 'Friday', 18], ['Sat', 'Saturday', 19], ['Sun', 'Sunday', 20]]
-  const PTODAY = 2
-  const PPICK = 2
-  const locked = (i) => i < PTODAY - 1
-  const PROWS = [
-    { name: 'Back squat', chips: ['3 × 5', '45 kg'], marks: [g, _, _, _, _, _, _] },
-    { name: 'Bench press', chips: ['3 × 5', '32.5 kg'], marks: [g, _, _, _, _, _, _] },
-    { name: 'Barbell row', chips: ['3 × 5', '35 kg'], marks: [g, _, _, _, _, _, _] },
-    { name: 'Deadlift', chips: ['1 × 5'], paused: 'Paused until Mon 28 Dec. Knee.' },
-    { name: 'Plank', chips: ['3 × 35 s'], marks: [g, _, _, _, _, _, _] },
-  ]
-  const LOCK = '<svg class="lk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'
-  const PAUSE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/></svg>'
+        // The Stamped ticks set, as John's screenshots draw it: the box filled solid in the pen, the
+        // symbol in paper, the hand-drawn box over both.
+        function markSvg(kind) {
+          const ink = kind
+            ? `<path class="ink" d="${ART.stamp}" fill-rule="evenodd"/><path class="sym" d="${ART.ticks[kind]}" fill="none" stroke-width="3.25"/>`
+            : ''
+          return `<svg viewBox="0 0 36 36" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ink}<path class="bx" d="${ART.box}" stroke-width="1.75"/></svg>`
+        }
+        function markButton(row, i, section) {
+          const kind = row.marks[i]
+          const [, full, date] = DAYS[i]
+          const label = `${row.name}, ${full} ${date} October${i === TODAY ? ', today' : ''}${kind ? KIND_WORDS[kind] : ''}`
+          return `<button type="button" class="mark" data-s="${section}" data-r="${row.i}" data-c="${i}"${kind ? ` data-mark="${kind}"` : ''} aria-pressed="${Boolean(kind)}" aria-label="${esc(label)}">${markSvg(kind)}</button>`
+        }
 
-  function programmeScreen(state) {
-    const rows = state.rows
-    const met = (i) => rows.filter((r) => r.marks && r.marks[i]).length >= PPICK
-    const narrow = state.layout === 'narrow'
-    const head = `<header class="head"><h2 id="prog-h">Beginner 5×5${narrow ? '' : '<span class="wk">14–20 December</span>'}</h2><a class="prog" href="#" aria-label="Week 4 of 8. Open the programme" data-testid="programme-week-link">Week 4 of 8${icon('m9 18 6-6-6-6')}</a></header>`
-    let cells = narrow ? '' : '<div class="hd corner"><span class="vh">Exercise</span></div>'
-    PDAYS.forEach(([short, , date], i) => {
-      const words = `${date} December${i === PTODAY ? ', today' : ''}${locked(i) ? ', locked' : ''}${met(i) ? ', two picked' : ''}`
-      cells += `<div class="hd${i === PTODAY ? ' today' : ''}${met(i) ? ' met' : ''}"${locked(i) ? ' data-locked' : ''}><span class="dl"><span class="dn">${short}</span>${locked(i) ? LOCK : ''}</span><span class="vh"> ${words}</span></div>`
-    })
-    rows.forEach((row, r) => {
-      const chips = row.chips.map((c) => `<span class="chip">${esc(c)}</span>`).join('')
-      cells += narrow ? `<div class="line"><span class="n">${esc(row.name)}</span>${chips}</div>` : `<div class="nm"><span class="n">${esc(row.name)}</span><span class="chips">${chips}</span></div>`
-      if (row.paused) { cells += `<div class="pz" data-testid="paused-row">${PAUSE}<span>${esc(row.paused)}</span></div>`; return }
-      PDAYS.forEach(([, full, date], i) => {
-        const kind = row.marks[i]
-        const label = `${row.name}, ${full} ${date} December${i === PTODAY ? ', today' : ''}${locked(i) ? ', locked' : ''}${kind ? KIND_WORDS[kind] : ''}`
-        cells += `<div class="d${locked(i) ? ' locked' : ''}"><button type="button" class="mark" data-r="${r}" data-c="${i}"${kind ? ` data-mark="${kind}"` : ''} aria-pressed="${Boolean(kind)}"${locked(i) ? ' aria-disabled="true"' : ''} aria-label="${esc(label)}">${markSvg(kind)}</button></div>`
-      })
-    })
-    const grid = narrow ? `<div class="ngrid">${cells}</div>` : `<div class="grid" style="--rows:${rows.length}">${cells}</div>`
-    return `<section class="screen prog-screen" aria-labelledby="prog-h">${head}${grid}</section>`
-  }
+        const count = (row) => row.marks.filter(Boolean).length
+        const TITLES = { exercises: 'Strength', cardio: 'Cardio', food: 'Food' }
+        const ITEM = { exercises: 'Exercise', cardio: 'Cardio', food: 'Food' }
+        const ORDER = ['exercises', 'cardio', 'food']
+        /** Round 3: a day whose marked exercises reach the daily pick. Only the Exercises screen shows it. */
+        const dayMet = (rows, i, section) =>
+          section === 'exercises' && rows.filter((r) => r.marks[i]).length >= PICK
+        const metHead = (met) => (met ? ' met' : '')
+        const METWORDS = '<span class="vh">, three picked</span>'
 
-  function mountProgramme(el, opts = {}) {
-    const state = { el, layout: '', rows: PROWS.map((r) => ({ ...r, marks: r.marks ? [...r.marks] : null })) }
-    el.classList.add('fs')
-    el.dataset.input = opts.input || 'mouse'
-    const render = () => { el.innerHTML = `<div class="scroller">${programmeScreen(state)}</div>` }
-    new ResizeObserver(() => {
-      const layout = el.offsetHeight > el.offsetWidth && el.offsetWidth < 1000 ? 'narrow' : 'wide'
-      if (layout === state.layout) return
-      state.layout = layout
-      el.dataset.layout = layout
-      render()
-    }).observe(el)
-    // A press steps a day great, partial, missed, then empty; a locked day doesn't press.
-    el.addEventListener('click', (e) => {
-      const btn = e.target.closest('.mark')
-      if (e.target.closest('a')) e.preventDefault()
-      if (!btn || btn.getAttribute('aria-disabled') === 'true') return
-      const row = state.rows[Number(btn.dataset.r)], c = Number(btn.dataset.c)
-      const cycle = [null, g, p, x]
-      row.marks[c] = cycle[(cycle.indexOf(row.marks[c]) + 1) % cycle.length]
-      render()
-      el.querySelector(`.mark[data-r="${btn.dataset.r}"][data-c="${c}"]`)?.focus({ preventScroll: true })
-    })
-  }
+        // The arrows between the screens (K42): no words, named for where they go. A screen has one
+        // back to the screen before it, on its title's line, and one on to the next, at its foot.
+        const cueFor = (state, section) => {
+          if (state.option === 'b' || state.short) return ''
+          const at = ORDER.indexOf(section)
+          const before = ORDER[at - 1],
+            after = ORDER[at + 1]
+          const up = before
+            ? `<button type="button" class="cue cue-up" data-go="${before}" aria-label="Back to ${TITLES[before]}">${icon('m18 15-6-6-6 6')}</button>`
+            : ''
+          const down = after
+            ? `<button type="button" class="cue" data-go="${after}" aria-label="Go to ${TITLES[after]}">${icon('m6 9 6 6 6-6')}</button>`
+            : ''
+          return up + down
+        }
 
-  window.PlannerScreen = { mount, mountProgramme }
-})()
-  for (const device of document.querySelectorAll('.device')) {
-    const w = Number(device.dataset.w), h = Number(device.dataset.h)
-    const screen = document.createElement('div')
-    screen.style.width = w + 'px'
-    screen.style.height = h + 'px'
-    device.append(screen)
-    const fit = () => {
-      const s = Math.min(1, device.clientWidth / w)
-      screen.style.transform = `scale(${s})`
-      device.style.height = Math.ceil(h * s) + 'px'
-    }
-    new ResizeObserver(fit).observe(device)
-    fit()
-    if ('programme' in device.dataset) PlannerScreen.mountProgramme(screen, { input: device.dataset.input })
-    else PlannerScreen.mount(screen, { option: 'a', phone: 'p2', affirm: 'g2', input: device.dataset.input, bar: device.dataset.bar })
-  }
-</script>
-</body>
+        // ---- The week grid, wide: a desktop, an iPad, a phone on its side. ----
+        function wideScreen(state, section, rows) {
+          const corner = state.option === 'b' || state.short
+          const head = corner
+            ? ''
+            : `<header class="head"><h2>${TITLES[section]}<span class="wk">${WEEK}</span></h2></header>`
+          const cornerCell = corner
+            ? `<div class="hd corner"><h2>${TITLES[section]}</h2><span class="wk">${WEEK}</span></div>`
+            : `<div class="hd corner"><span class="vh">${ITEM[section]}</span></div>`
+          let cells = cornerCell
+          DAYS.forEach(([short, , date], i) => {
+            const met = dayMet(rows, i, section)
+            cells += `<div class="hd${i === TODAY ? ' today' : ''}${metHead(met)}"><span class="dn">${short}</span><span class="vh"> ${date}</span>${met ? METWORDS : ''}</div>`
+          })
+          for (const row of rows) {
+            const chips = row.chips?.length
+              ? `<span class="chips">${row.chips.map((c) => `<span class="chip">${esc(c)}</span>`).join('')}</span>`
+              : ''
+            cells += `<div class="nm"><span class="n">${esc(row.name)}</span>${chips}</div>`
+            const last = row.i === rows.length - 1 ? ' last' : ''
+            row.marks.forEach((_, i) => {
+              const met = dayMet(rows, i, section)
+              cells += `<div class="d${i === TODAY ? ' today' : ''}${metHead(met)}${last}">${markButton(row, i, section)}</div>`
+            })
+          }
+          const cue = cueFor(state, section)
+          return `<section class="screen" data-section="${section}" aria-label="${TITLES[section]}">${head}<div class="grid" style="--rows:${rows.length}">${cells}</div>${cue}</section>`
+        }
+
+        // ---- P2: the week, narrow. ----
+        function narrowWeek(state, section, rows) {
+          let cells = ''
+          DAYS.forEach(([short, , date], i) => {
+            const met = dayMet(rows, i, section)
+            cells += `<div class="hd${i === TODAY ? ' today' : ''}${metHead(met)}"><span class="dn">${short}</span><span class="vh"> ${date}</span>${met ? METWORDS : ''}</div>`
+          })
+          for (const row of rows) {
+            const chips = (row.chips || [])
+              .slice(0, 1)
+              .map((c) => `<span class="chip">${esc(c)}</span>`)
+              .join('')
+            cells += `<div class="line"><span class="n">${esc(row.name)}</span>${chips}</div>`
+            const last = row.i === rows.length - 1 ? ' last' : ''
+            row.marks.forEach((_, i) => {
+              const met = dayMet(rows, i, section)
+              cells += `<div class="d${i === TODAY ? ' today' : ''}${metHead(met)}${last}">${markButton(row, i, section)}</div>`
+            })
+          }
+          return `<section class="screen" data-section="${section}" aria-label="${TITLES[section]}"><header class="head"><h2>${TITLES[section]}</h2></header><div class="ngrid" style="--t:${TODAY}">${cells}</div>${cueFor(state, section)}</section>`
+        }
+
+        // ---- P1: today, full screen. ----
+        function todayScreen(state, section, rows) {
+          const done = rows.filter((r) => r.marks[TODAY]).length
+          const band =
+            section === 'exercises'
+              ? `<div class="band"><h2>Today, Sunday 25 October</h2><p>${done === 0 ? 'None' : WORDS[done][0].toUpperCase() + WORDS[done].slice(1)} of ${WORDS[PICK]} picked.</p></div>`
+              : ''
+          const list = rows
+            .map((r) => {
+              const chips = (r.chips || [])
+                .map((c) => `<span class="chip">${esc(c)}</span>`)
+                .join('')
+              const n = count(r)
+              return `<div class="row"><div class="text"><span class="n">${esc(r.name)}</span><span class="sub">${chips}<span class="${n >= r.goal ? 'met' : ''}" data-tot="${section}-${r.i}">${n} of ${r.goal} this week</span></span></div><div class="d">${markButton(r, TODAY, section)}</div></div>`
+            })
+            .join('')
+          return `<section class="screen" data-section="${section}" aria-label="${TITLES[section]}">${band}<h3>${TITLES[section]}</h3><div class="tl" style="--rows:${rows.length}">${list}</div></section>`
+        }
+
+        // ---- The bar (the Header card). ----
+        const ICONS = {
+          fullscreen:
+            'M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3',
+          print:
+            'M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z',
+          logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
+        }
+        /** The browser's full screen, where it exists (not on an iPhone). */
+        const canFullscreen = () => document.fullscreenEnabled !== false
+        const fsButton = () =>
+          canFullscreen()
+            ? `<button class="icon-btn" type="button" data-action="fullscreen" aria-label="Full screen">${icon(ICONS.fullscreen)}</button>`
+            : ''
+
+        // ---- The sidebar (round 4, N2): hidden, or expanded with an icon and a name per item. ----
+        function sidebar() {
+          const item = (label, d, action) =>
+            `<button class="item" type="button"${action ? ` data-action="${action}"` : ''}>${d.startsWith('<svg') ? d : icon(d)}<span>${label}</span></button>`
+          const week = `<nav class="week" aria-label="Week"><button class="icon-btn" type="button" aria-label="Previous week">${icon('m15 18-6-6 6-6')}</button><span class="week-label">${WEEK}</span><button class="icon-btn" type="button" aria-label="Next week">${icon('m9 18 6-6-6-6')}</button></nav>`
+          const sw = `<button class="switch" type="button" role="switch" aria-checked="false"><span>Edit plan</span><span class="track" aria-hidden="true"><span class="thumb"></span></span></button>`
+          return `<aside class="side" aria-label="Menu"><span class="brand">${ART.wordmark}</span>${week}${sw}<div class="items">${item('Settings', ART.gear)}${item('Print…', ICONS.print)}${canFullscreen() ? item('Full screen', ICONS.fullscreen, 'fullscreen') : ''}</div><div class="room" aria-hidden="true"></div><div class="items foot">${item('Log out', ICONS.logout)}</div></aside><div class="scrim" aria-hidden="true"></div>`
+        }
+
+        // The bar as built (K47–K50): BarActions, a Lucide icon over its name, at the week's size.
+        const CHECK = '<path d="M20 6 9 17l-5-5"/>'
+        const tile = (label, glyph, attrs = '') =>
+          `<button class="ba" type="button"${attrs}>${glyph}<span>${label}</span></button>`
+        function bar(state) {
+          if (state.nav === 'side') return sidebar()
+          const week = `<nav class="week" aria-label="Week"><button class="icon-btn" type="button" aria-label="Previous week">${icon('m15 18-6-6 6-6')}</button><span class="week-label">${WEEK}</span><button class="icon-btn" type="button" aria-label="Next week">${icon('m9 18 6-6-6-6')}</button></nav>`
+          // No wordmark and no Edit plan button (K81, K82): the week first, and Done in Edit plan.
+          const done = tile(
+            'Done',
+            `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${CHECK}</svg>`,
+            ' data-done',
+          ).replace('class="ba"', 'class="ba done"')
+          const gear = tile('Settings', ART.gear)
+          const full = canFullscreen()
+            ? tile('Full screen', icon(ICONS.fullscreen), ' data-action="fullscreen"')
+            : ''
+          if (state.layout === 'narrow') {
+            return `<header class="bar">${week}<span class="end">${gear}${full}${done}</span></header>`
+          }
+          return `<header class="bar">${week}<span class="end">${gear}${tile('Print…', icon(ICONS.print))}${full}${done}</span></header>`
+        }
+
+        function render(state) {
+          const screen =
+            state.layout === 'narrow'
+              ? state.phone === 'p1' && state.device === 'phone'
+                ? todayScreen
+                : narrowWeek
+              : wideScreen
+          const dots = `<nav class="dots" aria-label="Screens">${ORDER.map((s) => `<button type="button" data-go="${s}" aria-label="${TITLES[s]}"><span></span></button>`).join('')}</nav>`
+          state.el.innerHTML = `<button type="button" class="grab" aria-label="Show the menu"><span></span></button>${bar(state)}<div class="scroller">${ORDER.map((s) => screen(state, s, state.rows[s])).join('')}</div>${dots}`
+          syncDots(state)
+        }
+
+        /** The screen that fills most of the scroller. */
+        const onScreen = (sc) =>
+          ORDER[Math.min(ORDER.length - 1, Math.round(sc.scrollTop / sc.clientHeight))]
+
+        function syncDots(state) {
+          const sc = state.el.querySelector('.scroller')
+          if (!sc) return
+          const at = onScreen(sc)
+          state.el
+            .querySelectorAll('.dots button')
+            .forEach((b) => b.setAttribute('aria-current', String(b.dataset.go === at)))
+        }
+
+        function mount(el, opts = {}) {
+          const clone = (rows) => rows.map((r, i) => ({ ...r, i, marks: [...r.marks] }))
+          const state = {
+            el,
+            option: opts.option || 'a',
+            phone: opts.phone || 'p2',
+            affirm: opts.affirm || 'g2',
+            nav: opts.nav || 'bar',
+            layout: '',
+            short: false,
+          }
+          state.rows = { exercises: clone(EXERCISES), cardio: clone(CARDIO), food: clone(FOODS) }
+          el.classList.add('fs')
+          el.dataset.option = state.option
+          el.dataset.affirm = state.affirm
+          el.dataset.nav = state.nav
+          el.dataset.input = opts.input || (matchMedia('(hover: none)').matches ? 'touch' : 'mouse')
+          let pinned = opts.bar === 'shown'
+          if (pinned) el.dataset.bar = 'shown'
+          // Edit plan (K80): the bar docked above the page, Edit plan pressed.
+          const syncDock = () => {
+            const docked = el.dataset.bar === 'docked'
+            if (docked)
+              el.style.setProperty('--docked-bar', `${el.querySelector('.bar').offsetHeight}px`)
+          }
+          const dock = (on) => {
+            if (on) el.dataset.bar = 'docked'
+            else delete el.dataset.bar
+            syncDock()
+          }
+
+          const measure = () => {
+            const w = el.offsetWidth,
+              h = el.offsetHeight
+            // Held upright, a phone or an iPad folds the week; a phone may show today instead (P1).
+            const layout = h > w && w < 1000 ? 'narrow' : 'wide'
+            el.dataset.device = w < 640 || h < 640 ? 'phone' : 'tablet'
+            state.device = el.dataset.device
+            const short = layout === 'wide' && h <= 540
+            if (layout === state.layout && short === state.short) return
+            const sc = el.querySelector('.scroller')
+            const was = sc ? onScreen(sc) : 'exercises'
+            state.layout = layout
+            state.short = short
+            el.dataset.layout = layout
+            render(state)
+            syncDock()
+            if (was !== 'exercises') go(was, false)
+          }
+          const go = (section, smooth = true) => {
+            const target = el.querySelector(`.screen[data-section="${section}"]`)
+            el.querySelector('.scroller').scrollTo({
+              top: target.offsetTop,
+              behavior:
+                smooth && !matchMedia('(prefers-reduced-motion: reduce)').matches
+                  ? 'smooth'
+                  : 'auto',
+            })
+          }
+
+          // The bar: a long press anywhere, or the handle, opens Edit plan with the bar docked above the
+          // page (K80), and another long press goes back. Focus alone floats it over the screen.
+          let hideTimer,
+            hold = null,
+            swallow = false
+          if (opts.bar === 'docked') requestAnimationFrame(() => dock(true))
+          const show = () => {
+            clearTimeout(hideTimer)
+            el.dataset.bar = 'shown'
+          }
+          const hideSoon = (ms = 500) => {
+            if (state.option === 'c' || pinned || el.dataset.bar === 'docked') return
+            clearTimeout(hideTimer)
+            hideTimer = setTimeout(() => {
+              if (!el.querySelector('.bar, .side')?.matches(':focus-within')) delete el.dataset.bar
+            }, ms)
+          }
+          el.addEventListener('pointerover', (e) => {
+            if (e.pointerType === 'touch') return
+            if (el.dataset.bar === 'shown' && e.target.closest('.bar, .side')) show()
+          })
+          el.addEventListener('pointerout', (e) => {
+            if (e.pointerType === 'touch') return
+            if (e.target.closest('.bar, .side') && !e.relatedTarget?.closest?.('.bar, .side')) {
+              pinned = false
+              hideSoon()
+            }
+          })
+          el.addEventListener('pointerleave', () => {
+            if (pinned) {
+              pinned = false
+              hideSoon(900)
+            }
+          })
+          el.addEventListener('focusout', () => hideSoon(200))
+          el.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && el.dataset.bar !== 'docked') {
+              pinned = false
+              delete el.dataset.bar
+            }
+          })
+          let pull
+          // A long press: held 500ms within 10px, the primary button. The click that ends it is
+          // swallowed, so the box held is not marked.
+          const endHold = () => {
+            if (hold) clearTimeout(hold.timer)
+            hold = null
+          }
+          el.addEventListener('pointerdown', (e) => {
+            swallow = false
+            endHold()
+            if (e.target.closest('.grab')) {
+              pull = e.clientY
+              return
+            }
+            if (e.target.closest('.bar, .side')) return
+            if (e.button === 0 && e.isPrimary !== false) {
+              hold = {
+                x: e.clientX,
+                y: e.clientY,
+                timer: setTimeout(() => {
+                  hold = null
+                  swallow = true
+                  dock(el.dataset.bar !== 'docked')
+                }, 500),
+              }
+            }
+            if (
+              el.dataset.input === 'touch' ||
+              el.dataset.bar === 'shown' ||
+              e.target.closest('.scrim')
+            ) {
+              pinned = false
+              hideSoon(0)
+            }
+          })
+          el.addEventListener('pointermove', (e) => {
+            if (pull != null && e.clientY - pull > 12) {
+              dock(true)
+              pull = null
+            }
+            if (hold && Math.hypot(e.clientX - hold.x, e.clientY - hold.y) > 10) endHold()
+          })
+          el.addEventListener('pointerup', () => {
+            pull = null
+            endHold()
+            if (swallow)
+              setTimeout(() => {
+                swallow = false
+              }, 300)
+          })
+          el.addEventListener('pointercancel', () => {
+            pull = null
+            endHold()
+          })
+          el.addEventListener('contextmenu', (e) => {
+            if (e.pointerType === 'touch' || el.dataset.input === 'touch') e.preventDefault()
+          })
+          el.addEventListener(
+            'click',
+            (e) => {
+              if (swallow) {
+                swallow = false
+                e.preventDefault()
+                e.stopImmediatePropagation()
+              }
+            },
+            true,
+          )
+
+          el.addEventListener('click', (e) => {
+            if (e.target.closest('.grab')) {
+              dock(true)
+              return
+            }
+            if (e.target.closest('.bar .done')) {
+              dock(false)
+              return
+            }
+            if (e.target.closest('[data-action="fullscreen"]')) {
+              if (document.fullscreenElement) document.exitFullscreen?.()
+              else el.requestFullscreen?.().catch(() => {})
+              return
+            }
+            const goto = e.target.closest('[data-go]')
+            if (goto) {
+              go(goto.dataset.go)
+              return
+            }
+            const btn = e.target.closest('.mark')
+            if (!btn) return
+            const rows = state.rows[btn.dataset.s]
+            const row = rows[Number(btn.dataset.r)]
+            const c = Number(btn.dataset.c)
+            // A press steps an exercise or cardio great, partial, missed, then empty; a food great, then empty.
+            const cycle = btn.dataset.s === 'food' ? [null, g] : [null, g, p, x]
+            row.marks[c] = cycle[(cycle.indexOf(row.marks[c]) + 1) % cycle.length]
+            const sc = el.querySelector('.scroller'),
+              top = sc.scrollTop
+            render(state)
+            syncDock()
+            el.querySelector('.scroller').scrollTop = top
+            el.querySelector(
+              `.mark[data-s="${btn.dataset.s}"][data-r="${btn.dataset.r}"][data-c="${c}"]`,
+            )?.focus({ preventScroll: true })
+          })
+          el.addEventListener('scroll', () => syncDots(state), true)
+
+          new ResizeObserver(measure).observe(el)
+          measure()
+          if (opts.start && opts.start !== 'exercises')
+            requestAnimationFrame(() => go(opts.start, false))
+          return state
+        }
+
+        // ---- A programme tracker's screen (K146), from the mockup (mockups/261117-programmes, 5A). ----
+        // One screen, the week of 14–20 December, today Wednesday. Plans lock at midnight, marks a day
+        // later (spec §8): Tuesday can still be marked, so only Monday is locked.
+        const PDAYS = [
+          ['Mon', 'Monday', 14],
+          ['Tue', 'Tuesday', 15],
+          ['Wed', 'Wednesday', 16],
+          ['Thu', 'Thursday', 17],
+          ['Fri', 'Friday', 18],
+          ['Sat', 'Saturday', 19],
+          ['Sun', 'Sunday', 20],
+        ]
+        const PTODAY = 2
+        const PPICK = 2
+        const locked = (i) => i < PTODAY - 1
+        const PROWS = [
+          { name: 'Back squat', chips: ['3 × 5', '45 kg'], marks: [g, _, _, _, _, _, _] },
+          { name: 'Bench press', chips: ['3 × 5', '32.5 kg'], marks: [g, _, _, _, _, _, _] },
+          { name: 'Barbell row', chips: ['3 × 5', '35 kg'], marks: [g, _, _, _, _, _, _] },
+          { name: 'Deadlift', chips: ['1 × 5'], paused: ['Paused until Mon 28 Dec.', 'Knee.'] },
+          { name: 'Plank', chips: ['3 × 35 s'], marks: [g, _, _, _, _, _, _] },
+        ]
+        const LOCK =
+          '<svg class="lk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'
+        const PAUSE =
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/></svg>'
+
+        function programmeScreen(state) {
+          const rows = state.rows
+          const met = (i) => rows.filter((r) => r.marks && r.marks[i]).length >= PPICK
+          const narrow = state.layout === 'narrow'
+          const head = `<header class="head"><h2 id="prog-h">Beginner 5×5${narrow ? '' : '<span class="wk">14–20 December</span>'}</h2><a class="prog" href="#" aria-label="Week 4 of 8. Open the programme" data-testid="programme-week-link">Week 4 of 8${icon('m9 18 6-6-6-6')}</a></header>`
+          let cells = narrow ? '' : '<div class="hd corner"><span class="vh">Exercise</span></div>'
+          PDAYS.forEach(([short, , date], i) => {
+            const words = `${date} December${i === PTODAY ? ', today' : ''}${locked(i) ? ', locked' : ''}${met(i) ? ', two picked' : ''}`
+            cells += `<div class="hd${i === PTODAY ? ' today' : ''}${met(i) ? ' met' : ''}"${locked(i) ? ' data-locked' : ''}><span class="dl"><span class="dn">${short}</span>${locked(i) ? LOCK : ''}</span><span class="vh"> ${words}</span></div>`
+          })
+          rows.forEach((row, r) => {
+            const chips = row.chips.map((c) => `<span class="chip">${esc(c)}</span>`).join('')
+            cells += narrow
+              ? `<div class="line"><span class="n">${esc(row.name)}</span>${chips}</div>`
+              : `<div class="nm"><span class="n">${esc(row.name)}</span><span class="chips">${chips}</span></div>`
+            if (row.paused) {
+              cells += `<div class="pz" data-testid="paused-row">${PAUSE}<span><span class="pu" data-testid="paused-lead">${esc(row.paused[0])}</span> ${esc(row.paused[1])}</span></div>`
+              return
+            }
+            PDAYS.forEach(([, full, date], i) => {
+              const kind = row.marks[i]
+              const label = `${row.name}, ${full} ${date} December${i === PTODAY ? ', today' : ''}${locked(i) ? ', locked' : ''}${kind ? KIND_WORDS[kind] : ''}`
+              cells += `<div class="d${locked(i) ? ' locked' : ''}"><button type="button" class="mark" data-r="${r}" data-c="${i}"${kind ? ` data-mark="${kind}"` : ''} aria-pressed="${Boolean(kind)}"${locked(i) ? ' aria-disabled="true"' : ''} aria-label="${esc(label)}">${markSvg(kind)}</button></div>`
+            })
+          })
+          const grid = narrow
+            ? `<div class="ngrid">${cells}</div>`
+            : `<div class="grid" style="--rows:${rows.length}">${cells}</div>`
+          return `<section class="screen prog-screen" aria-labelledby="prog-h">${head}${grid}</section>`
+        }
+
+        function mountProgramme(el, opts = {}) {
+          const state = {
+            el,
+            layout: '',
+            rows: PROWS.map((r) => ({ ...r, marks: r.marks ? [...r.marks] : null })),
+          }
+          el.classList.add('fs')
+          el.dataset.input = opts.input || 'mouse'
+          const render = () => {
+            el.innerHTML = `<div class="scroller">${programmeScreen(state)}</div>`
+          }
+          new ResizeObserver(() => {
+            const layout =
+              el.offsetHeight > el.offsetWidth && el.offsetWidth < 1000 ? 'narrow' : 'wide'
+            if (layout === state.layout) return
+            state.layout = layout
+            el.dataset.layout = layout
+            render()
+          }).observe(el)
+          // A press steps a day great, partial, missed, then empty; a locked day doesn't press.
+          el.addEventListener('click', (e) => {
+            const btn = e.target.closest('.mark')
+            if (e.target.closest('a')) e.preventDefault()
+            if (!btn || btn.getAttribute('aria-disabled') === 'true') return
+            const row = state.rows[Number(btn.dataset.r)],
+              c = Number(btn.dataset.c)
+            const cycle = [null, g, p, x]
+            row.marks[c] = cycle[(cycle.indexOf(row.marks[c]) + 1) % cycle.length]
+            render()
+            el.querySelector(`.mark[data-r="${btn.dataset.r}"][data-c="${c}"]`)?.focus({
+              preventScroll: true,
+            })
+          })
+        }
+
+        window.PlannerScreen = { mount, mountProgramme }
+      })()
+      for (const device of document.querySelectorAll('.device')) {
+        const w = Number(device.dataset.w),
+          h = Number(device.dataset.h)
+        const screen = document.createElement('div')
+        screen.style.width = w + 'px'
+        screen.style.height = h + 'px'
+        device.append(screen)
+        const fit = () => {
+          const s = Math.min(1, device.clientWidth / w)
+          screen.style.transform = `scale(${s})`
+          device.style.height = Math.ceil(h * s) + 'px'
+        }
+        new ResizeObserver(fit).observe(device)
+        fit()
+        if ('programme' in device.dataset)
+          PlannerScreen.mountProgramme(screen, { input: device.dataset.input })
+        else
+          PlannerScreen.mount(screen, {
+            option: 'a',
+            phone: 'p2',
+            affirm: 'g2',
+            input: device.dataset.input,
+            bar: device.dataset.bar,
+          })
+      }
+    </script>
+  </body>
 </html>

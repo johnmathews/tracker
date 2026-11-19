@@ -315,6 +315,7 @@ export const RUN: Run = {
   openPause: null,
   endsShort: [ENDS_SHORT],
   ended: null,
+  canReopen: false,
   clock: {
     programmeWeek: NOW + 1,
     status: 'running',
@@ -375,6 +376,37 @@ export const PART_PAUSE_GRID: Grid = (() => {
     const c = w.cells.deadlift!
     const part: Cell = { ...c, until, reason: 'Knee', target: i === NOW ? 1 : c.target }
     return { ...w, cells: { ...w.cells, deadlift: part } }
+  })
+  return { ...base, weeks }
+})()
+
+/**
+ * Rest weeks (K170), as the card's "rest" grid: running weeks planned with a goal of 0. Back squat
+ * rests in week 2 (nothing marked) and week 6 (still to come); Bench press rests in week 3, with
+ * one day marked. Deadlift's paused week 5 is there for contrast.
+ */
+export const REST_GRID: Grid = (() => {
+  const find = (key: string) => SPECS.find((s) => s.key === key)!
+  const bench = find('bench')
+  const specs: Spec[] = [
+    { ...find('squat'), done: [3, 0, 3, 1] },
+    { ...bench, plans: [30, 32.5, 35, 32.5, 37.5, 40, 42.5, 40], done: [3, 3, 1, 1] },
+    find('deadlift'),
+  ]
+  const rests: [string, number][] = [
+    ['squat', 1],
+    ['bench', 2],
+    ['squat', 5],
+  ]
+  const base = grid(specs)
+  const weeks = base.weeks.map((w, i) => {
+    const cells = { ...w.cells }
+    for (const [key, at] of rests) {
+      if (at !== i) continue
+      const c = cells[key]!
+      cells[key] = { ...c, target: 0, values: { ...c.values!, target: 0 } }
+    }
+    return { ...w, cells }
   })
   return { ...base, weeks }
 })()

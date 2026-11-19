@@ -6,7 +6,7 @@
 > server turns it into weeks, how a run changes, and which past days are locked. The spec is
 > [specs/2026-11-17-programmes.md](specs/2026-11-17-programmes.md). The endpoints are in
 > [api.md](api.md) §3.4, the agent tools in [mcp.md](mcp.md) §1.1, and the engine's design in
-> [architecture.md](architecture.md) §8.
+> [architecture.md](architecture.md) §8. §11 covers the shared library.
 
 ## 1. Overview
 
@@ -268,25 +268,42 @@ into the log, not a change type (K156). Delete tracker on a programme tracker en
 same way, from the week on screen's Monday or today, whichever is later. A run ended this way
 takes no more changes unless it is re-opened.
 
-**Restarting.** An agent's `restart_programme` starts a run again from week 1, as a new tracker,
-from today or a later day (K164). The new run starts from the old run's own copy of the document
+**Restarting.** A restart starts a run again from week 1, as a new tracker, from today or a later
+day (K164). An agent's `restart_programme` does it, and so does `POST /api/runs/{tracker}/restart`,
+each after a preview confirmed with its token (K167). The new run starts from the old run's own copy of the document
 and the parameters the old run started with, so it works after the library programme is edited or
 deleted. The new tracker takes the old one's name unless the agent gives another. A run still
 going on the new start day ends from that day in the same confirm, as End programme ends it, with
-the reason "Restarted from week 1.". Its weeks, marks, notes and log stay.
+the reason "Restarted from week 1.". Its weeks, marks, notes and log stay. That end carries a
+`restarted` marker, so the old run can't be re-opened: the new run replaces it (K167). A run End
+programme had already ended gains the same marker in its log, from its end's own day, and nothing
+else about it changes.
 
-**Re-opening.** An agent's `reopen_programme` carries on a run that End programme stopped part
-way, from today or a later day, and no earlier than the end's own day (K165). The days from the
+**Re-opening.** A re-open carries on a run that End programme stopped part way, from today or a
+later day, and no earlier than the end's own day (K165). An agent's `reopen_programme` does it, and
+so does `POST /api/runs/{tracker}/reopen`, each after a preview confirmed with its token (K167). The days from the
 end to the day before the re-open count as a pause of the whole programme. The run resumes at the
 programme week it stopped in, and each activity's week moves as it does across any programme
 pause (§8.2). The re-open goes into the log as a `reopen-programme` row. The tracker shows again in
 the weeks the end had hidden, which read as paused, and in every week to the run's new last day.
 Days before the end keep their sealed record, and the days from the end to yesterday are sealed as
 paused. A run that ran to its last Sunday, or was ended before it started, has nothing to
-re-open: restart it instead. A re-opened run takes changes again, and can be ended and re-opened
+re-open: restart it instead. A run a restart ended has nothing to re-open either. The run's
+`canReopen` says whether a re-open applies today. An end set for a later day leaves the run
+`running`, and it can still be re-opened from that day. A re-opened run takes changes again, and can be ended and re-opened
 again. Undo never applies to an end or a re-open; ending again is the way back. The overview's
 log reads "Programme re-opened, from Wed 11 Nov.", as it reads "Programme ended, from Wed 4 Nov."
 for the end.
+
+**On the overview** (K168). An ended run's line says its last day and the end's reason ("Ended Sun
+15 Nov. Knee."), and in place of the controls it has **Re-open programme**, when `canReopen` is
+true, and **Restart from week 1**. A run with an end set for a later day keeps its controls, with
+**Cancel the end** in End programme's place: a re-open from the end's own day. Each opens a sheet
+in the ChangeSheet's look. Re-open asks for From and Reason, Restart for Name (the tracker's to
+start with) and Starts. Step 2 is the server's preview, and nothing changes until the confirm.
+Cancel the end opens on its preview, with Keep the end and Cancel the end. A stale preview shows
+the fresh one with a line saying so. A confirmed restart opens the new tracker's overview, and the
+old run stays as it is.
 
 **Its plans are the engine's.** A programme tracker's plans can't be written by hand: the generic
 plan write answers 409 `programme-tracker`, and the MCP's `add_item`, `update_item` and
@@ -368,6 +385,10 @@ shown as 14, then 15.87, shown as 16.
   since each reads the week's plan. A week written under the old rule, the target in force on
   Sunday, gets the new goal at the run's next seal, the first read of a day. Earlier weeks keep
   theirs (P1).
+- A week planned with a goal of 0 is a **rest week**, a planned break, not a pause (K170). The
+  week runs: its state is `running`, and "paused" comes only from paused days. The overview's grid
+  says "Rest week" over the planned value, adds "1 done" when a day was marked, and never reads
+  "0 of 0". A rest week to come says "Rest week" in place of "0 a week".
 - A paused activity's activity week stops while the programme week runs on, so it comes back at
   the value it paused on. A resume on any day of a week gives the same value as a resume on its
   Monday (K151).
@@ -428,7 +449,7 @@ Past days are a record, and evidence for later decisions. They never change (spe
 ## 10. For agents: the MCP tools
 
 An agent connected over MCP ([mcp.md](mcp.md)) writes, saves, starts, changes, ends, restarts and
-re-opens a programme with nine tools:
+re-opens a programme with nine tools, and reaches the shared library with two more (below):
 
 1. `programme_format` gives the schema, the example in §2, each change type with its keys and what
    it does, and short notes. Call it first.
@@ -484,3 +505,31 @@ reopen_programme(tracker="Beginner 5×5", reason="Knee is better", confirm=true,
 
 The read tools (`week_summary`, `weeks`, `item_history`, `goals`, `consistency`) read a
 programme tracker as any other, since its weeks are ordinary plans. `mark_day` follows §9's lock.
+
+Two more tools reach the shared library (§11): `list_shared_programmes` lists it, or reads one
+shared programme with its document, and `copy_programme` copies one into the person's library.
+The copy is then adjusted with `save_programme` and started with `start_programme`, as above.
+
+## 11. Shared library
+
+The shared library holds programmes every signed-in user can see. Only an admin adds to it, by
+publishing one of their own library programmes. Any user copies a shared programme into their own
+library, then adjusts it and runs it like any other. The spec is
+[specs/2026-11-19-shared-library.md](specs/2026-11-19-shared-library.md) (K171), and the routes
+are in [api.md](api.md) §3.5.
+
+- **Publishing is a snapshot.** The shared library keeps its own copy of the document. A later
+  edit or delete in the admin's library changes nothing shared. Publishing the same programme
+  again replaces its shared copy.
+- **Publishing previews.** The preview shows the document as every user will see it: the name,
+  the description, and each activity's notes and links. Nothing is shared until the admin
+  confirms.
+- **A copy is the user's own.** It is an ordinary library programme with a new id and the shared
+  programme's name. It keeps no link to the shared one, and later publishes don't reach it. It
+  counts towards the library's 100 programmes and the account's quota.
+- **A shared programme names no one.** No shared answer carries an owner, a user id or a username.
+- **Adjusting a copy.** There is no form editor. A copy changes through the start options (the
+  parameters, the start day and the tracker's name) or through an agent's `save_programme`.
+
+An admin is an account with the admin flag, set with `tracker-admin admin <email>` ([api.md](api.md)
+§5). Publishing is in the app only: no MCP tool publishes.

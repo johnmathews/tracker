@@ -224,6 +224,12 @@ describe('a run in a line', () => {
     })
     expect(runMeta({ ...RUN, status: 'ended' })).toEqual({ lead: null, rest: 'Ended Sun 13 Dec.' })
     expect(runMeta({ ...RUN, status: 'ended', end: null })).toEqual({ lead: null, rest: 'Ended.' })
+    // An end with a reason says it after the last day (K168, the mockup's state (i)).
+    const ended = { from: '2026-11-16', reason: 'knee', seq: 5 }
+    expect(runMeta({ ...RUN, status: 'ended', end: '2026-11-15', ended })).toEqual({
+      lead: null,
+      rest: 'Ended Sun 15 Nov. Knee.',
+    })
   })
 
   it('reads the runs and today from the state, leaving out anything else', () => {
@@ -300,6 +306,9 @@ describe('changes in sentences', () => {
     expect(logSentence({ type: 'reopen-programme' }, '2026-12-28', NAMES, RUN.log)).toBe(
       'Programme re-opened, from Mon 28 Dec.',
     )
+    expect(
+      logSentence({ type: 'end-programme', restarted: true }, '2026-12-21', NAMES, RUN.log),
+    ).toBe('Restarted from week 1, from Mon 21 Dec.')
   })
 
   it('words each kind of change for the log', () => {

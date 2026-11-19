@@ -44,6 +44,8 @@ const props = defineProps<{
   readonly?: boolean
   /** The table bleeds to the screen's edges when folded, as on the overview. */
   bleed?: boolean
+  /** Weeks by number with no dates: a shared programme's preview, before any start day (K173). */
+  undated?: boolean
   /** An activity's item page, for its name's link. */
   itemHref?: (key: string) => string
 }>()
@@ -133,8 +135,8 @@ const rows = computed(() =>
 )
 
 type View = {
-  state: 'done' | 'current' | 'planned' | 'paused' | 'changed' | 'none'
-  /** The leading line: a value, a count, "Paused", or before → after. */
+  state: 'done' | 'current' | 'planned' | 'paused' | 'rest' | 'changed' | 'none'
+  /** The leading line: a value, a count, "Paused", "Rest week", or before → after. */
   main: string
   /** Before a change's arrow, in ink-secondary. */
   was: string | null
@@ -144,10 +146,15 @@ type View = {
   /** "Paused until Wed 2 Dec", after the lines, in paused-ink at 600 (K166). */
   until: string | null
   met: boolean
+  /** A running week planned with a goal of 0 (K170): "Rest week" leads, in ink-secondary. */
+  rest: boolean
   split: boolean
   hand: string | null
   tap: boolean
 }
+
+/** A rest week's leading line (K170): a planned break, never "Paused", "0 of 0" or "0 a week". */
+const REST_WEEK = 'Rest week'
 
 function changeFor(column: Column, key: string, lead: string | null): PreviewCell | null {
   if (props.mode !== 'preview' || !column.week) return null
@@ -167,6 +174,7 @@ function view(column: Column, key: string): View {
     lines: [],
     until: null,
     met: false,
+    rest: false,
     split: false,
     hand: null,
     tap: false,
@@ -175,7 +183,8 @@ function view(column: Column, key: string): View {
   const values = cell.values
   const lead = primaryField(values)
   const out: View = { ...blank, hidden: null }
-  if (cell.state === 'paused' || (column.past && cell.target === 0)) {
+  // "Paused" comes from the cell's state, never from its goal (K170).
+  if (cell.state === 'paused') {
     return { ...out, state: 'paused', main: 'Paused', lines: cell.reason ? [cell.reason] : [] }
   }
   // An activity planned by its goal alone leads with the goal: "3 a week".
@@ -190,8 +199,23 @@ function view(column: Column, key: string): View {
     : []
   const handMark = (lead && cell.hand[lead]) || Object.values(cell.hand)[0]
   const hand = handMark ? madeOnText(handMark.madeOn) : null
+  // A rest week (K170) leads with its words; its planned value moves to the line under them. An
+  // activity planned by its goal alone has no value line: its goal is the 0 the words replace.
+  const rest = cell.target === 0
+  const planned = split ? splitLines : lead ? [value] : []
   if (column.past) {
     const count = weekCount(cell)
+    if (rest) {
+      const done = count.done > 0 ? [`${count.done} done`] : []
+      return {
+        ...out,
+        state: 'rest',
+        main: REST_WEEK,
+        rest,
+        split: !!split,
+        lines: [...planned, ...done],
+      }
+    }
     return {
       ...out,
       state: 'done',
@@ -203,7 +227,7 @@ function view(column: Column, key: string): View {
     }
   }
   const sets = setsLine(values, props.kind)
-  const lines = split ? [splitLines[1]!] : []
+  const lines = rest ? [...planned] : split ? [splitLines[1]!] : []
   if (sets) lines.push(sets)
   if (column.current && cell.target > 0) {
     lines.push(`${weekCount(cell).done} of ${cell.target} so far`)
@@ -226,10 +250,11 @@ function view(column: Column, key: string): View {
   return {
     ...out,
     state: column.current ? 'current' : 'planned',
-    main: split ? splitLines[0]! : value,
+    main: rest ? REST_WEEK : split ? splitLines[0]! : value,
     hidden: hand ? `, set by hand on ${hand}` : null,
     lines,
     until,
+    rest,
     split: !!split,
     hand,
     tap,
@@ -304,7 +329,7 @@ function cellClass(column: Column, last: boolean): string[] {
         <tr>
           <th
             scope="col"
-            class="sticky left-0 z-2 w-[216px] min-w-[216px] border-b border-ink bg-canvas px-2 py-3 align-bottom folded:w-[132px] folded:min-w-[132px] folded:py-2.5 folded:shadow-[1px_0_0_var(--color-line)]"
+            class="sticky left-0 z-2 w-[216px] min-w-[216px] border-b border-ink bg-(--grid-ground,var(--canvas)) px-2 py-3 align-bottom folded:w-[132px] folded:min-w-[132px] folded:py-2.5 folded:shadow-[1px_0_0_var(--color-line)]"
             :class="bleed && 'folded:pl-(--screen-pad-x)'"
           >
             <span class="sr-only">Activity</span>
@@ -330,6 +355,7 @@ function cellClass(column: Column, last: boolean): string[] {
               column.name
             }}</span>
             <span
+              v-if="!undated"
               class="block text-(length:--set-caption) leading-[1.35] whitespace-nowrap text-ink-secondary"
               >{{ column.dates }}</span
             >
@@ -346,7 +372,7 @@ function cellClass(column: Column, last: boolean): string[] {
         <tr v-for="(row, r) in table" :key="row.key" :data-activity="row.key">
           <th
             scope="row"
-            class="sticky left-0 z-2 w-[216px] min-w-[216px] border-b border-line bg-canvas px-2 py-3 text-left align-top font-normal folded:w-[132px] folded:min-w-[132px] folded:py-2.5 folded:shadow-[1px_0_0_var(--color-line)]"
+            class="sticky left-0 z-2 w-[216px] min-w-[216px] border-b border-line bg-(--grid-ground,var(--canvas)) px-2 py-3 text-left align-top font-normal folded:w-[132px] folded:min-w-[132px] folded:py-2.5 folded:shadow-[1px_0_0_var(--color-line)]"
             :class="bleed && 'folded:pl-(--screen-pad-x)'"
           >
             <a
@@ -386,6 +412,7 @@ function cellClass(column: Column, last: boolean): string[] {
             :data-week="column.number ?? undefined"
             :data-cell="v.state"
             :data-met="v.met ? '' : undefined"
+            :data-rest="v.rest ? '' : undefined"
             :data-split="v.split ? '' : undefined"
             :data-hand-edit="v.hand ?? undefined"
             :data-when-resumed="column.week ? undefined : ''"
@@ -400,6 +427,8 @@ function cellClass(column: Column, last: boolean): string[] {
                 >
                   <span
                     class="flex items-center gap-1.5 text-[max(18px,calc(var(--u)*21))] leading-[1.3] font-semibold whitespace-nowrap folded:text-[calc(var(--n)*18)]"
+                    :class="v.rest && 'text-ink-secondary'"
+                    data-slot="cell-main"
                     >{{ v.main
                     }}<Pencil
                       v-if="v.hand"
@@ -427,7 +456,8 @@ function cellClass(column: Column, last: boolean): string[] {
             <template v-else-if="v.state !== 'none'">
               <span
                 class="flex items-center gap-1.5 text-[max(18px,calc(var(--u)*21))] leading-[1.3] font-semibold whitespace-nowrap folded:text-[calc(var(--n)*18)]"
-                :class="v.state === 'paused' && 'text-ink-secondary'"
+                :class="(v.state === 'paused' || v.rest) && 'text-ink-secondary'"
+                data-slot="cell-main"
               >
                 <span v-if="v.was" class="font-normal text-ink-secondary">{{ v.was }}</span>
                 <span

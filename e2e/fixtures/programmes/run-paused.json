@@ -1,6 +1,6 @@
 {
-  "tracker": "xmwmdo222uxyt",
-  "programmeId": "xmwmdo21iejbz",
+  "tracker": "xmwdbhk000001",
+  "programmeId": "xmwdbhk000000",
   "name": "Beginner 5×5",
   "kind": "strength",
   "doc": {
@@ -130,6 +130,7 @@
     }
   ],
   "ended": null,
+  "canReopen": false,
   "clock": {
     "programmeWeek": 1,
     "status": "running",
@@ -299,7 +300,7 @@
               "reps": 5,
               "weight": 30
             },
-            "target": 3,
+            "target": 2,
             "splits": {},
             "hand": {},
             "until": null,
@@ -315,7 +316,7 @@
               "reps": 5,
               "weight": 30
             },
-            "target": 3,
+            "target": 2,
             "splits": {},
             "hand": {},
             "until": null,
@@ -331,7 +332,7 @@
               "reps": 5,
               "weight": 60
             },
-            "target": 3,
+            "target": 2,
             "splits": {},
             "hand": {},
             "until": null,
@@ -346,7 +347,7 @@
               "sets": 3,
               "duration": 30
             },
-            "target": 3,
+            "target": 2,
             "splits": {},
             "hand": {},
             "until": null,
@@ -547,7 +548,7 @@
               "reps": 5,
               "weight": 42.5
             },
-            "target": 3,
+            "target": 2,
             "splits": {},
             "hand": {},
             "until": "2026-11-26",

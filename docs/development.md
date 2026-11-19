@@ -65,7 +65,8 @@ build and coverage output. ESLint also ignores Playwright's `playwright-report/`
   The palette is switched off, so a class such as `bg-red-500` silently draws nothing.
   [brand.md](brand.md) §3 says what each role means. `pen` is for done, a met day and a met week's count, nothing else.
   `caution-ink` is kept for InlineMessage's caution tone; nothing on the planner uses it (K28).
-  `paused-ink` is for the programme grid's "Paused until …" line and nothing else (K166).
+  `paused-ink` is for a pause and nothing else: the programme grid's "Paused until …" line (K166),
+  and the lead of the week view's paused row and of the item page's lede (K169).
 - **Type-style classes for text.** Set text with `display`, `title-1`, `title-2`, `body-large`,
   `body`, `caption`, `label` or `note`, rather than font-size and line-height utilities. The type
   classes sit in Tailwind's `components` layer, so a utility beside one wins as it reads
@@ -163,8 +164,14 @@ mark and details writes, so a later read returns what the app wrote.
   (`e2e/fixtures/programmes/`): starting a programme from the Library and the overview opening;
   pausing an activity from its page, then the overview and the week showing the pause; focus
   staying on the preview bar after Show it in the plan; at phone width, a locked day not pressing
-  and the overview's table scrolling inside itself, not the page; and axe on the Programmes page
-  (opened to start) and the overview (with a paused activity), in both themes.
+  and the overview's table scrolling inside itself, not the page; a second, non-admin account
+  copying from the shared library, the copy landing in view with focus on its name (K174), and seeing no publishing; Preview on a shared row opening its
+  Dialog, by week number, and copying from it (K173); the admin publishing from a row's More
+  menu, its preview, then the Shared chip; an ended-early run's overview offering Re-open and
+  Restart, each through its sheet; and axe on the Programmes page (opened to start), the overview
+  (with a paused activity), the Library tab with the shared section, a shared programme's Preview, the Publish dialog and the
+  Re-open sheet, in both themes. The mock answers 415 to a write with no JSON content type, as the
+  server does. `generate.py` writes the replies from the real API, with fixed ids.
 - `connections.spec.ts`: Settings › Connections (its tab pressed, at `#/settings/connections`;
   creating a token, shown once with Copy, then removed; axe with the banner in both themes; no
   sideways scroll at 375px; the address opening the tab, the arrow keys moving to Your data and

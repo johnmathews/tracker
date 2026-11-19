@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { Button } from '@/components/ui/button'
-import { ChangeSheet } from '@/components/ui/change-sheet'
+import { ChangeSheet, RunActionSheet } from '@/components/ui/change-sheet'
+import type { Run } from '@/lib/programmes'
+import type { RunAction } from '@/lib/runActions'
 import ExampleGroup from '../parts/ExampleGroup.vue'
 import StateExample from '../parts/StateExample.vue'
 import { ROW_FROM_WEEK_5, RUN, exampleServer } from './programmeExamples'
+import { ENDED_EARLY, ENDING, runActionServer } from './runActionExamples'
 
 /** How long the fake server takes to answer, so a pressed button shows it is busy. */
 const DELAY = 700
@@ -37,6 +40,72 @@ function openSheet(staleOnce: boolean): void {
   key.value++
   open.value = true
 }
+
+/** The run sheet (K168): Re-open, Restart and Cancel the end, each on the run it fits. */
+const RUN_CASES: {
+  id: string
+  label: string
+  action: RunAction
+  run: Run
+  staleOnce: boolean
+  state: string
+}[] = [
+  {
+    id: 'sg-change-sheet-reopen-open',
+    label: 'Re-open programme',
+    action: 'reopen',
+    run: ENDED_EARLY,
+    staleOnce: false,
+    state:
+      'Ended early from Mon 14 Dec. Step 1 is From and Reason, step 2 what it does: carries on at week 4, the days since the end paused, and the last day. A day before today gets the server’s error on step 1.',
+  },
+  {
+    id: 'sg-change-sheet-restart-open',
+    label: 'Restart from week 1',
+    action: 'restart',
+    run: ENDED_EARLY,
+    staleOnce: false,
+    state:
+      'Step 1 is Name, the tracker’s to start with, and Starts. Step 2 is the new tracker, week 1’s dates and its last day. An empty name gets the server’s error.',
+  },
+  {
+    id: 'sg-change-sheet-cancel-end-open',
+    label: 'Cancel the end',
+    action: 'cancel-end',
+    run: ENDING,
+    staleOnce: false,
+    state:
+      'Set to end from Mon 28 Dec. One step: the re-open’s preview from that day, with Keep the end and Cancel the end.',
+  },
+  {
+    id: 'sg-change-sheet-reopen-stale-open',
+    label: 'Re-open programme',
+    action: 'reopen',
+    run: ENDED_EARLY,
+    staleOnce: true,
+    state:
+      'The run changed since the preview: the first Re-open programme shows the fresh preview with a line saying so, and applies nothing. The second goes through.',
+  },
+]
+
+const runCase = ref<(typeof RUN_CASES)[number]>(RUN_CASES[0]!)
+const runOpen = ref(false)
+const runKey = ref(0)
+const runServer = ref(runActionServer(ENDED_EARLY))
+
+function openRunSheet(c: (typeof RUN_CASES)[number]): void {
+  runCase.value = c
+  runServer.value = runActionServer(c.run, { delay: DELAY, staleOnce: c.staleOnce })
+  answer.value = ''
+  runKey.value++
+  runOpen.value = true
+}
+
+const RUN_DONE: Record<RunAction, string> = {
+  reopen: 'Re-open programme: the run carries on, and the overview shows its controls again.',
+  restart: 'Restart programme: the new tracker’s overview opens.',
+  'cancel-end': 'Cancel the end: the run carries on past its end, as planned.',
+}
 </script>
 
 <!-- The card's sheet (components/ChangeSheet/preview.html): Change Barbell row, opened from week
@@ -48,6 +117,11 @@ function openSheet(staleOnce: boolean): void {
     <ExampleGroup title="Change Barbell row">
       <StateExample v-for="c in CASES" :key="c.id" :state="c.state">
         <Button :id="c.id" @click="openSheet(c.staleOnce)">Change Barbell row</Button>
+      </StateExample>
+    </ExampleGroup>
+    <ExampleGroup title="Re-open, Restart and Cancel the end">
+      <StateExample v-for="c in RUN_CASES" :key="c.id" :state="c.state">
+        <Button :id="c.id" @click="openRunSheet(c)">{{ c.label }}</Button>
       </StateExample>
     </ExampleGroup>
     <ExampleGroup title="Offline">
@@ -70,6 +144,16 @@ function openSheet(staleOnce: boolean): void {
         answer =
           'Show it in the plan: the overview shows the change in its cells, as the ProgrammeGrid section’s Previewing a change.'
       "
+    />
+    <RunActionSheet
+      :key="runKey"
+      v-model:open="runOpen"
+      :run="runCase.run"
+      :action="runCase.action"
+      name="Beginner 5×5"
+      :preview="runServer.preview"
+      :confirm="runServer.confirm"
+      @done="answer = RUN_DONE[runCase.action]"
     />
   </div>
 </template>

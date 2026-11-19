@@ -1,6 +1,6 @@
 {
   "tracker": {
-    "id": "xmwmdo222uxyt",
+    "id": "xmwdbhk000001",
     "name": "Beginner 5×5",
     "kind": "strength",
     "position": 3,
@@ -10,8 +10,8 @@
     "rev": 1
   },
   "run": {
-    "tracker": "xmwmdo222uxyt",
-    "programmeId": "xmwmdo21iejbz",
+    "tracker": "xmwdbhk000001",
+    "programmeId": "xmwdbhk000000",
     "name": "Beginner 5×5",
     "kind": "strength",
     "doc": {
@@ -133,6 +133,7 @@
     "openPause": null,
     "endsShort": [],
     "ended": null,
+    "canReopen": false,
     "clock": {
       "programmeWeek": 1,
       "status": "running",
@@ -271,7 +272,7 @@
                 "reps": 5,
                 "weight": 40
               },
-              "target": 3,
+              "target": 2,
               "splits": {},
               "hand": {},
               "until": null,
@@ -287,7 +288,7 @@
                 "reps": 5,
                 "weight": 30
               },
-              "target": 3,
+              "target": 2,
               "splits": {},
               "hand": {},
               "until": null,
@@ -303,7 +304,7 @@
                 "reps": 5,
                 "weight": 30
               },
-              "target": 3,
+              "target": 2,
               "splits": {},
               "hand": {},
               "until": null,
@@ -319,7 +320,7 @@
                 "reps": 5,
                 "weight": 60
               },
-              "target": 3,
+              "target": 2,
               "splits": {},
               "hand": {},
               "until": null,
@@ -334,7 +335,7 @@
                 "sets": 3,
                 "duration": 30
               },
-              "target": 3,
+              "target": 2,
               "splits": {},
               "hand": {},
               "until": null,

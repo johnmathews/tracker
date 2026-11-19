@@ -246,6 +246,13 @@ def create_app(
     async def on_run_ended(_: Request, __: data.RunEnded) -> JSONResponse:
         return error_response(409, "ended")
 
+    @app.exception_handler(data.CantReopen)
+    async def on_cant_reopen(_: Request, e: data.CantReopen) -> JSONResponse:
+        """A re-open of a run End programme didn't stop part way: `finished` False for one not
+        ended, True for one that ran to its end, was ended before it started or was restarted
+        (`restarted`, K167)."""
+        return error_response(409, "cant-reopen", finished=e.finished, restarted=e.restarted)
+
     @app.exception_handler(data.TooManyTrackers)
     async def on_too_many_trackers(_: Request, __: data.TooManyTrackers) -> JSONResponse:
         return error_response(409, "too-many")
@@ -340,11 +347,16 @@ def create_app(
         return ApiError(AUTH_STATUS[e.code], e.code, {"Retry-After": str(wait)}, retryAfter=wait)
 
     def account(conn: sqlite3.Connection, uid: int) -> dict[str, Any]:
-        """Who is signed in: the username, and with mail on, whether its email is confirmed (an
-        invited account has none, so no flag)."""
-        name = conn.execute("SELECT username FROM users WHERE id = ?", (uid,)).fetchone()[0]
+        """Who is signed in: the username; `admin: true` for an admin only (shared library §3);
+        and with mail on, whether its email is confirmed (an invited account has none, so no
+        flag)."""
+        row = conn.execute("SELECT username, admin FROM users WHERE id = ?", (uid,)).fetchone()
         state = auth.confirmed(conn, uid) if mailer is not None else None
-        return {"username": name} | ({} if state is None else {"confirmed": state})
+        return (
+            {"username": row["username"]}
+            | ({"admin": True} if row["admin"] else {})
+            | ({} if state is None else {"confirmed": state})
+        )
 
     def deliver(background: BackgroundTasks, message: Message) -> None:
         # After the response: Resend's latency never shows, so timing can't tell who has an account.
@@ -651,9 +663,15 @@ def create_app(
         return Response(schema, media_type="application/schema+json")
 
     @app.get("/api/programmes")
-    def programmes(user: User, conn: Conn) -> dict[str, list[data.ProgrammeSummary]]:
-        """The library, the programme changed last first, without the documents."""
-        return {"programmes": data.list_programmes(conn, user.id)}
+    def programmes(user: User, conn: Conn) -> dict[str, Any]:
+        """The library, the programme changed last first, without the documents. For an admin,
+        each summary carries `shared`: the shared programme it was published as, `{id,
+        updatedAt}`, or null. Nobody else's summaries carry the field."""
+        summaries = data.list_programmes(conn, user.id)
+        if not user.admin:
+            return {"programmes": summaries}
+        refs = data.shared_refs(conn, user.id)
+        return {"programmes": [{**s, "shared": refs.get(s["id"])} for s in summaries]}
 
     @app.post("/api/programmes", status_code=201)
     def add_programme(body: Body, user: User, conn: Conn) -> data.ProgrammeRecord:
@@ -806,6 +824,152 @@ def create_app(
         if ended is None:
             raise ApiError(404, "not-found")
         return {"tracker": ended.tracker, "run": ended.run}
+
+    @app.post("/api/runs/{tracker_id}/restart")
+    def restart_run(tracker_id: str, body: Body, user: User, conn: Conn) -> dict[str, Any]:
+        """`{start?, name?, preview?, rev?}` (K164, K167). A preview (the default) writes nothing
+        and returns `{preview: true, rev, restart}`. `preview: false` with the preview's `rev`
+        starts the run again from week 1 as a new tracker, ends the old run from the new start
+        when it is still going then, and returns `{preview: false, tracker, run, old}`: the new
+        tracker and run, and the old tracker. A stale `rev` gets 409 `{"error": "conflict", rev,
+        preview}`; problems 400 `invalid`; past the tracker cap 409 `too-many`; past the quota
+        413 `quota`."""
+        confirm = not preview_flag(body)
+        start, name, when = body.get("start"), body.get("name"), now()
+        try:
+            if not confirm:
+                preview = data.preview_restart(
+                    conn, user.id, tracker_id, start=start, name=name, when=when
+                )
+                if preview is None:
+                    raise ApiError(404, "not-found")
+                return preview
+            out = data.restart_run(
+                conn,
+                user.id,
+                tracker_id,
+                start=start,
+                name=name,
+                rev=body.get("rev"),
+                when=when,
+                quota=config.user_quota_bytes,
+                make_id=new_id,
+            )
+        except data.StaleRun as e:
+            raise ApiError(409, "conflict", rev=e.preview["rev"], preview=e.preview) from None
+        if out is None:
+            raise ApiError(404, "not-found")
+        return {"preview": False, "tracker": out.new.tracker, "run": out.new.run, "old": out.old}
+
+    @app.post("/api/runs/{tracker_id}/reopen")
+    def reopen_run(tracker_id: str, body: Body, user: User, conn: Conn) -> dict[str, Any]:
+        """`{from?, reason?, preview?, rev?}` (K165, K167). A preview (the default) writes nothing
+        and returns `{preview: true, rev, reopen}`. `preview: false` with the preview's `rev`
+        carries the run on from the day and returns `{preview: false, tracker, run}`. A run End
+        programme didn't stop part way gets 409 `{"error": "cant-reopen", finished, restarted}`;
+        a stale `rev` 409 `{"error": "conflict", rev, preview}`; problems 400 `invalid`; past the
+        quota 413 `quota`."""
+        confirm = not preview_flag(body)
+        on, reason, when = body.get("from"), body.get("reason"), now()
+        try:
+            if not confirm:
+                preview = data.preview_reopen(
+                    conn, user.id, tracker_id, on, reason=reason, when=when
+                )
+                if preview is None:
+                    raise ApiError(404, "not-found")
+                return preview
+            out = data.reopen_run(
+                conn,
+                user.id,
+                tracker_id,
+                on,
+                reason=reason,
+                rev=body.get("rev"),
+                when=when,
+                quota=config.user_quota_bytes,
+            )
+        except data.StaleRun as e:
+            raise ApiError(409, "conflict", rev=e.preview["rev"], preview=e.preview) from None
+        if out is None:
+            raise ApiError(404, "not-found")
+        return {"preview": False, "tracker": out.tracker, "run": out.run}
+
+    # --- the shared library (docs/specs/2026-11-19-shared-library.md §5) -----------------------
+
+    def need_admin(user: auth.SessionUser) -> None:
+        """S1: the account's flag, read with the session on this request. Checked before the id,
+        so a non-admin learns nothing about which ids exist."""
+        if not user.admin:
+            raise ApiError(403, "not-admin")
+
+    @app.get("/api/shared-programmes")
+    def shared_programmes(user: User, conn: Conn) -> dict[str, list[data.SharedSummary]]:
+        """`{programmes}`, the newest publish first, without the documents. No owner (S2)."""
+        return {"programmes": data.list_shared(conn)}
+
+    @app.get("/api/shared-programmes/{shared_id}")
+    def shared_programme(shared_id: str, user: User, conn: Conn) -> dict[str, data.SharedRecord]:
+        found = data.load_shared(conn, shared_id)
+        if found is None:
+            raise ApiError(404, "not-found")
+        return {"programme": found}
+
+    @app.get("/api/shared-programmes/{shared_id}/preview")
+    def shared_preview(shared_id: str, user: User, conn: Conn) -> dict[str, Any]:
+        """`{programme, plan}`: the shared programme with its document, and its plan as a
+        start's preview at its own values from today (K173). Writes nothing; no owner (S2)."""
+        found = data.preview_shared(conn, shared_id, when=now())
+        if found is None:
+            raise ApiError(404, "not-found")
+        return found
+
+    @app.post("/api/shared-programmes/{shared_id}/copy", status_code=201)
+    def copy_shared(shared_id: str, user: User, conn: Conn) -> data.ProgrammeRecord:
+        """201 with the new library programme, as `POST /api/programmes` answers: past the
+        library's cap 409 `too-many`, past the account's quota 413 `quota`."""
+        copied = data.copy_shared(
+            conn,
+            user.id,
+            shared_id,
+            config.clock(),
+            quota=config.user_quota_bytes,
+            make_id=new_id,
+        )
+        if copied is None:
+            raise ApiError(404, "not-found")
+        return copied
+
+    @app.post("/api/programmes/{programme_id}/publish")
+    def publish_programme(programme_id: str, body: Body, user: User, conn: Conn) -> dict[str, Any]:
+        """Admin only. `{preview?, rev?}`. A preview (the default) writes nothing and returns
+        `{preview: true, rev, publish: {programme, replaces}}`. `preview: false` with the
+        preview's `rev` publishes the snapshot and returns `{preview: false, shared: {id,
+        updatedAt}}`. A stale `rev` gets 409 `{"error": "conflict", rev, preview}`."""
+        need_admin(user)
+        confirm = not preview_flag(body)
+        try:
+            out = data.publish_programme(
+                conn,
+                user.id,
+                programme_id,
+                confirm=confirm,
+                rev=body.get("rev"),
+                now=config.clock(),
+                make_id=new_id,
+            )
+        except data.StalePublish as e:
+            raise ApiError(409, "conflict", rev=e.preview["rev"], preview=e.preview) from None
+        if out is None:
+            raise ApiError(404, "not-found")
+        return out
+
+    @app.delete("/api/shared-programmes/{shared_id}", status_code=204)
+    def unpublish(shared_id: str, user: User, conn: Conn) -> None:
+        """Admin only. Copies already made stay."""
+        need_admin(user)
+        if not data.unpublish(conn, shared_id):
+            raise ApiError(404, "not-found")
 
     def need_ask() -> AsyncAnthropic:
         if ask_client is None:

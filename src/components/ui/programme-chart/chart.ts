@@ -3,6 +3,7 @@ import {
   increaseOf,
   madeOnText,
   reasonText,
+  runMeta,
   setsLine,
   valueText,
   weekCount,
@@ -67,8 +68,11 @@ export type ActivityChart = {
   changes: { at: number; label: string }[]
   /** Each run of paused weeks, by column, with its reason. */
   pauses: { from: number; to: number; reason: string | null }[]
-  /** The line over the chart: its value in ink at 600, between the words. */
-  lede: { before: string; value: string | null; after: string }
+  /**
+   * The line over the chart: its value in ink at 600, between the words. A pause leads with its
+   * own sentence, "Paused until Mon 28 Dec." or "Paused.", in paused-ink at 600 (K169).
+   */
+  lede: { lead: string | null; before: string; value: string | null; after: string }
   /** The server's sentence when the activity ends before the programme. */
   endsShort: string | null
 }
@@ -179,15 +183,10 @@ function changesOf(run: Run, key: string, field: Field): ActivityChart['changes'
   return out.sort((a, b) => a.at - b.at)
 }
 
-/** The latest pause of the activity that isn't undone, in force today. */
-function pauseOf(run: Run, key: string): LogEntry | undefined {
-  return run.log.find(
-    (e) =>
-      e.change.type === 'pause-activity' &&
-      e.change.activity === key &&
-      e.undoneBy === null &&
-      e.from <= run.today,
-  )
+/** The day before `iso`: an end's last day, from the first day without it. */
+function dayBefore(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(Date.UTC(y!, m! - 1, d! - 1)).toISOString().slice(0, 10)
 }
 
 /**
@@ -293,18 +292,23 @@ function ledeOf(
   field: Field,
   endedOn: string | null,
 ): ActivityChart['lede'] {
-  const none = (before: string) => ({ before, value: null, after: '' })
-  if (run.status === 'ended') {
-    return none(`The programme ended on ${dayText(run.ended?.from ?? run.end!)}.`)
-  }
-  if (endedOn && endedOn <= run.today) return none(`It ended on ${dayText(endedOn)}.`)
+  const none = (before: string) => ({ lead: null, before, value: null, after: '' })
+  // An end reads by its last day, "Ended Sun 15 Nov.", as the overview's line says it (K168).
+  if (run.status === 'ended') return none(runMeta(run).rest)
+  if (endedOn && endedOn <= run.today) return none(`Ended ${dayText(dayBefore(endedOn))}.`)
   const reason = (v: unknown) => {
     const text = reasonText(typeof v === 'string' ? v : null)
     return text ? ` ${text}` : ''
   }
+  // A pause leads with its sentence in paused-ink (K169), the reason after it.
   if (run.status === 'paused') {
     const until = run.clock.until ? ` until ${dayText(run.clock.until)}` : ''
-    return none(`The programme is paused${until}.${reason(run.clock.reason)}`)
+    return {
+      lead: `The programme is paused${until}.`,
+      before: reason(run.clock.reason),
+      value: null,
+      after: '',
+    }
   }
   const value = (cell: Cell | undefined) => {
     const v = cell?.values?.[field]
@@ -313,21 +317,17 @@ function ledeOf(
   const thisWeek = run.grid.weeks.find((w) => w.current)
   const clock = clockOf(run, key)
   if (clock?.state === 'paused') {
-    const pause = pauseOf(run, key)
-    const since = pause ? ` since ${dayText(pause.from)}` : ''
-    const head = `Paused${since}.${reason(clock.reason)}`
-    if (!clock.until) {
-      return {
-        before: `${head} It comes back at `,
-        value: value(thisWeek?.cells[key]),
-        after: ' when you resume it.',
-      }
-    }
-    return {
-      before: `${head} It comes back on ${dayText(clock.until)} at `,
-      value: value(weekOf(run.grid, clock.until)?.cells[key] ?? thisWeek?.cells[key]),
-      after: '.',
-    }
+    // "Paused until Mon 28 Dec. Knee. It comes back at 45 kg." (K169): the day leads, as in the
+    // grid and the week; with no end day, "Paused. Knee. It comes back at 45 kg when you resume it."
+    // A value the grid doesn't hold (it comes back after the grid ends) leaves the last part out.
+    const lead = clock.until ? `Paused until ${dayText(clock.until)}.` : 'Paused.'
+    const back = clock.until
+      ? value(weekOf(run.grid, clock.until)?.cells[key] ?? thisWeek?.cells[key])
+      : value(thisWeek?.cells[key])
+    const why = reason(clock.reason)
+    if (back === null) return { lead, before: why, value: null, after: '' }
+    const after = clock.until ? '.' : ' when you resume it.'
+    return { lead, before: `${why} It comes back at `, value: back, after }
   }
   const cell = thisWeek?.cells[key]
   if (cell?.state === 'running') {
@@ -335,6 +335,7 @@ function ledeOf(
     const goes = progresses ? ` It goes up ${increaseNow(run, key, field)}.` : ''
     const sets = setsLine(cell.values!, run.kind)
     return {
+      lead: null,
       before: thisWeek!.label ? `This week is a ${thisWeek!.label.toLowerCase()}: ` : 'This week: ',
       value: value(cell),
       after: `${sets ? `, ${sets}` : ''}.${goes}`,
@@ -345,5 +346,10 @@ function ledeOf(
   if (!first) return none('')
   // A week the activity runs in has a day the programme runs.
   const day = first.days.find((d) => d.status === 'running')!.date
-  return { before: `It starts on ${dayText(day)} at `, value: value(first.cells[key]), after: '.' }
+  return {
+    lead: null,
+    before: `It starts on ${dayText(day)} at `,
+    value: value(first.cells[key]),
+    after: '.',
+  }
 }

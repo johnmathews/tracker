@@ -234,6 +234,46 @@ describe('a paused activity (spec §9.5)', () => {
     ])
   })
 
+  it('leads with “Paused until …” in paused-ink at 600; the reason and icon stay quiet (K169)', async () => {
+    await mountWeek()
+    usePlannerStore().nextWeek()
+    await settle()
+    const row = screen('t1').get('[data-testid="paused-row"]')
+    // The cell keeps ink-secondary at 400 for the reason and the icon.
+    expect(row.classes()).toContain('text-ink-secondary')
+    expect(row.classes()).not.toContain('font-semibold')
+    const lead = row.get('[data-testid="paused-lead"]')
+    expect(lead.text()).toBe('Paused until Thu 26 Nov.')
+    expect(lead.classes()).toEqual(expect.arrayContaining(['text-paused-ink', 'font-semibold']))
+    expect(row.findAll('.text-paused-ink')).toHaveLength(1)
+    expect(row.find('svg').classes()).not.toContain('text-paused-ink')
+    // Read aloud, the row is one sentence: the lead, a space, the reason.
+    expect(row.element.textContent!.trim()).toBe('Paused until Thu 26 Nov. Knee.')
+  })
+
+  it('leads with “Paused.” alone in paused-ink when the pause has no end (K169)', async () => {
+    await mountWeek(PAUSED)
+    usePlannerStore().nextWeek()
+    await settle()
+    const row = screen('t1').findAll('[data-testid="paused-row"]')[0]!
+    const lead = row.get('[data-testid="paused-lead"]')
+    expect(lead.text()).toBe('Paused.')
+    expect(lead.classes()).toEqual(expect.arrayContaining(['text-paused-ink', 'font-semibold']))
+    expect(row.element.textContent!.trim()).toBe('Paused. A cold.')
+  })
+
+  it('reads the lead alone when the pause has no reason', async () => {
+    const run: Run = structuredClone(RUN)
+    const next = run.grid.weeks.find((w) => w.monday === NEXT)!
+    next.cells.deadlift = { ...next.cells.deadlift!, reason: null }
+    await mountWeek(run)
+    usePlannerStore().nextWeek()
+    await settle()
+    const row = screen('t1').get('[data-testid="paused-row"]')
+    expect(row.element.textContent!.trim()).toBe('Paused until Thu 26 Nov.')
+    expect(row.get('[data-testid="paused-lead"]').text()).toBe('Paused until Thu 26 Nov.')
+  })
+
   it('reads the run once, and again when the state says it changed', async () => {
     await mountWeek()
     const reads = () => calls.filter((c) => c.path === '/runs/t1').length

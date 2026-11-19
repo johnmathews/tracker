@@ -1,223 +1,542 @@
-<!-- @dsCard group="Planner" height=1500 subtitle="An activity's Programme row on its item page: a step chart of the planned value week by week, solid to this week and dashed after, a dot per week done, gaps for pauses, labelled change lines, the numbers on hover, and the activity's controls (K145)" -->
+<!-- @dsCard group="Planner" height=1500 subtitle="An activity's Programme row on its item page: a step chart of the planned value week by week, solid to this week and dashed after, a dot per week done, gaps for pauses with the lede's lead in paused-ink, labelled change lines, the numbers on hover, and the activity's controls (K145, K169)" -->
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<title>ProgrammeChart — preview</title>
-<style>
-  * { box-sizing: border-box; }
-  body { margin: 0; padding: var(--space-6); background: var(--canvas); color: var(--ink); font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
-  button { font: inherit; color: inherit; }
-  .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  .variant { margin: 0 0 var(--space-3); color: var(--ink-secondary); }
-  .gap { height: var(--space-8); }
-  svg.i { width: 1em; height: 1em; flex: none; }
-  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-
-  /* ItemPage's rows, at u = 1 (K65): the heading in the 320u name column, the content at its right. */
-  .stage { border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 0 48px; }
-  .sec { display: grid; grid-template-columns: 320px minmax(0, 1fr); align-items: start; padding: 32px 0; }
-  .sec > .content { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
-  .sec h2 { margin: 0; font: 600 27px / 34px var(--font-sans); }
-  .lede { margin: 0; max-width: 60ch; color: var(--ink-secondary); font-size: 19px; line-height: 28px; }
-  .lede b { color: var(--ink); font-weight: 600; }
-
-  /* Button (secondary) at the page's size. */
-  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 60px; padding: 0 22px; border: 1px solid var(--control-border); border-radius: var(--radius-md); background: transparent; color: var(--ink); font: 600 19px / 25px var(--font-sans); cursor: pointer; white-space: nowrap; }
-  .btn svg { width: 26px; height: 26px; }
-  .btn:hover { background: var(--tile); }
-  .controls { display: flex; flex-wrap: wrap; gap: 12px; }
-
-  /* InlineMessage, info tone. */
-  .im { display: flex; align-items: flex-start; gap: var(--space-2); margin: 0; color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
-  .im svg { width: 16px; height: 16px; margin-top: 3px; flex: none; }
-
-  /* ---- The chart (K145) ---- */
-  .legend { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0; padding: 0; list-style: none; color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
-  .legend li { display: inline-flex; align-items: center; gap: 8px; }
-  .legend svg { width: 22px; height: 12px; overflow: visible; }
-  .legend .k-plan { stroke: var(--ink); stroke-width: 2; }
-  .legend .k-ahead { stroke: var(--ink-secondary); stroke-width: 2; stroke-dasharray: 6 5; }
-  .legend .k-met { fill: var(--pen); }
-  .legend .k-unmet { fill: var(--canvas); stroke: var(--ink-secondary); stroke-width: 2; }
-  .chart { position: relative; width: 100%; }
-  .chart svg { display: block; width: 100%; height: auto; overflow: visible; font-family: var(--font-sans); }
-  .chart .grid-l { stroke: var(--line); stroke-width: 1; }
-  .chart .axis-t { fill: var(--ink-secondary); font-size: 16px; }
-  .chart .axis-t.cur { fill: var(--ink); font-weight: 600; }
-  .chart .band { fill: var(--tile); }
-  .chart .plan { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-  .chart .plan.ahead { stroke: var(--ink-secondary); stroke-dasharray: 6 5; }
-  .chart .met { fill: var(--pen); stroke: var(--canvas); stroke-width: 2; }
-  .chart .unmet { fill: var(--canvas); stroke: var(--ink-secondary); stroke-width: 2; }
-  .chart .cp { stroke: var(--control-border); stroke-width: 1; stroke-dasharray: 3 3; }
-  .chart .cpl { fill: var(--ink); font-size: 16px; font-weight: 600; }
-  .chart .lbl { fill: var(--ink-secondary); font-size: 16px; }
-  .chart .val { fill: var(--ink); font-size: 16px; font-weight: 600; }
-  .chart .hit { fill: transparent; }
-  .chart .hit:hover { fill: color-mix(in srgb, var(--ink) 6%, transparent); }
-  /* The numbers for the week under the pointer: a small panel, as the Popover's. */
-  .tip { position: absolute; z-index: 5; pointer-events: none; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-sm);
-    box-shadow: var(--shadow-overlay); font-size: 16px; line-height: 22px; white-space: nowrap; }
-  .tip b { font-weight: 600; }
-  .tip span { display: block; color: var(--ink-secondary); }
-
-  @media (prefers-reduced-motion: no-preference) { .btn { transition: background-color 120ms; } }
-  /* Folded: one column, each heading over its content, at the system's sizes on n. */
-  @media (max-width: 639px) {
-    body { padding: var(--space-4) 0; }
-    .variant { padding: 0 var(--space-4); }
-    .stage { border-width: 1px 0; border-radius: 0; padding: 0 16px; }
-    .sec { display: flex; flex-direction: column; gap: 16px; padding: 24px 0; }
-    .sec > .content { gap: 16px; }
-    .sec h2 { font-size: 22px; line-height: 28px; }
-    .lede { font-size: 18px; line-height: 26px; }
-    .btn { height: 48px; font-size: 16px; line-height: 22px; }
-    .btn svg { width: 22px; height: 22px; }
-    /* Two to a row; a label too long for its half wraps inside the button. */
-    .controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .controls .btn { gap: 8px; height: auto; min-height: 48px; padding: 4px 8px; white-space: normal; }
-  }
-</style>
-</head>
-<body>
-
-<p class="variant label">Back squat (K145): this week is a deload, and its increase went from 5% to 7.5% a week on Thu 3 Dec. Point at a week for its numbers</p>
-<div class="stage">
-  <section class="sec" aria-labelledby="c1-h" data-testid="programme-section">
-    <h2 id="c1-h">Programme</h2>
-    <div class="content" data-chart="squat"></div>
-  </section>
-</div>
-
-<div class="gap"></div>
-<p class="variant label">Deadlift: paused for two weeks from Mon 14 Dec (knee), so the line has a gap, and it ends at its week 6 of 8</p>
-<div class="stage">
-  <section class="sec" aria-labelledby="c2-h" data-testid="programme-section">
-    <h2 id="c2-h">Programme</h2>
-    <div class="content" data-chart="deadlift"></div>
-  </section>
-</div>
-
-<script>
-// The chart, drawn from the mockup's markup and data (mockups/261117-programmes, proto.js, 4A):
-// "Beginner 5×5", today Wed 16 Dec, in programme week 4. The SVG is drawn at the chart's own
-// width, so its text stays 16px at every size.
-(() => {
-  const P = {
-    pencil: '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>',
-    up: '<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>',
-    pause: '<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>',
-    play: '<polygon points="6 3 20 12 6 21 6 3"/>',
-    stop: '<circle cx="12" cy="12" r="10"/><rect x="9" y="9" width="6" height="6" rx="1"/>',
-    info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
-  }
-  const ic = (name) => `<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name]}</svg>`
-  const WEEKS = [
-    { n: 1, d: '23–29 Nov' }, { n: 2, d: '30 Nov–6 Dec' }, { n: 3, d: '7–13 Dec' }, { n: 4, d: '14–20 Dec', deload: true },
-    { n: 5, d: '21–27 Dec' }, { n: 6, d: '28 Dec–3 Jan' }, { n: 7, d: '4–10 Jan' }, { n: 8, d: '11–17 Jan', deload: true },
-  ]
-  const CUR = 4
-  const TARGET = 3
-  const SW = ['5 × 5', '5 × 5', '5 × 5', '3 × 5', '5 × 5', '5 × 5', '5 × 5', '3 × 5']
-  const SERIES = {
-    squat: { name: 'Back squat', unit: 'kg', sets: SW, w: [40, 42.5, 45, 45, 52.5, 57.5, 60, 60], done: [3, 3, 3, 1],
-      lede: 'This week is a deload: <b>45 kg</b>, 3 × 5. It goes up 7.5% a week.',
-      changes: [{ x: 1 + 3 / 7, label: '7.5% a week, from 3 Dec' }] },
-    deadlift: { name: 'Deadlift', unit: 'kg', sets: Array(8).fill('1 × 5'), w: [60, 65, 70, null, null, 75, 80, 77.5], done: [3, 2, 3],
-      lede: 'Paused since Mon 14 Dec. Knee. It comes back on Mon 28 Dec at <b>75 kg</b>.', pause: [3, 4], why: 'Knee', ends: 'Deadlift ends at its week 6 of 8, because of its pause.' },
-  }
-  const fmt = (v, unit) => `${v} ${unit}`
-
-  function draw(host, sr) {
-    const W = Math.max(280, host.clientWidth), H = matchMedia('(max-width: 639px)').matches ? 240 : 290
-    const L = 40, R = 8, T = 40, B = 34
-    const vals = sr.w.filter((v) => v != null)
-    const lo = Math.floor((Math.min(...vals) - 5) / 10) * 10, hi = Math.ceil((Math.max(...vals) + 2.5) / 10) * 10
-    const cw = (W - L - R) / 8
-    const x = (i) => L + i * cw
-    const y = (v) => T + (H - T - B) * (1 - (v - lo) / (hi - lo))
-    let g = `<rect class="band" x="${x(CUR - 1)}" y="${T - 6}" width="${cw}" height="${H - T - B + 6}" rx="4"/>`
-    for (let t = lo; t <= hi; t += 10) g += `<line class="grid-l" x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}"/><text class="axis-t" x="${L - 8}" y="${y(t) + 5}" text-anchor="end">${t}</text>`
-    g += `<text class="axis-t" x="${L - 8}" y="${T - 18}" text-anchor="end">${sr.unit}</text>`
-    WEEKS.forEach((wk, i) => { g += `<text class="axis-t${wk.n === CUR ? ' cur' : ''}" x="${x(i) + cw / 2}" y="${H - 8}" text-anchor="middle">${wk.n}</text>` })
-    g += `<text class="axis-t" x="${L - 8}" y="${H - 8}" text-anchor="end">Wk</text>`
-    // The step line, broken at a pause; solid to this week, dashed after it.
-    const seg = (from, to, cls) => {
-      let d = '', prev = null
-      for (let i = from; i <= to; i++) {
-        const v = sr.w[i]
-        if (v == null) { prev = null; continue }
-        d += prev == null ? `M${x(i)} ${y(v)}` : `V${y(v)}`
-        d += `H${x(i + 1)}`
-        prev = v
+  <head>
+    <meta charset="utf-8" />
+    <title>ProgrammeChart — preview</title>
+    <style>
+      * {
+        box-sizing: border-box;
       }
-      return d ? `<path class="plan${cls}" d="${d}"/>` : ''
-    }
-    g += seg(0, CUR - 1, '')
-    const nextV = sr.w[CUR], curV = sr.w[CUR - 1]
-    g += (curV != null && nextV != null ? `<path class="plan ahead" d="M${x(CUR)} ${y(curV)}V${y(nextV)}"/>` : '') + seg(CUR, 7, ' ahead')
-    // A change: a dashed line where it took effect, labelled above the plot.
-    for (const c of sr.changes || []) {
-      const cx = x(c.x), tw = c.label.length * 8.2, right = cx + 6 + tw > W
-      g += `<line class="cp" x1="${cx}" x2="${cx}" y1="${T - 26}" y2="${H - B}"/><text class="cpl" x="${right ? cx - 6 : cx + 6}" y="${T - 14}" text-anchor="${right ? 'end' : 'start'}">${c.label}</text>`
-    }
-    // A pause: dashed lines at its ends, its name and reason between them, and no line.
-    if (sr.pause) {
-      const [p0, p1] = sr.pause, mid = (x(p0) + x(p1 + 1)) / 2, my = (T + H - B) / 2
-      g += `<line class="cp" x1="${x(p0)}" x2="${x(p0)}" y1="${T - 6}" y2="${H - B}"/><line class="cp" x1="${x(p1 + 1)}" x2="${x(p1 + 1)}" y1="${T - 6}" y2="${H - B}"/>`
-      g += `<text class="lbl" x="${mid}" y="${my - 4}" text-anchor="middle">Paused</text><text class="lbl" x="${mid}" y="${my + 16}" text-anchor="middle">${sr.why}</text>`
-    }
-    // What was done, on top: a dot per week so far, filled in pen where the goal was met.
-    sr.done.forEach((n, i) => {
-      const v = sr.w[i]; if (v == null) return
-      const cx = x(i) + cw / 2, cy = y(v), met = n >= TARGET
-      g += met ? `<circle class="met" cx="${cx}" cy="${cy}" r="7"/>` : `<circle class="unmet" cx="${cx}" cy="${cy}" r="6"/>`
-      if (!met) g += `<text class="lbl" x="${cx}" y="${cy + 26}" text-anchor="middle">${n} of ${TARGET}</text>`
-    })
-    // Two values labelled: this week's and the last week's.
-    for (const i of [CUR - 1, 7]) {
-      const v = sr.w[i]; if (v == null) continue
-      g += `<text class="val" x="${x(i) + cw / 2}" y="${y(v) - 12}" text-anchor="middle">${v}</text>`
-    }
-    WEEKS.forEach((_, i) => { g += `<rect class="hit" data-wk="${i}" x="${x(i)}" y="${T - 6}" width="${cw}" height="${H - T - B + 6}"/>` })
-    const plan = (i) => (sr.w[i] == null ? 'Paused' : `${fmt(sr.w[i], sr.unit)}, ${sr.sets[i]}`)
-    const rows = WEEKS.map((wk, i) => {
-      const done = sr.done[i] != null && sr.w[i] != null ? `${sr.done[i]} of ${TARGET}${wk.n === CUR ? ' so far' : sr.done[i] >= TARGET ? ', goal met' : ''}` : ''
-      return `<tr><th scope="row">Week ${wk.n}, ${wk.d}</th><td>${plan(i)}</td><td>${done}</td></tr>`
-    }).join('')
-    host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${sr.name}: planned weight for each week, with the weeks done so far" data-testid="programme-chart">${g}</svg>`
-      // The table for a screen reader sits in a hidden box: a table ignores a 1px width of its own.
-      + `<div class="vh"><table data-testid="programme-chart-table"><caption>${sr.name}, week by week</caption><tr><th scope="col">Week</th><th scope="col">Planned</th><th scope="col">Done</th></tr>${rows}</table></div>`
-      + `<div class="tip" hidden data-testid="programme-chart-tip"></div>`
-    const tip = host.querySelector('.tip')
-    host.querySelectorAll('.hit').forEach((r) => {
-      r.addEventListener('pointerenter', () => {
-        const i = Number(r.dataset.wk), wk = WEEKS[i]
-        const p = sr.w[i] == null ? `Paused, ${sr.why.toLowerCase()}` : `${plan(i)}${wk.deload ? ', deload' : ''}`
-        const done = sr.done[i] != null && sr.w[i] != null ? `${sr.done[i]} of ${TARGET}${wk.n === CUR ? ' so far' : sr.done[i] >= TARGET ? ', goal met' : ''}` : ''
-        tip.innerHTML = `<b>Week ${wk.n}</b> · ${wk.d}<span>${p}</span>${done ? `<span>${done}</span>` : ''}`
-        tip.hidden = false
-        tip.style.left = `${Math.min(Math.max(0, x(i) + cw / 2 - tip.offsetWidth / 2), W - tip.offsetWidth)}px`
-        tip.style.top = `${T - 6 - tip.offsetHeight + 34}px`
-      })
-      r.addEventListener('pointerleave', () => { tip.hidden = true })
-    })
-  }
+      body {
+        margin: 0;
+        padding: var(--space-6);
+        background: var(--canvas);
+        color: var(--ink);
+        font-family: var(--font-sans);
+        font-variant-numeric: tabular-nums;
+      }
+      button {
+        font: inherit;
+        color: inherit;
+      }
+      .vh {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
+      .variant {
+        margin: 0 0 var(--space-3);
+        color: var(--ink-secondary);
+      }
+      .gap {
+        height: var(--space-8);
+      }
+      svg.i {
+        width: 1em;
+        height: 1em;
+        flex: none;
+      }
+      :focus-visible {
+        outline: 2px solid var(--focus);
+        outline-offset: 2px;
+      }
 
-  for (const content of document.querySelectorAll('[data-chart]')) {
-    const sr = SERIES[content.dataset.chart]
-    const paused = !!sr.pause
-    content.innerHTML = `<p class="lede" data-testid="programme-lede">${sr.lede}</p>
+      /* ItemPage's rows, at u = 1 (K65): the heading in the 320u name column, the content at its right. */
+      .stage {
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        padding: 0 48px;
+      }
+      .sec {
+        display: grid;
+        grid-template-columns: 320px minmax(0, 1fr);
+        align-items: start;
+        padding: 32px 0;
+      }
+      .sec > .content {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        min-width: 0;
+      }
+      .sec h2 {
+        margin: 0;
+        font: 600 27px / 34px var(--font-sans);
+      }
+      .lede {
+        margin: 0;
+        max-width: 60ch;
+        color: var(--ink-secondary);
+        font-size: 19px;
+        line-height: 28px;
+      }
+      .lede b {
+        color: var(--ink);
+        font-weight: 600;
+      }
+      /* A pause's lead, "Paused until Mon 28 Dec.", in paused-ink at 600 (K169). */
+      .lede .pu {
+        color: var(--paused-ink);
+        font-weight: 600;
+      }
+
+      /* Button (secondary) at the page's size. */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        height: 60px;
+        padding: 0 22px;
+        border: 1px solid var(--control-border);
+        border-radius: var(--radius-md);
+        background: transparent;
+        color: var(--ink);
+        font: 600 19px / 25px var(--font-sans);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn svg {
+        width: 26px;
+        height: 26px;
+      }
+      .btn:hover {
+        background: var(--tile);
+      }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      /* InlineMessage, info tone. */
+      .im {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--space-2);
+        margin: 0;
+        color: var(--ink-secondary);
+        font-size: 16px;
+        line-height: 22px;
+      }
+      .im svg {
+        width: 16px;
+        height: 16px;
+        margin-top: 3px;
+        flex: none;
+      }
+
+      /* ---- The chart (K145) ---- */
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 18px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        color: var(--ink-secondary);
+        font-size: 16px;
+        line-height: 22px;
+      }
+      .legend li {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .legend svg {
+        width: 22px;
+        height: 12px;
+        overflow: visible;
+      }
+      .legend .k-plan {
+        stroke: var(--ink);
+        stroke-width: 2;
+      }
+      .legend .k-ahead {
+        stroke: var(--ink-secondary);
+        stroke-width: 2;
+        stroke-dasharray: 6 5;
+      }
+      .legend .k-met {
+        fill: var(--pen);
+      }
+      .legend .k-unmet {
+        fill: var(--canvas);
+        stroke: var(--ink-secondary);
+        stroke-width: 2;
+      }
+      .chart {
+        position: relative;
+        width: 100%;
+      }
+      .chart svg {
+        display: block;
+        width: 100%;
+        height: auto;
+        overflow: visible;
+        font-family: var(--font-sans);
+      }
+      .chart .grid-l {
+        stroke: var(--line);
+        stroke-width: 1;
+      }
+      .chart .axis-t {
+        fill: var(--ink-secondary);
+        font-size: 16px;
+      }
+      .chart .axis-t.cur {
+        fill: var(--ink);
+        font-weight: 600;
+      }
+      .chart .band {
+        fill: var(--tile);
+      }
+      .chart .plan {
+        fill: none;
+        stroke: var(--ink);
+        stroke-width: 2;
+        stroke-linejoin: round;
+        stroke-linecap: round;
+      }
+      .chart .plan.ahead {
+        stroke: var(--ink-secondary);
+        stroke-dasharray: 6 5;
+      }
+      .chart .met {
+        fill: var(--pen);
+        stroke: var(--canvas);
+        stroke-width: 2;
+      }
+      .chart .unmet {
+        fill: var(--canvas);
+        stroke: var(--ink-secondary);
+        stroke-width: 2;
+      }
+      .chart .cp {
+        stroke: var(--control-border);
+        stroke-width: 1;
+        stroke-dasharray: 3 3;
+      }
+      .chart .cpl {
+        fill: var(--ink);
+        font-size: 16px;
+        font-weight: 600;
+      }
+      .chart .lbl {
+        fill: var(--ink-secondary);
+        font-size: 16px;
+      }
+      .chart .val {
+        fill: var(--ink);
+        font-size: 16px;
+        font-weight: 600;
+      }
+      .chart .hit {
+        fill: transparent;
+      }
+      .chart .hit:hover {
+        fill: color-mix(in srgb, var(--ink) 6%, transparent);
+      }
+      /* The numbers for the week under the pointer: a small panel, as the Popover's. */
+      .tip {
+        position: absolute;
+        z-index: 5;
+        pointer-events: none;
+        padding: 8px 10px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        box-shadow: var(--shadow-overlay);
+        font-size: 16px;
+        line-height: 22px;
+        white-space: nowrap;
+      }
+      .tip b {
+        font-weight: 600;
+      }
+      .tip span {
+        display: block;
+        color: var(--ink-secondary);
+      }
+
+      @media (prefers-reduced-motion: no-preference) {
+        .btn {
+          transition: background-color 120ms;
+        }
+      }
+      /* Folded: one column, each heading over its content, at the system's sizes on n. */
+      @media (max-width: 639px) {
+        body {
+          padding: var(--space-4) 0;
+        }
+        .variant {
+          padding: 0 var(--space-4);
+        }
+        .stage {
+          border-width: 1px 0;
+          border-radius: 0;
+          padding: 0 16px;
+        }
+        .sec {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+          padding: 24px 0;
+        }
+        .sec > .content {
+          gap: 16px;
+        }
+        .sec h2 {
+          font-size: 22px;
+          line-height: 28px;
+        }
+        .lede {
+          font-size: 18px;
+          line-height: 26px;
+        }
+        .btn {
+          height: 48px;
+          font-size: 16px;
+          line-height: 22px;
+        }
+        .btn svg {
+          width: 22px;
+          height: 22px;
+        }
+        /* Two to a row; a label too long for its half wraps inside the button. */
+        .controls {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .controls .btn {
+          gap: 8px;
+          height: auto;
+          min-height: 48px;
+          padding: 4px 8px;
+          white-space: normal;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <p class="variant label">
+      Back squat (K145): this week is a deload, and its increase went from 5% to 7.5% a week on Thu
+      3 Dec. Point at a week for its numbers
+    </p>
+    <div class="stage">
+      <section class="sec" aria-labelledby="c1-h" data-testid="programme-section">
+        <h2 id="c1-h">Programme</h2>
+        <div class="content" data-chart="squat"></div>
+      </section>
+    </div>
+
+    <div class="gap"></div>
+    <p class="variant label">
+      Deadlift: paused for two weeks from Mon 14 Dec (knee), so the line has a gap, and it ends at
+      its week 6 of 8. The lede leads with “Paused until Mon 28 Dec.” in paused-ink at 600 (K169)
+    </p>
+    <div class="stage">
+      <section class="sec" aria-labelledby="c2-h" data-testid="programme-section">
+        <h2 id="c2-h">Programme</h2>
+        <div class="content" data-chart="deadlift"></div>
+      </section>
+    </div>
+
+    <script>
+      // The chart, drawn from the mockup's markup and data (mockups/261117-programmes, proto.js, 4A):
+      // "Beginner 5×5", today Wed 16 Dec, in programme week 4. The SVG is drawn at the chart's own
+      // width, so its text stays 16px at every size.
+      ;(() => {
+        const P = {
+          pencil:
+            '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>',
+          up: '<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>',
+          pause:
+            '<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>',
+          play: '<polygon points="6 3 20 12 6 21 6 3"/>',
+          stop: '<circle cx="12" cy="12" r="10"/><rect x="9" y="9" width="6" height="6" rx="1"/>',
+          info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+        }
+        const ic = (name) =>
+          `<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name]}</svg>`
+        const WEEKS = [
+          { n: 1, d: '23–29 Nov' },
+          { n: 2, d: '30 Nov–6 Dec' },
+          { n: 3, d: '7–13 Dec' },
+          { n: 4, d: '14–20 Dec', deload: true },
+          { n: 5, d: '21–27 Dec' },
+          { n: 6, d: '28 Dec–3 Jan' },
+          { n: 7, d: '4–10 Jan' },
+          { n: 8, d: '11–17 Jan', deload: true },
+        ]
+        const CUR = 4
+        const TARGET = 3
+        const SW = ['5 × 5', '5 × 5', '5 × 5', '3 × 5', '5 × 5', '5 × 5', '5 × 5', '3 × 5']
+        const SERIES = {
+          squat: {
+            name: 'Back squat',
+            unit: 'kg',
+            sets: SW,
+            w: [40, 42.5, 45, 45, 52.5, 57.5, 60, 60],
+            done: [3, 3, 3, 1],
+            lede: 'This week is a deload: <b>45 kg</b>, 3 × 5. It goes up 7.5% a week.',
+            changes: [{ x: 1 + 3 / 7, label: '7.5% a week, from 3 Dec' }],
+          },
+          deadlift: {
+            name: 'Deadlift',
+            unit: 'kg',
+            sets: Array(8).fill('1 × 5'),
+            w: [60, 65, 70, null, null, 75, 80, 77.5],
+            done: [3, 2, 3],
+            lede: '<span class="pu" data-testid="programme-lede-lead">Paused until Mon 28 Dec.</span> Knee. It comes back at <b>75 kg</b>.',
+            pause: [3, 4],
+            why: 'Knee',
+            ends: 'Deadlift ends at its week 6 of 8, because of its pause.',
+          },
+        }
+        const fmt = (v, unit) => `${v} ${unit}`
+
+        function draw(host, sr) {
+          const W = Math.max(280, host.clientWidth),
+            H = matchMedia('(max-width: 639px)').matches ? 240 : 290
+          const L = 40,
+            R = 8,
+            T = 40,
+            B = 34
+          const vals = sr.w.filter((v) => v != null)
+          const lo = Math.floor((Math.min(...vals) - 5) / 10) * 10,
+            hi = Math.ceil((Math.max(...vals) + 2.5) / 10) * 10
+          const cw = (W - L - R) / 8
+          const x = (i) => L + i * cw
+          const y = (v) => T + (H - T - B) * (1 - (v - lo) / (hi - lo))
+          let g = `<rect class="band" x="${x(CUR - 1)}" y="${T - 6}" width="${cw}" height="${H - T - B + 6}" rx="4"/>`
+          for (let t = lo; t <= hi; t += 10)
+            g += `<line class="grid-l" x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}"/><text class="axis-t" x="${L - 8}" y="${y(t) + 5}" text-anchor="end">${t}</text>`
+          g += `<text class="axis-t" x="${L - 8}" y="${T - 18}" text-anchor="end">${sr.unit}</text>`
+          WEEKS.forEach((wk, i) => {
+            g += `<text class="axis-t${wk.n === CUR ? ' cur' : ''}" x="${x(i) + cw / 2}" y="${H - 8}" text-anchor="middle">${wk.n}</text>`
+          })
+          g += `<text class="axis-t" x="${L - 8}" y="${H - 8}" text-anchor="end">Wk</text>`
+          // The step line, broken at a pause; solid to this week, dashed after it.
+          const seg = (from, to, cls) => {
+            let d = '',
+              prev = null
+            for (let i = from; i <= to; i++) {
+              const v = sr.w[i]
+              if (v == null) {
+                prev = null
+                continue
+              }
+              d += prev == null ? `M${x(i)} ${y(v)}` : `V${y(v)}`
+              d += `H${x(i + 1)}`
+              prev = v
+            }
+            return d ? `<path class="plan${cls}" d="${d}"/>` : ''
+          }
+          g += seg(0, CUR - 1, '')
+          const nextV = sr.w[CUR],
+            curV = sr.w[CUR - 1]
+          g +=
+            (curV != null && nextV != null
+              ? `<path class="plan ahead" d="M${x(CUR)} ${y(curV)}V${y(nextV)}"/>`
+              : '') + seg(CUR, 7, ' ahead')
+          // A change: a dashed line where it took effect, labelled above the plot.
+          for (const c of sr.changes || []) {
+            const cx = x(c.x),
+              tw = c.label.length * 8.2,
+              right = cx + 6 + tw > W
+            g += `<line class="cp" x1="${cx}" x2="${cx}" y1="${T - 26}" y2="${H - B}"/><text class="cpl" x="${right ? cx - 6 : cx + 6}" y="${T - 14}" text-anchor="${right ? 'end' : 'start'}">${c.label}</text>`
+          }
+          // A pause: dashed lines at its ends, its name and reason between them, and no line.
+          if (sr.pause) {
+            const [p0, p1] = sr.pause,
+              mid = (x(p0) + x(p1 + 1)) / 2,
+              my = (T + H - B) / 2
+            g += `<line class="cp" x1="${x(p0)}" x2="${x(p0)}" y1="${T - 6}" y2="${H - B}"/><line class="cp" x1="${x(p1 + 1)}" x2="${x(p1 + 1)}" y1="${T - 6}" y2="${H - B}"/>`
+            g += `<text class="lbl" x="${mid}" y="${my - 4}" text-anchor="middle">Paused</text><text class="lbl" x="${mid}" y="${my + 16}" text-anchor="middle">${sr.why}</text>`
+          }
+          // What was done, on top: a dot per week so far, filled in pen where the goal was met.
+          sr.done.forEach((n, i) => {
+            const v = sr.w[i]
+            if (v == null) return
+            const cx = x(i) + cw / 2,
+              cy = y(v),
+              met = n >= TARGET
+            g += met
+              ? `<circle class="met" cx="${cx}" cy="${cy}" r="7"/>`
+              : `<circle class="unmet" cx="${cx}" cy="${cy}" r="6"/>`
+            if (!met)
+              g += `<text class="lbl" x="${cx}" y="${cy + 26}" text-anchor="middle">${n} of ${TARGET}</text>`
+          })
+          // Two values labelled: this week's and the last week's.
+          for (const i of [CUR - 1, 7]) {
+            const v = sr.w[i]
+            if (v == null) continue
+            g += `<text class="val" x="${x(i) + cw / 2}" y="${y(v) - 12}" text-anchor="middle">${v}</text>`
+          }
+          WEEKS.forEach((_, i) => {
+            g += `<rect class="hit" data-wk="${i}" x="${x(i)}" y="${T - 6}" width="${cw}" height="${H - T - B + 6}"/>`
+          })
+          const plan = (i) =>
+            sr.w[i] == null ? 'Paused' : `${fmt(sr.w[i], sr.unit)}, ${sr.sets[i]}`
+          const rows = WEEKS.map((wk, i) => {
+            const done =
+              sr.done[i] != null && sr.w[i] != null
+                ? `${sr.done[i]} of ${TARGET}${wk.n === CUR ? ' so far' : sr.done[i] >= TARGET ? ', goal met' : ''}`
+                : ''
+            return `<tr><th scope="row">Week ${wk.n}, ${wk.d}</th><td>${plan(i)}</td><td>${done}</td></tr>`
+          }).join('')
+          host.innerHTML =
+            `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${sr.name}: planned weight for each week, with the weeks done so far" data-testid="programme-chart">${g}</svg>` +
+            // The table for a screen reader sits in a hidden box: a table ignores a 1px width of its own.
+            `<div class="vh"><table data-testid="programme-chart-table"><caption>${sr.name}, week by week</caption><tr><th scope="col">Week</th><th scope="col">Planned</th><th scope="col">Done</th></tr>${rows}</table></div>` +
+            `<div class="tip" hidden data-testid="programme-chart-tip"></div>`
+          const tip = host.querySelector('.tip')
+          host.querySelectorAll('.hit').forEach((r) => {
+            r.addEventListener('pointerenter', () => {
+              const i = Number(r.dataset.wk),
+                wk = WEEKS[i]
+              const p =
+                sr.w[i] == null
+                  ? `Paused, ${sr.why.toLowerCase()}`
+                  : `${plan(i)}${wk.deload ? ', deload' : ''}`
+              const done =
+                sr.done[i] != null && sr.w[i] != null
+                  ? `${sr.done[i]} of ${TARGET}${wk.n === CUR ? ' so far' : sr.done[i] >= TARGET ? ', goal met' : ''}`
+                  : ''
+              tip.innerHTML = `<b>Week ${wk.n}</b> · ${wk.d}<span>${p}</span>${done ? `<span>${done}</span>` : ''}`
+              tip.hidden = false
+              tip.style.left = `${Math.min(Math.max(0, x(i) + cw / 2 - tip.offsetWidth / 2), W - tip.offsetWidth)}px`
+              tip.style.top = `${T - 6 - tip.offsetHeight + 34}px`
+            })
+            r.addEventListener('pointerleave', () => {
+              tip.hidden = true
+            })
+          })
+        }
+
+        for (const content of document.querySelectorAll('[data-chart]')) {
+          const sr = SERIES[content.dataset.chart]
+          const paused = !!sr.pause
+          content.innerHTML = `<p class="lede" data-testid="programme-lede">${sr.lede}</p>
       <ul class="legend" data-testid="programme-chart-legend"><li><svg viewBox="0 0 22 12" aria-hidden="true"><path class="k-plan" d="M1 6h20"/></svg>Planned</li><li><svg viewBox="0 0 22 12" aria-hidden="true"><path class="k-ahead" d="M1 6h20"/></svg>Still to come</li><li><svg viewBox="0 0 22 12" aria-hidden="true"><circle class="k-met" cx="11" cy="6" r="6"/></svg>Goal met</li><li><svg viewBox="0 0 22 12" aria-hidden="true"><circle class="k-unmet" cx="11" cy="6" r="5"/></svg>Goal not met</li></ul>
       <div class="chart"></div>
       ${sr.ends ? `<p class="im" role="status" data-testid="activity-ends-short">${ic('info')}<span>${sr.ends}</span></p>` : ''}
       <div class="controls" data-testid="activity-controls"><button type="button" class="btn" data-testid="activity-set-value">${ic('pencil')}Set weight</button><button type="button" class="btn" data-testid="activity-set-increase">${ic('up')}Set increase</button>${paused ? `<button type="button" class="btn" data-testid="activity-resume">${ic('play')}Resume activity</button>` : `<button type="button" class="btn" data-testid="activity-pause">${ic('pause')}Pause activity</button>`}<button type="button" class="btn" data-testid="activity-end">${ic('stop')}End activity</button></div>`
-    const host = content.querySelector('.chart')
-    let width = 0
-    new ResizeObserver(() => { if (host.clientWidth !== width) { width = host.clientWidth; draw(host, sr) } }).observe(host)
-  }
-})()
-</script>
-</body>
+          const host = content.querySelector('.chart')
+          let width = 0
+          new ResizeObserver(() => {
+            if (host.clientWidth !== width) {
+              width = host.clientWidth
+              draw(host, sr)
+            }
+          }).observe(host)
+        }
+      })()
+    </script>
+  </body>
 </html>

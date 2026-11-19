@@ -62,7 +62,8 @@ function onOpenAutoFocus(event: Event): void {
 function onCloseAutoFocus(event: Event): void {
   if (slots.trigger) return
   event.preventDefault()
-  opener.focus()
+  // Without scrolling: the dialog's work may be scrolling the page to what it made (K174).
+  opener.focus({ preventScroll: true })
 }
 </script>
 

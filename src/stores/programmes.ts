@@ -11,10 +11,23 @@ import {
   type Outcome,
   type ProgrammeRecord,
   type ProgrammeSummary,
+  type PublishPreview,
   type Run,
   type RunSummary,
+  type SharedRef,
+  type SharedPreview,
+  type SharedSummary,
   type StartPreview,
 } from '@/lib/programmes'
+import {
+  CANT_REOPEN,
+  type Confirmed,
+  type ReopenBody,
+  type ReopenPreview,
+  type RestartBody,
+  type RestartPreview,
+  type Restarted,
+} from '@/lib/runActions'
 import { useSessionStore } from '@/stores/session'
 import { useSyncStore } from '@/stores/sync'
 
@@ -62,6 +75,8 @@ export const useProgrammesStore = defineStore('programmes', () => {
 
   /** The library, or null until it has loaded. */
   const library = ref<ProgrammeSummary[] | null>(null)
+  /** The shared library (shared library spec §5), newest publish first; null until it loads. */
+  const shared = ref<SharedSummary[] | null>(null)
   /** The runs by tracker id, as the state last listed them. */
   const runs = ref<Record<string, RunSummary>>({})
   /** The server's today (spec §8): the first day a start or a change may take. */
@@ -243,8 +258,163 @@ export const useProgrammesStore = defineStore('programmes', () => {
     return { ok: true, data: res.data.run }
   }
 
+  /** A restart's preview (K164, K167): the new tracker's name, start, weeks and last day. */
+  async function previewRestart(
+    tracker: string,
+    body: RestartBody,
+  ): Promise<Outcome<RestartPreview>> {
+    return outcome(
+      await call<RestartPreview>('POST', `/runs/${tracker}/restart`, { ...body, preview: true }),
+    )
+  }
+
+  /**
+   * Restart from week 1 with the preview's `rev`: a new tracker and run. Both runs stay here, the
+   * new one as the overview's, and the week reads the state again so the new tracker shows. A
+   * stale `rev` comes back as `stale`, with the restart previewed again.
+   */
+  async function restart(
+    tracker: string,
+    body: RestartBody,
+    rev: string,
+  ): Promise<Confirmed<Restarted, RestartPreview>> {
+    const res = await call<Restarted>('POST', `/runs/${tracker}/restart`, {
+      ...body,
+      preview: false,
+      rev,
+    })
+    if (!res.ok) {
+      if (res.error.kind === 'conflict') {
+        return { ok: false, stale: res.error.body.preview as RestartPreview }
+      }
+      return failed(res.error)
+    }
+    keep(res.data.tracker.id, res.data.run)
+    void sync.refresh()
+    return { ok: true, data: res.data }
+  }
+
+  /**
+   * A re-open refused because the run can't be re-opened any more (409 `cant-reopen`): it changed
+   * since the overview read it, so the run is read again for the overview to show what it can do.
+   */
+  async function reopenFailed(
+    tracker: string,
+    error: ApiError,
+  ): Promise<{ ok: false; problems: Problem[]; message: string | null }> {
+    if (error.kind !== 'refused' || error.code !== 'cant-reopen') return failed(error)
+    await loadRun(tracker)
+    return { ok: false, problems: [], message: CANT_REOPEN }
+  }
+
+  /** A re-open's preview (K165, K167), or Cancel the end's, from the end's own day. */
+  async function previewReopen(tracker: string, body: ReopenBody): Promise<Outcome<ReopenPreview>> {
+    const res = await call<ReopenPreview>('POST', `/runs/${tracker}/reopen`, {
+      ...body,
+      preview: true,
+    })
+    return res.ok ? { ok: true, data: res.data } : reopenFailed(tracker, res.error)
+  }
+
+  /** Re-open with the preview's `rev`, then take the run the server sends back. */
+  async function reopen(
+    tracker: string,
+    body: ReopenBody,
+    rev: string,
+  ): Promise<Confirmed<Run, ReopenPreview>> {
+    const res = await call<{ run: Run }>('POST', `/runs/${tracker}/reopen`, {
+      ...body,
+      preview: false,
+      rev,
+    })
+    if (!res.ok) {
+      if (res.error.kind === 'conflict') {
+        return { ok: false, stale: res.error.body.preview as ReopenPreview }
+      }
+      return reopenFailed(tracker, res.error)
+    }
+    keep(tracker, res.data.run)
+    void sync.refresh()
+    return { ok: true, data: res.data.run }
+  }
+
+  // -- The shared library (docs/specs/2026-11-19-shared-library.md §5) --
+
+  /**
+   * The shared programmes. A failure keeps what was here and says nothing: the shared library is
+   * an extra under the account's own, and the page's own load already says when the server can't
+   * be reached. Until one load works, the Library tab shows no shared section.
+   */
+  async function loadShared(): Promise<void> {
+    const res = await call<{ programmes: SharedSummary[] }>('GET', '/shared-programmes')
+    if (res.ok) shared.value = res.data.programmes
+  }
+
+  /**
+   * Copy a shared programme into the library (S4): a plain copy with a new id, which goes at the
+   * top of the list, as the server lists the newest first.
+   */
+  async function copyShared(id: string): Promise<Outcome<ProgrammeRecord>> {
+    const res = outcome(await call<ProgrammeRecord>('POST', `/shared-programmes/${id}/copy`))
+    if (!res.ok) return res
+    const { doc: _doc, ...summary } = res.data
+    library.value = [summary, ...(library.value ?? [])]
+    return res
+  }
+
+  /** A shared programme and its plan, to look at before copying it (K173). Writes nothing. */
+  async function previewShared(id: string): Promise<Outcome<SharedPreview>> {
+    return outcome(await call<SharedPreview>('GET', `/shared-programmes/${id}/preview`))
+  }
+
+  /** Publish's preview (S5): the programme as everyone will see it. The server writes nothing. */
+  async function previewPublish(id: string): Promise<Outcome<PublishPreview>> {
+    return outcome(
+      await call<PublishPreview>('POST', `/programmes/${id}/publish`, { preview: true }),
+    )
+  }
+
+  /**
+   * Publish with the preview's `rev` (admin only, S1). The row is marked shared and the shared
+   * library read again. A stale `rev` (the programme or its shared copy changed since) comes back
+   * as `stale`, with the publish previewed again.
+   */
+  async function publish(id: string, rev: string): Promise<Confirmed<SharedRef, PublishPreview>> {
+    const res = await call<{ preview: false; shared: SharedRef }>(
+      'POST',
+      `/programmes/${id}/publish`,
+      { preview: false, rev },
+    )
+    if (!res.ok) {
+      if (res.error.kind === 'conflict') {
+        return { ok: false, stale: res.error.body.preview as PublishPreview }
+      }
+      return failed(res.error)
+    }
+    const done = res.data.shared
+    if (library.value) {
+      library.value = library.value.map((p) => (p.id === id ? { ...p, shared: done } : p))
+    }
+    await loadShared()
+    return { ok: true, data: done }
+  }
+
+  /** Take a programme out of the shared library (admin only). Copies people made stay theirs. */
+  async function unpublish(sharedId: string): Promise<Outcome<null>> {
+    const res = await call<undefined>('DELETE', `/shared-programmes/${sharedId}`)
+    if (!res.ok) return failed(res.error)
+    if (library.value) {
+      library.value = library.value.map((p) =>
+        p.shared?.id === sharedId ? { ...p, shared: null } : p,
+      )
+    }
+    if (shared.value) shared.value = shared.value.filter((p) => p.id !== sharedId)
+    return { ok: true, data: null }
+  }
+
   return {
     library,
+    shared,
     runs,
     today,
     loadFailure,
@@ -263,5 +433,15 @@ export const useProgrammesStore = defineStore('programmes', () => {
     previewChange,
     confirmChange,
     endRun,
+    previewRestart,
+    restart,
+    previewReopen,
+    reopen,
+    loadShared,
+    copyShared,
+    previewShared,
+    previewPublish,
+    publish,
+    unpublish,
   }
 })

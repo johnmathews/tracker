@@ -3,6 +3,7 @@ and export (docs/api.md §3). Also the programme library and its runs: starting 
 changes, the weeks it writes, the lock on past days and the evidence (sealed days, mark events)
 of docs/specs/2026-11-17-programmes.md §4 to §8."""
 
+import hashlib
 import json
 import logging
 import sqlite3
@@ -155,12 +156,14 @@ class RunEnded(Exception):
 
 class CantReopen(Exception):
     """A re-open of a run End programme didn't stop part way (K165): one still going, with no
-    end (`finished` False), or one that ran to its last Sunday or was ended before it started
-    (`finished` True). Nothing was changed."""
+    end (`finished` False), or one that ran to its last Sunday, was ended before it started, or
+    was ended by a restart, whose new run replaces it (`finished` True, and `restarted` True for
+    the last, K167). Nothing was changed."""
 
-    def __init__(self, *, finished: bool) -> None:
-        super().__init__("finished" if finished else "going")
+    def __init__(self, *, finished: bool, restarted: bool = False) -> None:
+        super().__init__("restarted" if restarted else "finished" if finished else "going")
         self.finished = finished
+        self.restarted = restarted
 
 
 class RunUnreadable(Exception):
@@ -1078,17 +1081,35 @@ def _checked(doc: object) -> tuple[Programme, str]:
 _PROGRAMME_COLUMNS = "id, name, doc_json, rev, created_at, updated_at"
 
 
-def _programme(row: sqlite3.Row) -> ProgrammeRecord:
-    # Every stored document passed the format's check, so its kind, weeks and activities are
-    # there. `weeks` may have been sent as 8.0.
-    doc: dict[str, Any] = json.loads(row["doc_json"])
+class _Described(TypedDict):
+    description: str | None
+    kind: str
+    weeks: int
+    activities: int
+
+
+def _described(doc: Mapping[str, Any]) -> _Described:
+    """What a summary reads from a stored document, the library's or the shared library's. Every
+    stored document passed the format's check, so its kind, weeks and activities are there.
+    `weeks` may have been sent as 8.0."""
     return {
-        "id": row["id"],
-        "name": row["name"],
         "description": doc.get("description"),
         "kind": doc["kind"],
         "weeks": int(doc["weeks"]),
         "activities": len(doc["activities"]),
+    }
+
+
+def _programme(row: sqlite3.Row) -> ProgrammeRecord:
+    doc: dict[str, Any] = json.loads(row["doc_json"])
+    described = _described(doc)
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "description": described["description"],
+        "kind": described["kind"],
+        "weeks": described["weeks"],
+        "activities": described["activities"],
         "rev": row["rev"],
         "createdAt": row["created_at"],
         "updatedAt": row["updated_at"],
@@ -1212,6 +1233,223 @@ def delete_programme(conn: sqlite3.Connection, user_id: int, programme_id: str) 
     return cur.rowcount > 0
 
 
+# --- the shared library (docs/specs/2026-11-19-shared-library.md) --------------------------------
+#
+# Programmes every signed-in user can see and copy, which only an admin publishes. A shared
+# programme is a snapshot of an admin's library programme in a table of its own (S3), and no
+# shared read names anyone (S2): `published_by` and `source_id` only find the row a publish
+# replaces, and only the admin's own library summaries show the link (`shared_refs`). The shared
+# library is no account's data, so no quota, export or import counts it.
+
+
+class SharedSummary(TypedDict):
+    """A shared programme as the shared list shows it: a library summary with no `rev`, no
+    `createdAt` and no owner."""
+
+    id: str
+    name: str
+    description: str | None
+    kind: str
+    weeks: int
+    activities: int
+    #: Unix seconds: the last publish.
+    updatedAt: int
+
+
+class SharedRecord(SharedSummary):
+    doc: dict[str, Any]
+
+
+class SharedRef(TypedDict):
+    """Which shared programme an admin's library programme was published as, and when."""
+
+    id: str
+    updatedAt: int
+
+
+class StalePublish(Exception):
+    """A confirmed publish whose `rev` isn't the token of the publish as it is now: the library
+    programme or the shared copy it replaces changed since the preview. Nothing was changed.
+    `preview` is the publish previewed again."""
+
+    def __init__(self, preview: dict[str, Any]) -> None:
+        super().__init__("stale")
+        self.preview = preview
+
+
+_SHARED_COLUMNS = "id, name, doc_json, rev, updated_at"
+
+
+def _shared(row: sqlite3.Row) -> SharedRecord:
+    doc: dict[str, Any] = json.loads(row["doc_json"])
+    described = _described(doc)
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "description": described["description"],
+        "kind": described["kind"],
+        "weeks": described["weeks"],
+        "activities": described["activities"],
+        "updatedAt": row["updated_at"],
+        "doc": doc,
+    }
+
+
+def list_shared(conn: sqlite3.Connection) -> list[SharedSummary]:
+    """The shared library, the newest publish first, without the documents."""
+    out: list[SharedSummary] = []
+    for row in conn.execute(
+        f"SELECT {_SHARED_COLUMNS} FROM shared_programmes"  # noqa: S608
+        " ORDER BY updated_at DESC, published_at DESC, id"
+    ):
+        summary: dict[str, Any] = {k: v for k, v in _shared(row).items() if k != "doc"}
+        out.append(summary)  # type: ignore[arg-type]
+    return out
+
+
+def load_shared(conn: sqlite3.Connection, shared_id: str) -> SharedRecord | None:
+    row = conn.execute(
+        f"SELECT {_SHARED_COLUMNS} FROM shared_programmes WHERE id = ?",  # noqa: S608
+        (shared_id,),
+    ).fetchone()
+    return None if row is None else _shared(row)
+
+
+def copy_shared(
+    conn: sqlite3.Connection,
+    user_id: int,
+    shared_id: str,
+    now: int,
+    *,
+    quota: int,
+    make_id: Callable[[Container[str]], str],
+) -> ProgrammeRecord | None:
+    """Copy a shared programme into the account's library through `add_programme`, so the cap
+    and the quota apply: a plain copy with a new id and the shared name, and no link back (S4).
+    None for an unknown id. Raises as `add_programme` does."""
+    found = load_shared(conn, shared_id)
+    if found is None:
+        return None
+    return add_programme(conn, user_id, found["doc"], now, quota=quota, make_id=make_id)
+
+
+def shared_refs(conn: sqlite3.Connection, user_id: int) -> dict[str, SharedRef]:
+    """The account's published library programmes, by library id: for the admin's own list."""
+    return {
+        r["source_id"]: {"id": r["id"], "updatedAt": r["updated_at"]}
+        for r in conn.execute(
+            "SELECT id, source_id, updated_at FROM shared_programmes"
+            " WHERE published_by = ? AND source_id IS NOT NULL",
+            (user_id,),
+        )
+    }
+
+
+def _replaced(conn: sqlite3.Connection, user_id: int, programme_id: str) -> sqlite3.Row | None:
+    """The shared copy a publish of this library programme replaces, if it has one."""
+    row: sqlite3.Row | None = conn.execute(
+        "SELECT id, rev, updated_at FROM shared_programmes"
+        " WHERE published_by = ? AND source_id = ?",
+        (user_id, programme_id),
+    ).fetchone()
+    return row
+
+
+def _publish_preview(
+    record: ProgrammeRecord, replaces: sqlite3.Row | None, now: int
+) -> dict[str, Any]:
+    """A publish's preview (S5, P2): the programme as every user will see it, what it replaces,
+    and the token its confirm sends back. The token is a hash of the library programme's id and
+    rev and of the shared copy's id and rev, so an edit of either since gives another."""
+    covered = {
+        "programme": record["id"],
+        "rev": record["rev"],
+        "replaces": None if replaces is None else [replaces["id"], replaces["rev"]],
+    }
+    text = json.dumps(covered, sort_keys=True, separators=(",", ":"))
+    ref: SharedRef | None = (
+        None if replaces is None else {"id": replaces["id"], "updatedAt": replaces["updated_at"]}
+    )
+    return {
+        "preview": True,
+        "rev": hashlib.sha256(text.encode()).hexdigest()[:16],
+        "publish": {
+            "programme": {
+                # A first publish has no shared id until it is confirmed.
+                "id": None if ref is None else ref["id"],
+                "name": record["name"],
+                "description": record["description"],
+                "kind": record["kind"],
+                "weeks": record["weeks"],
+                "activities": record["activities"],
+                "updatedAt": now,
+                "doc": record["doc"],
+            },
+            "replaces": ref,
+        },
+    }
+
+
+def publish_programme(
+    conn: sqlite3.Connection,
+    user_id: int,
+    programme_id: str,
+    *,
+    confirm: bool,
+    rev: object,
+    now: int,
+    make_id: Callable[[Container[str]], str],
+) -> dict[str, Any] | None:
+    """Preview a publish of one of the account's library programmes, or with `confirm` publish
+    it. The caller has checked the admin flag (S1). None for a programme the account doesn't
+    have.
+
+    A preview writes nothing and returns `{preview: true, rev, publish: {programme, replaces}}`.
+    A confirm needs the preview's `rev` and checks it under the write lock. It adds the shared
+    copy, or replaces the one this programme was published as before, keeping its id and first
+    publish and moving its rev and time on. It returns `{preview: false, shared: {id,
+    updatedAt}}`. Raises ProgrammeInvalid for a confirm without a rev, and StalePublish for a
+    stale one."""
+    if not confirm:
+        row = _programme_row(conn, user_id, programme_id)
+        if row is None:
+            return None
+        return _publish_preview(_programme(row), _replaced(conn, user_id, programme_id), now)
+    with transaction(conn):
+        row = _programme_row(conn, user_id, programme_id)
+        if row is None:
+            return None
+        if not isinstance(rev, str):
+            raise ProgrammeInvalid([ProgrammeError("rev", "give the rev of the preview.")])
+        replaces = _replaced(conn, user_id, programme_id)
+        preview = _publish_preview(_programme(row), replaces, now)
+        if rev != preview["rev"]:
+            raise StalePublish(preview)
+        if replaces is None:
+            taken = {r["id"] for r in conn.execute("SELECT id FROM shared_programmes")}
+            shared_id = make_id(taken)
+            conn.execute(
+                "INSERT INTO shared_programmes (id, name, doc_json, rev, published_by, source_id,"
+                " published_at, updated_at) VALUES (?, ?, ?, 1, ?, ?, ?, ?)",
+                (shared_id, row["name"], row["doc_json"], user_id, programme_id, now, now),
+            )
+        else:
+            shared_id = replaces["id"]
+            conn.execute(
+                "UPDATE shared_programmes SET name = ?, doc_json = ?, rev = rev + 1,"
+                " updated_at = ? WHERE id = ?",
+                (row["name"], row["doc_json"], now, shared_id),
+            )
+    return {"preview": False, "shared": {"id": shared_id, "updatedAt": now}}
+
+
+def unpublish(conn: sqlite3.Connection, shared_id: str) -> bool:
+    """Take a programme out of the shared library; False for an unknown id. Copies already made
+    are their accounts' own and stay."""
+    cur = conn.execute("DELETE FROM shared_programmes WHERE id = ?", (shared_id,))
+    return cur.rowcount > 0
+
+
 # --- programme runs (docs/specs/2026-11-17-programmes.md §4 to §8, §11) --------------------------
 #
 # A run is a tracker of its programme's kind with a row in `programme_runs`: the run's own copy of
@@ -1265,11 +1503,12 @@ def _parse_reason(v: object, errors: list[ProgrammeError]) -> str | None:
 @dataclass(frozen=True)
 class _Ending:
     """End programme: the change that ended the run, its first day without the programme, and
-    why."""
+    why; `restarted` when a restart wrote it (K164), so the new run replaces this one (K167)."""
 
     seq: int
     from_date: date
     reason: str | None
+    restarted: bool = False
 
 
 @dataclass(frozen=True)
@@ -1382,9 +1621,15 @@ def _load_run(
         )
         sources[r["seq"]], made[r["seq"]] = r["source"], r["made_at"]
         if body.get("type") == END_PROGRAMME:
-            ending = _Ending(r["seq"], from_date, reason)
+            ending = _Ending(r["seq"], from_date, reason, body.get("restarted") is True)
         elif body.get("type") == REOPEN_PROGRAMME:
             ending = None  # K165
+    if (
+        ending is not None
+        and not ending.restarted
+        and _restarted_before_marker(conn, user_id, tracker_id, ending, doc, params)
+    ):
+        ending = replace(ending, restarted=True)
     sealed = {
         date.fromisoformat(r["date"]): day_from_json(json.loads(r["items_json"]))
         for r in conn.execute(
@@ -1405,6 +1650,31 @@ def _load_run(
         sealed=sealed,
         ending=ending,
         stored_status=row["status"],
+    )
+
+
+def _restarted_before_marker(
+    conn: sqlite3.Connection,
+    user_id: int,
+    tracker_id: str,
+    ending: _Ending,
+    doc: dict[str, Any],
+    params: dict[str, Any],
+) -> bool:
+    """Whether an end without the `restarted` marker is a restart's from before the marker
+    (K167). A restart gave its end the reason RESTARTED, from the new run's first day, and started
+    the new run from this run's own document and parameters. The reason alone is text a person
+    can type, so the new run must be there too: another run of the account with the same document
+    and parameters, starting on the end's day."""
+    if ending.reason != RESTARTED:
+        return False
+    return any(
+        json.loads(r["doc_json"]) == doc and json.loads(r["params_json"]) == params
+        for r in conn.execute(
+            "SELECT doc_json, params_json FROM programme_runs"
+            " WHERE user_id = ? AND tracker_id != ? AND start_date = ?",
+            (user_id, tracker_id, ending.from_date.isoformat()),
+        )
     )
 
 
@@ -1807,7 +2077,9 @@ def _run_json(
     conn: sqlite3.Connection, user_id: int, loaded: _Loaded, rp: Replay, when: When
 ) -> dict[str, Any]:
     """The run (`GET /api/runs/{tracker}`): its programme, parameters in force, dates, status and
-    clocks today, the log newest first, what ends short, and the grid."""
+    clocks today, the log newest first, what ends short, and the grid. `canReopen` says whether a
+    re-open applies today (`_reopenable`, K167), whatever the status: an end set for a later day
+    leaves the run `running`, and it can be re-opened."""
     today = when.today
     programme = loaded.run.programme
     status = loaded.status(rp, today)
@@ -1839,11 +2111,25 @@ def _run_json(
         "endsShort": _ends_short_json(rp),
         "ended": None
         if ending is None
-        else {"from": ending.from_date.isoformat(), "reason": ending.reason, "seq": ending.seq},
+        else {
+            "from": ending.from_date.isoformat(),
+            "reason": ending.reason,
+            "seq": ending.seq,
+            "restarted": ending.restarted,
+        },
+        "canReopen": _can_reopen(loaded, rp, today),
         "clock": _clock_json(day),
         "log": [_change_json(loaded, c, rp, today) for c in reversed(loaded.changes)],
         "grid": _grid_json(rp, today, load_log(conn, user_id, loaded.tracker_id), last),
     }
+
+
+def _can_reopen(loaded: _Loaded, rp: Replay, today: date) -> bool:
+    try:
+        _reopenable(loaded, rp, today)
+    except CantReopen:
+        return False
+    return True
 
 
 def _paused_since(rp: Replay, today: date) -> date:
@@ -1950,6 +2236,32 @@ def preview_programme(
         "params": {key: _number(value) for key, value in rp.params.items()},
         "endsShort": _ends_short_json(rp),
         "grid": _grid_json(rp, when.today, {}, rp.end),
+    }
+
+
+def preview_shared(
+    conn: sqlite3.Connection, shared_id: str, *, when: When
+) -> dict[str, Any] | None:
+    """A shared programme and its plan, for anyone to look at before copying it (`GET
+    /api/shared-programmes/{id}/preview`, K173): `{programme, plan}`, the plan as a start's
+    preview at the programme's own values from today. Writes nothing. None for an unknown id."""
+    found = load_shared(conn, shared_id)
+    if found is None:
+        return None
+    run, _ = _start_inputs(
+        parse_programme(found["doc"]), start=None, params=None, name=None, today=when.today
+    )
+    rp = replay(run, [], until=when.today)
+    return {
+        "programme": found,
+        "plan": {
+            "start": run.start.isoformat(),
+            "end": _iso(rp.end),
+            "weeks": run.programme.weeks,
+            "params": {key: _number(value) for key, value in rp.params.items()},
+            "endsShort": _ends_short_json(rp),
+            "grid": _grid_json(rp, when.today, {}, rp.end),
+        },
     }
 
 
@@ -2366,10 +2678,12 @@ def _write_end(
     *,
     when: When,
     source: str,
+    restarted: bool = False,
 ) -> tuple[_Loaded, Replay]:
     """End programme's writes, for `end_run` and a restart (K164): the `end-programme` row, the
     tracker's end week moved earlier (never later, K122), the weeks up to the end rewritten and the
-    status stored. Inside the caller's transaction. Returns the run as it now is."""
+    status stored. A restart's row carries `restarted`, so the run can't be re-opened beside the
+    new one (K167). Inside the caller's transaction. Returns the run as it now is."""
     tracker_id = loaded.tracker_id
     week = _week_after(on - _DAY)
     conn.execute(
@@ -2382,7 +2696,9 @@ def _write_end(
             max((c.seq for c in loaded.changes), default=0) + 1,
             when.now,
             on.isoformat(),
-            json.dumps({"type": END_PROGRAMME}),
+            json.dumps(
+                {"type": END_PROGRAMME, "restarted": True} if restarted else {"type": END_PROGRAMME}
+            ),
             why or "",
             source,
         ),
@@ -2407,6 +2723,37 @@ def _write_end(
 
 
 # -- restarting a run (K164) --
+
+
+def _write_restart_marker(
+    conn: sqlite3.Connection, user_id: int, loaded: _Loaded, *, when: When, source: str
+) -> None:
+    """A restart's mark on a run End programme had already ended (K167): an `end-programme` row
+    with `restarted`, from the same day as that end and with the reason RESTARTED, so the run
+    reads as ended by the restart and can't be re-opened beside the new one. The end's day is
+    unchanged, so the run's weeks, marks, notes and sealed days stay as they are: only its log and
+    its rev move. Inside the caller's transaction."""
+    assert loaded.ending is not None
+    conn.execute(
+        "INSERT INTO run_changes"
+        " (user_id, tracker_id, seq, made_at, from_date, change_json, reason, source)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            user_id,
+            loaded.tracker_id,
+            max(c.seq for c in loaded.changes) + 1,
+            when.now,
+            loaded.ending.from_date.isoformat(),
+            json.dumps({"type": END_PROGRAMME, "restarted": True}),
+            RESTARTED,
+            source,
+        ),
+    )
+    conn.execute(
+        "UPDATE programme_runs SET rev = rev + 1 WHERE user_id = ? AND tracker_id = ?",
+        (user_id, loaded.tracker_id),
+    )
+
 
 #: The reason a restart gives the end it writes on the run it replaces.
 RESTARTED = "Restarted from week 1."
@@ -2536,8 +2883,9 @@ def restart_run(
     """Restart a run from week 1 (K164), as a confirm of `preview_restart`: a new tracker and run
     from `start` (today or later, default today) through Start programme's writes, from the old
     run's own copy of the document and its parameters. An old run still going on that day is
-    ended from it in the same transaction, as End programme ends it, with the reason RESTARTED.
-    None when the tracker has no run.
+    ended from it in the same transaction, as End programme ends it, with the reason RESTARTED and
+    the `restarted` marker (K167). An old run End programme had already ended gains only the
+    marker, from its end's own day (`_write_restart_marker`). None when the tracker has no run.
 
     `rev` must be the preview's token on the run and the trackers as they are now, checked inside
     the write's transaction; otherwise it raises StaleRun with a fresh preview. Raises
@@ -2565,7 +2913,11 @@ def restart_run(
         before = usage(conn, user_id)
         on = _old_ends_from(loaded, rp, run.start)
         if on is not None:
-            _write_end(conn, user_id, loaded, on, RESTARTED, when=when, source=source)
+            _write_end(
+                conn, user_id, loaded, on, RESTARTED, when=when, source=source, restarted=True
+            )
+        elif loaded.ending is not None and not loaded.ending.restarted:
+            _write_restart_marker(conn, user_id, loaded, when=when, source=source)
         tracker, new = _new_run(
             conn,
             user_id,
@@ -2599,11 +2951,14 @@ def _reopen_args(
 
 
 def _reopenable(loaded: _Loaded, rp: Replay, today: date) -> _Ending:
-    """The end a re-open lifts: one that stopped the run part way, from its start or later and
-    no later than its last day. Raises CantReopen for any other run."""
+    """The end a re-open lifts: one End programme wrote, not a restart (K167), that stopped the
+    run part way, from its start or later and no later than its last day. Raises CantReopen for
+    any other run."""
     ending = loaded.ending
     if ending is None:
         raise CantReopen(finished=loaded.status(rp, today) == "ended")
+    if ending.restarted:
+        raise CantReopen(finished=True, restarted=True)
     if ending.from_date < loaded.run.start or (rp.end is not None and ending.from_date > rp.end):
         raise CantReopen(finished=True)
     return ending

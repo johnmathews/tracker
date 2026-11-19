@@ -2,7 +2,8 @@ A short list of actions that opens under the control that pressed it, with an op
 
 ## Use
 
-- **The account menu (K106)** is the one in the app: the Header's last BarAction, "Profile" (Lucide `circle-user-round`), opens it. It reads "Signed in as" and the email, then "Profile" (Lucide `user-round`), which goes to the Profile page, and "Sign out" (Lucide `log-out`).
+- **The account menu (K106):** the Header's last BarAction, "Profile" (Lucide `circle-user-round`), opens it. It reads "Signed in as" and the email, then "Profile" (Lucide `user-round`), which goes to the Profile page, and "Sign out" (Lucide `log-out`).
+- **A row's More menu (K171):** on the admin's Programmes page, each library row ends with a quiet IconButton, **More** (Lucide `ellipsis`, named for its row: "More for Couch to 5K"), at the row's button height, after Delete. Its menu has no header and holds the actions that don't earn a button of their own: **Publish** (Lucide `share`), or for a shared row **Publish again** (`refresh-cw`) and **Unpublish** (`eye-off`). It opens under the IconButton with their right edges aligned. An item that needs a question or a preview opens a Dialog or a ConfirmDialog after the menu closes. Offline, More is disabled with the row's other buttons. Nobody else sees it.
 - **Panel:** `panel` fill, 1px `line` border, `radius-lg`, `shadow-overlay` (none in dark), `space-2` padding, 288px wide. It opens `space-2` below its trigger with their right edges aligned, and stays inside the screen with a 16px margin on a phone.
 - **Header** (optional): the caption ("Signed in as") in `caption` and `ink-secondary` over the value (the email) in `label` type and `ink`, with `space-2` `space-3` `space-3` padding and a `line` rule under it. A long email breaks anywhere rather than run past the panel.
 - **Items:** `space-2` under the header, 2px apart. Each is at least 48px tall, with `space-3` side padding, a 22px Lucide icon at the 1.5 stroke, then its name in `label` type: a verb or a place, in sentence case ("Profile", "Sign out"). `radius-md`, no border.
@@ -28,4 +29,4 @@ A short list of actions that opens under the control that pressed it, with an op
 
 ## You provide
 
-The trigger (a BarAction or a Button), the header's caption and value if it has one, and each item's icon, name and select handler. `v-model:open` if you need to know whether it is open.
+The trigger (a BarAction, a Button, or an IconButton named for what it is more of), the header's caption and value if it has one, and each item's icon, name and select handler. `v-model:open` if you need to know whether it is open.

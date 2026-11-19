@@ -277,4 +277,71 @@ describe('session', () => {
     expect(await session.logout()).toBeNull()
     expect(session.status).toBe('signed-out')
   })
+
+  describe('the admin flag (shared library spec §3)', () => {
+    it('is off until the server says otherwise, and for an account without it', async () => {
+      api = fresh()
+      const session = useSessionStore()
+      expect(session.isAdmin).toBe(false)
+      await session.login(USER, PASSWORD)
+      expect(session.isAdmin).toBe(false)
+    })
+
+    it('comes from login', async () => {
+      api = fresh()
+      api.admins.add(USER)
+      const session = useSessionStore()
+      await session.login(USER, PASSWORD)
+      expect(session.isAdmin).toBe(true)
+    })
+
+    it('comes from signup', async () => {
+      api = fresh()
+      api.admins.add('sam@example.com')
+      const session = useSessionStore()
+      expect(await session.signup('sam@example.com', PASSWORD)).toBeNull()
+      expect(session.isAdmin).toBe(true)
+    })
+
+    it('comes from /auth/me for a remembered session of the same user (F5)', async () => {
+      api = signedIn()
+      api.admins.add(USER)
+      const session = useSessionStore()
+      const init = session.init()
+      // Remembered: signed in at once, before the server has said who is an admin.
+      expect(session.isAdmin).toBe(false)
+      await init
+      expect(session.user).toBe(USER)
+      expect(session.isAdmin).toBe(true)
+    })
+
+    it('follows /auth/me when the flag was taken away', async () => {
+      api = fresh()
+      api.admins.add(USER)
+      const session = useSessionStore()
+      await session.login(USER, PASSWORD)
+      api.admins.delete(USER)
+      await session.init()
+      expect(session.isAdmin).toBe(false)
+    })
+
+    it('is dropped on signing out, and for another tab’s different user', async () => {
+      api = signedIn()
+      api.admins.add(USER)
+      api.addUser('bob')
+      const session = useSessionStore()
+      await session.init()
+      expect(session.isAdmin).toBe(true)
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ user: 'bob' }))
+      api.signedIn = 'bob'
+      await session.onStorage(SESSION_KEY)
+      expect(session.user).toBe('bob')
+      expect(session.isAdmin).toBe(false)
+      api.admins.add('bob')
+      await session.init()
+      expect(session.isAdmin).toBe(true)
+      expect(await session.logout()).toBeNull()
+      expect(session.isAdmin).toBe(false)
+    })
+  })
 })

@@ -668,7 +668,7 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
   its set's three marks with `DayMarkDrawing`, the mark without its button (K20).
 - **An item's own page** (K64, K65, the ItemPage card). The handoff has nowhere to keep more about
   an exercise or a food than its row. `ItemPage.vue`, at `#/item/<section>/<id>`, is one of
-  Settings' family: no Header, Settings' sizes, full width on the page's margins. Its layout is
+  Settings' family: no Header, Settings' sizes, in the page's centred column (K176). Its layout is
   option A of the mockup `261101-item-page`, rows like Settings (K65; K64 first built option B).
   Under the head (Back to the week, the type, "Exercise", and the name in `title-1` with its
   chips), each section is a row with its heading in the week's 320u name column
@@ -822,8 +822,9 @@ have no `<style>` blocks. Everything global is in `src/styles/main.css`.
   `bg-canvas`, `text-ink-secondary` or `border-control-border`, and both themes follow without
   `dark:` variants. The roles are `canvas`, `panel`, `tile`, `line`, `control-border`, `ink`,
   `on-ink`, `ink-secondary`, `error-ink`, `focus`, `pen`, `pen-partial`, `pen-missed`,
-  `caution-ink`, `paused-ink`, `edit` and `scrim`. `paused-ink` draws only the programme grid's
-  "Paused until …" line (K166). `edit` draws only Edit plan's frame (K112): App.vue's
+  `caution-ink`, `paused-ink`, `edit` and `scrim`. `paused-ink` draws only a pause: the programme grid's
+  "Paused until …" line (K166), and the lead of the week view's paused row and of the item page's
+  lede (K169). `edit` draws only Edit plan's frame (K112): App.vue's
   `data-slot="edit-frame"`, fixed round the window, `--edit-frame` wide (8px; on a phone a 4px line along the top only, K117, K162).
 - **No palette.** `--color-*: initial` switches Tailwind's default colours off, keeping only
   `transparent` and `current`, so a palette class such as `bg-red-500` or `text-white` generates
@@ -1121,8 +1122,9 @@ out to be invalid; offline or busy, the page offers to try again.
 email, and only then links "Forgot your password?" to `#/forgot`. The session store asks again
 after every sign-in and when the browser comes back online, for the `ask` flag too (§3). That form posts the email and
 then always says a link is on its way if there is an account, whatever the server found. The
-account the API returns on sign-in and from `/auth/me` carries `confirmed` for an email account
-while mail is on; the session store keeps it, and `EmailStatus` shows the confirm banner while it
+account the API returns on sign-in and from `/auth/me` carries `admin: true` for an admin, read
+from the account on every request (§8, The shared library). It carries `confirmed` for an email
+account while mail is on; the session store keeps it, and `EmailStatus` shows the confirm banner while it
 is false, with "Send it again" (`POST /api/auth/confirm/resend`). A confirm link,
 `#/confirm/<token>`, opens `ConfirmEmail` whether or not anyone is signed in, ahead of every other
 screen; it posts the token, clears the fragment once used or dead, and, when the link was for the
@@ -1424,6 +1426,30 @@ the tracker.
 log, sealed days and mark events, with no new file version. An import adds a run only with a
 tracker it adds, and only when the run's document, parameters, sealed days and log all read; a
 programme tracker the account has takes nothing from a file.
+
+**The shared library** (K171, the spec
+[specs/2026-11-19-shared-library.md](specs/2026-11-19-shared-library.md), [api.md](api.md) §3.5).
+An admin publishes a snapshot of a library programme into `shared_programmes`, and any user copies
+one back into their own library. Three choices hold it together:
+
+- **The admin flag is the server's check.** `users.admin` is set only by `tracker-admin admin`.
+  `auth.session_user` reads it with the session on every request into `SessionUser.admin`, so
+  publish and unpublish check it on every call, and a flag cleared mid-session takes effect at
+  once. `/auth/me` and the sign-in answers carry `admin: true` for an admin only. An MCP token
+  carries no admin rights, so no tool publishes.
+- **A snapshot, not a flag on the library row.** `shared_programmes` keeps its own copy of the
+  document under its own id. Editing or deleting the admin's programme changes nothing shared,
+  and `published_by` is `ON DELETE SET NULL`, so deleting the admin's account doesn't empty the
+  shared library. `(published_by, source_id)` finds the row a second publish replaces. A publish
+  previews first, and its token covers the library programme's `rev` and the replaced row's
+  `rev`, checked under the write lock (P2).
+- **No owner leaves the server.** A username is an email address, so the shared summaries carry
+  no owner, user id or source. The admin's own library summaries alone carry `shared`, the link
+  from a library programme to its shared copy.
+
+A copy goes through `data.add_programme`, so the library's cap and the account's quota apply, and
+the copy keeps no link back. The shared library is no account's data: no quota counts it, and
+export and import leave it out.
 
 **In the app.** The web app computes no plan value (P4). Every number it shows comes from the
 server: the start preview, the run's grid, a change's preview and the run a confirmed change sends

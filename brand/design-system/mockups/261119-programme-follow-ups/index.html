@@ -1,0 +1,697 @@
+<title>Programme follow-ups: Restart and Re-open, paused in red, a planned break</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="tokens.css">
+<!--
+  A mockup (design-system skill, references/mockups.md). Three questions on one page, each with
+  lettered options, one recommended. Every stage is drawn by the script at the foot from the cards'
+  own markup and styles (ProgrammeGrid, ChangeSheet, RadioCard, PlannerScreen, ProgrammeChart,
+  Button), once per theme (the .pane elements). No colour here is new: the options use the
+  system's tokens, paused-ink (K166) included, so there is no --candidate-* value. Measures: one
+  <li data-fg data-bg data-min> per colour pairing an option uses in a new place.
+-->
+<style>
+  body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font-sans); }
+  .mockup-page {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: var(--space-8, 32px) var(--space-16, 64px);
+    max-width: 1200px; margin: 0 auto; display: grid; gap: var(--space-12, 48px);
+  }
+  .mockup-head { display: grid; gap: var(--space-2, 8px); max-width: 70ch; }
+  .mockup-head h1, .option h3, .question h2 { margin: 0; text-wrap: balance; }
+  .mockup-head p, .option > p, .q-head p { margin: 0; }
+  .mockup-head ol { margin: 0; padding-left: 1.4em; }
+  .mockup-meta { color: var(--ink-secondary); }
+  .option { display: grid; gap: var(--space-4, 16px); min-width: 0; }
+  .option-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2, 8px) var(--space-3, 12px); }
+  .option-tag { color: var(--ink-secondary); }
+  .option[data-recommended] .option-tag::after { content: " · Recommended"; color: var(--ink); }
+  /* The same stage in light and in dark, side by side; stacked on a phone. Each pane is a
+     data-theme subtree, so the system's own tokens switch inside it. A wide stage (the overview,
+     the week, the grid) takes the page's whole width, light over dark, at its real desktop size. */
+  .panes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--space-4, 16px); }
+  .panes.wide { grid-template-columns: minmax(0, 1fr); }
+  .pane { min-width: 0; background: var(--canvas); color: var(--ink); border: 1px solid var(--line);
+          border-radius: var(--radius-lg, 10px); padding: var(--space-4, 16px); overflow-x: auto; }
+  .pane-label { color: var(--ink-secondary); margin: 0 0 var(--space-3, 12px); }
+  .measures { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); }
+  .measures li { border: 1px solid var(--line); border-radius: var(--radius-sm, 4px); padding: 2px var(--space-2, 8px); font-variant-numeric: tabular-nums; }
+  .measures li[data-pass="no"] { border-color: currentColor; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  /* The page's own frame: a question, its options, and a label over each stage. */
+  .question { display: grid; gap: var(--space-10, 40px); padding-top: var(--space-8, 32px); border-top: 2px solid var(--ink); }
+  .q-head { display: grid; gap: var(--space-2, 8px); max-width: 75ch; }
+  .q-num { color: var(--ink-secondary); }
+  .sub { margin: var(--space-2, 8px) 0 0; }
+  .stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-6, 24px); }
+  .stack > *, .panes > * { min-width: 0; }
+  .side { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-4, 16px); }
+  .side > :first-child { flex: 1 1 640px; min-width: 0; }
+  .side > :last-child { flex: 0 1 auto; min-width: 0; }
+  .stage-cap { margin: 0 0 var(--space-2, 8px); color: var(--ink-secondary); }
+  .fixnote { display: grid; gap: var(--space-3, 12px); padding: var(--space-4, 16px); border: 1px dashed var(--control-border); border-radius: var(--radius-lg, 10px); }
+  .fixnote h3 { margin: 0; }
+  .fixnote p { margin: 0; max-width: 75ch; }
+
+  /* ---- Shared by the cards (Button, Chip, InlineMessage), at the page's size (K55). ---- */
+  .pane * { box-sizing: border-box; }
+  .pane { font-variant-numeric: tabular-nums; }
+  .pane button, .pane input { font: inherit; color: inherit; }
+  .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  svg.i { width: 1em; height: 1em; flex: none; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 60px; padding: 0 22px; border: 1px solid var(--control-border); border-radius: var(--radius-md);
+    background: transparent; color: var(--ink); font: 600 19px / 25px var(--font-sans); cursor: pointer; white-space: nowrap; }
+  .btn svg { width: 26px; height: 26px; }
+  .btn:hover { background: var(--tile); }
+  .btn.primary { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+  .btn.primary:hover { background: color-mix(in srgb, var(--ink) 82%, var(--canvas)); }
+  .chip { display: inline-block; font: 600 16px / 22px var(--font-sans); background: var(--tile); color: var(--ink-secondary); border-radius: var(--radius-sm); padding: 1px var(--space-2); white-space: nowrap; }
+  .im { display: flex; align-items: flex-start; gap: var(--space-2); margin: 0; color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
+  .im svg { width: 16px; height: 16px; margin-top: 3px; flex: none; }
+
+  /* ---- The overview page (ProgrammeGrid card), at u = 1, with no bar. ---- */
+  .ov { border: 1px solid var(--line); border-radius: var(--radius-lg); min-width: 0; }
+  .ov .page { padding: 28px 48px 48px; display: flex; flex-direction: column; min-width: 0; }
+  .ov .back { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-size: 19px; line-height: 26px; text-decoration: underline; text-underline-offset: 4px; }
+  .ov .back svg { width: 26px; height: 26px; }
+  .ov .type { margin: 16px 0 0; color: var(--ink-secondary); font: 600 19px / 25px var(--font-sans); }
+  .ov h4 { margin: 4px 0 0; font: 600 40px / 46px var(--font-serif); }
+  .ov .meta { margin: 6px 0 0; color: var(--ink-secondary); font-size: 19px; line-height: 28px; }
+  .ov .meta b { color: var(--ink); font-weight: 600; }
+  .ov .tabs { display: flex; flex-wrap: wrap; column-gap: 32px; margin-top: 24px; border-bottom: 1px solid var(--line); }
+  .ov .tabs span { display: inline-flex; align-items: center; min-height: 44px; padding: var(--space-2) 0; color: var(--ink-secondary); font: 600 19px / 26px var(--font-sans); }
+  .ov .tabs span[aria-selected="true"] { color: var(--ink); box-shadow: inset 0 -3px 0 var(--ink); }
+  .ov .controls { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+  /* Option 1C: the ended run's next steps under its line, above the tabs. */
+  .ov .controls.top { margin-top: 20px; }
+
+  /* ---- The grid (ProgrammeGrid card): a table that scrolls inside its own box. ---- */
+  .grid-wrap { position: relative; margin-top: 20px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
+  table.og { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 19px; }
+  .og th, .og td { padding: 12px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; font-weight: 400; }
+  .og thead th { border-bottom: 1px solid var(--ink); vertical-align: bottom; }
+  .og .act { position: sticky; left: 0; z-index: 2; background: var(--canvas); width: 216px; min-width: 216px; }
+  .og .wk { min-width: 108px; }
+  .og .wn { display: flex; align-items: center; gap: 6px; font: 600 19px / 1.35 var(--font-sans); white-space: nowrap; }
+  .og .wd { display: block; color: var(--ink-secondary); font-size: 16px; line-height: 22px; white-space: nowrap; }
+  .og .wt { display: block; font: 600 16px / 22px var(--font-sans); white-space: nowrap; }
+  .og .an { display: block; font: 600 22px / 1.3 var(--font-sans); overflow-wrap: anywhere; }
+  .og .ac { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 4px; align-items: center; }
+  .og .ac .t { color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
+  .cv { display: flex; align-items: center; gap: 6px; font: 600 21px / 1.3 var(--font-sans); white-space: nowrap; }
+  .cs { display: block; color: var(--ink-secondary); font-size: 16px; line-height: 22px; white-space: nowrap; }
+  .res { color: var(--ink-secondary); font-weight: 400; }
+  .res.met { color: var(--ink); font-weight: 600; text-decoration: underline; text-decoration-color: var(--pen); text-decoration-thickness: 2px; text-underline-offset: 0.22em; }
+  .paused .cv { color: var(--ink-secondary); }
+  .cs.pu { color: var(--paused-ink); font-weight: 600; }
+  .og .past { background: var(--tile); }
+  .og .cur { box-shadow: inset 2px 0 0 var(--ink), inset -2px 0 0 var(--ink); }
+  .og thead .cur { box-shadow: inset 2px 0 0 var(--ink), inset -2px 0 0 var(--ink), inset 0 2px 0 var(--ink); }
+  .og tbody tr:last-child .cur { box-shadow: inset 2px 0 0 var(--ink), inset -2px 0 0 var(--ink), inset 0 -2px 0 var(--ink); }
+  .og td.tap { padding: 0; }
+  .cellbtn { display: block; width: 100%; height: 100%; min-height: 44px; margin: 0; padding: 12px 8px; border: 0; background: transparent; text-align: left; cursor: pointer; }
+  .og td.tap:hover { background: var(--tile); }
+  /* Question 3's cells. A rest week leads with its words in the cell value's style, in ink-secondary
+     (as a paused cell's "Paused"); option 3B's past count is plain ink, with no met underline. */
+  .rest .cv { color: var(--ink-secondary); }
+  .res.plain { color: var(--ink); font-weight: 400; }
+  .og.one { width: auto; }
+  .og.one .act { display: none; }
+  .og.fit { width: auto; }
+  .og.fit .wk { min-width: 150px; }
+
+  /* ---- The ChangeSheet (on the Dialog card): the overview behind, the scrim, the sheet. ---- */
+  .cs-stage { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: var(--space-12) var(--space-4) var(--space-4); }
+  .cs-stage + .cs-stage { margin-top: var(--space-4); }
+  .behind { position: absolute; inset: 0; padding: var(--space-6) 48px; }
+  .behind b { display: block; margin: 0 0 var(--space-6); font: 600 40px / 46px var(--font-serif); }
+  .behind span { display: block; padding: var(--space-3) 0; border-bottom: 1px solid var(--line); font-weight: 600; font-size: 19px; }
+  .scrim { position: absolute; inset: 0; background: var(--scrim); opacity: 0.4; }
+  .dlg { position: relative; margin: 0 auto; width: min(720px, 100%); display: flex; flex-direction: column; gap: 20px; padding: 32px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-overlay); }
+  .steps { margin: 0; color: var(--ink-secondary); font: 600 16px / 22px var(--font-sans); }
+  .dlg-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin: -12px -12px 0 0; }
+  .dlg-head h4 { margin: 12px 0 0; font: 600 27px / 34px var(--font-sans); }
+  .ib { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 52px; height: 52px; padding: 0; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); cursor: pointer; }
+  .ib svg { width: 28px; height: 28px; }
+  .field { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .field > .flabel { font: 600 19px / 25px var(--font-sans); }
+  .hint { margin: 0; color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
+  .row2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 20px 24px; align-items: start; }
+  input.tf, .pick { height: 60px; width: 100%; padding: 0 15px; border: 1px solid var(--control-border); border-radius: var(--radius-sm);
+    background: var(--panel); color: var(--ink); font: 400 19px / 1.3 var(--font-sans); font-variant-numeric: tabular-nums; }
+  .pick { display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; cursor: pointer; }
+  .pick svg { width: 22px; height: 22px; color: var(--ink-secondary); }
+  .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; padding-top: 4px; }
+  .summary { margin: 0; padding: 12px 14px; background: var(--tile); border-radius: var(--radius-sm); font-size: 19px; line-height: 1.45; }
+  .pv { display: flex; flex-direction: column; gap: 8px; padding-top: 20px; border-top: 1px solid var(--line); }
+  .pv h5 { margin: 0; font: 600 19px / 25px var(--font-sans); }
+  .pv ol { list-style: none; margin: 0; padding: 0; }
+  .pv li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: baseline; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 19px; line-height: 1.4; }
+  .pv li:first-child { border-top: 1px solid var(--line); }
+  .pv li .w { font-weight: 600; }
+  .pv li .d { display: block; color: var(--ink-secondary); font-weight: 400; font-size: 16px; line-height: 22px; }
+  .pv li .v { font-weight: 600; text-align: right; }
+  .calm { margin: 0; color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
+  /* RadioCard, with a line each (option 1B's choice). */
+  .choices { display: flex; flex-direction: column; gap: var(--space-2); }
+  .choice { display: flex; align-items: flex-start; gap: var(--space-3); min-height: 76px; padding: var(--space-3);
+            border: 1px solid var(--control-border); border-radius: var(--radius-md); background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+  .choice:hover { background: var(--tile); }
+  .choice[aria-checked="true"] { border: 2px solid var(--ink); padding: calc(var(--space-3) - 1px); }
+  .choice .dot { flex: none; width: 20px; height: 20px; margin-top: 3px; border: 1px solid var(--control-border); border-radius: var(--radius-full); display: grid; place-items: center; }
+  .choice[aria-checked="true"] .dot { border: 2px solid var(--ink); }
+  .choice[aria-checked="true"] .dot::after { content: ""; width: 10px; height: 10px; border-radius: var(--radius-full); background: var(--ink); }
+  .choice .what { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+  .choice .what .nm { font-size: 18px; line-height: 26px; font-weight: 600; }
+  .choice .what .ln { color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
+
+  /* ---- The week (PlannerScreen card, a programme tracker's screen, K146), at u = 1. ---- */
+  .wv { border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 28px 48px 20px; min-width: 0; }
+  .wv .head { display: flex; align-items: baseline; justify-content: space-between; gap: 4px 24px; flex-wrap: wrap; padding-bottom: 20px; }
+  .wv .head h4 { margin: 0; font: 600 40px / 1.15 var(--font-serif); }
+  .wv .head .wk { margin-left: 16px; font: 400 20px / 1.3 var(--font-sans); color: var(--ink-secondary); }
+  .wv .prog { display: inline-flex; align-items: center; gap: 4px; color: var(--ink); font: 600 19px / 1.4 var(--font-sans); text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 1px; white-space: nowrap; }
+  .wv .prog svg { width: 20px; height: 20px; }
+  .wv .grid { display: grid; grid-template-columns: 280px repeat(7, minmax(0, 1fr)); grid-auto-rows: auto; }
+  .wv .grid > * { min-width: 0; }
+  .wv .hd { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding: 12px 0; border-bottom: 1px solid var(--ink); }
+  .wv .hd .dl { display: inline-flex; align-items: center; gap: 4px; }
+  .wv .hd .dn { font-size: 27px; line-height: 1.25; font-weight: 600; }
+  .wv .hd .lk { flex: none; width: 16px; height: 16px; color: var(--ink-secondary); }
+  .wv .nm, .wv .d, .wv .pz { border-bottom: 1px solid var(--line); }
+  .wv .nm { display: flex; flex-direction: column; justify-content: center; gap: 6px; padding: 12px 12px 12px 0; min-height: 112px; }
+  .wv .nm .n { font-size: 24px; line-height: 1.25; font-weight: 600; }
+  .wv .chips { display: flex; flex-wrap: wrap; gap: 6px 8px; }
+  .wv .chips .chip { font-size: 17px; line-height: 1.35; padding: 0 8px; }
+  .wv .d { display: grid; place-items: center; }
+  .wv .mark { display: grid; place-items: center; width: 96px; aspect-ratio: 1; padding: 0; border: 0; border-radius: var(--radius-md); background: transparent; }
+  .wv .mark svg { width: 94%; height: 94%; overflow: visible; }
+  .wv .mark .bx { stroke: var(--control-border); }
+  .wv .mark[data-mark="great"] .ink { fill: var(--pen); }
+  .wv .mark .sym { stroke: var(--canvas); }
+  /* A paused activity says so across its seven days: the row in question 2. */
+  .wv .pz { grid-column: span 7; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0 8px;
+    color: var(--ink-secondary); font-size: 19px; line-height: 1.4; text-align: center; }
+  .wv .pz svg { flex: none; width: 18px; height: 18px; }
+  .wv .pz .pu { color: var(--paused-ink); font-weight: 600; }
+  .wv .pz.all { color: var(--paused-ink); font-weight: 600; }
+
+  /* ---- The item page's Programme row (ProgrammeChart card), at u = 1. ---- */
+  .ip { border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 0 48px; min-width: 0; }
+  .ip .sec { display: grid; grid-template-columns: 320px minmax(0, 1fr); align-items: start; padding: 32px 0; }
+  .ip .sec + .sec { border-top: 1px solid var(--line); }
+  .ip .content { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+  .ip h4 { margin: 0; font: 600 27px / 34px var(--font-sans); }
+  /* The note's half-width panes: the row folded, its heading over its content, as on a phone. */
+  .ip.folded { padding: 0 20px; }
+  .ip.folded .sec { display: flex; flex-direction: column; gap: 12px; padding: 20px 0; }
+  .ip.folded h4 { font-size: 22px; line-height: 28px; }
+  .ip .rowcap { margin: 4px 0 0; color: var(--ink-secondary); font-size: 16px; line-height: 22px; font-weight: 400; }
+  .lede { margin: 0; max-width: 60ch; color: var(--ink-secondary); font-size: 19px; line-height: 28px; }
+  .lede b { color: var(--ink); font-weight: 600; }
+  .lede .pu { color: var(--paused-ink); font-weight: 600; }
+  .lede.all, .lede.all b { color: var(--paused-ink); font-weight: 600; }
+
+  /* Folded (a phone): the cards' own rules, on n = 1. */
+  @media (max-width: 639px) {
+    .question { gap: var(--space-8, 32px); }
+    .pane { padding: var(--space-3, 12px); }
+    .btn { height: 48px; padding: 0 16px; font-size: 16px; line-height: 22px; }
+    .btn svg { width: 22px; height: 22px; }
+    .ov .page { padding: 20px 16px 32px; }
+    .ov .back, .ov .meta { font-size: 18px; line-height: 26px; }
+    .ov .back svg { width: 22px; height: 22px; }
+    .ov .type { font-size: 16px; line-height: 22px; }
+    .ov h4 { font-size: 30px; line-height: 36px; }
+    .ov .tabs { margin-top: 20px; }
+    .ov .tabs span { font-size: 18px; }
+    .ov .controls { margin-top: 24px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .ov .controls.top { margin-top: 16px; }
+    .ov .controls .btn { gap: 8px; height: auto; min-height: 48px; padding: 4px 8px; white-space: normal; line-height: 20px; }
+    .ov .grid-wrap { margin: 16px -16px 0; }
+    table.og { font-size: 18px; }
+    .og th, .og td, .cellbtn { padding: 10px 8px; }
+    .og td.tap { padding: 0; }
+    .og .act { width: 132px; min-width: 132px; padding-left: 16px; box-shadow: 1px 0 0 var(--line); }
+    .og .wk { min-width: 104px; }
+    .og tr > :last-child, .og tr > td.tap:last-child .cellbtn { padding-right: 16px; }
+    .og tr > td.tap:last-child { padding-right: 0; }
+    .og .wn { font-size: 16px; }
+    .og .an { font-size: 18px; }
+    .cv { font-size: 18px; }
+    .cs-stage { padding: var(--space-12) var(--space-3) var(--space-4); }
+    .behind { padding: var(--space-4); }
+    .behind b { font-size: 30px; line-height: 36px; }
+    .dlg { padding: 16px; gap: 16px; }
+    .dlg-head h4 { font-size: 22px; line-height: 28px; }
+    .ib { width: 44px; height: 44px; }
+    .ib svg { width: 24px; height: 24px; }
+    .field > .flabel, .pv h5 { font-size: 16px; line-height: 22px; }
+    input.tf, .pick { height: 48px; font-size: 18px; }
+    .actions .btn { flex: 1 1 auto; }
+    .summary, .pv li { font-size: 18px; }
+    .wv { padding: 20px 16px 12px; }
+    .wv .head h4 { font-size: 30px; }
+    .wv .head .wk { display: none; }
+    .wv .grid { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+    .wv .hd { padding: 6px 0; }
+    .wv .hd .dn { font-size: 20px; }
+    .wv .hd .lk { width: 14px; height: 14px; }
+    .wv .hd .dl { flex-direction: column; gap: 0; }
+    .wv .hd.corner { display: none; }
+    .wv .nm { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; justify-content: flex-start; align-items: baseline; gap: 8px; min-height: 0; padding: 10px 0 2px; border-bottom: 0; }
+    .wv .nm .n { font-size: 18px; line-height: 1.45; }
+    .wv .chips .chip { font-size: 16px; }
+    .wv .d { height: 52px; }
+    .wv .mark { width: 44px; }
+    .wv .pz { grid-column: 1 / -1; min-height: 48px; font-size: 16px; }
+    .ip { padding: 0 16px; }
+    .ip .sec { display: flex; flex-direction: column; gap: 16px; padding: 24px 0; }
+    .ip .content { gap: 16px; }
+    .ip h4 { font-size: 22px; line-height: 28px; }
+    .lede { font-size: 18px; line-height: 26px; }
+  }
+</style>
+
+<main class="mockup-page">
+  <header class="mockup-head">
+    <p class="caption mockup-meta">Mockup · 2026-11-19 · Tracker</p>
+    <h1 class="title-1">Programme follow-ups: Restart and Re-open, paused in red, a planned break</h1>
+    <p class="body">Three questions about programmes. Each has its own options, and each is answered on its own. Everything outside each question stays as it is.</p>
+    <ol class="body">
+      <li><a href="#q1">How an ended run's overview offers Restart and Re-open</a> (#87)</li>
+      <li><a href="#q2">“Paused until” in paused-ink in the week and on the item page</a> (#90)</li>
+      <li><a href="#q3">How the grid shows a week planned with a goal of 0</a> (#91)</li>
+    </ol>
+    <p class="body mockup-meta">Strength 5×5, with Back squat and Bench press. Today is Thu 19 Nov 2026. No option adds a colour: each uses the system's tokens, <code>paused-ink</code> (K166) included.</p>
+  </header>
+
+  <!-- ===================================== Question 1 ===================================== -->
+  <section class="question" id="q1" aria-labelledby="q1-h">
+    <header class="q-head">
+      <p class="label q-num">Question 1 of 3 · #87</p>
+      <h2 class="title-1" id="q1-h">1. Restart and Re-open on an ended run</h2>
+      <p class="body">Today an ended run's overview shows its grid and no controls. The server can already do two things with it. <b>Restart</b> starts a new tracker from week 1. <b>Re-open</b> carries on a run that End programme stopped part way. Re-open fits only a run ended early; a run that ran to its last Sunday can only be restarted. A run with an end set for a later day is still running, so it keeps its normal controls.</p>
+      <p class="body mockup-meta">Each option is drawn in three states: (i) ended early, (ii) ran to its end, (iii) still running with an end on a later day. Then the dialogs its buttons open, in the ChangeSheet's two steps. Each overview is trimmed to its head, Back squat's row of the grid over four weeks, and the buttons; the back link is left out, and the tabs too where nothing sits by them.</p>
+    </header>
+
+    <section class="option" id="q1a" data-recommended aria-labelledby="q1a-h">
+      <div class="option-head"><h3 class="title-2" id="q1a-h">A. Two buttons where the controls sit</h3><span class="label option-tag">Option 1A</span></div>
+      <p class="body">An ended run gets <b>Re-open programme</b> (only when it ended early) and <b>Restart from week 1</b>, where the controls row sits. A running run with a later end swaps End programme for <b>Cancel the end</b>. Each opens a ChangeSheet in two steps. Step 1 asks what the server needs, in the sheet's own fields: for Re-open, From (a date, today or later) and Reason; for Restart, Name (the old name to start with) and Starts (a date, today or later). Step 2 is the server's preview, then the confirm. Option B draws a step 1.</p>
+      <p class="label sub">The overview, three states</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="overviews" data-opt="a" data-states="i ii iii"></div><div class="pane" data-theme="dark" data-draw="overviews" data-opt="a" data-states="i ii iii"></div></div>
+      <p class="label sub">Re-open programme, from state (i): step 2, the preview</p>
+      <div class="panes"><div class="pane" data-theme="light" data-draw="dialogs" data-dlg="reopen2"></div><div class="pane" data-theme="dark" data-draw="dialogs" data-dlg="reopen2"></div></div>
+      <p class="label sub">Restart from week 1, from state (i) or (ii): step 2, the preview</p>
+      <div class="panes"><div class="pane" data-theme="light" data-draw="dialogs" data-dlg="restart2"></div><div class="pane" data-theme="dark" data-draw="dialogs" data-dlg="restart2"></div></div>
+      <p class="label sub">Cancel the end, from state (iii): the re-open's preview, from the end's own day</p>
+      <div class="panes"><div class="pane" data-theme="light" data-draw="dialogs" data-dlg="cancelend"></div><div class="pane" data-theme="dark" data-draw="dialogs" data-dlg="cancelend"></div></div>
+      <ul class="measures caption">
+        <li data-fg="var(--ink)" data-bg="var(--canvas)" data-min="4.5">Button words on the page</li>
+        <li data-fg="var(--control-border)" data-bg="var(--canvas)" data-min="3">Button outline on the page</li>
+        <li data-fg="var(--ink-secondary)" data-bg="var(--panel)" data-min="4.5">The sheet's hints and calm line</li>
+        <li data-fg="var(--ink)" data-bg="var(--tile)" data-min="4.5">The summary on its tile</li>
+        <li data-fg="var(--on-ink)" data-bg="var(--ink)" data-min="4.5">The confirm button</li>
+      </ul>
+    </section>
+
+    <section class="option" id="q1b" aria-labelledby="q1b-h">
+      <div class="option-head"><h3 class="title-2" id="q1b-h">B. One button, Start again, with a choice inside</h3><span class="label option-tag">Option 1B</span></div>
+      <p class="body">An ended run gets one button, <b>Start again</b>. Its sheet asks which, in two RadioCards: <b>Carry on where it stopped</b> or <b>Start from week 1</b>. In state (ii) the button is the same, and its sheet opens on Start from week 1 with no choice, since there is nothing to carry on. Step 2 is option A's preview. State (iii) is as in A.</p>
+      <p class="label sub">The overview, state (i)</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="overviews" data-opt="b" data-states="i"></div><div class="pane" data-theme="dark" data-draw="overviews" data-opt="b" data-states="i"></div></div>
+      <p class="label sub">Start again, from state (i): step 1 with the choice</p>
+      <div class="panes"><div class="pane" data-theme="light" data-draw="dialogs" data-dlg="again1"></div><div class="pane" data-theme="dark" data-draw="dialogs" data-dlg="again1"></div></div>
+      <ul class="measures caption">
+        <li data-fg="var(--control-border)" data-bg="var(--panel)" data-min="3">A RadioCard's outline on the sheet</li>
+        <li data-fg="var(--ink-secondary)" data-bg="var(--panel)" data-min="4.5">A RadioCard's line on the sheet</li>
+      </ul>
+    </section>
+
+    <section class="option" id="q1c" aria-labelledby="q1c-h">
+      <div class="option-head"><h3 class="title-2" id="q1c-h">C. As A, at the top of the page</h3><span class="label option-tag">Option 1C</span></div>
+      <p class="body">The same buttons and sheets as A, but under the run's line and above the tabs, with the first one primary. A full grid runs past the bottom of a laptop's screen, so at the foot the next step is out of sight. On an ended run the grid is history, and what to do next comes first. In state (ii) Restart from week 1 is the primary button there, alone. State (iii) is as in A: a running run keeps its controls at the foot.</p>
+      <p class="label sub">The overview, state (i)</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="overviews" data-opt="c" data-states="i"></div><div class="pane" data-theme="dark" data-draw="overviews" data-opt="c" data-states="i"></div></div>
+      <ul class="measures caption">
+        <li data-fg="var(--on-ink)" data-bg="var(--ink)" data-min="4.5">The primary button on the page</li>
+      </ul>
+    </section>
+
+    <aside class="fixnote" aria-labelledby="q1n-h">
+      <h3 class="title-2" id="q1n-h">And a wording fix: both places name the last day</h3>
+      <p class="body">The overview says “Ended Sun 15 Nov”, its last day. The item page's lede says “ended on Mon 16 Nov”, the first day without it. The same end reads as two days. The proposal: both say the last day, “Ended Sun 15 Nov.” The overview's line stays as it is (state (i) above); the item page's lede changes.</p>
+      <div class="panes"><div class="pane" data-theme="light" data-draw="endfix"></div><div class="pane" data-theme="dark" data-draw="endfix"></div></div>
+    </aside>
+  </section>
+
+  <!-- ===================================== Question 2 ===================================== -->
+  <section class="question" id="q2" aria-labelledby="q2-h">
+    <header class="q-head">
+      <p class="label q-num">Question 2 of 3 · #90</p>
+      <h2 class="title-1" id="q2-h">2. “Paused until” in paused&#8209;ink, in two more places</h2>
+      <p class="body">K166 made the grid's “Paused until Wed 2 Dec” line <code>paused-ink</code> at weight 600. The week's paused row and the item page's lede still say it in <code>ink-secondary</code> at 400. The options make them match. The rest of the row and the page stay as they are.</p>
+      <p class="body mockup-meta">Back squat is paused from Mon 16 Nov until Mon 28 Dec, for the knee, in a 12-week run. Each option shows the week, then the item page's lede, then the lede for a pause with no end date.</p>
+    </header>
+
+    <section class="option" id="q2a" data-recommended aria-labelledby="q2a-h">
+      <div class="option-head"><h3 class="title-2" id="q2a-h">A. The “Paused until” sentence in red; the lede leads with it</h3><span class="label option-tag">Option 2A</span></div>
+      <p class="body">In the week, “Paused until Mon 28 Dec.” is paused-ink at 600; the reason and the icon stay ink-secondary at 400. The item page's lede is reworded to lead as the grid and the week do: “Paused until Mon 28 Dec. Knee. It comes back at 45 kg.”, with its first sentence in red. With no end date it reads “Paused. Knee. It comes back at 45 kg when you resume it.”</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="paused" data-opt="a"></div><div class="pane" data-theme="dark" data-draw="paused" data-opt="a"></div></div>
+      <ul class="measures caption">
+        <li data-fg="var(--paused-ink)" data-bg="var(--canvas)" data-min="4.5">paused-ink on the page (the week, the lede)</li>
+        <li data-fg="var(--ink-secondary)" data-bg="var(--canvas)" data-min="4.5">The reason beside it</li>
+      </ul>
+    </section>
+
+    <section class="option" id="q2b" aria-labelledby="q2b-h">
+      <div class="option-head"><h3 class="title-2" id="q2b-h">B. The same parts in red, today's wording</h3><span class="label option-tag">Option 2B</span></div>
+      <p class="body">The week as in A. The item page keeps its wording, “Paused since Mon 16 Nov. Knee. It comes back on Mon 28 Dec at 45 kg.”, with “Paused since Mon 16 Nov.” in red. The red then names a different day in each place: the end of the pause in the week, its start on the item page.</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="paused" data-opt="b"></div><div class="pane" data-theme="dark" data-draw="paused" data-opt="b"></div></div>
+      <ul class="measures caption">
+        <li data-fg="var(--paused-ink)" data-bg="var(--canvas)" data-min="4.5">paused-ink on the page</li>
+      </ul>
+    </section>
+
+    <section class="option" id="q2c" aria-labelledby="q2c-h">
+      <div class="option-head"><h3 class="title-2" id="q2c-h">C. The whole line in red</h3><span class="label option-tag">Option 2C</span></div>
+      <p class="body">Every word of the week's row, the icon too, in paused-ink at 600. The item page's whole lede is the same, its value too, in A's wording.</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="paused" data-opt="c"></div><div class="pane" data-theme="dark" data-draw="paused" data-opt="c"></div></div>
+      <ul class="measures caption">
+        <li data-fg="var(--paused-ink)" data-bg="var(--canvas)" data-min="4.5">paused-ink on the page</li>
+      </ul>
+    </section>
+  </section>
+
+  <!-- ===================================== Question 3 ===================================== -->
+  <section class="question" id="q3" aria-labelledby="q3-h">
+    <header class="q-head">
+      <p class="label q-num">Question 3 of 3 · #91</p>
+      <h2 class="title-1" id="q3-h">3. A week planned with a goal of 0</h2>
+      <p class="body">A programme can plan a week with a goal of 0: a rest week. Today the grid calls any past week with a goal of 0 “Paused”, even when it ran. From now on “Paused” comes only from the cell's state. The options say what a rest week reads instead. The rest of the grid stays as it is.</p>
+      <p class="body mockup-meta">Back squat rests in week 3 (past) and week 6 (to come), and is paused in week 5 for the knee, a real pause for contrast. Bench press runs every week. Beside each grid, the past rest week again, had one day been marked in it.</p>
+    </header>
+
+    <section class="option" id="q3a" data-recommended aria-labelledby="q3a-h">
+      <div class="option-head"><h3 class="title-2" id="q3a-h">A. “Rest week”</h3><span class="label option-tag">Option 3A</span></div>
+      <p class="body">“Rest week” in the cell value's style, in ink-secondary, with the planned value under it as usual. A past rest week with marks adds “1 done”. A later rest week reads “Rest week” too.</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="rest" data-opt="a"></div><div class="pane" data-theme="dark" data-draw="rest" data-opt="a"></div></div>
+      <ul class="measures caption">
+        <li data-fg="var(--ink-secondary)" data-bg="var(--tile)" data-min="4.5">Rest week on a past week's tile</li>
+        <li data-fg="var(--ink-secondary)" data-bg="var(--canvas)" data-min="4.5">Rest week on a later week</li>
+      </ul>
+    </section>
+
+    <section class="option" id="q3b" aria-labelledby="q3b-h">
+      <div class="option-head"><h3 class="title-2" id="q3b-h">B. Numbers only</h3><span class="label option-tag">Option 3B</span></div>
+      <p class="body">A past rest week reads “0 of 0” in plain ink, with no met underline (“1 of 0” with a mark). A later one shows its value and sets, then “0 a week”.</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="rest" data-opt="b"></div><div class="pane" data-theme="dark" data-draw="rest" data-opt="b"></div></div>
+      <ul class="measures caption">
+        <li data-fg="var(--ink)" data-bg="var(--tile)" data-min="4.5">0 of 0 in ink on a past week's tile</li>
+      </ul>
+    </section>
+
+    <section class="option" id="q3c" aria-labelledby="q3c-h">
+      <div class="option-head"><h3 class="title-2" id="q3c-h">C. “Planned break”</h3><span class="label option-tag">Option 3C</span></div>
+      <p class="body">As A, with “Planned break” in place of “Rest week”. It says the break was planned, but it is longer, and it reads close to “Paused”.</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="rest" data-opt="c"></div><div class="pane" data-theme="dark" data-draw="rest" data-opt="c"></div></div>
+      <ul class="measures caption">
+        <li data-fg="var(--ink-secondary)" data-bg="var(--tile)" data-min="4.5">Planned break on a past week's tile</li>
+      </ul>
+    </section>
+
+    <section class="option" id="q3now" aria-labelledby="q3now-h">
+      <div class="option-head"><h3 class="title-2" id="q3now-h">Today, for comparison</h3><span class="label option-tag">Now</span></div>
+      <p class="body">The past rest week reads “Paused”, with no reason. The later one looks like any other week. Dropping the “Paused” rule alone would make the past one read “0 of 0”, underlined as met (beside the grid).</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="rest" data-opt="now"></div><div class="pane" data-theme="dark" data-draw="rest" data-opt="now"></div></div>
+    </section>
+  </section>
+</main>
+
+<script>
+// Every stage is drawn here, once per pane, so light and dark show the same thing. The markup is
+// the cards' (ProgrammeGrid, ChangeSheet, RadioCard, PlannerScreen, ProgrammeChart); the words are
+// the app's (src/components/ProgrammeOverview.vue, TrackerSection.vue, programme-chart/chart.ts,
+// programme-grid/ProgrammeGrid.vue) or the server's previews (api mcp_server.py).
+(() => {
+  const ART = {"box": "M6.5 4.8C12.5 4.3 23.5 4.6 30.2 4.9C31.4 5 31.6 6.1 31.5 7.2C31.2 13.5 31.4 22.5 31.2 29.4C31.2 30.6 30.3 31.3 29.1 31.3C22.5 31.6 13 31.2 6.6 31.4C5.4 31.4 4.7 30.6 4.7 29.4C4.6 22.8 4.9 13 4.6 6.8C4.6 5.6 5.4 4.9 6.5 4.8Z", "stamp": "M5.8 33.2C5.2 33 4.9 32.7 4.9 32.4C4.9 31.9 4.6 31.8 3.3 31.7C2 31.6 1.9 31.6 1.6 31.1C1.4 30.8 1.3 30.2 1.3 29.7C1.2 29.4 1.6 29.1 2.2 29C2.5 29 2.7 29 2.8 28.9C2.9 28.8 3.1 28.7 3.2 28.7C3.6 28.7 3.7 28.5 3.5 27.6C3.4 26.8 3.5 23.7 3.6 23.3C3.6 23.3 3.7 23 3.7 22.7C3.8 22.2 3.8 22 3.9 21.3C4 20.8 4.1 20.7 4.3 20.6C4.4 20.5 4.5 20.4 4.5 20.1C4.5 19.8 4.5 19.7 4.8 19.6C5.2 19.4 5.2 17.9 4.8 17.3C4.7 17.1 4.6 16.2 4.6 16C4.7 15.9 4.7 15.8 4.6 15.7C4.6 15.5 4.6 15.2 4.6 14C4.6 12.5 4.5 12.3 4.3 12.3C4 12.3 3.4 9.5 3.5 8.4C3.5 8.2 3.5 7.9 3.4 7.2C3.3 6.3 3.3 6 3.5 5.6C3.7 5 4.1 4.8 4.5 5C4.8 5.3 6 5.3 6.2 5C6.4 4.9 6.4 4.9 6.7 4.8C6.9 4.8 7 4.8 7.2 4.7C7.4 4.6 7.4 4.6 7.9 4.6C8.2 4.6 9 4.7 9.7 4.7C10.3 4.7 11 4.7 11.2 4.7C11.4 4.7 11.9 4.8 12.3 4.8C12.7 4.8 13.3 4.8 13.6 4.8C14 4.9 14.4 4.9 14.9 4.9C15.6 4.8 16.1 4.9 16.3 5.1C16.4 5.1 16.6 5.2 16.7 5.2C16.9 5.2 17 5.3 17.1 5.3C17.4 5.5 18.1 5.5 18.3 5.3C18.6 5.1 18.8 5.1 19.1 5.3C19.4 5.5 21.7 5.5 23.8 5.2C25.2 5.1 25.5 5.1 26.9 5.1C27.8 5.1 28.9 5.1 29.5 5.1C30.5 5.1 30.5 5.1 30.8 5.2C30.9 5.3 31.1 5.4 31.2 5.4C31.2 5.3 31.4 5.4 31.5 5.5C31.6 5.6 31.7 5.8 31.8 5.8C32.1 6 32.2 6.9 32.1 7.6C31.9 8.1 31.9 8.3 32 8.6C32.1 8.6 32.2 8.9 32.3 9.1C32.7 9.9 33.2 12.2 33.1 13.3C33.1 13.8 33 14.8 33 15.4C32.9 16.1 32.9 16.7 32.9 16.9C32.8 17 32.8 17.6 32.7 18.1C32.6 18.7 32.6 19.2 32.5 19.3C32.5 19.4 32.4 20.2 32.3 21C32.2 21.9 32.1 22.6 32.1 22.7C32.1 22.8 32 23.3 32 23.8C32 24.2 31.9 24.7 31.9 24.8C31.8 25 31.7 25.5 31.7 26.1C31.6 26.5 31.6 26.8 31.5 27C31.2 27.7 31.2 27.7 31 27.8C30.6 27.9 30.5 28.6 30.7 29.1C31.1 29.8 31 31.1 30.5 31.1C30.4 31.1 30.3 31.3 30.2 31.5C30.2 31.6 30 32.1 29.9 32.2C29.4 32.5 27.6 32.4 26.2 32.1C25.9 32 25.6 32 25.4 31.9C24.5 31.8 24.3 31.8 23.8 31.8C23.4 31.7 23 31.7 22.9 31.7C22.7 31.6 22.3 31.6 22 31.6C21.6 31.6 21.2 31.5 21.1 31.5C20.9 31.4 20.8 31.4 20.3 31.5C19.9 31.5 19.7 31.5 19.4 31.5C18.9 31.3 18.7 31.3 18.1 31.4C17.3 31.5 17.2 31.5 16.8 31.3C16.5 31.2 16.5 31.2 15.6 31.2C14.4 31.3 14.4 31.3 14.2 31.1C14 31 12.6 30.9 11.6 31.1C11.3 31.1 10.7 31.1 10.3 31.2C9.3 31.2 8.9 31.2 8.6 31.4C8.5 31.4 8.3 31.5 8.2 31.5C8 31.5 8 31.5 7.7 31.8C7.7 31.9 7.6 31.9 7.6 32C7.6 32 7.5 32.1 7.5 32.2C7.4 32.6 7.1 33 6.7 33.2C6.3 33.4 6.3 33.4 5.8 33.2Z", "tick": "M8.6 18.2C10.6 19.9 12.6 22.4 14.6 25.9C15 26.6 15.6 26.6 16 25.9C19.4 19.2 24.6 11.6 31.6 5.2"} // the app's own drawings (src/components/ui/day-mark), from the PlannerScreen card
+  const P = {
+    left: '<path d="m15 18-6-6 6-6"/>',
+    right: '<path d="m9 18 6-6-6-6"/>',
+    down: '<path d="m6 9 6 6 6-6"/>',
+    x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    cal: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>',
+    pause: '<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>',
+    play: '<polygon points="6 3 20 12 6 21 6 3"/>',
+    skip: '<polygon points="5 4 15 12 5 20 5 4"/><line x1="19" x2="19" y1="5" y2="19"/>',
+    plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+    stop: '<circle cx="12" cy="12" r="10"/><rect x="9" y="9" width="6" height="6" rx="1"/>',
+    restart: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+    undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/>',
+    pencil: '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>',
+    up: '<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>',
+    info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+    lock: '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  }
+  const ic = (name, cls = 'i') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name]}</svg>`
+  const btn = (icon, words, cls = '') => `<button type="button" class="btn${cls ? ' ' + cls : ''}">${icon ? ic(icon) : ''}${words}</button>`
+  let uid = 0
+  const id = (p) => `${p}${++uid}`
+
+  // ---------------------------------------------------------------- the grid (ProgrammeGrid card)
+  // A column: { n, d, past, cur, tags }. A cell: { v, s: [lines], met, plain, paused, rest, tap,
+  // blank, until }. The app draws the same from the run's grid (spec P4).
+  function grid(cols, rows, label, extraCls = '') {
+    const head = `<tr><th class="act" scope="col"><span class="vh">Activity</span></th>${cols.map((c) => {
+      const cls = ['wk', c.past ? 'past' : '', c.cur ? 'cur' : ''].filter(Boolean).join(' ')
+      const tags = [...(c.cur ? ['This week'] : []), ...(c.tags || [])]
+      return `<th class="${cls}" scope="col"${c.cur ? ' aria-current="date"' : ''}><span class="wn">Week ${c.n}</span><span class="wd">${c.d}</span>${tags.map((t) => `<span class="wt">${t}</span>`).join('')}</th>`
+    }).join('')}</tr>`
+    const body = rows.map((r) => `<tr><th class="act" scope="row"><span class="an">${r.name}</span><span class="ac"><span class="chip">${r.chip}</span><span class="t">${r.goal}</span></span></th>${r.cells.map((x, i) => cell(x, cols[i])).join('')}</tr>`).join('')
+    return `<div class="grid-wrap" tabindex="0" role="region" aria-label="${label}"><table class="og${extraCls ? ' ' + extraCls : ''}"><thead>${head}</thead><tbody>${body}</tbody></table></div>`
+  }
+  function cell(x, col) {
+    const cls = ['wk', col.past ? 'past' : '', col.cur ? 'cur' : '', x.paused ? 'paused' : '', x.rest ? 'rest' : '']
+    if (x.blank) return `<td class="${cls.filter(Boolean).join(' ')}"><span class="vh">Not in this week</span></td>`
+    let main = x.v
+    if (col.past && x.count) main = `<span class="res${x.met ? ' met' : ''}${x.plain ? ' plain' : ''}">${x.v}</span>${x.met ? '<span class="vh">, goal met</span>' : ''}`
+    const inner = `<span class="cv">${main}</span>${(x.s || []).map((l) => `<span class="cs">${l}</span>`).join('')}${x.until ? `<span class="cs pu">${x.until}</span>` : ''}`
+    if (x.tap) { cls.push('tap'); return `<td class="${cls.filter(Boolean).join(' ')}"><button type="button" class="cellbtn" aria-haspopup="menu">${inner}</button></td>` }
+    return `<td class="${cls.filter(Boolean).join(' ')}">${inner}</td>`
+  }
+  const SQ = { name: 'Back squat', chip: '5 × 5', goal: '3 a week' }
+  const BP = { name: 'Bench press', chip: '5 × 5', goal: '3 a week' }
+  const done = (v, s, met) => ({ v, s: [s], count: true, met })
+  const BLANK = { blank: true }
+
+  // ------------------------------------------------------------ question 1: the overview, 3 states
+  // Strength 5×5, eight weeks. (i) and (iii) started Mon 19 Oct, so this week is week 5. (ii)
+  // started Mon 21 Sep and ran its eight weeks to Sun 15 Nov.
+  const STATES = {
+    i: {
+      cap: '(i) Ended early. End programme stopped it from Mon 16 Nov, in week 5, for the knee.',
+      meta: 'Ended Sun 15 Nov. Knee.',
+      cols: [{ n: 3, d: '2–8 Nov', past: true }, { n: 4, d: '9–15 Nov', past: true }, { n: 5, d: '16–22 Nov', cur: true }, { n: 6, d: '23–29 Nov' }],
+      rows: [{ ...SQ, cells: [done('3 of 3', '45 kg', true), done('2 of 3', '47.5 kg'), BLANK, BLANK] },
+             { ...BP, cells: [done('3 of 3', '35 kg', true), done('3 of 3', '37.5 kg', true), BLANK, BLANK] }],
+    },
+    ii: {
+      cap: '(ii) Ran to its end. Its last week finished on Sun 15 Nov, so there is nothing to re-open.',
+      meta: 'Ended Sun 15 Nov.',
+      cols: [{ n: 5, d: '19–25 Oct', past: true }, { n: 6, d: '26 Oct–1 Nov', past: true }, { n: 7, d: '2–8 Nov', past: true }, { n: 8, d: '9–15 Nov', past: true, tags: ['Deload'] }],
+      rows: [{ ...SQ, cells: [done('3 of 3', '52.5 kg', true), done('3 of 3', '55 kg', true), done('3 of 3', '57.5 kg', true), done('2 of 3', '50 kg')] },
+             { ...BP, cells: [done('3 of 3', '40 kg', true), done('3 of 3', '42.5 kg', true), done('2 of 3', '45 kg'), done('3 of 3', '40 kg', true)] }],
+    },
+    iii: {
+      cap: '(iii) Still running, with an end set for a later day: it ends from Mon 30 Nov, so week 7 is empty.',
+      lead: 'Week 5 of 8.', meta: 'Started Mon 19 Oct, ends Sun 29 Nov.',
+      cols: [{ n: 4, d: '9–15 Nov', past: true }, { n: 5, d: '16–22 Nov', cur: true }, { n: 6, d: '23–29 Nov' }, { n: 7, d: '30 Nov–6 Dec' }],
+      rows: [{ ...SQ, cells: [done('2 of 3', '47.5 kg'), { v: '50 kg', s: ['5 × 5', '2 of 3 so far'] }, { v: '52.5 kg', s: ['5 × 5'], tap: true }, BLANK] },
+             { ...BP, cells: [done('3 of 3', '37.5 kg', true), { v: '40 kg', s: ['5 × 5', '1 of 3 so far'] }, { v: '42.5 kg', s: ['5 × 5'], tap: true }, BLANK] }],
+    },
+  }
+  const RUNNING = [btn('pause', 'Pause programme'), btn('skip', 'Go to week'), btn('plus', 'Add activity')]
+  // Each option's buttons, by state. State (iii) is A's in every option.
+  const CONTROLS = {
+    a: { i: [btn('play', 'Re-open programme'), btn('restart', 'Restart from week 1')], ii: [btn('restart', 'Restart from week 1')], iii: [...RUNNING, btn('undo', 'Cancel the end')] },
+    b: { i: [btn('restart', 'Start again')], ii: [btn('restart', 'Start again')] },
+    c: { i: [btn('play', 'Re-open programme', 'primary'), btn('restart', 'Restart from week 1')], ii: [btn('restart', 'Restart from week 1', 'primary')] },
+  }
+  function overview(opt, state) {
+    const s = STATES[state], buttons = CONTROLS[opt][state]
+    const meta = `<p class="meta">${s.lead ? `<b>${s.lead}</b> ` : ''}${s.meta}</p>`
+    const controls = `<div class="controls${opt === 'c' ? ' top' : ''}">${buttons.join('')}</div>`
+    return `<div><p class="caption stage-cap">${s.cap}</p><div class="ov"><div class="page">
+      <p class="type" style="margin-top:0">Programme</p><h4>Strength 5×5</h4>${meta}
+      ${opt === 'c' ? controls : ''}
+      ${opt === 'c' ? '<div class="tabs" role="tablist"><span role="tab" aria-selected="true">Plan</span><span role="tab" aria-selected="false">Changes</span></div>' : ''}
+      ${grid(s.cols, s.rows.slice(0, 1), 'The plan, week by week')}
+      ${opt === 'c' ? '' : controls}
+    </div></div></div>`
+  }
+
+  // ------------------------------------------------------------- question 1: the sheets (ChangeSheet)
+  const BEHIND = '<div class="behind" aria-hidden="true" inert><b>Strength 5×5</b><span>Back squat</span><span>Bench press</span></div><div class="scrim" aria-hidden="true"></div>'
+  const fieldPick = (label, value, icon, hint) => { const f = id('f'); return `<div class="field"><span class="flabel" id="${f}">${label}</span><button type="button" class="pick" aria-labelledby="${f} ${f}v"${hint ? ` aria-describedby="${f}h"` : ''}><span id="${f}v">${value}</span>${ic(icon)}</button>${hint ? `<p class="hint" id="${f}h">${hint}</p>` : ''}</div>` }
+  const fieldText = (label, value, hint) => { const f = id('f'); return `<div class="field"><label class="flabel" for="${f}">${label}</label><input class="tf" id="${f}" value="${value}"${hint ? ` aria-describedby="${f}h"` : ''}>${hint ? `<p class="hint" id="${f}h">${hint}</p>` : ''}</div>` }
+  const list = (h, rows) => { const f = id('pv'); return `<section class="pv" aria-labelledby="${f}"><h5 id="${f}">${h}</h5><ol>${rows.map(([w, d, v]) => `<li><span class="w">${w}${d ? `<span class="d">${d}</span>` : ''}</span><span class="v">${v}</span></li>`).join('')}</ol></section>` }
+  const SHEETS = {
+    reopen2: {
+      cap: 'Step 1 chose Thu 19 Nov and the reason “Knee is better”. Nothing has changed yet.',
+      step: 'Step 2 of 2', title: 'Re-open Strength 5×5',
+      body: () => `<p class="summary">Carries on from Thu 19 Nov, at week 5. <i>Knee is better.</i></p>${list('What it does', [
+        ['Carries on', 'At the week it stopped in', 'Thu 19 Nov, week 5'],
+        ['Paused', 'The days since it ended count as a pause', 'Mon 16 to Wed 18 Nov'],
+        ['Last day', 'Week 8, as planned', 'Sun 13 Dec'],
+      ])}<p class="calm">Nothing before Mon 16 Nov changes.</p>`,
+      actions: [btn('left', 'Back'), btn('', 'Re-open programme', 'primary')],
+    },
+    restart2: {
+      cap: 'Step 1 kept the name and chose Mon 23 Nov. A run still going would add a line: “The run now: ends Sun 22 Nov”.',
+      step: 'Step 2 of 2', title: 'Restart Strength 5×5',
+      body: () => `<p class="summary">A new Strength 5×5, from week 1 on Mon 23 Nov.</p>${list('What it does', [
+        ['New tracker', '', 'Strength 5×5'],
+        ['Week 1', '', '23–29 Nov'],
+        ['Last day', '8 weeks', 'Sun 17 Jan'],
+      ])}<p class="calm">This run has ended and stays as it is, with its weeks, marks, notes and changes.</p>`,
+      actions: [btn('left', 'Back'), btn('', 'Restart programme', 'primary')],
+    },
+    cancelend: {
+      cap: 'One step, with no fields: a re-open can only be from the end’s own day, so there is nothing to choose.',
+      step: '', title: 'Cancel the end of Strength 5×5',
+      body: () => `<p class="summary">Carries on past Sun 29 Nov, as planned.</p>${list('What it does', [
+        ['Carries on', 'From the day it was to end', 'Mon 30 Nov, week 7'],
+        ['Paused', '', 'No day'],
+        ['Last day', 'Week 8, as planned', 'Sun 13 Dec'],
+      ])}<p class="calm">Nothing before Mon 30 Nov changes.</p>`,
+      actions: [btn('', 'Keep the end'), btn('', 'Cancel the end', 'primary')],
+    },
+    again1: {
+      cap: 'Step 1: which, then that choice’s fields. Step 2 is option A’s preview for the one chosen.',
+      step: 'Step 1 of 2', title: 'Start Strength 5×5 again',
+      body: () => { const g = id('g'); return `<div class="field"><span class="flabel" id="${g}">How</span><div class="choices" role="radiogroup" aria-labelledby="${g}">
+        <button type="button" role="radio" class="choice" aria-checked="true" tabindex="0" aria-labelledby="${g}a" aria-describedby="${g}ah"><span class="dot" aria-hidden="true"></span><span class="what"><span class="nm" id="${g}a">Carry on where it stopped</span><span class="ln" id="${g}ah">At week 5. The days since it ended count as a pause.</span></span></button>
+        <button type="button" role="radio" class="choice" aria-checked="false" tabindex="-1" aria-labelledby="${g}b" aria-describedby="${g}bh"><span class="dot" aria-hidden="true"></span><span class="what"><span class="nm" id="${g}b">Start from week 1</span><span class="ln" id="${g}bh">A new tracker. This run stays as it is.</span></span></button>
+        </div></div><div class="row2">${fieldPick('From', 'Thu 19 Nov', 'cal', 'Today, Thu 19 Nov, or any later day.')}</div>${fieldText('Reason', 'Knee is better', 'It shows in Changes.')}` },
+      actions: [btn('', 'Cancel'), btn('', 'Preview', 'primary')],
+    },
+  }
+  function sheet(key) {
+    const s = SHEETS[key], h = id('h'), st = id('st')
+    return `<div><p class="caption stage-cap">${s.cap}</p><div class="cs-stage">${BEHIND}<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="${h}" aria-describedby="${st}">
+      ${s.step ? `<p class="steps" id="${st}">${s.step}</p>` : ''}
+      <div class="dlg-head"><h4 id="${h}">${s.title}</h4><button type="button" class="ib" aria-label="Close">${ic('x')}</button></div>
+      ${s.body()}<div class="actions">${s.actions.join('')}</div></div></div></div>`
+  }
+
+  // -------------------------------------------------- question 1's note: the same end, the same day
+  function endfix() {
+    const row = (cap, lede) => `<div><p class="caption stage-cap">${cap}</p><div class="ip folded"><section class="sec"><h4>Programme</h4><div class="content"><p class="lede">${lede}</p></div></section></div></div>`
+    return `<div class="stack">
+      ${row('Back squat’s item page, today: the first day without it.', 'The programme ended on Mon 16 Nov.')}
+      ${row('Back squat’s item page, proposed: the last day, as the overview says it.', 'Ended Sun 15 Nov.')}
+    </div>`
+  }
+
+  // ---------------------------------------------------- question 2: the week's paused row (PlannerScreen)
+  const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  const markSvg = (kind) => `<svg viewBox="0 0 36 36" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${kind ? `<path class="ink" d="${ART.stamp}" fill-rule="evenodd"/><path class="sym" d="${ART.tick}" fill="none" stroke-width="3.25"/>` : ''}<path class="bx" d="${ART.box}" stroke-width="1.75"/></svg>`
+  const PAUSED_ROW = {
+    a: `${ic('pause')}<span><span class="pu">Paused until Mon 28 Dec.</span> Knee.</span>`,
+    b: `${ic('pause')}<span><span class="pu">Paused until Mon 28 Dec.</span> Knee.</span>`,
+    c: `${ic('pause')}<span>Paused until Mon 28 Dec. Knee.</span>`,
+  }
+  function week(opt) {
+    // Today is Thursday. Marks stay open for today and yesterday, so Monday and Tuesday are locked.
+    let cells = '<div class="hd corner"><span class="vh">Exercise</span></div>'
+    DAYS.forEach((d, i) => { cells += `<div class="hd"><span class="dl"><span class="dn">${d}</span>${i < 2 ? ic('lock', 'lk') : ''}</span><span class="vh"> ${16 + i} November${i === 3 ? ', today' : ''}${i < 2 ? ', locked' : ''}</span></div>` })
+    cells += `<div class="nm"><span class="n">Back squat</span><span class="chips"><span class="chip">5 × 5</span></span></div><div class="pz${opt === 'c' ? ' all' : ''}">${PAUSED_ROW[opt]}</div>`
+    const marks = ['great', null, 'great', null, null, null, null]
+    cells += `<div class="nm"><span class="n">Bench press</span><span class="chips"><span class="chip">5 × 5</span><span class="chip">40 kg</span></span></div>`
+    marks.forEach((m, i) => { cells += `<div class="d"><button type="button" class="mark"${m ? ` data-mark="${m}"` : ''} aria-pressed="${!!m}" aria-label="Bench press, ${DAYS[i]} ${16 + i} November${m ? ', done' : ''}">${markSvg(m)}</button></div>` })
+    return `<div><p class="caption stage-cap">The week, Mon 16 to Sun 22 Nov. Back squat's row says it in place of its seven boxes.</p><section class="wv"><header class="head"><h4>Strength 5×5<span class="wk">16–22 November</span></h4><a class="prog" href="#">Week 4 of 12${ic('right')}</a></header><div class="grid">${cells}</div></section></div>`
+  }
+
+  // --------------------------------------------- question 2: the item page's Programme row (ProgrammeChart)
+  const LEDE = {
+    now: { until: 'Paused since Mon 16 Nov. Knee. It comes back on Mon 28 Dec at <b>45 kg</b>.', open: 'Paused since Mon 16 Nov. Knee. It comes back at <b>45 kg</b> when you resume it.' },
+    a: { until: '<span class="pu">Paused until Mon 28 Dec.</span> Knee. It comes back at <b>45 kg</b>.', open: '<span class="pu">Paused.</span> Knee. It comes back at <b>45 kg</b> when you resume it.' },
+    b: { until: '<span class="pu">Paused since Mon 16 Nov.</span> Knee. It comes back on Mon 28 Dec at <b>45 kg</b>.', open: '<span class="pu">Paused since Mon 16 Nov.</span> Knee. It comes back at <b>45 kg</b> when you resume it.' },
+    c: { until: 'Paused until Mon 28 Dec. Knee. It comes back at <b>45 kg</b>.', open: 'Paused. Knee. It comes back at <b>45 kg</b> when you resume it.', all: true },
+  }
+  function itemRow(opt) {
+    const l = LEDE[opt], cls = `lede${l.all ? ' all' : ''}`
+    return `<div><p class="caption stage-cap">Back squat's item page: the lede at the top of its Programme row. The chart and the controls under it stay as they are, so they are left out.</p><div class="ip">
+      <section class="sec"><h4>Programme</h4><div class="content"><p class="${cls}">${l.until}</p></div></section>
+      <section class="sec"><h4>Programme<span class="rowcap" style="display:block">Paused with no end date</span></h4><div class="content"><p class="${cls}">${l.open}</p></div></section>
+    </div></div>`
+  }
+  function paused(opt) { return `<div class="stack">${week(opt)}${itemRow(opt)}</div>` }
+
+  // ------------------------------------------------------- question 3: a rest week in the grid
+  // Eight weeks from Mon 26 Oct; this week is week 4. Back squat's goal is 0 in weeks 3 and 6, and
+  // it is paused for week 5 (knee). Bench press runs every week.
+  const RCOLS = [{ n: 3, d: '9–15 Nov', past: true }, { n: 4, d: '16–22 Nov', cur: true }, { n: 5, d: '23–29 Nov' }, { n: 6, d: '30 Nov–6 Dec' }]
+  const REST = {
+    a: { past: { v: 'Rest week', rest: true, s: ['42.5 kg'] }, later: { v: 'Rest week', rest: true, s: ['50 kg', '5 × 5'], tap: true }, marked: { v: 'Rest week', rest: true, s: ['42.5 kg', '1 done'] } },
+    b: { past: { v: '0 of 0', count: true, plain: true, s: ['42.5 kg'] }, later: { v: '50 kg', s: ['5 × 5', '0 a week'], tap: true }, marked: { v: '1 of 0', count: true, plain: true, s: ['42.5 kg'] } },
+    c: { past: { v: 'Planned break', rest: true, s: ['42.5 kg'] }, later: { v: 'Planned break', rest: true, s: ['50 kg', '5 × 5'], tap: true }, marked: { v: 'Planned break', rest: true, s: ['42.5 kg', '1 done'] } },
+    now: { past: { v: 'Paused', paused: true }, later: { v: '50 kg', s: ['5 × 5'], tap: true }, marked: { v: '0 of 0', count: true, met: true, s: ['42.5 kg'] } },
+  }
+  function rest(opt) {
+    const r = REST[opt]
+    const rows = [
+      { ...SQ, cells: [r.past, { v: '45 kg', s: ['5 × 5', '2 of 3 so far'] }, { v: 'Paused', paused: true, s: ['Knee'] }, r.later] },
+      { ...BP, cells: [done('3 of 3', '35 kg', true), { v: '37.5 kg', s: ['5 × 5', '1 of 3 so far'] }, { v: '40 kg', s: ['5 × 5'], tap: true }, { v: '42.5 kg', s: ['5 × 5'], tap: true }] },
+    ]
+    const capMarked = opt === 'now' ? 'Back squat’s week 3 with the “Paused” rule dropped and nothing else: “0 of 0”, underlined as met.' : 'Back squat’s week 3 again, had one day been marked in it.'
+    return `<div class="side"><div><p class="caption stage-cap">The overview's grid, weeks 3 to 6.</p>${grid(RCOLS, rows, 'The plan, week by week', 'fit')}</div>
+      <div><p class="caption stage-cap" style="max-width:220px">${capMarked}</p>${grid([RCOLS[0]], [{ ...SQ, cells: [r.marked] }], 'Week 3', 'one')}</div></div>`
+  }
+
+  // ------------------------------------------------------------------------------------ drawing
+  const DRAW = {
+    overviews: (el) => `<div class="stack">${el.dataset.states.split(' ').map((s) => overview(el.dataset.opt, s)).join('')}</div>`,
+    dialogs: (el) => el.dataset.dlg.split(' ').map(sheet).join(''),
+    endfix: () => endfix(),
+    paused: (el) => paused(el.dataset.opt),
+    rest: (el) => rest(el.dataset.opt),
+  }
+  for (const pane of document.querySelectorAll('.pane[data-draw]')) {
+    pane.innerHTML = `<p class="label pane-label">${pane.dataset.theme === 'dark' ? 'Dark' : 'Light'}</p>${DRAW[pane.dataset.draw](pane)}`
+  }
+  for (const a of document.querySelectorAll('.pane a[href="#"]')) a.addEventListener('click', (e) => e.preventDefault())
+})()
+</script>
+
+<script>
+  // Measures: for each <li data-fg data-bg data-min>, the WCAG contrast of the two colours in each
+  // theme, resolved inside the option (so --candidate-* values apply), written after the label.
+  (() => {
+    const rgb = (value, scope, theme) => {
+      const probe = document.createElement('span')
+      probe.dataset.theme = theme
+      probe.style.color = value
+      scope.append(probe)
+      const parts = getComputedStyle(probe).color.match(/[\d.]+/g).map(Number)
+      probe.remove()
+      return parts.slice(0, 3)
+    }
+    const lum = ([r, g, b]) => [r, g, b]
+      .map((c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4 })
+      .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0)
+    const ratio = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05) }
+    for (const li of document.querySelectorAll('.measures li[data-fg]')) {
+      const scope = li.closest('.option') || document.body
+      const min = Number(li.dataset.min || 0)
+      const results = ['light', 'dark'].map((theme) => {
+        const r = ratio(rgb(li.dataset.fg, scope, theme), rgb(li.dataset.bg, scope, theme))
+        return { theme, r, ok: !min || r >= min }
+      })
+      li.dataset.pass = results.every((x) => x.ok) ? 'yes' : 'no'
+      li.append(`: ${results.map((x) => `${x.theme} ${x.r.toFixed(1)}:1${x.ok ? '' : ' (below ' + min + ':1)'}`).join(', ')}`)
+    }
+  })()
+</script>

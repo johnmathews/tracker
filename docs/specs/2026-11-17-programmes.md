@@ -322,10 +322,17 @@ These follow John's picks in the mockup round (§10) and the Notebook design sys
   - Past weeks are locked and show how they went (sessions done against the goal).
   - Future cells show the prescription. Tapping one offers Edit this week and Change from here.
   - Pauses, hand-edits, deloads and split weeks are visible in the cells.
+  - "Paused" comes from a cell's state, never from its goal. A running week planned with a goal of
+    0 reads "Rest week" over its value, with "1 done" when a day was marked (K170).
   - Weeks after an open pause show "When resumed" in place of dates.
 - **Changes tab:** the log, newest first, with the from day, what changed, the reason and the
   source. Undo shows on changes whose effect starts today or later.
-- **Controls:** Pause, Go to week, Add activity, End programme.
+- **Controls:** Pause, Go to week, Add activity, End programme. An ended run has Re-open programme,
+  only when End programme stopped it part way (the run's `canReopen`), and Restart from week 1 in
+  their place. A run with an end set for a later day keeps its controls, with Cancel the end, a
+  re-open from the end's own day, in End programme's place (K168). Each previews first in the
+  ChangeSheet's look, and a confirmed restart opens the new tracker's overview. The line under the
+  title says an ended run's last day and the end's reason: "Ended Sun 15 Nov. Knee."
 
 ### 9.3 The same grid, three places
 
@@ -336,6 +343,9 @@ The overview grid is one component used for the start preview (§9.1), the runni
 
 The item page gains a **Programme** section:
 
+- a lede over the chart: this week's plan, or a pause, which leads in `paused-ink` at 600 as the
+  week view does: "Paused until Mon 28 Dec. Knee. It comes back at 45 kg." (K169). An ended run
+  says its last day, "Ended Sun 15 Nov.", as the overview does (K168);
 - a step chart of the planned value for each week, with what was done on top, gaps for pauses,
   and a labelled point for each change;
 - the activity's controls, named for the field: Set weight (or Set reps, Set time), Set
@@ -345,7 +355,8 @@ The item page gains a **Programme** section:
 
 - A programme tracker's title line ends with "Week 4 of 8", a link to the overview.
 - A locked day has a `lock` by its name.
-- A paused activity's row reads "Paused until Mon 28 Dec. Knee." in place of its boxes.
+- A paused activity's row reads "Paused until Mon 28 Dec. Knee." in place of its boxes, with
+  "Paused until Mon 28 Dec." in `paused-ink` at 600 (K169).
 - Edit plan doesn't edit a programme tracker's items. Their rows link to the activity's controls.
 
 ## 10. Mockup round

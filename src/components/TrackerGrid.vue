@@ -5,7 +5,7 @@ import type { Tracked } from '@/lib/tracker'
 import { useGridNav } from '@/composables/gridNav'
 import { ref } from 'vue'
 import { Lock } from '@lucide/vue'
-import TrackerRow from '@/components/TrackerRow.vue'
+import TrackerRow, { type PausedLine } from '@/components/TrackerRow.vue'
 import { itemHref } from '@/lib/routes'
 
 defineProps<{
@@ -34,7 +34,7 @@ defineProps<{
    */
   lockedDays?: boolean[]
   /** A programme tracker's paused activity's sentence, read in place of its boxes; else null. */
-  pausedFor?: (item: Tracked) => string | null
+  pausedFor?: (item: Tracked) => PausedLine | null
 }>()
 
 defineEmits<{

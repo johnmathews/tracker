@@ -287,7 +287,7 @@ def test_delete_on_a_programme_tracker_ends_its_run_from_today(
     # Ended from today, a Friday: this week still shows it.
     assert r.json()["endWeek"] == NEXT_WEEK
     run = client.get(f"/api/runs/{tracker}").json()
-    assert run["ended"] == {"from": "2026-10-23", "reason": None, "seq": 1}
+    assert run["ended"] == {"from": "2026-10-23", "reason": None, "seq": 1, "restarted": False}
     assert run["log"][0]["change"] == {"type": "end-programme"}
     # Ended once, it stays ended where it is.
     again = client.post(f"/api/trackers/{tracker}/end", json={"week": "2026-11-30"})

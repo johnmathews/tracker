@@ -14,33 +14,33 @@ The planner's layout: the week fixed at the top, each tracker the week shows fil
 - **A programme tracker** (spec §9.5, K146) is a screen like any other, with three additions, and nothing else changes:
   - **"Week 4 of 8" at the end of the title's line**, a link to the programme's overview (`#/programme/<tracker>`, the ProgrammeGrid card), where Edit plan puts Add (SectionHeader's end slot): `body` at weight 600 in `ink`, underlined 1px 4px under the letters (2px under the pointer), then a 20px Lucide `chevron-right`. It never wraps; folded it stays on the title's line, and the title is the SectionHeader's 24n.
   - **A lock by a locked day's name:** a 16px Lucide `lock` in `ink-secondary` (14px folded), 4px after the day's name. A day is locked once its marks are: before yesterday by the server's date (spec §8; marks stay open for one day, so on a Wednesday only Monday is locked). Its boxes stay as they are, marks and all, and don't press. A met day's name keeps its `pen` underline; the lock is not underlined.
-  - **A paused activity's row** reads its sentence in place of its seven boxes, centred across them: a 18px Lucide `pause` and "Paused until Mon 28 Dec. Knee." in `body` `ink-secondary` (16px folded). Its name and chips stay.
+  - **A paused activity's row** reads its sentence in place of its seven boxes, centred across them: a 18px Lucide `pause` and "Paused until Mon 28 Dec. Knee." in `body` (16px folded). Its lead, "Paused until Mon 28 Dec." ("Paused." with no end day), is `paused-ink` at 600, as the ProgrammeGrid's "Paused until" line (K169); the reason and the icon stay `ink-secondary` at 400. Its name and chips stay.
   - Edit plan doesn't edit a programme tracker's items: their rows link to the activity's own controls on its page (ProgrammeChart).
 - **Not in Settings**: there the page scrolls freely, nothing sprints and there is no bar (K52).
 - **Print**: no sprinting, no bar, the WeekGrid as a table on paper. Each section starts a page of its own, with the week over it in `display` (SectionHeader, K97).
 
 ## States
 
-| State                                                   | Look                                                                                                                                             |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| At rest                                                 | the week fixed at the top (K86, K88), then the screen: the section's heading, the week's grid, and the arrows to the screens before and after it |
-| Moving, or on Cardio or Food                            | a screen under the band, with the hairline at the band's foot                                                                                    |
-| Bar called up                                           | the Header over the top of the screen, with `shadow-overlay`                                                                                     |
-| Edit plan                                               | the bar sticky above the page, and the `edit` frame round the window, 8px; on a phone a 4px line along the top only (K112, K117, K162)                                          |
-| Short (540px tall or less)                              | no band (the week is for a screen reader only); the title in the grid's corner; no chips, no arrows                                              |
-| Folded (upright under 1000px wide, or under 760px wide) | the WeekGrid folded; the band at 30n                                                                                                             |
-| A programme tracker | "Week 4 of 8" at the end of the title's line, a `lock` by each locked day's name, a paused row's sentence in place of its boxes (K146) |
+| State                                                   | Look                                                                                                                                                                          |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| At rest                                                 | the week fixed at the top (K86, K88), then the screen: the section's heading, the week's grid, and the arrows to the screens before and after it                              |
+| Moving, or on Cardio or Food                            | a screen under the band, with the hairline at the band's foot                                                                                                                 |
+| Bar called up                                           | the Header over the top of the screen, with `shadow-overlay`                                                                                                                  |
+| Edit plan                                               | the bar sticky above the page, and the `edit` frame round the window, 8px; on a phone a 4px line along the top only (K112, K117, K162)                                        |
+| Short (540px tall or less)                              | no band (the week is for a screen reader only); the title in the grid's corner; no chips, no arrows                                                                           |
+| Folded (upright under 1000px wide, or under 760px wide) | the WeekGrid folded; the band at 30n                                                                                                                                          |
+| A programme tracker                                     | "Week 4 of 8" at the end of the title's line, a `lock` by each locked day's name, a paused row's sentence in place of its boxes, its lead in `paused-ink` at 600 (K146, K169) |
 
 ## Accessibility
 
 - Each screen is a `<section aria-labelledby>` on its SectionHeader's `<h2>`. The band is the week's `<h1>`, before them all, so the heading outline is unchanged; where the band is hidden it stays for a screen reader.
 - The sprint never traps the keyboard: focus moving into the Cardio or Food grid scrolls it into view, and a stop across a line sprints on to the next screen.
 - Each arrow is a real `<button>` named for the tracker it goes to: "Go to Cardio", "Back to Strength", "Go to Food", "Back to Cardio". Each screen's `<h2>` has the id `tracker-<id>-heading`, and the Header's "Skip to today" link points at the first one.
-- On a programme tracker, the link reads "Week 4 of 8. Open the programme". A locked day's name adds ", locked" for a screen reader (the `lock` is `aria-hidden`), and each of its boxes is `aria-disabled="true"` with ", locked" in its name, so it can still be reached and read. The paused row's sentence is plain text in the row.
+- On a programme tracker, the link reads "Week 4 of 8. Open the programme". A locked day's name adds ", locked" for a screen reader (the `lock` is `aria-hidden`), and each of its boxes is `aria-disabled="true"` with ", locked" in its name, so it can still be reached and read. The paused row's sentence is plain text in the row, one sentence read aloud: the lead's colour adds no words. `paused-ink` on `canvas` is 7.4:1 light and 7.2:1 dark.
 - Nothing depends on hover: a long press, the handle and focus reach the bar with a mouse, a finger or the keyboard. Only focus lays it over the week.
 
 ## You provide
 
 - The trackers the week shows, in order (each one's name and kind), and whether Edit plan (screens under the bar) or another page (no screens) is showing.
 - The messages to show, if any.
-- For a programme tracker: its programme week and length, which days are locked (from the server's date), and each paused activity's sentence. Test ids: `programme-week-link` on the link, `paused-row` on a paused row's sentence, and `data-locked` on a locked day's head.
+- For a programme tracker: its programme week and length, which days are locked (from the server's date), and each paused activity's sentence. Test ids: `programme-week-link` on the link, `paused-row` on a paused row's sentence and `paused-lead` on its red lead, and `data-locked` on a locked day's head.

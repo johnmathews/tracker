@@ -585,7 +585,9 @@
   [data-slot='radio-card']
   [role='radiogroup'] {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* As many as fit at 260u, so a set's three marks stay inside its card: two to a row in the
+     centred column (K176), three where there is room. */
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--u) * 260)), 1fr));
   gap: calc(var(--u) * 12);
 }
 :is(
@@ -835,6 +837,15 @@
 
   /* AnswerProgress's pen (its card, and the Ask mockup's `ask-write`): a stroke at 35% ink
      brightens to full and back. Used only under motion-safe; at rest the stroke stays at 35%. */
+  /* A copy landing in the library (K174, mockup 261119-copy-and-width, option A): the row slides
+     down 8px into place as it fades in. Used only under motion-safe. */
+  --animate-land-in: land-in 240ms ease-out both;
+  @keyframes land-in {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+  }
   --animate-pen-write: pen-write 1.2s ease-in-out infinite;
   @keyframes pen-write {
     0%,

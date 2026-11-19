@@ -23,6 +23,7 @@ import { InlineMessage } from '@/components/ui/inline-message'
 import { Button } from '@/components/ui/button'
 import { Stepper } from '@/components/ui/stepper'
 import TrackerGrid from '@/components/TrackerGrid.vue'
+import type { PausedLine } from '@/components/TrackerRow.vue'
 
 const props = defineProps<{
   /** The tracker this screen shows (K123). */
@@ -113,13 +114,15 @@ const lockedDays = computed(() =>
   summary.value ? planner.days.map((d) => sync.locked(id.value, d.key)) : undefined,
 )
 
-/** A paused activity's sentence for the week on screen: "Paused until Mon 28 Dec. Knee." */
-function pausedFor(item: Tracked): string | null {
+/**
+ * A paused activity's sentence for the week on screen, in its parts (K169): the lead "Paused
+ * until Mon 28 Dec." (or "Paused." with no end), then the reason, "Knee.".
+ */
+function pausedFor(item: Tracked): PausedLine | null {
   const cell = runWeek.value?.cells[item.id]
   if (cell?.state !== 'paused') return null
   const until = cell.until ? ` until ${dayText(cell.until)}` : ''
-  const why = reasonText(cell.reason)
-  return `Paused${until}.${why ? ` ${why}` : ''}`
+  return { lead: `Paused${until}.`, reason: reasonText(cell.reason) || null }
 }
 
 /** Edit plan's Add opens the new item page (K104), not a dialog. */

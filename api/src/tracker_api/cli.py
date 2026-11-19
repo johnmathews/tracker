@@ -1,5 +1,5 @@
-"""`tracker-admin`: invites, resets, account switches and API tokens, run in the API container, and
-demo data for a local stack (docs/api.md §5)."""
+"""`tracker-admin`: invites, resets, account switches, the admin flag and API tokens, run in the API
+container, and demo data for a local stack (docs/api.md §5)."""
 
 import argparse
 import os
@@ -63,6 +63,11 @@ def _parser() -> argparse.ArgumentParser:
         # `username`: the account's name, its email (or, for an account from before invites
         # took an email, the username it was invited with).
         commands.add_parser(name, help=text).add_argument("username", metavar="email")
+    admin = commands.add_parser(
+        "admin", help="let an account publish to the shared library, or with --off stop it"
+    )
+    admin.add_argument("username", metavar="email")
+    admin.add_argument("--off", action="store_true", help="clear the admin flag")
     commands.add_parser("users", help="list users")
     token = commands.add_parser("token", help="personal API tokens, for the MCP endpoint")
     tokens = token.add_subparsers(dest="token_command", required=True)
@@ -143,6 +148,12 @@ def _run(args: argparse.Namespace, config: Config, conn: sqlite3.Connection) -> 
             print(
                 f"{args.username} is now {'disabled' if args.command == 'disable' else 'enabled'}."
             )
+        case "admin":
+            auth.set_admin(conn, args.username, not args.off)
+            if args.off:
+                print(f"{args.username} is no longer an admin.")
+            else:
+                print(f"{args.username} is now an admin: it can publish to the shared library.")
         case "seed-demo":
             result = seed.seed(conn, config, args.username, args.password)
             if result["created"]:
@@ -168,7 +179,10 @@ def _run(args: argparse.Namespace, config: Config, conn: sqlite3.Connection) -> 
                     f"the tracker {seed.DEMO_RUN}. Its overview: "
                     f"{config.public_origin}/#/programme/{seed.DEMO_RUN}"
                 )
-            if not (added or result["programmes"] or result["runs"]):
+            if result["shared"]:
+                shared = seed.SHARED_PROGRAMME["name"]
+                print(f"Added the programme {shared} to the shared library.")
+            if not (added or result["programmes"] or result["runs"] or result["shared"]):
                 print("Nothing to add: the demo weeks are already there.")
             print(f"Sign in at {config.public_origin}/")
         case "revoke-sessions":
@@ -182,7 +196,7 @@ def _run(args: argparse.Namespace, config: Config, conn: sqlite3.Connection) -> 
             _token(args, config, conn)
         case _:  # users
             rows = conn.execute(
-                "SELECT u.username, u.created_at, u.disabled,"
+                "SELECT u.username, u.created_at, u.disabled, u.admin,"
                 " (SELECT count(*) FROM sessions s WHERE s.user_id = u.id) AS sessions,"
                 " (SELECT count(*) FROM api_tokens t WHERE t.user_id = u.id) AS tokens"
                 " FROM users u ORDER BY u.username"
@@ -191,8 +205,9 @@ def _run(args: argparse.Namespace, config: Config, conn: sqlite3.Connection) -> 
                 print("No users yet.")
             for r in rows:
                 state = "disabled" if r["disabled"] else "active"
+                role = "admin" if r["admin"] else "user"
                 print(
-                    f"{r['username']:<32} {state:<8} since {_when(r['created_at'])},"
+                    f"{r['username']:<32} {state:<8} {role:<5} since {_when(r['created_at'])},"
                     f" {_plural(r['sessions'], 'session')}, {_plural(r['tokens'], 'token')}"
                 )
     return 0

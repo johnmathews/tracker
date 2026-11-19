@@ -15,9 +15,8 @@ import { useSyncStore } from '@/stores/sync'
 import { Button } from '@/components/ui/button'
 import { ChangeSheet } from '@/components/ui/change-sheet'
 import { InlineMessage } from '@/components/ui/inline-message'
-import { ProgrammeChart, activityChart } from '@/components/ui/programme-chart'
+import { ProgrammeChart, ProgrammeLede, activityChart } from '@/components/ui/programme-chart'
 import { ProgrammeGrid } from '@/components/ui/programme-grid'
-import { LEDE } from '@/lib/itemPage'
 
 const props = defineProps<{
   /** The programme tracker's id. */
@@ -135,11 +134,7 @@ const CONTROL =
     loadError
   }}</InlineMessage>
   <template v-if="run && chart">
-    <p :class="LEDE" data-testid="programme-lede">
-      {{ chart.lede.before
-      }}<b v-if="chart.lede.value" class="font-semibold text-ink">{{ chart.lede.value }}</b
-      >{{ chart.lede.after }}
-    </p>
+    <ProgrammeLede :lede="chart.lede" data-testid="programme-lede" />
     <!-- The page's foot keeps clear of the bar, as the overview's does. -->
     <ProgrammeGrid
       v-if="previewing"

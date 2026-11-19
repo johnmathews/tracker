@@ -4,7 +4,7 @@ import { ProgrammeGrid } from '@/components/ui/programme-grid'
 import { weekName, type GridWeek } from '@/lib/programmes'
 import ExampleGroup from '../parts/ExampleGroup.vue'
 import StateExample from '../parts/StateExample.vue'
-import { OPEN_PAUSE_GRID, PART_PAUSE_GRID, ROW_AT_45, RUN } from './programmeExamples'
+import { OPEN_PAUSE_GRID, PART_PAUSE_GRID, REST_GRID, ROW_AT_45, RUN } from './programmeExamples'
 
 const names = Object.fromEntries(RUN.grid.activities.map((a) => [a.key, a.name]))
 /** An activity's name links to its item page, whose Programme row is the ProgrammeChart. */
@@ -17,7 +17,7 @@ function chose(what: string, key: string, week: GridWeek): void {
 }
 </script>
 
-<!-- The card's four tables (components/ProgrammeGrid/preview.html), drawn by the app's own
+<!-- The card's five tables (components/ProgrammeGrid/preview.html), drawn by the app's own
      ProgrammeGrid from browser-built example data (programmeExamples.ts): Beginner 5×5, today Wed
      16 Dec in week 4. Each grid's region has its own name, so the page's landmarks stay unique.
      The overview round it (its line, Tabs, Changes and controls) and the preview's bar at the foot
@@ -76,6 +76,25 @@ function chose(what: string, key: string, week: GridWeek): void {
           kind="strength"
           mode="running"
           label="The plan with a pause, week by week"
+          :item-href="itemHref"
+          @edit="(key, week) => chose('Edit this week', key, week)"
+          @change="(key, week) => chose('Change from here', key, week)"
+        />
+      </StateExample>
+    </ExampleGroup>
+
+    <ExampleGroup title="Rest weeks">
+      <StateExample
+        state="A rest week is a running week planned with a goal of 0, a planned break (K170). Back squat rests in week 2, nothing marked, and in week 6, still to come; Bench press rests in week 3, with one day marked. Each reads “Rest week” over its value, never “Paused” or “0 of 0”. Deadlift's paused week 5 is there for contrast: “Paused” comes from a week's state only."
+        class="w-full"
+      >
+        <ProgrammeGrid
+          id="sg-programme-grid-overview-rest"
+          class="w-full"
+          :grid="REST_GRID"
+          kind="strength"
+          mode="running"
+          label="The plan with rest weeks, week by week"
           :item-href="itemHref"
           @edit="(key, week) => chose('Edit this week', key, week)"
           @change="(key, week) => chose('Change from here', key, week)"

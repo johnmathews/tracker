@@ -214,7 +214,7 @@ export const SECTIONS: readonly StyleGuideSection[] = [
     id: 'sg-chip',
     title: 'Chip',
     summary:
-      'A small quiet tag under an exercise name that says how much: sets × reps, each side, or the weight.',
+      'A small quiet tag under an exercise name that says how much: sets × reps, each side, or the weight; after a programme’s name, one state: Shared.',
     component: ChipSection,
   },
   {

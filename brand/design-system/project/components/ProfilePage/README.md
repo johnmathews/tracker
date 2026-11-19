@@ -3,7 +3,7 @@ The Profile page, at `#/profile`: a link back to the week, the heading, then Acc
 ## Use
 
 - **Opening it:** "Profile" in the Menu under the Header's last BarAction, "Profile" (Lucide `circle-user-round`). Like the SettingsPage, the page has no Header (K52) and starts with its own link back to the week.
-- **Layout:** the SettingsPage's frame, exactly: full width on the page's own 48u margins, every size from the PlannerScreen's `u` (main.css's `--set-*` sizes); a TextLink "Back to the week", the `<h1>` "Profile" in the `title-1` serif at 40u, then a row per section, its `<h2>` in the 320u left column and its content to the right, a 1px `line` rule above each. **Folded**, the heading sits over its content in one column at the system's sizes on `n`.
+- **Layout:** the SettingsPage's frame, exactly: in the page's centred column, 960u wide on the page's own 48u margins (K176), every size from the PlannerScreen's `u` (main.css's `--set-*` sizes); a TextLink "Back to the week", the `<h1>` "Profile" in the `title-1` serif at 40u, then a row per section, its `<h2>` in the 320u left column and its content to the right, a 1px `line` rule above each. **Folded**, the heading sits over its content in one column at the system's sizes on `n`.
 - **Contents, in order:**
   1. **Account:** "Signed in as" and the email in `body` `ink-secondary` (the email in 600 `ink`), and beside it a secondary Button "Sign out" (`log-out`), wrapping under the words when the row is narrow (K53). Sign out with unsent changes asks first with a ConfirmDialog; a refusal shows as an InlineMessage under the row.
   2. **Your goals:** a TextArea, "What you’re working towards", hint "Ask and your connected apps read this. Nothing else does." (F1).

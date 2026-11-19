@@ -1,0 +1,85 @@
+{
+  "trackers": [
+    {
+      "id": "exercise",
+      "name": "Strength",
+      "kind": "strength",
+      "position": 0,
+      "dailyTarget": 3,
+      "startWeek": null,
+      "endWeek": null,
+      "rev": 1
+    },
+    {
+      "id": "cardio",
+      "name": "Cardio",
+      "kind": "cardio",
+      "position": 1,
+      "dailyTarget": null,
+      "startWeek": null,
+      "endWeek": null,
+      "rev": 1
+    },
+    {
+      "id": "diet",
+      "name": "Food",
+      "kind": "food",
+      "position": 2,
+      "dailyTarget": 2,
+      "startWeek": null,
+      "endWeek": null,
+      "rev": 1
+    }
+  ],
+  "sections": {
+    "exercise": {
+      "plans": {},
+      "log": {},
+      "revs": {}
+    },
+    "cardio": {
+      "plans": {},
+      "log": {},
+      "revs": {}
+    },
+    "diet": {
+      "plans": {},
+      "log": {},
+      "revs": {}
+    }
+  },
+  "details": {
+    "exercise": {},
+    "cardio": {},
+    "diet": {}
+  },
+  "detailRevs": {
+    "exercise": {},
+    "cardio": {},
+    "diet": {}
+  },
+  "exercise": {
+    "plans": {},
+    "log": {},
+    "revs": {},
+    "details": {},
+    "detailRevs": {}
+  },
+  "cardio": {
+    "plans": {},
+    "log": {},
+    "revs": {},
+    "details": {},
+    "detailRevs": {}
+  },
+  "diet": {
+    "plans": {},
+    "log": {},
+    "revs": {},
+    "details": {},
+    "detailRevs": {}
+  },
+  "settings": null,
+  "today": "2026-11-12",
+  "runs": {}
+}

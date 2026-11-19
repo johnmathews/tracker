@@ -31,7 +31,7 @@
       "rev": 1
     },
     {
-      "id": "xmwmdo222uxyt",
+      "id": "xmwdbhk000001",
       "name": "Beginner 5×5",
       "kind": "strength",
       "position": 3,
@@ -57,7 +57,7 @@
       "log": {},
       "revs": {}
     },
-    "xmwmdo222uxyt": {
+    "xmwdbhk000001": {
       "plans": {
         "2026-11-09": [
           {
@@ -74,7 +74,7 @@
             "sets": 5,
             "reps": 5,
             "weight": 30,
-            "target": 3
+            "target": 2
           },
           {
             "id": "row",
@@ -82,7 +82,7 @@
             "sets": 5,
             "reps": 5,
             "weight": 30,
-            "target": 3
+            "target": 2
           },
           {
             "id": "deadlift",
@@ -90,7 +90,7 @@
             "sets": 1,
             "reps": 5,
             "weight": 60,
-            "target": 3
+            "target": 2
           },
           {
             "id": "plank",
@@ -98,7 +98,7 @@
             "sets": 3,
             "reps": 0,
             "duration": 30,
-            "target": 3
+            "target": 2
           }
         ],
         "2026-11-16": [
@@ -150,7 +150,7 @@
             "sets": 5,
             "reps": 5,
             "weight": 42.5,
-            "target": 3
+            "target": 2
           },
           {
             "id": "bench",
@@ -413,7 +413,7 @@
     "exercise": {},
     "cardio": {},
     "diet": {},
-    "xmwmdo222uxyt": {
+    "xmwdbhk000001": {
       "deadlift": {
         "notes": "Hinge, don’t squat. Bar close to the shins."
       },
@@ -426,7 +426,7 @@
     "exercise": {},
     "cardio": {},
     "diet": {},
-    "xmwmdo222uxyt": {
+    "xmwdbhk000001": {
       "deadlift": 1,
       "squat": 1
     }
@@ -455,8 +455,8 @@
   "settings": null,
   "today": "2026-11-12",
   "runs": {
-    "xmwmdo222uxyt": {
-      "programmeId": "xmwmdo21iejbz",
+    "xmwdbhk000001": {
+      "programmeId": "xmwdbhk000000",
       "name": "Beginner 5×5",
       "status": "running",
       "week": 1,

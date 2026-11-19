@@ -145,6 +145,7 @@ describe('the Programme row (K145)', () => {
     const lede = byTestId('programme-lede')
     expect(lede.text()).toBe('This week is a deload: 35 kg, 3 × 5. It goes up 2.5 kg a week.')
     expect(lede.get('b').text()).toBe('35 kg')
+    expect(lede.find('[data-testid="programme-lede-lead"]').exists()).toBe(false)
   })
 
   it('draws the step chart from the run’s grid, with its legend and its table', async () => {
@@ -169,15 +170,23 @@ describe('the Programme row (K145)', () => {
     await openItem('deadlift')
     expect(controls()).toEqual(['Set weight', 'Set increase', 'Resume activity', 'End activity'])
     expect(byTestId('activity-ends-short').text()).toBe('Deadlift ends at its week 7 of 8.')
-    expect(byTestId('programme-lede').text()).toBe(
-      'Paused since Thu 12 Nov. Knee. It comes back on Thu 26 Nov at 80 kg.',
-    )
+    // K169: "Paused until …" leads in paused-ink at 600; the rest stays ink-secondary at 400.
+    const lede = byTestId('programme-lede')
+    expect(lede.text()).toBe('Paused until Thu 26 Nov. Knee. It comes back at 80 kg.')
+    expect(lede.classes()).toContain('text-ink-secondary')
+    const lead = lede.get('[data-testid="programme-lede-lead"]')
+    expect(lead.text()).toBe('Paused until Thu 26 Nov.')
+    expect(lead.classes()).toEqual(expect.arrayContaining(['text-paused-ink', 'font-semibold']))
+    expect(lede.findAll('.text-paused-ink')).toHaveLength(1)
+    expect(lede.get('b').text()).toBe('80 kg')
   })
 
   it('has no controls once the run has ended', async () => {
     await openItem('row', { 'GET /runs/t1': { body: { ...RUN, status: 'ended' } } })
     expect(page().find('[data-testid="activity-controls"]').exists()).toBe(false)
-    expect(byTestId('programme-lede').text()).toBe('The programme ended on Sun 13 Dec.')
+    // K168: the end by its last day, as the overview says it; nothing in paused-ink.
+    expect(byTestId('programme-lede').text()).toBe('Ended Sun 13 Dec.')
+    expect(page().find('[data-testid="programme-lede-lead"]').exists()).toBe(false)
   })
 
   it('says why the run couldn’t load', async () => {

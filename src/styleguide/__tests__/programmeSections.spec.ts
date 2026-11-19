@@ -4,6 +4,7 @@ import { mount } from '@vue/test-utils'
 import ProgrammeGridSection from '../sections/ProgrammeGridSection.vue'
 import ChangeSheetSection from '../sections/ChangeSheetSection.vue'
 import ProgrammeChartSection from '../sections/ProgrammeChartSection.vue'
+import WeekGridSection from '../sections/WeekGridSection.vue'
 import { exampleServer, previewChange } from '../sections/programmeExamples'
 
 /** The sections of the programme primitives (#84): each card state, captioned, under its id. */
@@ -57,8 +58,23 @@ describe('ProgrammeGridSection', () => {
     expect(preview.querySelector('button[aria-haspopup="menu"]')).toBeNull()
 
     const labels = wrapper.findAll('[role="region"]').map((r) => r.attributes('aria-label'))
-    expect(new Set(labels).size).toBe(4)
-    expect(captions(wrapper.element)).toHaveLength(4)
+    expect(new Set(labels).size).toBe(5)
+    expect(captions(wrapper.element)).toHaveLength(5)
+  })
+
+  it('draws rest weeks as “Rest week”, past and to come, and a real pause as Paused (K170)', () => {
+    const wrapper = mount(ProgrammeGridSection, { attachTo: document.body })
+    const grid = wrapper.get('#sg-programme-grid-overview-rest').element
+    expect(cell(grid, 'squat', 2).dataset.cell).toBe('rest')
+    expect(cell(grid, 'squat', 2).textContent).toBe('Rest week42.5 kg')
+    expect(cell(grid, 'bench', 3).dataset.cell).toBe('rest')
+    expect(cell(grid, 'bench', 3).textContent).toBe('Rest week35 kg1 done')
+    const later = cell(grid, 'squat', 6)
+    expect(later.hasAttribute('data-rest')).toBe(true)
+    expect(later.querySelector('button[aria-haspopup="menu"]')!.textContent).toBe(
+      'Rest week57.5 kg5 × 5',
+    )
+    expect(cell(grid, 'deadlift', 5).dataset.cell).toBe('paused')
   })
 
   it('draws a pause that ends mid-week, its Paused until line in paused-ink (K166)', () => {
@@ -94,7 +110,33 @@ describe('ProgrammeChartSection', () => {
     expect(deadlift.findAll('line[data-pause]')).toHaveLength(2)
     expect(pause.every((t) => ['Paused', 'Knee'].includes(t))).toBe(true)
     expect(deadlift.get('text[data-count]').text()).toBe('2 of 3')
-    expect(captions(wrapper.element)).toHaveLength(2)
+    expect(captions(wrapper.element)).toHaveLength(3)
+  })
+
+  it('puts the lede over each chart, a pause leading in paused-ink at 600 (K169)', () => {
+    const wrapper = mount(ProgrammeChartSection, { attachTo: document.body })
+    const squat = wrapper.get('#sg-programme-chart-squat-running p')
+    expect(squat.text()).toBe('This week is a deload: 45 kg, 3 × 5. It goes up 7.5% a week.')
+    expect(squat.find('[data-testid="programme-lede-lead"]').exists()).toBe(false)
+    const ledes = [
+      [
+        '#sg-programme-chart-deadlift-paused p',
+        'Paused until Mon 28 Dec.',
+        ' Knee. It comes back at 75 kg.',
+      ],
+      [
+        '#sg-programme-chart-lede-open',
+        'Paused.',
+        ' Knee. It comes back at 75 kg when you resume it.',
+      ],
+    ]
+    for (const [at, lead, rest] of ledes) {
+      const lede = wrapper.get(at!)
+      expect(lede.text()).toBe(`${lead}${rest}`)
+      const red = lede.get('[data-testid="programme-lede-lead"]')
+      expect(red.text()).toBe(lead)
+      expect(red.classes()).toEqual(expect.arrayContaining(['text-paused-ink', 'font-semibold']))
+    }
   })
 })
 
@@ -204,5 +246,21 @@ describe('the example server', () => {
     const server = exampleServer({ staleOnce: true })
     expect('stale' in (await server.confirm(setRow(45)))).toBe(true)
     expect((await server.confirm(setRow(45))).ok).toBe(true)
+  })
+})
+
+describe('WeekGridSection, a programme tracker’s week', () => {
+  it('reads a paused row in place of its boxes, “Paused until …” in paused-ink at 600 (K169)', () => {
+    const wrapper = mount(WeekGridSection, { attachTo: document.body })
+    const week = wrapper.get('#sg-week-grid-programme-paused')
+    const row = week.get('[data-testid="paused-row"]')
+    expect(row.element.textContent!.trim()).toBe('Paused until Mon 28 Dec. Knee.')
+    expect(row.classes()).toContain('text-ink-secondary')
+    const lead = row.get('[data-testid="paused-lead"]')
+    expect(lead.text()).toBe('Paused until Mon 28 Dec.')
+    expect(lead.classes()).toEqual(expect.arrayContaining(['text-paused-ink', 'font-semibold']))
+    // Bench press keeps its seven boxes.
+    expect(week.findAll('[data-slot="day-mark-button"]')).toHaveLength(7)
+    wrapper.unmount()
   })
 })

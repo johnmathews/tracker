@@ -1,8 +1,24 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, useId, useTemplateRef } from 'vue'
-import { ChevronLeft, CircleStop, Pause, Play, Plus, SkipForward, Undo2 } from '@lucide/vue'
+import {
+  ChevronLeft,
+  CircleStop,
+  Pause,
+  Play,
+  Plus,
+  RotateCcw,
+  SkipForward,
+  Undo2,
+} from '@lucide/vue'
 import { useConfirm } from '@/composables/useConfirm'
-import { PROGRAMMES_HREF, backToWeek, cameFromProgrammes, itemHref } from '@/lib/routes'
+import {
+  PROGRAMMES_HREF,
+  backToWeek,
+  cameFromProgrammes,
+  itemHref,
+  programmeHref,
+} from '@/lib/routes'
+import { runControls, type Restarted, type RunAction, type RunActionBody } from '@/lib/runActions'
 import {
   dayText,
   logSentence,
@@ -19,7 +35,7 @@ import {
 import { useProgrammesStore } from '@/stores/programmes'
 import { useTrackersStore } from '@/stores/trackers'
 import { Button } from '@/components/ui/button'
-import { ChangeSheet } from '@/components/ui/change-sheet'
+import { ChangeSheet, RunActionSheet } from '@/components/ui/change-sheet'
 import { InlineMessage } from '@/components/ui/inline-message'
 import { ProgrammeGrid } from '@/components/ui/programme-grid'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -166,6 +182,43 @@ async function endProgramme(): Promise<void> {
   if (!res.ok) actionError.value = res.message
 }
 
+// -- Re-open, Restart and Cancel the end (K168) --
+
+/** Which controls the run gets: ended early, ended, ending on a later day, or running. */
+const controls = computed(() => (run.value ? runControls(run.value) : 'running'))
+const runAction = ref<RunAction | null>(null)
+const runActionKey = ref(0)
+const runActionOpen = ref(false)
+
+function openRunAction(action: RunAction): void {
+  actionError.value = null
+  runAction.value = action
+  runActionKey.value++
+  runActionOpen.value = true
+}
+
+function onRunActionOpen(open: boolean): void {
+  runActionOpen.value = open
+  if (!open) runAction.value = null
+}
+
+function previewRunAction(action: RunAction, body: RunActionBody) {
+  return action === 'restart'
+    ? store.previewRestart(props.tracker, body)
+    : store.previewReopen(props.tracker, body)
+}
+
+function confirmRunAction(action: RunAction, body: RunActionBody, rev: string) {
+  return action === 'restart'
+    ? store.restart(props.tracker, body, rev)
+    : store.reopen(props.tracker, body, rev)
+}
+
+/** A confirmed restart opens the new tracker's overview; a re-open shows the run it sent back. */
+function onRunActionDone(data: unknown): void {
+  if (runAction.value === 'restart') location.hash = programmeHref((data as Restarted).tracker.id)
+}
+
 const log = computed(() =>
   run.value!.log.map((entry) => ({
     entry,
@@ -293,25 +346,39 @@ function backToProgrammes(ev: MouseEvent): void {
             e.message
           }}</InlineMessage>
         </div>
-        <template v-if="!ended">
-          <InlineMessage
-            v-if="store.offline"
-            tone="info"
-            class="mt-4"
-            data-testid="programme-offline"
-            >{{ OFFLINE }}</InlineMessage
-          >
-          <InlineMessage
-            v-if="actionError"
-            tone="error"
-            class="mt-4"
-            data-testid="programme-error"
-            >{{ actionError }}</InlineMessage
-          >
-          <div
-            class="mt-[calc(var(--u)*28)] flex flex-wrap gap-3 folded:grid folded:grid-cols-2"
-            data-testid="programme-controls"
-          >
+        <InlineMessage
+          v-if="store.offline"
+          tone="info"
+          class="mt-4"
+          data-testid="programme-offline"
+          >{{ OFFLINE }}</InlineMessage
+        >
+        <InlineMessage v-if="actionError" tone="error" class="mt-4" data-testid="programme-error">{{
+          actionError
+        }}</InlineMessage>
+        <div
+          class="mt-[calc(var(--u)*28)] flex flex-wrap gap-3 folded:grid folded:grid-cols-2"
+          data-testid="programme-controls"
+        >
+          <!-- An ended run (K168): Re-open when End programme stopped it part way, and Restart. -->
+          <template v-if="ended">
+            <Button
+              v-if="controls === 'ended-early'"
+              :class="CONTROL"
+              :disabled="store.offline"
+              data-testid="programme-reopen"
+              @click="openRunAction('reopen')"
+              ><Play :stroke-width="1.5" />Re-open programme</Button
+            >
+            <Button
+              :class="CONTROL"
+              :disabled="store.offline"
+              data-testid="programme-restart"
+              @click="openRunAction('restart')"
+              ><RotateCcw :stroke-width="1.5" />Restart from week 1</Button
+            >
+          </template>
+          <template v-else>
             <Button
               v-if="paused"
               :class="CONTROL"
@@ -343,14 +410,24 @@ function backToProgrammes(ev: MouseEvent): void {
               ><Plus :stroke-width="1.5" />Add activity</Button
             >
             <Button
+              v-if="controls === 'running'"
               :class="CONTROL"
               :disabled="store.offline"
               data-testid="programme-end"
               @click="endProgramme"
               ><CircleStop :stroke-width="1.5" />End programme</Button
             >
-          </div>
-        </template>
+            <!-- An end set for a later day: Cancel the end re-opens from its own day (K168). -->
+            <Button
+              v-else-if="run.canReopen"
+              :class="CONTROL"
+              :disabled="store.offline"
+              data-testid="programme-cancel-end"
+              @click="openRunAction('cancel-end')"
+              ><Undo2 :stroke-width="1.5" />Cancel the end</Button
+            >
+          </template>
+        </div>
       </TabsContent>
 
       <TabsContent value="changes">
@@ -455,5 +532,18 @@ function backToProgrammes(ev: MouseEvent): void {
     @update:open="onSheetOpen"
     @show-in-plan="onShowInPlan"
     @done="onDone"
+  />
+
+  <RunActionSheet
+    v-if="run && runAction"
+    :key="runActionKey"
+    :open="runActionOpen"
+    :run="run"
+    :action="runAction"
+    :name="name"
+    :preview="(body) => previewRunAction(runAction!, body)"
+    :confirm="(body, rev) => confirmRunAction(runAction!, body, rev)"
+    @update:open="onRunActionOpen"
+    @done="onRunActionDone"
   />
 </template>

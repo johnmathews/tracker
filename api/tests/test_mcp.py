@@ -18,6 +18,7 @@ from tracker_api import auth, data, mcp_server, oauth
 from tracker_api.app import MAX_BODY, create_app
 from tracker_api.config import Config
 from tracker_api.data import create_tracker, end_tracker, put_settings
+from tracker_api.edits import new_id
 from tracker_api.mcp_server import MCP_PATH, OUT_OF_RANGE, caller
 from tracker_api.programme import FORMAT, check_programme, programme_schema
 from tracker_api.programme_replay import CHANGE_KEYS, CHANGE_TYPES
@@ -41,6 +42,7 @@ READ_TOOLS = [
     "programme_format",
     "list_programmes",
     "get_programme",
+    "list_shared_programmes",
 ]
 WRITE_TOOLS = [
     "add_item",
@@ -49,6 +51,7 @@ WRITE_TOOLS = [
     "mark_day",
     "set_daily_targets",
     "save_programme",
+    "copy_programme",
     "start_programme",
     "change_programme",
     "end_programme",
@@ -696,6 +699,8 @@ WRITE_HINTS = {
     "mark_day": {"destructiveHint": False, "idempotentHint": True},
     "set_daily_targets": {"destructiveHint": False, "idempotentHint": True},
     "save_programme": {"destructiveHint": False, "idempotentHint": False},
+    # Adds a library programme, as save_programme does: a second call adds a second copy.
+    "copy_programme": {"destructiveHint": False, "idempotentHint": False},
     "start_programme": {"destructiveHint": False, "idempotentHint": False},
     # A confirm moves the log's rev on, so the same confirm again only previews.
     "change_programme": {"destructiveHint": False, "idempotentHint": True},
@@ -713,6 +718,7 @@ WRITE_CALLS: dict[str, dict[str, Any]] = {
     "mark_day": {"item_id": "sq", "mark": "great"},
     "set_daily_targets": {"exercises_a_day": 4},
     "save_programme": {"doc": {"format": "tracker-programme/1"}},
+    "copy_programme": {"programme": "xs1"},
     "start_programme": {"programme": "x1"},
     "change_programme": {"tracker": "exercise", "change": {"type": "go-to-week", "week": 2}},
     "end_programme": {"tracker": "exercise"},
@@ -1864,7 +1870,12 @@ def test_end_programme_previews_then_ends_with_the_previews_rev(
     )
     assert out["tracker"]["endWeek"] == NEXT_MONDAY
     run = out["run"]
-    assert run["ended"] == {"from": NEXT_MONDAY, "reason": "Moving house.", "seq": 1}
+    assert run["ended"] == {
+        "from": NEXT_MONDAY,
+        "reason": "Moving house.",
+        "seq": 1,
+        "restarted": False,
+    }
     (entry,) = run["log"]
     assert (entry["change"], entry["from"], entry["source"]) == (
         {"type": "end-programme"},
@@ -2134,14 +2145,21 @@ def test_restart_programme_previews_then_starts_week_1_and_ends_the_running_run(
     # The old run ends the day before the new one's first, in the same confirm.
     assert (out["old"]["id"], out["old"]["endWeek"]) == (old, "2026-11-09")
     after = tool(agent, writer, "get_programme", tracker=old)["run"]
-    assert after["ended"] == {"from": "2026-11-09", "reason": RESTARTED, "seq": 1}
+    assert after["ended"] == {
+        "from": "2026-11-09",
+        "reason": RESTARTED,
+        "seq": 1,
+        "restarted": True,
+    }
     assert after["end"] == "2026-11-08"
     (entry,) = after["log"]
     assert (entry["change"], entry["source"], entry["undoable"]) == (
-        {"type": "end-programme"},
+        {"type": "end-programme", "restarted": True},
         "agent",
         False,
     )
+    # A restart replaces the run, so it can't be re-opened (K167).
+    assert after["canReopen"] is False
     # Its history is as it was: the sealed days, the past weeks and their plans.
     assert sealed_days(conn, old) == days
     assert past_weeks(conn, uid, config, old) == history
@@ -2163,18 +2181,23 @@ def test_restart_programme_of_a_run_that_has_ended_ends_nothing_more(
     clock: Clock,
     how: str,
 ) -> None:
-    """Ended with End programme, or run to its last Sunday: the old run stays as it is, and the
-    new one runs week 1 from today."""
+    """Ended with End programme, or run to its last Sunday: the old run's days stay as they are,
+    and the new one runs week 1 from today. A run End programme ended gains the restart's marker
+    in its log, from its end's own day, so it can't be re-opened (K167)."""
     old = running(agent, writer)["tracker"]["id"]
     if how == "ended":
         data.end_run(conn, uid, old, when=data.When(START, config.timezone))
     today = "2026-11-04" if how == "ended" else "2026-12-16"
     go_to(clock, today)
-    log = tool(agent, writer, "get_programme", tracker=old)["run"]["log"]
+    before = tool(agent, writer, "get_programme", tracker=old)["run"]
+    days, history = sealed_days(conn, old), past_weeks(conn, uid, config, old)
     preview = restart(agent, writer, old)
     assert preview["restart"]["start"] == today
     assert preview["restart"]["oldEndsFrom"] is None
-    assert f"{NAME}, the run now, has ended and stays as it is." in preview["message"]
+    assert (
+        f"{NAME}, the run now, has ended. Its marks, weeks, notes and log stay, and the new run "
+        "replaces it, so it can't be re-opened."
+    ) in preview["message"]
     out = restart(agent, writer, old, confirm=True, rev=preview["rev"])
     assert (out["run"]["status"], out["run"]["week"], out["run"]["start"]) == (
         "running",
@@ -2182,7 +2205,26 @@ def test_restart_programme_of_a_run_that_has_ended_ends_nothing_more(
         today,
     )
     assert out["tracker"]["name"] == NAME
-    assert tool(agent, writer, "get_programme", tracker=old)["run"]["log"] == log
+    after = tool(agent, writer, "get_programme", tracker=old)["run"]
+    assert (sealed_days(conn, old), past_weeks(conn, uid, config, old)) == (days, history)
+    assert (after["status"], after["end"], after["grid"]) == (
+        "ended",
+        before["end"],
+        before["grid"],
+    )
+    assert after["canReopen"] is False
+    if how == "finished":
+        assert after["log"] == before["log"]
+        return
+    marker, *log = after["log"]
+    assert log == before["log"]
+    assert (marker["from"], marker["change"], marker["reason"], marker["source"]) == (
+        TODAY,
+        {"type": "end-programme", "restarted": True},
+        RESTARTED,
+        "agent",
+    )
+    assert after["ended"] == {"from": TODAY, "reason": RESTARTED, "seq": 2, "restarted": True}
 
 
 def test_restart_programme_starts_from_the_runs_own_copy_when_the_library_one_is_gone(
@@ -2372,7 +2414,7 @@ def test_restart_programme_brings_a_later_end_day_forward_to_the_new_start(
     out = restarted(agent, writer, old, start="2026-11-02")
     assert out["old"]["endWeek"] == "2026-11-02"
     run = tool(agent, writer, "get_programme", tracker=old)["run"]
-    assert run["ended"] == {"from": "2026-11-02", "reason": RESTARTED, "seq": 2}
+    assert run["ended"] == {"from": "2026-11-02", "reason": RESTARTED, "seq": 2, "restarted": True}
     assert [e["from"] for e in run["log"]] == ["2026-11-02", "2026-12-07"]
     assert run["end"] == "2026-11-01"
 
@@ -2609,6 +2651,55 @@ def test_reopen_programme_refuses_a_run_end_programme_didnt_stop_part_way(
         )
 
 
+#: What `reopen_programme` answers for a run a restart ended (K167).
+REPLACED = (
+    f"tracker: {NAME} was restarted from week 1 as a new tracker, which replaces this run, so "
+    "there is nothing to re-open"
+)
+
+
+def test_reopen_programme_refuses_a_run_a_restart_ended(
+    agent: TestClient, conn: sqlite3.Connection, uid: int, writer: str
+) -> None:
+    """A restart replaces the run (K164): re-opening the old one would leave two runs of the
+    programme planning the same days. Its end row carries the marker, and the run says so."""
+    old = running(agent, writer)["tracker"]["id"]
+    out = restarted(agent, writer, old, start=NEXT_MONDAY)
+    (entry,) = tool(agent, writer, "get_programme", tracker=old)["run"]["log"]
+    assert entry["change"] == {"type": "end-programme", "restarted": True}
+    for confirm in ({}, {"confirm": True, "rev": "0123456789abcdef"}):
+        args = {"tracker": old, "from_date": NEXT_MONDAY, **confirm}
+        assert refused(agent, writer, "reopen_programme", args) == REPLACED
+    assert len(tool(agent, writer, "get_programme", tracker=old)["run"]["log"]) == 1
+    assert tool(agent, writer, "get_programme", tracker=out["tracker"]["id"])["run"]["log"] == []
+
+
+def test_reopen_programme_refuses_a_restart_written_before_the_marker(
+    agent: TestClient, conn: sqlite3.Connection, uid: int, writer: str
+) -> None:
+    """An end a restart wrote before the marker (K167) has the restart's reason, and the new run
+    beside it: the same document and parameters, starting on the end's day."""
+    old = running(agent, writer)["tracker"]["id"]
+    restarted(agent, writer, old, start=NEXT_MONDAY)
+    conn.execute('UPDATE run_changes SET change_json = \'{"type":"end-programme"}\'')
+    conn.commit()
+    args = {"tracker": old, "from_date": NEXT_MONDAY}
+    assert refused(agent, writer, "reopen_programme", args) == REPLACED
+
+
+def test_reopen_programme_takes_an_end_whose_reason_only_reads_like_a_restart(
+    agent: TestClient, writer: str
+) -> None:
+    """The reason alone is something a person can type: with no new run beside it, the end is
+    End programme's, and the run re-opens."""
+    tracker = running(agent, writer)["tracker"]["id"]
+    ended(agent, writer, tracker, from_date=NEXT_MONDAY, reason=RESTARTED)
+    run = tool(agent, writer, "get_programme", tracker=tracker)["run"]
+    assert (run["ended"]["reason"], run["canReopen"]) == (RESTARTED, True)
+    out = reopened(agent, writer, tracker, from_date=NEXT_MONDAY)
+    assert out["run"]["ended"] is None
+
+
 @pytest.mark.parametrize("confirm", [{}, {"confirm": True, "rev": "0123456789abcdef"}])
 def test_reopen_programme_refuses_an_ordinary_tracker(
     agent: TestClient, uid: int, writer: str, confirm: dict[str, Any]
@@ -2715,3 +2806,134 @@ def test_the_instructions_name_reopen_programme(agent: TestClient, token: str) -
     assert "`reopen_programme` carries on a run End programme stopped" in text
     notes = " ".join(tool(agent, token, "programme_format")["notes"])
     assert "reopen_programme" in notes
+
+
+# --- the shared library (docs/specs/2026-11-19-shared-library.md §6) ----------------------------
+
+ADMIN = "john@example.com"
+
+
+def share(conn: sqlite3.Connection, config: Config, document: dict[str, Any]) -> str:
+    """Publish `document` from an admin's library, as the app does: its shared id."""
+    row = conn.execute("SELECT id FROM users WHERE username = ?", (ADMIN,)).fetchone()
+    admin = int(row["id"]) if row else auth.signup(conn, config, ADMIN, PASSWORD)
+    auth.set_admin(conn, ADMIN, True)
+    record = data.add_programme(conn, admin, document, config.clock(), quota=10**9, make_id=new_id)
+    args: dict[str, Any] = {"now": config.clock(), "make_id": new_id}
+    preview = data.publish_programme(conn, admin, record["id"], confirm=False, rev=None, **args)
+    assert preview is not None
+    out = data.publish_programme(
+        conn, admin, record["id"], confirm=True, rev=preview["rev"], **args
+    )
+    assert out is not None
+    return out["shared"]["id"]  # type: ignore[no-any-return]
+
+
+def test_list_shared_programmes_lists_the_shared_library_and_reads_one(
+    agent: TestClient,
+    conn: sqlite3.Connection,
+    config: Config,
+    clock: Clock,
+    uid: int,
+    token: str,
+) -> None:
+    """A read token browses it. Nothing names the admin who published it (S2)."""
+    assert tool(agent, token, "list_shared_programmes") == {"programmes": [], "programme": None}
+    first = share(conn, config, EXAMPLE)
+    clock.advance(60)
+    cardio = doc("cardio")
+    second = share(conn, config, cardio)
+    out = tool(agent, token, "list_shared_programmes")
+    assert out["programme"] is None
+    # The newest publish first.
+    assert [(p["id"], p["name"], p["kind"]) for p in out["programmes"]] == [
+        (second, cardio["name"], "cardio"),
+        (first, EXAMPLE["name"], "strength"),
+    ]
+    assert set(out["programmes"][0]) == {
+        "id",
+        "name",
+        "description",
+        "kind",
+        "weeks",
+        "activities",
+        "updatedAt",
+    }
+    one = tool(agent, token, "list_shared_programmes", programme=first)
+    assert one["programmes"] is None
+    assert one["programme"]["doc"] == EXAMPLE
+    assert one["programme"]["id"] == first
+    assert ADMIN not in json.dumps(out) + json.dumps(one)
+    text = tool_error(agent, token, "list_shared_programmes", programme="nope")
+    assert text.endswith(
+        "programme: no programme nope in the shared library; list_shared_programmes lists them"
+    )
+
+
+def test_copy_programme_copies_into_the_library_to_start_like_any_other(
+    agent: TestClient, conn: sqlite3.Connection, config: Config, uid: int, writer: str
+) -> None:
+    """The agent's loop of §6: browse, copy, adjust with save_programme, start."""
+    shared_id = share(conn, config, EXAMPLE)
+    out = write(agent, writer, "copy_programme", {"programme": shared_id})
+    record = out["programme"]
+    assert set(out) == {"programme"}
+    assert record["id"] != shared_id
+    assert (record["name"], record["rev"], record["doc"]) == (EXAMPLE["name"], 1, EXAMPLE)
+    listed = tool(agent, writer, "list_programmes")["programmes"]
+    assert [p["id"] for p in listed] == [record["id"]]
+    assert "shared" not in listed[0]
+    adjusted = {**EXAMPLE, "weeks": 10}
+    saved = write(
+        agent, writer, "save_programme", {"programme": record["id"], "rev": 1, "doc": adjusted}
+    )
+    assert saved["programme"]["rev"] == 2
+    started = write(agent, writer, "start_programme", {"programme": record["id"]})
+    assert started["run"]["weeks"] == 10
+    # The shared programme is as it was.
+    assert data.load_shared(conn, shared_id)["doc"] == EXAMPLE  # type: ignore[index]
+    text = refused(agent, writer, "copy_programme", {"programme": "nope"})
+    assert text == (
+        "programme: no programme nope in the shared library; list_shared_programmes lists them"
+    )
+
+
+def test_copy_programme_refuses_past_the_library_cap_and_the_quota(
+    agent: TestClient,
+    conn: sqlite3.Connection,
+    config: Config,
+    uid: int,
+    writer: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    shared_id = share(conn, config, EXAMPLE)
+    monkeypatch.setattr(data, "MAX_PROGRAMMES", 1)
+    save(agent, writer)
+    text = refused(agent, writer, "copy_programme", {"programme": shared_id})
+    assert text == (
+        "programme: the library holds 1 programme, the most it can; delete one in the app first"
+    )
+    monkeypatch.undo()
+    small = replace(config, user_quota_bytes=1)
+    with TestClient(create_app(small, run_backups=False), base_url=ORIGIN) as tight:
+        text = refused(tight, writer, "copy_programme", {"programme": shared_id})
+    assert text == "quota: the account is full, so nothing was copied"
+    assert len(data.list_programmes(conn, uid)) == 1
+
+
+def test_copy_programme_names_the_problems_of_a_document_the_format_no_longer_takes(
+    agent: TestClient, conn: sqlite3.Connection, uid: int, writer: str
+) -> None:
+    """A snapshot stored under an older format: the copy is refused with every problem."""
+    conn.execute(
+        "INSERT INTO shared_programmes VALUES ('xs1', 'Old', ?, 1, NULL, NULL, 5, 5)",
+        (json.dumps({**EXAMPLE, "weeks": 0}),),
+    )
+    text = refused(agent, writer, "copy_programme", {"programme": "xs1"})
+    assert text.startswith("programme: the programme has 1 problem, so nothing was copied.")
+    assert data.list_programmes(conn, uid) == []
+
+
+def test_the_instructions_name_the_shared_library(agent: TestClient, token: str) -> None:
+    text = result(call(agent, "initialize", INITIALIZE, token=token))["instructions"]
+    assert "`list_shared_programmes`" in text and "`copy_programme`" in text

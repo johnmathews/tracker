@@ -25,6 +25,31 @@ A change to a running programme in two steps on the Dialog: the change first, th
 - **Closing** (Close, Escape, the scrim, Cancel) at either step changes nothing.
 - The sheet doesn't print.
 
+## Re-open, Restart and Cancel the end (K168)
+
+The overview's controls on an ended run, and on one with an end set for a later day, open the same sheet with their own fields and preview (the run sheet). The look is the ChangeSheet's: the Dialog's panel, the step line, the sentence on a `tile`, a list under its `label` heading, the calm line, Back and a primary confirm.
+
+- **Re-open programme** (Lucide `play`), only on a run End programme stopped part way (the run's `canReopen`). Title "Re-open Beginner 5×5".
+  - **Step 1:** **From**, a date, today by default ("Today, Wed 16 Dec, or any later day."), and **Reason** ("It shows in Changes."). Cancel and **Preview** (primary).
+  - **Step 2:** "Carries on from Wed 16 Dec, at week 4. _Knee is better._" Then **What it does**: Carries on ("At the week it stopped in", "Wed 16 Dec, week 4"), Paused ("The days since it ended count as a pause", "Mon 14 to Tue 15 Dec", or "No day"), Last day ("Week 8, as planned", "Sun 17 Jan"). The calm line: "Nothing before Mon 14 Dec changes." Back and **Re-open programme**.
+- **Restart from week 1** (Lucide `rotate-ccw`), on every ended run. Title "Restart Beginner 5×5".
+  - **Step 1:** **Name**, the tracker's own to start with ("The new tracker’s name."), and **Starts**, a date, today by default. Cancel and **Preview**.
+  - **Step 2:** "A new Beginner 5×5, from week 1 on Mon 21 Dec." Then New tracker ("Beginner 5×5"), Week 1 ("21–27 Dec"), Last day ("8 weeks", "Sun 14 Feb"), and, for a run still going on the new start, The run now ("Ends Sun 20 Dec"). The calm line: "This run has ended and stays as it is, with its weeks, marks, notes and changes." Back and **Restart programme**. A confirmed restart opens the new tracker's overview.
+- **Cancel the end** (Lucide `undo-2`), in End programme's place on a run with an end set for a later day. One step and no fields: a re-open can only be from the end's own day. Title "Cancel the end of Beginner 5×5". It asks for the preview as it opens: "Carries on past Sun 27 Dec, as planned.", the same three rows ("Mon 28 Dec, week 6", "No day", "Sun 17 Jan"), "Nothing before Mon 28 Dec changes." Then **Keep the end** (secondary, closes) and **Cancel the end** (primary).
+- Every day, week and last day is the server's preview's (P4). Nothing changes until the confirm, which sends the preview's `rev`.
+
+| State                                                   | Look                                                                                                           |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Step 1                                                  | The fields, Cancel and Preview                                                                                 |
+| Step 2                                                  | The sentence, What it does, the calm line, Back and the confirm                                                |
+| Cancel the end                                          | No step line; while its preview comes, the confirm is busy and disabled                                        |
+| A field the server refuses                              | Its TextField's error line on step 1; any other problem in an InlineMessage (error) over the actions           |
+| The run changed since the preview (409)                 | The fresh preview, with "The plan changed since this preview. Check it, then confirm." Nothing is applied      |
+| The run can't be re-opened any more (409 `cant-reopen`) | "This programme changed since its page opened, so it can’t be re-opened now." The overview reads the run again |
+| Offline                                                 | The sheet doesn't open: the overview's controls are disabled                                                   |
+
+Accessibility as the ChangeSheet's: described by the step line, or, for Cancel the end, by a visually hidden "Nothing changes until you cancel the end."; focus on the first field (From, Name), on the sentence after Preview, and on the sentence once Cancel the end's preview arrives.
+
 ## States
 
 | State | Look |
@@ -63,6 +88,17 @@ A change to a running programme in two steps on the Dialog: the change first, th
 | The hand-edit | `change-hand-edit`, `change-drop-hand-edit`, `change-keep-hand-edit` |
 | The calm line | `change-unchanged` |
 | Show it in the plan | `change-show-in-plan` |
+
+The run sheet is `RunActionSheet.vue` in the same folder (K168):
+
+| Element                                  | Test id                                                                                |
+| ---------------------------------------- | -------------------------------------------------------------------------------------- |
+| The sheet                                | `run-sheet` (with `data-action`: `reopen`, `restart` or `cancel-end`, and `data-step`) |
+| The step line, Close, Cancel             | `run-step`, `run-close`, `run-cancel`                                                  |
+| The fields                               | `run-from`, `run-reason`, `run-name`, `run-start`                                      |
+| Preview, Back, the confirm, Keep the end | `run-preview-button`, `run-back`, `run-confirm`, `run-keep`                            |
+| The sentence, the list, a row            | `run-summary`, `run-preview`, `run-preview-row`                                        |
+| The calm line, the stale line, errors    | `run-unchanged`, `run-stale`, `run-error`                                              |
 
 ## You provide
 

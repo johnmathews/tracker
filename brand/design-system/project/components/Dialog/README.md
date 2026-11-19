@@ -24,7 +24,7 @@ A modal panel for one focused task over a dimmed page.
 
 - Built on Reka UI's Dialog (K1), as the app's `Dialog.vue` is: the panel is `role="dialog"` with `aria-modal="true"`, `aria-labelledby` pointing at the title (an `h2`), and `aria-describedby` pointing at the description when there is one (none otherwise). The scrim is Reka's overlay, `scrim` at 40% on the layer.
 - On open, focus moves to the first field, not the Close button before it. Focus is trapped: Tab and Shift+Tab stay inside the dialog. Escape, the Close button and a click on the scrim close it.
-- On close, focus returns to the control that opened it: the trigger, or whatever had focus when the dialog opened from code, also when the dialog mounts already open (a control that shows the dialog with what it edits).
+- On close, focus returns to the control that opened it, without scrolling the page (K174: the dialog's work may be scrolling to what it made): the trigger, or whatever had focus when the dialog opened from code, also when the dialog mounts already open (a control that shows the dialog with what it edits).
 - While it is open, the page behind is hidden from assistive technology and takes no pointer input.
 - Every field has a `<label>`; a hint is linked with `aria-describedby`.
 - The focus ring is a solid 2px `focus` outline at 2px offset; `focus` and `control-border` on `panel` are measured by the gate.

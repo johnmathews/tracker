@@ -225,6 +225,84 @@ describe('ProgrammeGrid, a running programme (K142, K143)', () => {
   })
 })
 
+describe('ProgrammeGrid, a rest week: a running week planned with a goal of 0 (K170)', () => {
+  /** Squat rests in weeks 2 (past), 4 (this week) and 6 (to come), with `marks` in week 2. */
+  function restGrid(marks: (string | null)[] = [null, null, null, null, null, null, null]): Grid {
+    const grid: Grid = structuredClone(RUN.grid)
+    for (const i of [1, 3, 5]) {
+      const squat = grid.weeks[i]!.cells.squat!
+      squat.target = 0
+      squat.values = { ...squat.values!, target: 0 }
+    }
+    grid.weeks[1]!.cells.squat!.marks = marks
+    return grid
+  }
+
+  it('says “Rest week” for a past one that ran, with its value, never “Paused” or “0 of 0”', () => {
+    mountGrid({ grid: restGrid() })
+    const td = cell('squat', 2)
+    expect(td.dataset.cell).toBe('rest')
+    expect(td.dataset.met).toBeUndefined()
+    expect(td.textContent).toBe('Rest week42.5 kg')
+    expect(td.textContent).not.toContain('Paused')
+    expect(td.textContent).not.toContain('0 of 0')
+    expect(td.textContent).not.toContain('done')
+    // In the cell value's style, in ink-secondary as a paused cell's "Paused", never underlined.
+    const main = td.querySelector<HTMLElement>('[data-slot="cell-main"]')!
+    expect(main.textContent).toBe('Rest week')
+    expect(main.classList).toContain('font-semibold')
+    expect(main.classList).toContain('text-ink-secondary')
+    expect(td.innerHTML).not.toContain('decoration-pen')
+    expect(td.innerHTML).not.toContain('text-paused-ink')
+  })
+
+  it('counts the days marked in a past rest week as “N done”', () => {
+    mountGrid({ grid: restGrid(['great', null, null, null, null, null, null]) })
+    const td = cell('squat', 2)
+    expect(td.dataset.cell).toBe('rest')
+    expect(td.textContent).toBe('Rest week42.5 kg1 done')
+    expect(td.dataset.met).toBeUndefined()
+  })
+
+  it('says “Rest week” this week and later in place of the goal, over the value and sets', () => {
+    mountGrid({ grid: restGrid() })
+    const now = cell('squat', 4)
+    expect(now.dataset.cell).toBe('current')
+    expect(now.textContent).toBe('Rest week42.5 kg3 × 5')
+    expect(now.textContent).not.toContain('so far')
+    const later = cell('squat', 6)
+    expect(later.dataset.cell).toBe('planned')
+    const button = later.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!
+    expect(button.textContent).toBe('Rest week50 kg5 × 5')
+    const main = button.querySelector<HTMLElement>('[data-slot="cell-main"]')!
+    expect(main.textContent).toBe('Rest week')
+    expect(main.classList).toContain('text-ink-secondary')
+    expect(later.textContent).not.toContain('0 a week')
+  })
+
+  it('says “Rest week” for an activity planned by its goal alone, never “0 a week”', () => {
+    const grid = restGrid()
+    for (const i of [1, 5])
+      grid.weeks[i]!.cells.plank = {
+        ...grid.weeks[i]!.cells.plank!,
+        target: 0,
+        values: { target: 0 },
+      }
+    mountGrid({ grid })
+    expect(cell('plank', 2).textContent).toBe('Rest week')
+    expect(cell('plank', 6).textContent).toBe('Rest week')
+  })
+
+  it('still shows a paused week as Paused with its reason, whatever its goal', () => {
+    const grid = restGrid()
+    grid.weeks[1]!.cells.squat = { ...grid.weeks[1]!.cells.squat!, state: 'paused', reason: 'Knee' }
+    mountGrid({ grid })
+    const td = cell('squat', 2)
+    expect(td.dataset.cell).toBe('paused')
+    expect(td.textContent).toBe('PausedKnee')
+  })
+})
+
 describe('ProgrammeGrid, after an open pause (spec §5)', () => {
   it('says where this week stopped, and shows the weeks to come when resumed, without dates', () => {
     const wrapper = mountGrid({ grid: PAUSED.grid, openPause: true })
@@ -307,6 +385,16 @@ describe('ProgrammeGrid, a start’s preview (spec §9.1)', () => {
       wrapper.findAll('td[data-cell]').every((td) => td.attributes('data-cell') === 'planned'),
     ).toBe(true)
     expect(cell('squat', 1).textContent).toContain('40 kg')
+  })
+
+  it('heads the weeks by number alone when undated: a shared programme’s preview (K173)', () => {
+    const dated = mountGrid({ grid: START.grid, mode: 'start' })
+    const withDates = head(1).textContent
+    dated.unmount()
+    mountGrid({ grid: START.grid, mode: 'start', undated: true })
+    expect(head(1).textContent).toContain('Week 1')
+    expect(withDates).not.toBe(head(1).textContent)
+    expect(head(1).textContent).not.toMatch(/\d+–\d+ \w{3}|\d+ \w{3}/)
   })
 
   it('shows a cardio programme’s time, then its distance', () => {
