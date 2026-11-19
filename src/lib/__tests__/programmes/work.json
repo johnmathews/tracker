@@ -1,0 +1,338 @@
+{
+  "total": {
+    "unit": "kg",
+    "leftOut": ["Plank"],
+    "weeks": [
+      {
+        "monday": "2026-10-19",
+        "programmeWeeks": [1],
+        "planned": 5600,
+        "done": 5600
+      },
+      {
+        "monday": "2026-10-26",
+        "programmeWeeks": [2],
+        "planned": 9039,
+        "done": 8226
+      },
+      {
+        "monday": "2026-11-02",
+        "programmeWeeks": [3],
+        "planned": 9675,
+        "done": 8200
+      },
+      {
+        "monday": "2026-11-09",
+        "programmeWeeks": [4],
+        "planned": 5400,
+        "done": 1575
+      },
+      {
+        "monday": "2026-11-16",
+        "programmeWeeks": [5],
+        "planned": 8625,
+        "done": null
+      },
+      {
+        "monday": "2026-11-23",
+        "programmeWeeks": [6],
+        "planned": 10363,
+        "done": null
+      },
+      {
+        "monday": "2026-11-30",
+        "programmeWeeks": [7],
+        "planned": 11400,
+        "done": null
+      },
+      {
+        "monday": "2026-12-07",
+        "programmeWeeks": [8],
+        "planned": 6937,
+        "done": null
+      }
+    ]
+  },
+  "activities": [
+    {
+      "key": "squat",
+      "name": "Back squat",
+      "measure": "work",
+      "unit": "kg",
+      "weeks": [
+        {
+          "monday": "2026-10-19",
+          "programmeWeeks": [1],
+          "planned": 2000,
+          "done": 2000
+        },
+        {
+          "monday": "2026-10-26",
+          "programmeWeeks": [2],
+          "planned": 3188,
+          "done": 3188
+        },
+        {
+          "monday": "2026-11-02",
+          "programmeWeeks": [3],
+          "planned": 3375,
+          "done": 2250
+        },
+        {
+          "monday": "2026-11-09",
+          "programmeWeeks": [4],
+          "planned": 1912,
+          "done": 638
+        },
+        {
+          "monday": "2026-11-16",
+          "programmeWeeks": [5],
+          "planned": 3562,
+          "done": null
+        },
+        {
+          "monday": "2026-11-23",
+          "programmeWeeks": [6],
+          "planned": 3750,
+          "done": null
+        },
+        {
+          "monday": "2026-11-30",
+          "programmeWeeks": [7],
+          "planned": 3938,
+          "done": null
+        },
+        {
+          "monday": "2026-12-07",
+          "programmeWeeks": [8],
+          "planned": 2250,
+          "done": null
+        }
+      ]
+    },
+    {
+      "key": "bench",
+      "name": "Bench press",
+      "measure": "work",
+      "unit": "kg",
+      "weeks": [
+        {
+          "monday": "2026-10-19",
+          "programmeWeeks": [1],
+          "planned": 1500,
+          "done": 1500
+        },
+        {
+          "monday": "2026-10-26",
+          "programmeWeeks": [2],
+          "planned": 2438,
+          "done": 2438
+        },
+        {
+          "monday": "2026-11-02",
+          "programmeWeeks": [3],
+          "planned": 2625,
+          "done": 2625
+        },
+        {
+          "monday": "2026-11-09",
+          "programmeWeeks": [4],
+          "planned": 1238,
+          "done": 412
+        },
+        {
+          "monday": "2026-11-16",
+          "programmeWeeks": [5],
+          "planned": 2438,
+          "done": null
+        },
+        {
+          "monday": "2026-11-23",
+          "programmeWeeks": [6],
+          "planned": 2625,
+          "done": null
+        },
+        {
+          "monday": "2026-11-30",
+          "programmeWeeks": [7],
+          "planned": 2812,
+          "done": null
+        },
+        {
+          "monday": "2026-12-07",
+          "programmeWeeks": [8],
+          "planned": 1575,
+          "done": null
+        }
+      ]
+    },
+    {
+      "key": "row",
+      "name": "Barbell row",
+      "measure": "work",
+      "unit": "kg",
+      "weeks": [
+        {
+          "monday": "2026-10-19",
+          "programmeWeeks": [1],
+          "planned": 1500,
+          "done": 1500
+        },
+        {
+          "monday": "2026-10-26",
+          "programmeWeeks": [2],
+          "planned": 2438,
+          "done": 1625
+        },
+        {
+          "monday": "2026-11-02",
+          "programmeWeeks": [3],
+          "planned": 2625,
+          "done": 2625
+        },
+        {
+          "monday": "2026-11-09",
+          "programmeWeeks": [4],
+          "planned": 1575,
+          "done": 525
+        },
+        {
+          "monday": "2026-11-16",
+          "programmeWeeks": [5],
+          "planned": 2625,
+          "done": null
+        },
+        {
+          "monday": "2026-11-23",
+          "programmeWeeks": [6],
+          "planned": 3188,
+          "done": null
+        },
+        {
+          "monday": "2026-11-30",
+          "programmeWeeks": [7],
+          "planned": 3375,
+          "done": null
+        },
+        {
+          "monday": "2026-12-07",
+          "programmeWeeks": [8],
+          "planned": 1912,
+          "done": null
+        }
+      ]
+    },
+    {
+      "key": "deadlift",
+      "name": "Deadlift",
+      "measure": "work",
+      "unit": "kg",
+      "weeks": [
+        {
+          "monday": "2026-10-19",
+          "programmeWeeks": [1],
+          "planned": 600,
+          "done": 600
+        },
+        {
+          "monday": "2026-10-26",
+          "programmeWeeks": [2],
+          "planned": 975,
+          "done": 975
+        },
+        {
+          "monday": "2026-11-02",
+          "programmeWeeks": [3],
+          "planned": 1050,
+          "done": 700
+        },
+        {
+          "monday": "2026-11-09",
+          "programmeWeeks": [4],
+          "planned": 675,
+          "done": 0
+        },
+        {
+          "monday": "2026-11-16",
+          "programmeWeeks": [5],
+          "planned": 0,
+          "done": null
+        },
+        {
+          "monday": "2026-11-23",
+          "programmeWeeks": [6],
+          "planned": 800,
+          "done": null
+        },
+        {
+          "monday": "2026-11-30",
+          "programmeWeeks": [7],
+          "planned": 1275,
+          "done": null
+        },
+        {
+          "monday": "2026-12-07",
+          "programmeWeeks": [8],
+          "planned": 1200,
+          "done": null
+        }
+      ]
+    },
+    {
+      "key": "plank",
+      "name": "Plank",
+      "measure": "seconds",
+      "unit": "s",
+      "weeks": [
+        {
+          "monday": "2026-10-19",
+          "programmeWeeks": [1],
+          "planned": 180,
+          "done": 90
+        },
+        {
+          "monday": "2026-10-26",
+          "programmeWeeks": [2],
+          "planned": 270,
+          "done": 270
+        },
+        {
+          "monday": "2026-11-02",
+          "programmeWeeks": [3],
+          "planned": 315,
+          "done": 210
+        },
+        {
+          "monday": "2026-11-09",
+          "programmeWeeks": [4],
+          "planned": 315,
+          "done": 105
+        },
+        {
+          "monday": "2026-11-16",
+          "programmeWeeks": [5],
+          "planned": 360,
+          "done": null
+        },
+        {
+          "monday": "2026-11-23",
+          "programmeWeeks": [6],
+          "planned": 360,
+          "done": null
+        },
+        {
+          "monday": "2026-11-30",
+          "programmeWeeks": [7],
+          "planned": 405,
+          "done": null
+        },
+        {
+          "monday": "2026-12-07",
+          "programmeWeeks": [8],
+          "planned": 405,
+          "done": null
+        }
+      ]
+    }
+  ]
+}

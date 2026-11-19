@@ -343,7 +343,7 @@ describe('the library’s other actions', () => {
 
 describe('adding a programme', () => {
   const PROBLEMS = [
-    { path: 'weeks', message: 'a programme runs 1 to 52 weeks; this one has 60.' },
+    { path: 'weeks', message: 'a programme runs 1 to 156 weeks; this one has 160.' },
     { path: 'activities[2].weight.rate', message: 'a progression has add or rate, not both.' },
     { path: 'activities[4].key', message: 'a key is a-z, 0-9 and -.' },
   ]
@@ -357,7 +357,7 @@ describe('adding a programme', () => {
     expect(page().text()).toContain(
       'Paste a programme in the tracker-programme/1 format, or choose a file.',
     )
-    await box.setValue('{"weeks": 60}')
+    await box.setValue('{"weeks": 160}')
     await byTestId('add-check').trigger('click')
     await settle()
     const errors = byTestId('add-errors')
@@ -372,7 +372,7 @@ describe('adding a programme', () => {
     )
     expect(box.attributes('aria-invalid')).toBe('true')
     expect(box.attributes('aria-describedby')).toContain(errors.attributes('id'))
-    expect((box.element as HTMLTextAreaElement).value).toBe('{"weeks": 60}')
+    expect((box.element as HTMLTextAreaElement).value).toBe('{"weeks": 160}')
   })
 
   it('says when the text isn’t JSON', async () => {

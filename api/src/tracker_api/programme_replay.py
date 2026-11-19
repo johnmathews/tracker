@@ -96,7 +96,7 @@ from . import validate
 from .programme import (
     FIELDS,
     KIND_FIELDS,
-    MAX_WEEKS,
+    MAX_SPAN,
     RATE_DOMAIN,
     Activity,
     Field,
@@ -988,8 +988,8 @@ class _Check:
     # -- pieces --
 
     def _weeks(self, path: str) -> None:
-        if path in self.body and whole_in(self.body[path], 1, MAX_WEEKS) is None:
-            self.error(path, f"give a whole number of weeks from 1 to {MAX_WEEKS}.")
+        if path in self.body and whole_in(self.body[path], 1, MAX_SPAN) is None:
+            self.error(path, f"give a whole number of weeks from 1 to {MAX_SPAN}.")
 
     def _activity(self, sim: _Sim, current: Replay) -> _Act | None:
         key = self.body.get("activity")

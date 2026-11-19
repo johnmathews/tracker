@@ -27,6 +27,7 @@ import WeekGridSection from './sections/WeekGridSection.vue'
 import RecentWeeksSection from './sections/RecentWeeksSection.vue'
 import ProgrammeGridSection from './sections/ProgrammeGridSection.vue'
 import ProgrammeChartSection from './sections/ProgrammeChartSection.vue'
+import WorkChartSection from './sections/WorkChartSection.vue'
 import ItemPageSection from './sections/ItemPageSection.vue'
 import NewTrackerPageSection from './sections/NewTrackerPageSection.vue'
 import TranscriptSection from './sections/TranscriptSection.vue'
@@ -251,6 +252,13 @@ export const SECTIONS: readonly StyleGuideSection[] = [
     summary:
       "An activity's Programme row on its item page: a step chart of the planned value week by week, with what was done on top, and the activity's own controls.",
     component: ProgrammeChartSection,
+  },
+  {
+    id: 'sg-work-chart',
+    title: 'WorkChart',
+    summary:
+      'A programme’s work, week by week: a column per week outlined at the work planned and filled to the work done, on the overview’s Work tab and an activity’s item page.',
+    component: WorkChartSection,
   },
   {
     id: 'sg-item-page',

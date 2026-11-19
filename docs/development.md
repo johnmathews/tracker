@@ -168,8 +168,10 @@ mark and details writes, so a later read returns what the app wrote.
   copying from the shared library, the copy landing in view with focus on its name (K174), and seeing no publishing; Preview on a shared row opening its
   Dialog, by week number, and copying from it (K173); the admin publishing from a row's More
   menu, its preview, then the Shared chip; an ended-early run's overview offering Re-open and
-  Restart, each through its sheet; and axe on the Programmes page (opened to start), the overview
-  (with a paused activity), the Library tab with the shared section, a shared programme's Preview, the Publish dialog and the
+  Restart, each through its sheet; the overview's Work tab (the whole programme, then a chart per
+  activity, two to a row, one at phone width with nothing scrolling sideways) and an activity's
+  work under its step chart (K180); and axe on the Programmes page (opened to start), the overview
+  (with a paused activity), its Work tab, the Library tab with the shared section, a shared programme's Preview, the Publish dialog and the
   Re-open sheet, in both themes. The mock answers 415 to a write with no JSON content type, as the
   server does. `generate.py` writes the replies from the real API, with fixed ids.
 - `connections.spec.ts`: Settings › Connections (its tab pressed, at `#/settings/connections`;
@@ -368,7 +370,7 @@ listed in [api.md](api.md) §10):
 - `src/components/ui/__tests__/`: one spec per primitive (AnswerProgress, BarAction, Banner,
   BrandMark, Button, ChangeSheet, Chip, ConfirmDialog, DayMark, Dialog, HistoryList, IconButton,
   InlineMessage, Menu, Popover, ProgrammeChart, ProgrammeGrid, QuotaChip, RadioCard, SectionHeader, SegmentedControl, SidePanel, Stepper, Switch,
-  Tabs, TextArea, TextField, TextLink, Transcript), each checking its
+  Tabs, TextArea, TextField, TextLink, Transcript, WorkChart), each checking its
   roles, accessible names, sizes, states and the role colours its card names. Examples: an
   IconButton renders nothing without a label, the Popover closes when focus leaves it (F14), the
   Stepper's limits stay focusable with `aria-disabled`.
@@ -378,6 +380,16 @@ listed in [api.md](api.md) §10):
   value, P4): dates and a week's dates, each field's value and unit, the line under a value, the
   run's line (Started, paused, upcoming; K161), the validator's and the requests' problems, and
   each change's sentence. It reads the JSON in `src/lib/__tests__/programmes/`.
+- `src/lib/__tests__/work.spec.ts`: the work charts' words (K179): amounts with a thousands
+  separator (km with one decimal), the line over a chart with and without the work so far, a split
+  week's name, the whole programme when no week is this week, and the sentence naming what the
+  total leaves out. It reads `src/lib/__tests__/programmes/work.json`, a run's `work` made by hand
+  in the API's shape (spec 2026-11-19-work-charts §3).
+- `src/components/ui/__tests__/WorkChart.spec.ts`: the WorkChart card (K180, K181): a column per
+  week outlined and filled, the weeks to come dashed, the band, the axis from 0, "Wk 1" or "Wk" in
+  the axis, a shorter series laid on the grid's weeks, a long programme scrolling with the axis
+  fixed and opening on this week, week numbers thinned and never touching this week's, the hidden
+  table, and the panel under the pointer and the arrows.
 - `src/stores/__tests__/programmes.spec.ts`: the programmes store against a fake API: the page's
   data and why it couldn't load, offline, the library (add, problems, duplicate, delete), a start
   and its preview, a run's overview, a change's preview and confirm (a stale `rev` handing back a
@@ -389,15 +401,16 @@ listed in [api.md](api.md) §10):
 - `src/components/__tests__/ProgrammesPage.spec.ts`, `ProgrammeOverview.spec.ts`,
   `ProgrammeWeek.spec.ts` and `ItemProgramme.spec.ts`: the Programmes page (its tabs, the start
   opened in place, the library's actions, adding, offline, the bar's way in), a run's overview
-  (the plan, Changes, the controls, Show it in the plan), a programme tracker's week (the week
+  (the plan, Work, Changes, the controls, Show it in the plan), a programme tracker's week (the week
   link, locked days, a paused activity's sentence, no Add in Edit plan) and an activity's
-  Programme row (the step chart and its controls), all against `programmesApi.ts`, a helper.
+  Programme row (the step chart, its work chart and its controls), all against `programmesApi.ts`,
+  a helper.
 - `src/styleguide/__tests__/look.spec.ts`: the style guide's theme from the query string, the
   round trip back to it, and the class it sets.
 - `src/styleguide/__tests__/complete.spec.ts`: a style guide section for every folder in
   `src/components/ui/`, and no two sections with one id.
-- `src/styleguide/__tests__/programmeSections.spec.ts`: the ProgrammeGrid, ChangeSheet and
-  ProgrammeChart sections draw each state their cards show under its id, and the fake server
+- `src/styleguide/__tests__/programmeSections.spec.ts`: the ProgrammeGrid, ChangeSheet,
+  ProgrammeChart and WorkChart sections draw each state their cards show under its id, and the fake server
   previews, refuses and finds a stale plan as the real one does.
 - `src/stores/__tests__/planner.spec.ts`: stepping a day through its marks, totals, week navigation, goal clamping, adding,
   removal's effect on totals, settings, detail chips, editing exercises, sets, weekly plans

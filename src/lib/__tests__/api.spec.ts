@@ -61,7 +61,7 @@ describe('request', () => {
 
   it('passes a programme’s problems through, each with its path (spec §3.4)', async () => {
     const errors = [
-      { path: 'weeks', message: 'give a whole number from 1 to 52.' },
+      { path: 'weeks', message: 'give a whole number from 1 to 156.' },
       { path: 'activities[2].weight.rate', message: 'a progression has add or rate, not both.' },
     ]
     respond(400, { error: 'invalid', errors })

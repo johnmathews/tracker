@@ -92,6 +92,7 @@ from .validate import (
     normalise_reason,
     parse_json,
 )
+from .work import work_json
 
 log = logging.getLogger(__name__)
 
@@ -1968,12 +1969,18 @@ def _week_json(
     }
 
 
+def _grid_weeks(rp: Replay, last_day: date | None) -> list[WeekPlan]:
+    """The calendar weeks the grid shows: each up to the one holding the run's last day. After an
+    open-ended pause the weeks when resumed have no dates and are not among them."""
+    cut = None if last_day is None else _week_after(last_day)
+    return [w for w in rp.weeks if cut is None or w.monday.isoformat() < cut]
+
+
 def _grid_json(rp: Replay, today: date, log: Log, last_day: date | None) -> dict[str, Any]:
     """The overview grid (§9.2): a column per calendar week up to the run's last day, a cell per
     activity, and the weeks after an open-ended pause as they will run when resumed. A goal
     counts no day after `last_day` (K163). A week when resumed holds its Sunday's plan, which runs
     all seven days."""
-    cut = None if last_day is None else _week_after(last_day)
     return {
         "activities": [
             {
@@ -1986,11 +1993,7 @@ def _grid_json(rp: Replay, today: date, log: Log, last_day: date | None) -> dict
             for a in rp.activities
             if not a.deleted
         ],
-        "weeks": [
-            _week_json(rp, w, today, log, last_day)
-            for w in rp.weeks
-            if cut is None or w.monday.isoformat() < cut
-        ],
+        "weeks": [_week_json(rp, w, today, log, last_day) for w in _grid_weeks(rp, last_day)],
         "whenResumed": [
             {
                 "programmeWeek": w.programme_week,
@@ -2077,9 +2080,10 @@ def _run_json(
     conn: sqlite3.Connection, user_id: int, loaded: _Loaded, rp: Replay, when: When
 ) -> dict[str, Any]:
     """The run (`GET /api/runs/{tracker}`): its programme, parameters in force, dates, status and
-    clocks today, the log newest first, what ends short, and the grid. `canReopen` says whether a
-    re-open applies today (`_reopenable`, K167), whatever the status: an end set for a later day
-    leaves the run `running`, and it can be re-opened."""
+    clocks today, the log newest first, what ends short, the grid, and the work planned and done
+    week by week (`work_json`, K179). `canReopen` says whether a re-open applies today
+    (`_reopenable`, K167), whatever the status: an end set for a later day leaves the run
+    `running`, and it can be re-opened."""
     today = when.today
     programme = loaded.run.programme
     status = loaded.status(rp, today)
@@ -2087,6 +2091,7 @@ def _run_json(
     last = loaded.last_day(rp)
     pause = rp.open_pause
     ending = loaded.ending
+    log = load_log(conn, user_id, loaded.tracker_id)
     return {
         "tracker": loaded.tracker_id,
         "programmeId": loaded.programme_id,
@@ -2120,7 +2125,8 @@ def _run_json(
         "canReopen": _can_reopen(loaded, rp, today),
         "clock": _clock_json(day),
         "log": [_change_json(loaded, c, rp, today) for c in reversed(loaded.changes)],
-        "grid": _grid_json(rp, today, load_log(conn, user_id, loaded.tracker_id), last),
+        "grid": _grid_json(rp, today, log, last),
+        "work": work_json(rp, _grid_weeks(rp, last), today=today, log=log, last_day=last),
     }
 
 

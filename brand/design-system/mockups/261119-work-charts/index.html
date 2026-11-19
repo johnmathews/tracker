@@ -1,0 +1,622 @@
+<title>Work charts: a programme's work, week by week</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="tokens.css">
+<!--
+  A mockup (design-system skill, references/mockups.md). Two questions, lettered options, one
+  recommended each. Every stage is the programme's overview on its new Work tab, drawn by the
+  script at the foot from the cards' markup and styles (ProgrammeGrid's overview head, Tabs,
+  ProgrammeChart's chart skin), once per theme. No colour is new: done is the `pen` the marks are
+  drawn in. Spec: docs/specs/2026-11-19-work-charts.md.
+-->
+<style>
+  body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font-sans); }
+  .mockup-page {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: var(--space-8, 32px) var(--space-16, 64px);
+    max-width: 1200px; margin: 0 auto; display: grid; gap: var(--space-12, 48px);
+  }
+  .mockup-head { display: grid; gap: var(--space-2, 8px); max-width: 70ch; }
+  .mockup-head h1, .option h3, .question h2 { margin: 0; text-wrap: balance; }
+  .mockup-head p, .option > p, .q-head p { margin: 0; }
+  .mockup-head ol { margin: 0; padding-left: 1.4em; }
+  .mockup-meta { color: var(--ink-secondary); }
+  .option { display: grid; gap: var(--space-4, 16px); min-width: 0; }
+  .option-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2, 8px) var(--space-3, 12px); }
+  .option-tag { color: var(--ink-secondary); }
+  .option[data-recommended] .option-tag::after { content: " · Recommended"; color: var(--ink); }
+  /* The same stage in light and in dark, side by side; stacked on a phone. Each pane is a
+     data-theme subtree, so the system's own tokens switch inside it. A page or a Dialog takes the
+     page's whole width, light over dark, at its real desktop size. */
+  .panes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--space-4, 16px); }
+  .panes.wide { grid-template-columns: minmax(0, 1fr); }
+  .pane { min-width: 0; background: var(--canvas); color: var(--ink); border: 1px solid var(--line);
+          border-radius: var(--radius-lg, 10px); padding: var(--space-4, 16px); overflow-x: auto; }
+  .pane-label { color: var(--ink-secondary); margin: 0 0 var(--space-3, 12px); }
+  .measures { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); }
+  .measures li { border: 1px solid var(--line); border-radius: var(--radius-sm, 4px); padding: 2px var(--space-2, 8px); font-variant-numeric: tabular-nums; }
+  .measures li[data-pass="no"] { border-color: currentColor; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  /* The page's own frame: a question, its options, and a label over each stage. */
+  .question { display: grid; gap: var(--space-10, 40px); padding-top: var(--space-8, 32px); border-top: 2px solid var(--ink); }
+  .q-head { display: grid; gap: var(--space-2, 8px); max-width: 75ch; }
+  .q-num { color: var(--ink-secondary); }
+  .sub { margin: var(--space-2, 8px) 0 0; }
+  .stage-cap { margin: 0 0 var(--space-2, 8px); color: var(--ink-secondary); }
+
+  /* ---- Shared by the cards, at the page's size (u = 1, a 1280×800 screen; K55). ---- */
+  .pane * { box-sizing: border-box; }
+  .pane { font-variant-numeric: tabular-nums; }
+  .pane button, .pane input { font: inherit; color: inherit; }
+  .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  svg.i { width: 1em; height: 1em; flex: none; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 60px; padding: 0 22px; border: 1px solid var(--control-border); border-radius: var(--radius-md);
+    background: transparent; color: var(--ink); font: 600 19px / 25px var(--font-sans); cursor: pointer; white-space: nowrap; }
+  .btn svg { width: 26px; height: 26px; }
+  .btn:hover { background: var(--tile); }
+  .btn.quiet { border-color: transparent; }
+  .btn.primary { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+  .btn.primary:hover { background: color-mix(in srgb, var(--ink) 82%, var(--canvas)); }
+  .ib { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 52px; height: 52px; padding: 0; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); cursor: pointer; }
+  .ib svg { width: 28px; height: 28px; }
+  .ib:hover, .ib[aria-expanded="true"] { background: var(--tile); }
+  .chip { display: inline-block; font: 600 16px / 22px var(--font-sans); background: var(--tile); color: var(--ink-secondary); border-radius: var(--radius-sm); padding: 1px var(--space-2); white-space: nowrap; }
+  /* InlineMessage: caption text, a 16px icon, no box. Success is ink, info ink-secondary. */
+  .im { display: flex; align-items: flex-start; gap: var(--space-2); margin: 0; font-size: 16px; line-height: 22px; }
+  .im svg { width: 16px; height: 16px; margin-top: 3px; flex: none; }
+  .im.success { color: var(--ink); }
+  .im.info { color: var(--ink-secondary); }
+  /* TextLink: ink, a 1px underline at 3px, 2px under the pointer. */
+  .pane a.tl { color: var(--ink); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  .pane a.tl:hover { text-decoration-thickness: 2px; }
+
+  /* ---- The Programmes page (ProgrammesPage card), at u = 1, with no bar. ---- */
+  .pp { border: 1px solid var(--line); border-radius: var(--radius-lg); min-width: 0; }
+  .pp .page { padding: 28px 48px 48px; display: flex; flex-direction: column; min-width: 0; }
+  .pp .back { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-size: 19px; line-height: 26px; text-decoration: underline; text-underline-offset: 4px; }
+  .pp .back svg { width: 26px; height: 26px; }
+  .pp h4.ttl { margin: 4px 0 0; font: 600 40px / 46px var(--font-serif); }
+  .tabs { display: flex; flex-wrap: wrap; column-gap: 32px; margin-top: 24px; border-bottom: 1px solid var(--line); }
+  .tabs button { display: inline-flex; align-items: center; min-height: 44px; padding: var(--space-2) 0; border: 0; background: transparent; color: var(--ink-secondary); font: 600 19px / 26px var(--font-sans); cursor: pointer; }
+  .tabs button:hover { color: var(--ink); }
+  .tabs button[aria-selected="true"] { color: var(--ink); box-shadow: inset 0 -3px 0 var(--ink); }
+  .tp { padding-top: 8px; }
+  .tp > .im { margin-top: 8px; }
+  .plist { list-style: none; margin: 0; padding: 0; max-width: 820px; }
+  .plist > li { border-bottom: 1px solid var(--line); }
+  .pn { margin: 0; font: 600 22px / 1.3 var(--font-sans); }
+  .pm { margin: 0; color: var(--ink-secondary); font-size: 19px; line-height: 1.45; }
+  .empty { margin: 0; padding: 14px 0; color: var(--ink-secondary); font-size: 19px; line-height: 1.45; }
+  .lib { display: flex; flex-direction: column; gap: 12px; padding: 16px 0; }
+  .lib .pd { margin: 4px 0 0; font-size: 19px; line-height: 1.45; max-width: 60ch; }
+  .acts { display: flex; flex-wrap: wrap; gap: 12px; }
+  .acts.end { justify-content: flex-end; }
+  .lib .pa { gap: 8px; }
+  .lib .pa .btn { height: 52px; padding: 0 16px; }
+  .lib .pa .btn.quiet { padding: 0 10px; }
+  /* Option 2A: the "Shared" Chip after the name, on its line. */
+  .namel { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+  /* Option 1B: the shared programmes as a section at the foot of the Library tab. */
+  .sect { margin: 40px 0 0; max-width: 820px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .sect h4 { margin: 0; font: 600 27px / 34px var(--font-sans); }
+  .sect p { margin: 4px 0 0; color: var(--ink-secondary); font-size: 19px; line-height: 1.45; }
+  .sect + .plist .pn, .lib h5.pn { font: 600 22px / 1.3 var(--font-sans); }
+  /* Option 1C: a shared programme opened in place to look at it, framed as Preview and start is (K147). */
+  .lib.open { gap: 20px; }
+  .xp { display: flex; flex-direction: column; gap: 20px; padding: 16px; margin: 0 -16px; border: 2px solid var(--ink); border-radius: var(--radius-lg); min-width: 0; }
+  .spv { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .spv h5 { margin: 0; font: 600 19px / 25px var(--font-sans); }
+  /* Option 2B: a row's overflow Menu, open under its IconButton, right edges aligned. */
+  .anchor { position: relative; display: inline-flex; }
+  .menu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 5; width: 288px; padding: var(--space-2); background: var(--panel); color: var(--ink);
+    border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-overlay); text-align: left; }
+  .menu ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .menu .item { display: flex; align-items: center; gap: var(--space-3); width: 100%; min-height: 48px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-md);
+    background: transparent; color: var(--ink); font: 600 16px / 22px var(--font-sans); cursor: pointer; text-align: left; }
+  .menu .item svg { width: 22px; height: 22px; }
+  .menu .item:hover, .menu .item[data-highlighted] { background: var(--tile); }
+  .room { padding-bottom: 150px; }
+
+  /* ---- The grid (ProgrammeGrid card), as the start's preview: no week framed, no tile. ---- */
+  .grid-wrap { position: relative; margin-top: 8px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
+  table.og { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 19px; }
+  .og th, .og td { padding: 12px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; font-weight: 400; }
+  .og thead th { border-bottom: 1px solid var(--ink); vertical-align: bottom; }
+  .og .act { position: sticky; left: 0; z-index: 2; background: var(--canvas); width: 216px; min-width: 216px; }
+  .og .wk { min-width: 108px; }
+  .og .wn { display: block; font: 600 19px / 1.35 var(--font-sans); white-space: nowrap; }
+  .og .wt { display: block; font: 600 16px / 22px var(--font-sans); white-space: nowrap; }
+  .og .an { display: block; font: 600 22px / 1.3 var(--font-sans); overflow-wrap: anywhere; }
+  .og .ac { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 4px; align-items: center; }
+  .og .ac .t { color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
+  .cv { display: block; font: 600 21px / 1.3 var(--font-sans); white-space: nowrap; }
+  .cs { display: block; color: var(--ink-secondary); font-size: 16px; line-height: 22px; white-space: nowrap; }
+
+  /* ---- Dialog and ConfirmDialog: the page behind, the scrim, the panel. ---- */
+  .dstage { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 64px var(--space-4) var(--space-6); }
+  .behind { position: absolute; inset: 0; padding: var(--space-6) 48px; }
+  .behind b { display: block; margin: 0 0 var(--space-6); font: 600 40px / 46px var(--font-serif); }
+  .behind span { display: block; padding: var(--space-3) 0; border-bottom: 1px solid var(--line); font-weight: 600; font-size: 19px; }
+  .scrim { position: absolute; inset: 0; background: var(--scrim); opacity: 0.4; }
+  .dlg { position: relative; margin: 0 auto; width: min(720px, 100%); display: flex; flex-direction: column; gap: 20px; padding: 32px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-overlay); }
+  .dlg.confirm { width: min(600px, 100%); gap: 0; }
+  .dlg-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin: -12px -12px 0 0; }
+  .dlg-head h4, .dlg.confirm h4 { margin: 12px 0 0; font: 600 27px / 34px var(--font-sans); }
+  .dlg.confirm h4 { margin: 0; }
+  .dlg.confirm p { margin: 8px 0 0; font-size: 19px; line-height: 28px; }
+  .dlg.confirm .actions { margin-top: 24px; }
+  .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; padding-top: 4px; }
+  .dlg .lead { margin: 0; font-size: 19px; line-height: 28px; }
+  .dlg .who { margin: 0; font-size: 19px; line-height: 28px; }
+  /* Publish's preview (S5): the programme as the shared library shows it, on the page's own canvas. */
+  .seen { display: flex; flex-direction: column; gap: 8px; }
+  .seen h5 { margin: 0; font: 600 19px / 25px var(--font-sans); }
+  .doc { background: var(--canvas); border: 1px solid var(--line); border-radius: var(--radius-md); padding: 16px 20px; }
+  .doc .pd { margin: 4px 0 0; font-size: 19px; line-height: 1.45; }
+  .doc ol { list-style: none; margin: 16px 0 0; padding: 0; border-top: 1px solid var(--line); }
+  .doc li { display: flex; flex-direction: column; gap: 4px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .doc li:last-child { border-bottom: 0; padding-bottom: 0; }
+  .doc .an { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font: 600 19px / 25px var(--font-sans); }
+  .doc .note { margin: 0; font: italic 400 19px / 28px var(--font-serif); color: var(--ink); max-width: 60ch; }
+  .doc .none { margin: 0; color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
+  .doc a.tl { font-size: 16px; line-height: 22px; align-self: flex-start; }
+
+  @media (prefers-reduced-motion: no-preference) { .btn, .tabs button, .ib, .menu .item { transition: background-color 120ms, color 120ms, border-color 120ms; } }
+
+  /* Folded (a phone): the cards' own rules, on n = 1. The stage takes the pane's whole width, as
+     the ProgrammesPage card's preview does, so the page inside is the phone's own width less the
+     mockup's frame. */
+  @media (max-width: 639px) {
+    .question { gap: var(--space-8, 32px); }
+    .pane { padding: var(--space-3, 12px) 0 0; }
+    .pane-label { padding: 0 var(--space-3, 12px); }
+    .pane .stage-cap { padding: 0 var(--space-3, 12px); }
+    .pp, .dstage { border-width: 1px 0 0; border-radius: 0; }
+    .btn, .lib .pa .btn { height: 48px; padding: 0 16px; font-size: 16px; line-height: 22px; }
+    .btn svg { width: 22px; height: 22px; }
+    .pp .page { padding: 20px 16px 32px; }
+    .pp .back, .pm, .lib .pd, .empty, .sect p { font-size: 18px; line-height: 26px; }
+    .pp .back svg { width: 22px; height: 22px; }
+    .pp h4.ttl { font-size: 30px; line-height: 36px; }
+    .tabs { margin-top: 20px; }
+    .tabs button { font-size: 18px; }
+    .pn, .sect + .plist .pn, .lib h5.pn { font-size: 18px; }
+    .sect { margin-top: 32px; }
+    .sect h4 { font-size: 22px; line-height: 28px; }
+    .lib .pa { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .lib .pa .btn:first-child { grid-column: 1 / -1; }
+    .lib .pa.one { grid-template-columns: minmax(0, 1fr); }
+    .lib .pa.two { display: flex; }
+    .lib .pa.two .btn { flex: 1 1 auto; }
+    .lib .pa.trail { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+    .lib .pa.trail .btn:first-child { grid-column: 1 / -1; }
+    .ib { width: 44px; height: 48px; }
+    .ib svg { width: 24px; height: 24px; }
+    .menu { width: min(288px, calc(100vw - 32px)); }
+    .xp { margin: 0 -8px; padding: 12px 8px; }
+    .spv h5 { font-size: 16px; line-height: 22px; }
+    .acts.end .btn { flex: 1 1 auto; }
+    table.og { font-size: 18px; }
+    .og th, .og td { padding: 10px 8px; }
+    .og .act { width: 132px; min-width: 132px; box-shadow: 1px 0 0 var(--line); }
+    .og .wk { min-width: 104px; }
+    .og .wn { font-size: 16px; }
+    .og .an, .cv { font-size: 18px; }
+    .dstage { padding: 48px 16px 16px; }
+    .behind { padding: var(--space-4); }
+    .behind b { font-size: 30px; line-height: 36px; }
+    .dlg { padding: 16px; gap: 16px; }
+    .dlg-head h4, .dlg.confirm h4 { font-size: 22px; line-height: 28px; }
+    .ib.close { width: 44px; height: 44px; }
+    .dlg .lead, .dlg .who, .dlg.confirm p { font-size: 18px; line-height: 26px; }
+    .seen h5 { font-size: 16px; line-height: 22px; }
+    .doc { padding: 12px; }
+    .doc .pd, .doc .note { font-size: 18px; line-height: 26px; }
+    .doc .an { font-size: 18px; }
+    .actions .btn { flex: 1 1 auto; }
+  }
+
+  /* ---- The overview's head (ProgrammeGrid card, the overview page). ---- */
+  .ov .page { padding: 28px 48px 48px; }
+  .ov .kicker { margin: 16px 0 0; color: var(--ink-secondary); font: 600 19px / 25px var(--font-sans); }
+  .ov h4.ttl { margin: 2px 0 0; }
+  .ov .runline { margin: 6px 0 0; color: var(--ink-secondary); font-size: 19px; line-height: 1.45; }
+  .ov .runline b { color: var(--ink); font-weight: 600; }
+  /* ---- The Work tab. ---- */
+  .work { display: flex; flex-direction: column; gap: 12px; padding-top: 16px; min-width: 0; }
+  .work h5 { margin: 0; font: 600 22px / 1.3 var(--font-sans); }
+  .wline { margin: 0; color: var(--ink-secondary); font-size: 19px; line-height: 1.45; }
+  .wline b { color: var(--ink); font-weight: 600; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0; padding: 0; list-style: none; color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
+  .legend li { display: inline-flex; align-items: center; gap: 8px; }
+  .sw { display: inline-block; width: 18px; height: 12px; border-radius: 2px; }
+  .sw.planned { border: 1.5px solid var(--ink-secondary); }
+  .sw.tocome { border: 1.5px dashed var(--control-border); }
+  .sw.done { background: var(--pen); }
+  .sw.line { height: 0; border-top: 2px solid var(--ink); border-radius: 0; }
+  .sw.dline { height: 0; border-top: 2px dashed var(--ink-secondary); border-radius: 0; }
+  .sw.dot { width: 12px; height: 12px; border-radius: 50%; background: var(--pen); }
+  .chart { width: 100%; min-width: 0; }
+  .chart svg { display: block; width: 100%; overflow: visible; }
+  .chart text { font-family: var(--font-sans); font-size: 16px; fill: var(--ink-secondary); }
+  .chart text.v { fill: var(--ink); font-weight: 600; }
+  .chart text.now { fill: var(--ink); font-weight: 600; }
+  .leftout { margin: 0; color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
+  .acts-h { margin: 28px 0 0; padding-top: 20px; border-top: 1px solid var(--line); }
+  .multi { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 28px 32px; }
+  .mini { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .mini h6 { margin: 0; font: 600 19px / 25px var(--font-sans); }
+  .mini .wline { font-size: 16px; line-height: 22px; }
+  .picker { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .picker .lab { font: 600 19px / 25px var(--font-sans); }
+  .select { display: inline-flex; align-items: center; gap: 10px; height: 52px; padding: 0 16px; border: 1px solid var(--control-border); border-radius: var(--radius-md); font: 600 19px / 25px var(--font-sans); }
+  .select svg { width: 22px; height: 22px; }
+  @media (max-width: 639px) {
+    .ov .page { padding: 20px 16px 32px; }
+    .ov .runline, .wline { font-size: 18px; line-height: 26px; }
+    .work h5 { font-size: 20px; }
+    .chart text { font-size: 14px; }
+    .select { height: 48px; font-size: 16px; }
+  }
+</style>
+<main class="mockup-page">
+  <header class="mockup-head">
+    <p class="caption mockup-meta">Mockup · 2026-11-19 · Tracker</p>
+    <h1 class="title-1">Work charts: a programme's work, week by week</h1>
+    <p class="body">A programme's overview gains a tab, <b>Work</b>, between Plan and Changes. Work is weight × reps × sets; a marked day counts its session's full planned work; an activity without weight counts total reps, or seconds held. Two questions, each answered on its own. An activity's item page shows its own chart under the step chart, in whichever form is picked in question 1.</p>
+    <ol class="body">
+      <li><a href="#q1">The chart: how planned and done work show week by week</a></li>
+      <li><a href="#q2">The tab: the whole programme, then each activity</a></li>
+      <li><a href="#q3">A long programme: two years of weeks</a></li>
+    </ol>
+    <p class="body mockup-meta">Beginner 5×5 in week 4 of 8, today Thu 19 Nov. Five weighted lifts, three sessions a week (the deadlift one), and a plank added in week 2, held three times a week. Weeks 4 and 8 are deloads. The plan's numbers are the programme's own.</p>
+  </header>
+
+  <section class="question" id="q1" aria-labelledby="q1-h">
+    <header class="q-head">
+      <p class="label q-num">Question 1 of 3 · decided: A</p>
+      <h2 class="title-1" id="q1-h">1. The chart</h2>
+      <p class="body">Each option draws the programme's total work, in kg, over its eight weeks. Over every chart a line says this week's work and the total so far: "Week 4: <b>2,400 kg</b> of 5,650 kg planned. 29,775 kg done so far." Done is drawn in <code>pen</code>, the colour the marks are drawn in; this week sits on a <code>tile</code> band, as on the step chart.</p>
+    </header>
+
+    <section class="option" id="q1a" data-recommended aria-labelledby="q1a-h">
+      <div class="option-head"><h3 class="title-2" id="q1a-h">A. A column per week: planned outlined, done filled</h3><span class="label option-tag">Option A</span></div>
+      <p class="body">Each week is a column outlined at its planned work (1.5px <code>ink-secondary</code>; dashed <code>control-border</code> for the weeks to come), filled with <code>pen</code> up to the work done. A full column is a week done as planned; a deload is visibly shorter. Recommended: one glance says both how much was planned and how much of it was done, week by week.</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="chart" data-form="a"></div><div class="pane" data-theme="dark" data-draw="chart" data-form="a"></div></div>
+      <ul class="measures caption">
+        <li data-fg="var(--pen)" data-bg="var(--canvas)" data-min="3">The done fill</li>
+        <li data-fg="var(--ink-secondary)" data-bg="var(--canvas)" data-min="3">The planned outline</li>
+        <li data-fg="var(--control-border)" data-bg="var(--canvas)" data-min="3">The weeks to come</li>
+      </ul>
+    </section>
+
+    <section class="option" id="q1b" aria-labelledby="q1b-h">
+      <div class="option-head"><h3 class="title-2" id="q1b-h">B. Lines: planned as a step, done as dots</h3><span class="label option-tag">Option B</span></div>
+      <p class="body">As the step chart draws an activity's weight: the planned work a step per week (solid <code>ink</code> to this week, dashed after), and a <code>pen</code> dot at each week's work done, joined by a thin <code>pen</code> line. Close to the chart already on the item page; a week done short is a dot below its step.</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="chart" data-form="b"></div><div class="pane" data-theme="dark" data-draw="chart" data-form="b"></div></div>
+    </section>
+
+    <section class="option" id="q1c" aria-labelledby="q1c-h">
+      <div class="option-head"><h3 class="title-2" id="q1c-h">C. Running totals</h3><span class="label option-tag">Option C</span></div>
+      <p class="body">Two lines rising across the programme: the work planned to date (<code>ink</code>, dashed after this week, ending at the programme's whole planned work), and the work done so far (<code>pen</code>). The gap between them is the work behind. Shows the whole programme's progress; a single week's shortfall is harder to see.</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="chart" data-form="c"></div><div class="pane" data-theme="dark" data-draw="chart" data-form="c"></div></div>
+    </section>
+  </section>
+
+  <section class="question" id="q2" aria-labelledby="q2-h">
+    <header class="q-head">
+      <p class="label q-num">Question 2 of 3 · decided: A</p>
+      <h2 class="title-1" id="q2-h">2. The tab</h2>
+      <p class="body">Both options start with the programme's total, then show each activity in its own measure: the lifts in kg, the plank in seconds held. The total leaves out the plank and says so. Drawn with option A's columns; whichever form is picked applies.</p>
+    </header>
+
+    <section class="option" id="q2a" data-recommended aria-labelledby="q2a-h">
+      <div class="option-head"><h3 class="title-2" id="q2a-h">A. The total, then a small chart for every activity</h3><span class="label option-tag">Option A</span></div>
+      <p class="body">Under the total, "By activity" and a chart per activity, two to a row on a laptop, one to a row on a phone. Every activity is in view at once to compare. Recommended: nothing to choose, and the lifts line up.</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="tab" data-form="a"></div><div class="pane" data-theme="dark" data-draw="tab" data-form="a"></div></div>
+    </section>
+
+    <section class="option" id="q2b" aria-labelledby="q2b-h">
+      <div class="option-head"><h3 class="title-2" id="q2b-h">B. The total, then one activity at a time</h3><span class="label option-tag">Option B</span></div>
+      <p class="body">Under the total, a select, "Activity", choosing one activity, drawn as large as the total. Quieter, one chart at a time; comparing two lifts means switching.</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="tab" data-form="b"></div><div class="pane" data-theme="dark" data-draw="tab" data-form="b"></div></div>
+    </section>
+  </section>
+
+  <section class="question" id="q3" aria-labelledby="q3-h">
+    <header class="q-head">
+      <p class="label q-num">Question 3 of 3 · new, after John's note</p>
+      <h2 class="title-1" id="q3-h">3. A long programme</h2>
+      <p class="body">Not every programme runs 8 weeks: one could run two years. Here a 104-week programme is in week 40. A column per week is about 12px wide on the whole programme's chart, and 3 to 6px on an activity's or a phone's. Both options keep the columns of question 1; they differ in what happens when the weeks don't fit. (Today a programme runs at most 52 weeks; two years would raise that to 104.)</p>
+    </header>
+
+    <section class="option" id="q3a" aria-labelledby="q3a-h">
+      <div class="option-head"><h3 class="title-2" id="q3a-h">A. A column per week, scrolling sideways</h3><span class="label option-tag">Option A</span></div>
+      <p class="body">Each week keeps its own column, at least 18px apart. When they don't fit, the chart scrolls sideways inside itself, as the overview's grid does, and opens with this week in view; the axis stays put at the left. Every week stays exact; the rest of the programme is a scroll away.</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="long" data-form="scroll"></div><div class="pane" data-theme="dark" data-draw="long" data-form="scroll"></div></div>
+    </section>
+
+    <section class="option" id="q3b" data-recommended aria-labelledby="q3b-h">
+      <div class="option-head"><h3 class="title-2" id="q3b-h">B. Weeks grouped to fit</h3><span class="label option-tag">Option B</span></div>
+      <p class="body">When weekly columns would be narrower than 14px, each column adds up two weeks, four or eight, whichever is the fewest that fits that chart: on a laptop the whole programme's chart shows weeks in twos; on a phone, eights. Labels name the span ("37–40"), and the column holding this week sits on the band. Pointing at a column, and the table a screen reader gets, still give each week. Recommended: the whole programme in view on every screen, nothing hidden off to the side.</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="long" data-form="group"></div><div class="pane" data-theme="dark" data-draw="long" data-form="group"></div></div>
+    </section>
+  </section>
+</main>
+<script>
+// Every stage is drawn here, once per pane, so light and dark show the same thing. The markup and
+// the sizes are the cards' (ProgrammesPage, Tabs, Button, Chip, InlineMessage, TextLink, Dialog,
+// ConfirmDialog, Menu, ProgrammeGrid); the words follow src/components/ProgrammesPage.vue and the
+// spec (docs/specs/2026-11-19-shared-library.md).
+(() => {
+  const P = {
+    left: '<path d="m15 18-6-6 6-6"/>',
+    x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    play: '<polygon points="6 3 20 12 6 21 6 3"/>',
+    copy: '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+    copyplus: '<line x1="15" x2="15" y1="12" y2="18"/><line x1="12" x2="18" y1="15" y2="15"/><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+    trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
+    eye: '<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>',
+    eyeoff: '<path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/>',
+    share: '<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" x2="12" y1="2" y2="15"/>',
+    refresh: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+    ellipsis: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+    check: '<path d="M20 6 9 17l-5-5"/>',
+  }
+  const ic = (name, cls = 'i') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name]}</svg>`
+  const btn = (icon, words, cls = '', attrs = '') => `<button type="button" class="btn${cls ? ' ' + cls : ''}"${attrs}>${icon ? ic(icon) : ''}${words}</button>`
+  let uid = 0
+  const id = (p) => `${p}${++uid}`
+
+
+  // ------------------------------------------------------------------------------- the data
+  // Beginner 5×5, eight weeks, this is week 4. Each lift: weight per week, reps × sets, sessions.
+  const NOW = 4
+  const DELOAD = [4, 8]
+  const LIFTS = [
+    { key: 'squat', name: 'Back squat', kg: [40, 42.5, 45, 40, 47.5, 50, 52.5, 47.5], sets: 5, reps: 5, target: 3 },
+    { key: 'bench', name: 'Bench press', kg: [30, 32.5, 35, 30, 35, 37.5, 40, 35], sets: 5, reps: 5, target: 3 },
+    { key: 'row', name: 'Barbell row', kg: [30, 32.5, 35, 30, 35, 37.5, 40, 35], sets: 5, reps: 5, target: 3 },
+    { key: 'ohp', name: 'Overhead press', kg: [20, 22.5, 22.5, 20, 25, 25, 27.5, 22.5], sets: 5, reps: 5, target: 3 },
+    { key: 'dead', name: 'Deadlift', kg: [50, 55, 57.5, 50, 60, 62.5, 67.5, 60], sets: 1, reps: 5, target: 1 },
+  ]
+  // Sessions marked each week, so far (week 4 is under way).
+  const DONE = { squat: [3, 3, 2, 2], bench: [3, 3, 3, 1], row: [3, 2, 3, 1], ohp: [3, 3, 2, 1], dead: [1, 1, 1, 0] }
+  // The plank: seconds × 3 sets, three times a week, from week 2.
+  const PLANK = { key: 'plank', name: 'Plank', s: [null, 30, 30, 35, 35, 40, 40, 45], sets: 3, target: 3, done: [null, 3, 2, 1] }
+  const deload = (w) => DELOAD.includes(w)
+  const setsOf = (l, w) => (deload(w) && l.sets === 5 ? 3 : l.sets)
+  function liftSeries(l) {
+    return l.kg.map((kg, i) => {
+      const w = i + 1, per = kg * l.reps * setsOf(l, w)
+      return { w, planned: per * l.target, done: w <= NOW ? per * DONE[l.key][i] : null }
+    })
+  }
+  const plankSeries = PLANK.s.map((s, i) => {
+    const w = i + 1
+    if (s == null) return { w, planned: 0, done: w <= NOW ? 0 : null, none: true }
+    return { w, planned: s * PLANK.sets * PLANK.target, done: w <= NOW ? s * PLANK.sets * PLANK.done[i] : null }
+  })
+  const BY = Object.fromEntries(LIFTS.map((l) => [l.key, liftSeries(l)]))
+  const TOTAL = Array.from({ length: 8 }, (_, i) => ({
+    w: i + 1,
+    planned: LIFTS.reduce((a, l) => a + BY[l.key][i].planned, 0),
+    done: i + 1 <= NOW ? LIFTS.reduce((a, l) => a + BY[l.key][i].done, 0) : null,
+  }))
+  const fmt = (n) => Math.round(n).toLocaleString('en-GB')
+  const soFar = (s) => s.reduce((a, x) => a + (x.done ?? 0), 0)
+  function line(s, unit) {
+    const now = s[NOW - 1]
+    return `Week ${NOW}: <b>${fmt(now.done)} ${unit}</b> of ${fmt(now.planned)} ${unit} planned. ${fmt(soFar(s))} ${unit} done so far.`
+  }
+
+  // ------------------------------------------------------------------------------- a chart
+  // Drawn at its box's own width, so its text stays 16px. Form a: columns; b: step and dots; c: running totals.
+  function chart(el, s, form, unit, h) {
+    const W = Math.max(el.clientWidth, 280), H = h, L = 56, R = 8, T = 40, B = 30
+    const n = s.length, cw = (W - L - R) / n
+    let top
+    if (form === 'c') {
+      let p = 0, d = 0
+      s = s.map((x) => { p += x.planned; if (x.done != null) d += x.done; return { ...x, cp: p, cd: x.done != null ? d : null } })
+      top = s[n - 1].cp
+    } else top = Math.max(...s.map((x) => Math.max(x.planned, x.done ?? 0)))
+    const nice = (v) => { const e = 10 ** Math.floor(Math.log10(v || 1)); const m = v / e; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * e }
+    const step = nice(top / 4), max = Math.ceil(top / step) * step || 1
+    const y = (v) => T + (H - T - B) * (1 - v / max)
+    const x0 = (i) => L + i * cw
+    let g = ''
+    // This week's band.
+    g += `<rect x="${x0(NOW - 1) + 2}" y="${T - 22}" width="${cw - 4}" height="${H - T - B + 22}" rx="4" fill="var(--tile)"/>`
+    for (let v = 0; v <= max + 1e-9; v += step) {
+      g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-width="1"/>`
+      g += `<text x="${L - 8}" y="${y(v) + 5}" text-anchor="end">${fmt(v)}</text>`
+    }
+    g += `<text x="${L - 8}" y="${T - 22}" text-anchor="end">${unit}</text>`
+    s.forEach((x, i) => {
+      const cx = x0(i) + cw / 2
+      g += `<text x="${cx}" y="${H - 8}" text-anchor="middle" class="${x.w === NOW ? 'now' : ''}">${i === 0 ? 'Wk ' : ''}${x.w}</text>`
+    })
+    if (form === 'a') {
+      const bw = Math.min(cw * 0.56, 44)
+      s.forEach((x, i) => {
+        if (x.none) return
+        const bx = x0(i) + (cw - bw) / 2
+        if (x.done != null && x.done > 0) {
+          const dh = y(0) - y(x.done)
+          g += `<rect x="${bx}" y="${y(x.done)}" width="${bw}" height="${dh}" fill="var(--pen)"/>`
+        }
+        const future = x.w > NOW
+        g += `<rect x="${bx + 0.75}" y="${y(x.planned) + 0.75}" width="${bw - 1.5}" height="${Math.max(y(0) - y(x.planned) - 1.5, 0)}" fill="none" stroke="var(${future ? '--control-border' : '--ink-secondary'})" stroke-width="1.5"${future ? ' stroke-dasharray="5 4"' : ''}/>`
+      })
+    } else if (form === 'b') {
+      let d1 = '', d2 = ''
+      s.forEach((x, i) => {
+        const seg = `M${x0(i)},${y(x.planned)} H${x0(i) + cw}`
+        if (x.w <= NOW) d1 += seg + (i < n - 1 && s[i + 1].w <= NOW ? ` V${y(s[i + 1].planned)}` : '')
+        else d2 += (x.w === NOW + 1 ? `M${x0(i)},${y(s[i - 1].planned)} V${y(x.planned)} ` : '') + seg + (i < n - 1 ? ` V${y(s[i + 1].planned)}` : '')
+      })
+      g += `<path d="${d1}" fill="none" stroke="var(--ink)" stroke-width="2"/><path d="${d2}" fill="none" stroke="var(--ink-secondary)" stroke-width="2" stroke-dasharray="6 5"/>`
+      const pts = s.filter((x) => x.done != null && !x.none).map((x) => [x0(x.w - 1) + cw / 2, y(x.done)])
+      g += `<polyline points="${pts.map((p) => p.join(',')).join(' ')}" fill="none" stroke="var(--pen)" stroke-width="1.5"/>`
+      pts.forEach(([px, py]) => { g += `<circle cx="${px}" cy="${py}" r="7" fill="var(--pen)" stroke="var(--canvas)" stroke-width="2"/>` })
+    } else {
+      const pp = s.map((x, i) => [x0(i) + cw / 2, y(x.cp)])
+      const solid = pp.slice(0, NOW), dash = pp.slice(NOW - 1)
+      g += `<polyline points="${solid.map((p) => p.join(',')).join(' ')}" fill="none" stroke="var(--ink)" stroke-width="2"/>`
+      g += `<polyline points="${dash.map((p) => p.join(',')).join(' ')}" fill="none" stroke="var(--ink-secondary)" stroke-width="2" stroke-dasharray="6 5"/>`
+      const dd = s.filter((x) => x.cd != null).map((x) => [x0(x.w - 1) + cw / 2, y(x.cd)])
+      g += `<polyline points="${dd.map((p) => p.join(',')).join(' ')}" fill="none" stroke="var(--pen)" stroke-width="2.5"/>`
+      dd.forEach(([px, py]) => { g += `<circle cx="${px}" cy="${py}" r="5" fill="var(--pen)" stroke="var(--canvas)" stroke-width="2"/>` })
+      const last = s[n - 1]
+      g += `<text x="${x0(n - 1) + cw / 2}" y="${y(last.cp) - 10}" text-anchor="end" class="v">${fmt(last.cp)}</text>`
+      const lastDone = s.filter((x) => x.cd != null).at(-1)
+      g += `<text x="${x0(lastDone.w - 1) + cw / 2 + 10}" y="${y(lastDone.cd) + 22}" class="v">${fmt(lastDone.cd)}</text>`
+    }
+    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Work planned and done, week by week">${g}</svg>`
+  }
+  const LEGEND = {
+    a: '<li><span class="sw planned"></span>Planned</li><li><span class="sw tocome"></span>Still to come</li><li><span class="sw done"></span>Done</li>',
+    b: '<li><span class="sw line"></span>Planned</li><li><span class="sw dline"></span>Still to come</li><li><span class="sw dot"></span>Done</li>',
+    c: '<li><span class="sw line"></span>Planned so far</li><li><span class="sw dline"></span>Still to come</li><li><span class="sw dot"></span>Done so far</li>',
+  }
+
+  // ------------------------------------------------------------------------ the overview's frame
+  function overview(work) {
+    const pid = id('ov')
+    const tabs = [['plan', 'Plan'], ['work', 'Work'], ['changes', 'Changes']]
+    return `<div class="pp ov"><div class="page"><a class="back" href="#">${ic('left')}<span>Back to programmes</span></a>
+      <p class="kicker">Programme</p><h4 class="ttl" id="${pid}-h">Beginner 5×5</h4>
+      <p class="runline"><b>Week 4 of 8.</b> Started Mon 26 Oct, ends Sun 20 Dec.</p>
+      <div class="tabs" role="tablist" aria-labelledby="${pid}-h">${tabs.map(([k, l]) => `<button type="button" role="tab" aria-selected="${k === 'work'}" tabindex="${k === 'work' ? 0 : -1}">${l}</button>`).join('')}</div>
+      <div class="tp" role="tabpanel">${work}</div></div></div>`
+  }
+  const totalBlock = (form) => `<div class="work"><h5>The whole programme</h5><p class="wline">${line(TOTAL, 'kg')}</p>
+      <ul class="legend" aria-hidden="true">${LEGEND[form]}</ul>
+      <div class="chart" data-series="total" data-form="${form}" data-unit="kg" data-h="300"></div>
+      <p class="leftout">Plank has no weight, so it is not in the total.</p>`
+  const miniFor = (key, name, s, unit, form) => `<div class="mini"><h6>${name}</h6><p class="wline">${line(s, unit)}</p><div class="chart" data-series="${key}" data-form="${form}" data-unit="${unit}" data-h="200"></div></div>`
+  function tab(layout) {
+    let rest
+    if (layout === 'a') {
+      rest = `<h5 class="acts-h">By activity</h5><div class="multi">${LIFTS.map((l) => miniFor(l.key, l.name, BY[l.key], 'kg', 'a')).join('')}${miniFor('plank', 'Plank, seconds held', plankSeries, 's', 'a')}</div>`
+    } else {
+      rest = `<div class="acts-h picker"><span class="lab" id="pk">Activity</span><button type="button" class="select" aria-labelledby="pk" aria-haspopup="listbox">Back squat <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></div>
+        <p class="wline">${line(BY.squat, 'kg')}</p><div class="chart" data-series="squat" data-form="a" data-unit="kg" data-h="300"></div>`
+    }
+    return overview(totalBlock('a') + rest + '</div>')
+  }
+
+  // ------------------------------------------------------------- question 3: a 104-week programme
+  const LNOW = 40, LN = 104
+  const wave = (w) => 1 + 0.25 * Math.sin(w / 6) + w / 260
+  const longLift = (base, sets, reps, target, seed) => Array.from({ length: LN }, (_, i) => {
+    const w = i + 1, deload = w % 6 === 0
+    const kg = Math.round(base * wave(w) * (deload ? 0.8 : 1) / 2.5) * 2.5
+    const per = kg * reps * sets
+    const marks = w === LNOW ? 1 : w <= LNOW ? Math.max(0, target - ((w * seed) % 5 === 0 ? 1 : 0) ) : null
+    return { w, planned: per * target, done: marks == null ? null : per * marks }
+  })
+  const LSQ = longLift(60, 5, 5, 3, 3), LBE = longLift(45, 5, 5, 3, 7), LDL = longLift(80, 1, 5, 1, 11)
+  const LTOTAL = LSQ.map((x, i) => ({ w: x.w, planned: x.planned + LBE[i].planned + LDL[i].planned, done: x.done == null ? null : x.done + LBE[i].done + LDL[i].done }))
+  function groupOf(n, width) { for (const g of [1, 2, 4, 8]) if ((width - 56) / Math.ceil(n / g) >= 14) return g; return 8 }
+  function grouped(s, g) {
+    const out = []
+    for (let i = 0; i < s.length; i += g) {
+      const part = s.slice(i, i + g)
+      const done = part.some((x) => x.done != null) ? part.reduce((a, x) => a + (x.done ?? 0), 0) : null
+      out.push({ w: part[0].w, last: part.at(-1).w, planned: part.reduce((a, x) => a + x.planned, 0), done, now: part.some((x) => x.w === LNOW), future: part[0].w > LNOW })
+    }
+    return out
+  }
+  // Columns for long series: the band on the column holding this week; labels thinned to fit.
+  function longChart(el, s, mode, unit, h) {
+    const W = Math.max(el.clientWidth, 280), H = h, L = 56, R = 8, T = 40, B = 30
+    const g = mode === 'group' ? groupOf(s.length, W) : 1
+    const cols = g === 1 ? s.map((x) => ({ ...x, last: x.w, now: x.w === LNOW, future: x.w > LNOW })) : grouped(s, g)
+    const pitch = mode === 'scroll' ? Math.max((W - L - R) / cols.length, 18) : (W - L - R) / cols.length
+    const PW = mode === 'scroll' ? cols.length * pitch : W - L - R
+    const top = Math.max(...cols.map((x) => Math.max(x.planned, x.done ?? 0)))
+    const nice = (v) => { const e = 10 ** Math.floor(Math.log10(v || 1)); const m = v / e; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * e }
+    const step = nice(top / 4), max = Math.ceil(top / step) * step
+    const y = (v) => T + (H - T - B) * (1 - v / max)
+    let axis = `<text x="${L - 8}" y="${T - 22}" text-anchor="end">${unit}</text>`
+    let grid = ''
+    for (let v = 0; v <= max + 1e-9; v += step) {
+      axis += `<text x="${L - 8}" y="${y(v) + 5}" text-anchor="end">${fmt(v)}</text>`
+      grid += `<line x1="0" x2="${PW}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/>`
+    }
+    const bw = Math.max(Math.min(pitch * 0.6, 44), 4)
+    let plot = grid
+    const every = Math.ceil((g === 1 ? 30 : 64) / pitch)
+    const nowAt = cols.findIndex((x) => x.now)
+    cols.forEach((x, i) => {
+      const cx = i * pitch + pitch / 2, bx = cx - bw / 2
+      if (x.now) plot = `<rect x="${i * pitch + 1}" y="${T - 22}" width="${pitch - 2}" height="${H - T - B + 22}" rx="3" fill="var(--tile)"/>` + plot
+      if (x.done) plot += `<rect x="${bx}" y="${y(x.done)}" width="${bw}" height="${y(0) - y(x.done)}" fill="var(--pen)"/>`
+      plot += `<rect x="${bx + 0.75}" y="${y(x.planned) + 0.75}" width="${bw - 1.5}" height="${Math.max(y(0) - y(x.planned) - 1.5, 0)}" fill="none" stroke="var(${x.future ? '--control-border' : '--ink-secondary'})" stroke-width="1.5"${x.future ? ' stroke-dasharray="4 3"' : ''}/>`
+      if (x.now || (i % every === 0 && Math.abs(i - nowAt) >= every)) plot += `<text x="${cx}" y="${H - 8}" text-anchor="middle" class="${x.now ? 'now' : ''}">${g === 1 ? x.w : `${x.w}–${x.last}`}</text>`
+    })
+    if (mode === 'scroll') {
+      el.innerHTML = `<div style="display:flex;min-width:0"><svg width="${L}" height="${H}" style="flex:none;width:${L}px">${axis}</svg><div class="hscroll" style="overflow-x:auto;min-width:0;flex:1"><svg width="${PW}" height="${H}" style="width:${PW}px">${plot}</svg></div></div>`
+      const sc = el.querySelector('.hscroll'); sc.scrollLeft = Math.max(0, (LNOW - 1) * pitch - sc.clientWidth * 0.7)
+    } else {
+      el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" height="${H}">${axis}<g transform="translate(${L},0)">${plot}</g></svg>`
+    }
+  }
+  function longTab(mode) {
+    const lline = (s, unit) => `Week ${LNOW}: <b>${fmt(s[LNOW - 1].done)} ${unit}</b> of ${fmt(s[LNOW - 1].planned)} ${unit} planned. ${fmt(soFar(s))} ${unit} done so far.`
+    const mini = (k, name, s) => `<div class="mini"><h6>${name}</h6><p class="wline">${lline(s, 'kg')}</p><div class="chart" data-long="${k}" data-mode="${mode}" data-h="200"></div></div>`
+    const work = `<div class="work"><h5>The whole programme</h5><p class="wline">${lline(LTOTAL, 'kg')}</p><ul class="legend" aria-hidden="true">${LEGEND.a}</ul>
+      <div class="chart" data-long="total" data-mode="${mode}" data-h="300"></div>
+      <h5 class="acts-h">By activity</h5><div class="multi">${mini('sq', 'Back squat', LSQ)}${mini('be', 'Bench press', LBE)}${mini('dl', 'Deadlift', LDL)}</div></div>`
+    return overview(work).replace('Beginner 5×5', 'Two-year strength').replace('<b>Week 4 of 8.</b> Started Mon 26 Oct, ends Sun 20 Dec.', '<b>Week 40 of 104.</b> Started Mon 16 Feb, ends Sun 13 Feb 2028.')
+  }
+  const LONG = { total: LTOTAL, sq: LSQ, be: LBE, dl: LDL }
+  const SERIES = { total: TOTAL, plank: plankSeries, ...BY }
+  for (const pane of document.querySelectorAll('.pane[data-draw]')) {
+    const html = pane.dataset.draw === 'chart' ? overview(totalBlock(pane.dataset.form) + '</div>') : pane.dataset.draw === 'long' ? longTab(pane.dataset.form) : tab(pane.dataset.form)
+    pane.innerHTML = `<p class="label pane-label">${pane.dataset.theme === 'dark' ? 'Dark' : 'Light'}</p>${html}`
+  }
+  const drawAll = () => {
+    document.querySelectorAll('.chart[data-series]').forEach((el) => chart(el, SERIES[el.dataset.series], el.dataset.form, el.dataset.unit, Number(el.dataset.h)))
+    document.querySelectorAll('.chart[data-long]').forEach((el) => longChart(el, LONG[el.dataset.long], el.dataset.mode, 'kg', Number(el.dataset.h)))
+  }
+  drawAll()
+  addEventListener('resize', drawAll)
+  document.fonts?.ready.then(drawAll)
+  for (const a of document.querySelectorAll('.pane a[href="#"]')) a.addEventListener('click', (e) => e.preventDefault())
+})()
+</script>
+
+<script>
+  // Measures: for each <li data-fg data-bg data-min>, the WCAG contrast of the two colours in each
+  // theme, resolved inside the option (so --candidate-* values apply), written after the label.
+  (() => {
+    const rgb = (value, scope, theme) => {
+      const probe = document.createElement('span')
+      probe.dataset.theme = theme
+      probe.style.color = value
+      scope.append(probe)
+      const parts = getComputedStyle(probe).color.match(/[\d.]+/g).map(Number)
+      probe.remove()
+      return parts.slice(0, 3)
+    }
+    const lum = ([r, g, b]) => [r, g, b]
+      .map((c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4 })
+      .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0)
+    const ratio = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05) }
+    for (const li of document.querySelectorAll('.measures li[data-fg]')) {
+      const scope = li.closest('.option') || document.body
+      const min = Number(li.dataset.min || 0)
+      const results = ['light', 'dark'].map((theme) => {
+        const r = ratio(rgb(li.dataset.fg, scope, theme), rgb(li.dataset.bg, scope, theme))
+        return { theme, r, ok: !min || r >= min }
+      })
+      li.dataset.pass = results.every((x) => x.ok) ? 'yes' : 'no'
+      li.append(`: ${results.map((x) => `${x.theme} ${x.r.toFixed(1)}:1${x.ok ? '' : ' (below ' + min + ':1)'}`).join(', ')}`)
+    }
+  })()
+</script>

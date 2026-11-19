@@ -351,7 +351,8 @@ class ProgrammeRead(TypedDict):
     """One of the two, the other None."""
 
     programme: data.ProgrammeRecord | None
-    #: As `GET /api/runs/{tracker}` gives it, its grid from this week on.
+    #: As `GET /api/runs/{tracker}` gives it, its grid from this week on; its `work` keeps
+    #: every week.
     run: dict[str, Any] | None
 
 
@@ -1012,9 +1013,13 @@ def _add_tools(server: MCPServer, config: Config) -> None:
         "run: the programme's copy (`doc`), the `params` in force, its `status`, this "
         "programme `week` of `weeks`, `clock` (today's programme week and each activity's "
         "state and activity week), `log` (every change, newest first: when it was made, the "
-        "day it took effect, the change, the reason and who made it), `endsShort`, and `grid`, "
-        "the weeks from this one on with each activity's values. Read a run before changing "
-        "it, and its log to explain why a value changed.",
+        "day it took effect, the change, the reason and who made it), `endsShort`, `grid`, "
+        "the weeks from this one on with each activity's values, and `work`, every week's "
+        "work planned and done from the first week: `total` in kg over the weighted "
+        "activities (null when none has weight; `leftOut` names the others), and each "
+        "activity's own, in its `measure` (work in kg, reps, seconds, distance in km or time "
+        "in min). Any mark counts a session in full; `done` is null for a week to come. Read a "
+        "run before changing it, and its log to explain why a value changed.",
         annotations=READ_ONLY,
     )
     def get_programme(

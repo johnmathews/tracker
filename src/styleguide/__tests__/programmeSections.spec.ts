@@ -5,6 +5,7 @@ import ProgrammeGridSection from '../sections/ProgrammeGridSection.vue'
 import ChangeSheetSection from '../sections/ChangeSheetSection.vue'
 import ProgrammeChartSection from '../sections/ProgrammeChartSection.vue'
 import WeekGridSection from '../sections/WeekGridSection.vue'
+import WorkChartSection from '../sections/WorkChartSection.vue'
 import { exampleServer, previewChange } from '../sections/programmeExamples'
 
 /** The sections of the programme primitives (#84): each card state, captioned, under its id. */
@@ -262,5 +263,26 @@ describe('WeekGridSection, a programme tracker’s week', () => {
     // Bench press keeps its seven boxes.
     expect(week.findAll('[data-slot="day-mark-button"]')).toHaveLength(7)
     wrapper.unmount()
+  })
+})
+
+describe('WorkChartSection', () => {
+  it('draws the whole programme, an activity without weight, and a long programme that scrolls', () => {
+    const wrapper = mount(WorkChartSection, { attachTo: document.body })
+    const total = wrapper.get('#sg-work-chart-total-running')
+    expect(total.text()).toContain('Week 4: 2,400 kg of 5,650 kg planned. 29,775 kg done so far.')
+    expect(total.findAll('rect[data-planned]')).toHaveLength(8)
+    expect(total.findAll('rect[data-future]')).toHaveLength(4)
+    expect(total.get('text[data-current]').text()).toBe('4')
+    const plank = wrapper.get('#sg-work-chart-activity-seconds')
+    expect(plank.text()).toContain('Week 4: 105 s of 315 s planned.')
+    expect(plank.get('[data-testid="work-chart"]').attributes('height')).toBe('200')
+    // Week 1 plans no plank: no column.
+    expect(plank.findAll('rect[data-planned]')).toHaveLength(7)
+    const long = wrapper.get('#sg-work-chart-long-scrolling')
+    expect(long.get('[data-testid="work-chart-plot"]').attributes('data-scroll')).toBeDefined()
+    expect(long.findAll('rect[data-planned]')).toHaveLength(104)
+    expect(long.get('text[data-current]').text()).toBe('40')
+    expect(captions(wrapper.element)).toHaveLength(3)
   })
 })

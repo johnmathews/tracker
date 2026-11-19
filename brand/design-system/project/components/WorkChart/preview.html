@@ -1,0 +1,505 @@
+<!-- @dsCard group="Planner" height=2100 subtitle="A programme's work, week by week: a column per week outlined at the work planned (dashed for the weeks to come) and filled with pen to the work done, this week on a tile band; the overview's Work tab with the whole programme and a chart per activity, and a long programme that scrolls sideways with the axis fixed (K179-K181)" -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>WorkChart — preview</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: var(--space-6);
+        background: var(--canvas);
+        color: var(--ink);
+        font-family: var(--font-sans);
+        font-variant-numeric: tabular-nums;
+      }
+      .vh {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
+      .variant {
+        margin: 0 0 var(--space-3);
+        color: var(--ink-secondary);
+      }
+      .gap {
+        height: var(--space-8);
+      }
+      :focus-visible {
+        outline: 2px solid var(--focus);
+        outline-offset: 2px;
+      }
+
+      /* The overview's tab panel, at u = 1: the page's 48u margins. */
+      .stage {
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        padding: 16px 48px 48px;
+      }
+      .work {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-width: 0;
+      }
+      .work h2 {
+        margin: 0;
+        font: 600 22px / 1.3 var(--font-sans);
+      }
+      .wline {
+        margin: 0;
+        color: var(--ink-secondary);
+        font-size: 19px;
+        line-height: 1.45;
+      }
+      .wline b {
+        color: var(--ink);
+        font-weight: 600;
+      }
+      .leftout {
+        margin: 0;
+        color: var(--ink-secondary);
+        font-size: 16px;
+        line-height: 22px;
+      }
+      .work h2.acts-h {
+        margin-top: 28px;
+        padding-top: 20px;
+        border-top: 1px solid var(--line);
+      }
+      /* By activity: two to a row, one folded. */
+      .multi {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 28px 32px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .mini {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+      }
+      .mini h3 {
+        margin: 0;
+        font: 600 19px / 25px var(--font-sans);
+      }
+      .mini .wline {
+        font-size: 16px;
+        line-height: 22px;
+      }
+
+      /* ---- The legend ---- */
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 20px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        color: var(--ink-secondary);
+        font-size: 16px;
+        line-height: 22px;
+      }
+      .legend li {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .sw {
+        display: inline-block;
+        width: 18px;
+        height: 12px;
+        border-radius: 2px;
+      }
+      .sw.planned {
+        border: 1.5px solid var(--ink-secondary);
+      }
+      .sw.tocome {
+        border: 1.5px dashed var(--control-border);
+      }
+      .sw.done {
+        background: var(--pen);
+      }
+
+      /* ---- The chart (K180, K181) ---- */
+      .chart {
+        position: relative;
+        width: 100%;
+        min-width: 0;
+      }
+      .chart .row {
+        display: flex;
+      }
+      .chart .axis {
+        flex: none;
+        display: block;
+        overflow: visible;
+      }
+      .chart .plot {
+        flex: 1;
+        min-width: 0;
+      }
+      .chart .plot.scroll {
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        scrollbar-width: thin;
+      }
+      .chart .plot svg {
+        display: block;
+        border-radius: var(--radius-sm);
+      }
+      .chart .plot svg:focus-visible {
+        outline-offset: -2px;
+      }
+      .chart text {
+        font-family: var(--font-sans);
+        font-size: 16px;
+        fill: var(--ink-secondary);
+      }
+      .chart text.now {
+        fill: var(--ink);
+        font-weight: 600;
+      }
+      .chart .rule {
+        stroke: var(--line);
+        stroke-width: 1;
+      }
+      .chart .band {
+        fill: var(--tile);
+      }
+      .chart .done {
+        fill: var(--pen);
+      }
+      .chart .planned {
+        fill: none;
+        stroke: var(--ink-secondary);
+        stroke-width: 1.5;
+      }
+      .chart .planned.future {
+        stroke: var(--control-border);
+      }
+      .chart .hit {
+        fill: transparent;
+      }
+      .chart .hit:hover,
+      .chart .hit.on {
+        fill: color-mix(in srgb, var(--ink) 6%, transparent);
+      }
+      /* The numbers for the week pointed at: a small panel, as the Popover's. */
+      .tip {
+        position: absolute;
+        z-index: 5;
+        pointer-events: none;
+        transform: translate(-50%, -100%);
+        padding: 8px 10px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        box-shadow: var(--shadow-overlay);
+        font-size: 16px;
+        line-height: 22px;
+        white-space: nowrap;
+      }
+      .tip b {
+        font-weight: 600;
+      }
+      .tip span {
+        display: block;
+        color: var(--ink-secondary);
+      }
+
+      /* Folded: one chart to a row, the page's 16px gutters, the system's n sizes. */
+      @media (max-width: 639px) {
+        body {
+          padding: var(--space-4) 0;
+        }
+        .variant {
+          padding: 0 var(--space-4);
+        }
+        .stage {
+          border-width: 1px 0;
+          border-radius: 0;
+          padding: 12px 16px 32px;
+        }
+        .work h2 {
+          font-size: 20px;
+        }
+        .wline {
+          font-size: 18px;
+          line-height: 26px;
+        }
+        .mini h3 {
+          font-size: 16px;
+          line-height: 22px;
+        }
+        .multi {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <p class="variant label">
+      The overview's Work tab (K180, option 2A): Beginner 5×5 in week 4 of 8, today Thu 19 Nov.
+      Weeks 4 and 8 are deloads. Point at a week, or focus a chart and use the arrows, for its
+      numbers
+    </p>
+    <div class="stage">
+      <div class="work" data-testid="programme-work">
+        <h2>The whole programme</h2>
+        <p class="wline" data-testid="work-total-line" data-line="total"></p>
+        <ul class="legend" data-testid="work-chart-legend">
+          <li><span class="sw planned" aria-hidden="true"></span>Planned</li>
+          <li><span class="sw tocome" aria-hidden="true"></span>Still to come</li>
+          <li><span class="sw done" aria-hidden="true"></span>Done</li>
+        </ul>
+        <div class="chart" data-testid="work-total" data-series="total" data-h="300"></div>
+        <p class="leftout" data-testid="work-left-out">
+          Plank has no weight, so it is not in the total.
+        </p>
+        <h2 class="acts-h" data-testid="work-by-activity">By activity</h2>
+        <ul class="multi" data-activities></ul>
+      </div>
+    </div>
+
+    <div class="gap"></div>
+    <p class="variant label">
+      A long programme (K181, option 3A): Two-year strength, 104 weeks, in week 40. A column per
+      week, 18px apart; the plot scrolls sideways inside itself and opens with this week about two
+      thirds across, while the axis stays at the left. The week numbers thin out; this week's
+      always shows
+    </p>
+    <div class="stage">
+      <div class="work">
+        <h2>The whole programme</h2>
+        <p class="wline" data-line="long"></p>
+        <ul class="legend">
+          <li><span class="sw planned" aria-hidden="true"></span>Planned</li>
+          <li><span class="sw tocome" aria-hidden="true"></span>Still to come</li>
+          <li><span class="sw done" aria-hidden="true"></span>Done</li>
+        </ul>
+        <div class="chart" data-series="long" data-h="300"></div>
+      </div>
+    </div>
+
+    <script>
+      // The chart, drawn from the mockup's data (mockups/261119-work-charts): "Beginner 5×5", eight
+      // weeks from Mon 26 Oct, and "Two-year strength", 104 weeks from Mon 16 Feb. The SVG is drawn
+      // at the chart's own width, so its text stays 16px at every size.
+      ;(() => {
+        const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        const day = (first, i) => {
+          const d = new Date(first)
+          d.setUTCDate(d.getUTCDate() + 7 * i)
+          return d
+        }
+        const dates = (first, i) => {
+          const a = day(first, i)
+          const b = day(first, i)
+          b.setUTCDate(b.getUTCDate() + 6)
+          return a.getUTCMonth() === b.getUTCMonth()
+            ? `${a.getUTCDate()}–${b.getUTCDate()} ${MONTHS[b.getUTCMonth()]}`
+            : `${a.getUTCDate()} ${MONTHS[a.getUTCMonth()]}–${b.getUTCDate()} ${MONTHS[b.getUTCMonth()]}`
+        }
+        const fmt = (v) => Math.round(v).toLocaleString('en-GB')
+        const amount = (v, unit) => `${fmt(v)} ${unit}`
+
+        // ---- Beginner 5×5: five lifts and a plank, in week 4 ----
+        const NOW = 4
+        const DELOAD = [4, 8]
+        const LIFTS = [
+          { key: 'squat', name: 'Back squat', kg: [40, 42.5, 45, 40, 47.5, 50, 52.5, 47.5], sets: 5, target: 3, done: [3, 3, 2, 2] },
+          { key: 'bench', name: 'Bench press', kg: [30, 32.5, 35, 30, 35, 37.5, 40, 35], sets: 5, target: 3, done: [3, 3, 3, 1] },
+          { key: 'row', name: 'Barbell row', kg: [30, 32.5, 35, 30, 35, 37.5, 40, 35], sets: 5, target: 3, done: [3, 2, 3, 1] },
+          { key: 'ohp', name: 'Overhead press', kg: [20, 22.5, 22.5, 20, 25, 25, 27.5, 22.5], sets: 5, target: 3, done: [3, 3, 2, 1] },
+          { key: 'dead', name: 'Deadlift', kg: [50, 55, 57.5, 50, 60, 62.5, 67.5, 60], sets: 1, target: 1, done: [1, 1, 1, 0] },
+        ]
+        const lift = (l) =>
+          l.kg.map((kg, i) => {
+            const one = kg * 5 * (DELOAD.includes(i + 1) && l.sets === 5 ? 3 : l.sets)
+            return { w: i + 1, planned: one * l.target, done: i < NOW ? one * l.done[i] : null }
+          })
+        const PLANK_S = [null, 30, 30, 35, 35, 40, 40, 45]
+        const PLANK_DONE = [0, 3, 2, 1]
+        const plank = PLANK_S.map((s, i) => ({
+          w: i + 1,
+          planned: s == null ? 0 : s * 9,
+          done: i < NOW ? (s ?? 0) * 3 * PLANK_DONE[i] : null,
+        }))
+        const sum = (list) =>
+          list[0].map((x, i) => ({
+            w: x.w,
+            planned: list.reduce((a, s) => a + s[i].planned, 0),
+            done: x.done == null ? null : list.reduce((a, s) => a + s[i].done, 0),
+          }))
+        const BY = Object.fromEntries(LIFTS.map((l) => [l.key, lift(l)]))
+
+        // ---- Two-year strength: 104 weeks, in week 40, a deload every sixth ----
+        const LNOW = 40
+        const wave = (w) => 1 + 0.25 * Math.sin(w / 6) + w / 260
+        const longLift = (base, sets, target, seed) =>
+          Array.from({ length: 104 }, (_, i) => {
+            const w = i + 1
+            const kg = Math.round((base * wave(w) * (w % 6 === 0 ? 0.8 : 1)) / 2.5) * 2.5
+            const one = kg * 5 * sets
+            const marks = w === LNOW ? 1 : w < LNOW ? Math.max(0, target - ((w * seed) % 5 === 0 ? 1 : 0)) : null
+            return { w, planned: one * target, done: marks == null ? null : one * marks }
+          })
+
+        const SERIES = {
+          total: { first: '2026-10-26', now: NOW, unit: 'kg', weeks: sum(LIFTS.map((l) => BY[l.key])), label: 'The whole programme: work in kg planned and done, week by week' },
+          long: { first: '2026-02-16', now: LNOW, unit: 'kg', weeks: sum([longLift(60, 5, 3, 3), longLift(45, 5, 3, 7), longLift(80, 1, 1, 11)]), label: 'Two-year strength: work in kg planned and done, week by week' },
+          plank: { first: '2026-10-26', now: NOW, unit: 's', weeks: plank, label: 'Plank: seconds held planned and done, week by week' },
+        }
+        for (const l of LIFTS)
+          SERIES[l.key] = { first: '2026-10-26', now: NOW, unit: 'kg', weeks: BY[l.key], label: `${l.name}: work in kg planned and done, week by week` }
+
+        // The line over a chart: "Week 4: <b>2,400 kg</b> of 5,650 kg planned. 29,775 kg done so far."
+        // An activity without weight leaves out the last sentence.
+        const line = (sr, soFar) => {
+          const now = sr.weeks[sr.now - 1]
+          const total = sr.weeks.reduce((a, x) => a + (x.done ?? 0), 0)
+          return `Week ${sr.now}: <b>${amount(now.done, sr.unit)}</b> of ${amount(now.planned, sr.unit)} planned.${soFar ? ` ${amount(total, sr.unit)} done so far.` : ''}`
+        }
+        document.querySelector('[data-line="total"]').innerHTML = line(SERIES.total, true)
+        document.querySelector('[data-line="long"]').innerHTML = line(SERIES.long, true)
+        const minis = [...LIFTS.map((l) => [l.key, l.name, true]), ['plank', 'Plank, seconds held', false]]
+        document.querySelector('[data-activities]').innerHTML = minis
+          .map(
+            ([key, name, soFar]) =>
+              `<li class="mini" data-testid="work-activity"><h3>${name}</h3><p class="wline" data-testid="work-activity-line">${line(SERIES[key], soFar)}</p><div class="chart" data-series="${key}" data-h="200"></div></li>`,
+          )
+          .join('')
+
+        // ---- Drawing ----
+        const T = 40, B = 30, R = 8, MIN = 18, CH = 9, GAP = 8
+        const nice = (v) => {
+          const e = 10 ** Math.floor(Math.log10(v || 1))
+          const m = v / e
+          return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * e
+        }
+        function draw(host, sr) {
+          const W = Math.max(280, host.clientWidth), H = Number(host.dataset.h)
+          const n = sr.weeks.length, now = sr.now - 1
+          const top = Math.max(...sr.weeks.map((x) => Math.max(x.planned, x.done ?? 0)))
+          const step = nice(top / 4), max = Math.ceil(top / step) * step || step
+          const ticks = Array.from({ length: Math.round(max / step) + 1 }, (_, k) => k * step)
+          const L = Math.max(44, Math.max(...ticks.map((t) => fmt(t).length), sr.unit.length) * CH + 16)
+          const y = (v) => T + (H - T - B) * (1 - v / max)
+          const scroll = (W - L - R) / n < MIN
+          const pitch = scroll ? MIN : (W - L - R) / n
+          const PW = scroll ? n * pitch + R : W - L
+          const cx = (i) => i * pitch + pitch / 2
+          const bw = Math.min(44, Math.max(4, pitch * 0.56))
+          const wkInAxis = scroll || pitch < 4 * CH + GAP
+          const dash = pitch < 30 ? '4 3' : '5 4'
+
+          let axis = `<text x="${L - 8}" y="${T - 22}" text-anchor="end">${sr.unit}</text>`
+          let plot = ''
+          for (const t of ticks) {
+            axis += `<text x="${L - 8}" y="${y(t) + 5}" text-anchor="end">${fmt(t)}</text>`
+            plot += `<line class="rule" x1="0" x2="${PW}" y1="${y(t)}" y2="${y(t)}"/>`
+          }
+          if (wkInAxis) axis += `<text x="${L - 8}" y="${H - 8}" text-anchor="end">Wk</text>`
+          const inset = pitch >= 30 ? 2 : 1
+          plot = `<rect class="band" x="${now * pitch + inset}" y="${T - 22}" width="${pitch - 2 * inset}" height="${H - T - B + 22}" rx="${pitch >= 30 ? 4 : 3}"/>` + plot
+          sr.weeks.forEach((x, i) => {
+            const bx = cx(i) - bw / 2
+            if (x.done) plot += `<rect class="done" x="${bx}" y="${y(x.done)}" width="${bw}" height="${y(0) - y(x.done)}"/>`
+            if (x.planned > 0) {
+              const future = x.done == null
+              plot += `<rect class="planned${future ? ' future' : ''}" x="${bx + 0.75}" y="${y(x.planned) + 0.75}" width="${bw - 1.5}" height="${Math.max(y(0) - y(x.planned) - 1.5, 0)}"${future ? ` stroke-dasharray="${dash}"` : ''}/>`
+            }
+          })
+          // Week numbers, thinned to stay apart; this week's always shows and touches none.
+          const texts = sr.weeks.map((x, i) => (i === 0 && !wkInAxis ? `Wk ${x.w}` : `${x.w}`))
+          const room = (i) => texts[i].length * CH
+          const every = Math.max(1, Math.ceil((Math.max(...texts.map((_, i) => room(i))) + GAP) / pitch))
+          const clear = (i) => Math.abs(cx(i) - cx(now)) >= (room(i) + room(now)) / 2 + GAP
+          texts.forEach((t, i) => {
+            if (i === now || (i % every === 0 && clear(i)))
+              plot += `<text x="${cx(i)}" y="${H - 8}" text-anchor="middle" data-room="${room(i)}"${i === now ? ' class="now"' : ''}>${t}</text>`
+          })
+          sr.weeks.forEach((_, i) => {
+            plot += `<rect class="hit" data-wk="${i}" x="${i * pitch}" y="${T - 22}" width="${pitch}" height="${H - T - B + 22}"/>`
+          })
+          const done = (x, i) => (x.done == null ? '' : `${amount(x.done, sr.unit)}${i === now ? ' so far' : ''}`)
+          const rows = sr.weeks
+            .map((x, i) => `<tr><th scope="row">Week ${x.w}, ${dates(sr.first, i)}</th><td>${amount(x.planned, sr.unit)}</td><td>${done(x, i)}</td></tr>`)
+            .join('')
+          host.innerHTML =
+            `<div class="row"><svg class="axis" width="${L}" height="${H}" viewBox="0 0 ${L} ${H}" aria-hidden="true">${axis}</svg>` +
+            `<div class="plot${scroll ? ' scroll' : ''}" data-testid="work-chart-plot"><svg width="${PW}" height="${H}" viewBox="0 0 ${PW} ${H}" role="img" tabindex="0" aria-label="${sr.label}" data-testid="work-chart">${plot}</svg></div></div>` +
+            // The table for a screen reader sits in a hidden box: a table ignores a 1px width of its own.
+            `<div class="vh"><table data-testid="work-chart-table"><caption>${sr.label}</caption><tr><th scope="col">Week</th><th scope="col">Planned</th><th scope="col">Done</th></tr>${rows}</table></div>` +
+            `<div class="tip" hidden aria-hidden="true" data-testid="work-chart-tip"></div>`
+
+          const box = host.querySelector('.plot')
+          // A long plot opens with this week about two thirds across. A number the box's edge
+          // would cut is left out, so "13" never reads "3"; this week's always shows.
+          const edges = () => {
+            if (!scroll) return
+            for (const t of box.querySelectorAll('text[data-room]')) {
+              const x = Number(t.getAttribute('x')), half = Number(t.dataset.room) / 2
+              const cut = x - half < box.scrollLeft || x + half > box.scrollLeft + box.clientWidth
+              t.style.visibility = cut && !t.classList.contains('now') ? 'hidden' : ''
+            }
+          }
+          if (scroll) box.scrollLeft = Math.max(0, cx(now) - (box.clientWidth * 2) / 3)
+          edges()
+          box.addEventListener('scroll', edges)
+          const tip = host.querySelector('.tip')
+          const hits = [...host.querySelectorAll('.hit')]
+          const show = (i) => {
+            hits.forEach((h, k) => h.classList.toggle('on', k === i))
+            if (i == null) return (tip.hidden = true)
+            const x = sr.weeks[i]
+            tip.innerHTML = `<b>Week ${x.w}</b> · ${dates(sr.first, i)}<span>Planned ${amount(x.planned, sr.unit)}</span>${x.done == null ? '' : `<span>Done ${done(x, i)}</span>`}`
+            tip.hidden = false
+            tip.style.left = `${Math.min(Math.max(L + cx(i) - box.scrollLeft, 80), W - 80)}px`
+            tip.style.top = `${T + 28}px`
+          }
+          hits.forEach((h) => {
+            h.addEventListener('pointerenter', () => show(Number(h.dataset.wk)))
+            h.addEventListener('pointerleave', () => show(null))
+          })
+          // Focus and the arrows move the panel, keeping the week in view.
+          const svg = box.querySelector('svg')
+          let active = null
+          svg.addEventListener('focus', () => show((active = now)))
+          svg.addEventListener('blur', () => show((active = null)))
+          svg.addEventListener('keydown', (e) => {
+            const moves = { ArrowLeft: active - 1, ArrowRight: active + 1, Home: 0, End: n - 1 }
+            if (!(e.key in moves)) return
+            e.preventDefault()
+            active = Math.min(Math.max(moves[e.key], 0), n - 1)
+            const left = active * pitch
+            if (left < box.scrollLeft) box.scrollLeft = left
+            else if (left + pitch > box.scrollLeft + box.clientWidth) box.scrollLeft = left + pitch - box.clientWidth
+            show(active)
+          })
+        }
+
+        for (const host of document.querySelectorAll('.chart[data-series]')) {
+          const sr = SERIES[host.dataset.series]
+          let width = 0
+          new ResizeObserver(() => {
+            if (host.clientWidth !== width) {
+              width = host.clientWidth
+              draw(host, sr)
+            }
+          }).observe(host)
+        }
+      })()
+    </script>
+  </body>
+</html>

@@ -85,7 +85,7 @@ shared library and copy a programme from it into your library. A started program
 | ------------------------ | ----- | ----------------------------------------------------------------------------------------- |
 | `programme_format`       | read  | The format's JSON Schema, a worked example, each type of change, and how to use them.     |
 | `list_programmes`        | read  | Your library, and every run with its status and week.                                     |
-| `get_programme`          | read  | One library programme with its document, or one run with its clock, log and coming weeks. |
+| `get_programme`          | read  | One library programme with its document, or a run: its clock, log, coming weeks and work. |
 | `list_shared_programmes` | read  | The shared library's programmes, or one shared programme with its document.               |
 | `save_programme`         | write | Checks a document and adds it to the library, or replaces one. Lists every problem.       |
 | `copy_programme`         | write | Copies a shared programme into your library and returns the copy.                         |
@@ -108,8 +108,10 @@ shared library and copy a programme from it into your library. A started program
   `ended`.
 - `get_programme(programme=…)` returns `{programme, run: null}`, the programme with its `doc`.
   `get_programme(tracker=…)` returns `{programme: null, run}`, the run as
-  [api.md](api.md) §3.4 describes it, with the grid's weeks from this one on. `tracker` is the
-  programme tracker's id, or its name in any case.
+  [api.md](api.md) §3.4 describes it, with the grid's weeks from this one on. Its `work` has
+  every week from the first: the work planned and done, in kg over the weighted activities and in
+  each activity's own measure (K179). `tracker` is the programme tracker's id, or its name in any
+  case.
 - `list_shared_programmes(programme?)` reads the shared library: programmes anyone with an
   account can copy, which an admin publishes in the app ([api.md](api.md) §3.5). Without
   `programme` it returns `{programmes, programme: null}`, each programme `{id, name, description,
@@ -186,7 +188,7 @@ kind, weeks, activities, updatedAt}`, the newest publish first. With `programme`
 
 | Refusal                                                                                                                                                                                    | Means                                                                                                                                                                                                                     |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `doc: the programme has 3 problems, so nothing was saved. Fix each one and send it again.` then one line each, `- weeks: give a whole number from 1 to 52.`                                | The document has problems; each line has its JSON path. Nothing was stored.                                                                                                                                               |
+| `doc: the programme has 3 problems, so nothing was saved. Fix each one and send it again.` then one line each, `- weeks: give a whole number from 1 to 156.`                               | The document has problems; each line has its JSON path. Nothing was stored.                                                                                                                                               |
 | `doc: is not a JSON object; send the object itself`                                                                                                                                        | The document came as JSON text, not an object.                                                                                                                                                                            |
 | `rev: give the programme's rev, from list_programmes or get_programme, to replace it`                                                                                                      | A replace needs the programme's `rev`.                                                                                                                                                                                    |
 | `rev: the programme changed since rev 2; it is at rev 3 now. …`                                                                                                                            | Someone saved it since. Read it again with `get_programme`, then send the document with that rev.                                                                                                                         |

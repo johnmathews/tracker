@@ -17,6 +17,9 @@ import { ChangeSheet } from '@/components/ui/change-sheet'
 import { InlineMessage } from '@/components/ui/inline-message'
 import { ProgrammeChart, ProgrammeLede, activityChart } from '@/components/ui/programme-chart'
 import { ProgrammeGrid } from '@/components/ui/programme-grid'
+import { WorkChart, WorkLegend } from '@/components/ui/work-chart'
+import { LEDE } from '@/lib/itemPage'
+import { chartLabel, currentMonday, workFrame, workLine } from '@/lib/work'
 
 const props = defineProps<{
   /** The programme tracker's id. */
@@ -46,6 +49,20 @@ watch(
 const run = computed(() => store.byTracker[props.tracker] ?? null)
 const chart = computed(() => (run.value ? activityChart(run.value, props.activity) : null))
 const ended = computed(() => run.value!.status === 'ended')
+/** The activity's work chart (K180), found by its key in the run's work; none from an older
+ * server, or for an activity the work leaves out. */
+const work = computed(() => {
+  const series = run.value!.work?.activities.find((a) => a.key === props.activity)
+  if (!series) return null
+  const current = currentMonday(run.value!)
+  return {
+    series,
+    frame: workFrame(run.value!),
+    current,
+    line: workLine(series, current, series.measure === 'work'),
+    label: chartLabel(series.name, series.measure),
+  }
+})
 const paused = computed(() =>
   activityOptions(run.value!, props.activity).some((o) => o.kind === 'resume-activity'),
 )
@@ -124,7 +141,8 @@ const CONTROL =
 
 <!--
   An activity's Programme row's content (ProgrammeChart card, K145, spec §9.4): the lede, the
-  step chart from the run's grid, the line when it ends short, then its controls, each opening the
+  step chart from the run's grid, the line when it ends short, the activity's work under a "Work"
+  heading (WorkChart card, K180), then its controls, each opening the
   ChangeSheet from today with its change chosen. Offline, the controls are disabled with one line
   saying why (spec §11.2). Show it in the plan (K148) puts the sheet away and shows the run's plan
   with the change in its cells here, with the overview's bar at the foot.
@@ -151,6 +169,22 @@ const CONTROL =
       <InlineMessage v-if="chart.endsShort" tone="info" data-testid="activity-ends-short">{{
         chart.endsShort
       }}</InlineMessage>
+      <!-- The activity's work, as the overview's Work tab draws it (WorkChart card, K180). -->
+      <div v-if="work" class="flex flex-col gap-3" data-testid="activity-work">
+        <h3 class="label text-(length:--set-label) leading-[1.3] font-semibold text-ink">Work</h3>
+        <p :class="LEDE" data-testid="activity-work-line">
+          {{ work.line.before }}<b class="font-semibold text-ink">{{ work.line.value }}</b
+          >{{ work.line.after }}
+        </p>
+        <WorkLegend />
+        <WorkChart
+          :series="work.series"
+          :frame="work.frame"
+          :current="work.current"
+          :height="200"
+          :label="work.label"
+        />
+      </div>
       <template v-if="!ended">
         <InlineMessage v-if="store.offline" tone="info" data-testid="activity-offline">{{
           OFFLINE

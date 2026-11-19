@@ -648,6 +648,17 @@
           <button
             type="button"
             role="tab"
+            id="o1-tab-work"
+            aria-controls="o1-work"
+            aria-selected="false"
+            tabindex="-1"
+            data-testid="programme-tab-work"
+          >
+            Work
+          </button>
+          <button
+            type="button"
+            role="tab"
             id="o1-tab-changes"
             aria-controls="o1-changes"
             aria-selected="false"
@@ -737,6 +748,10 @@
               >End programme
             </button>
           </div>
+        </div>
+        <!-- The Work tab (K180) is the WorkChart card's: the whole programme, then each activity. -->
+        <div role="tabpanel" id="o1-work" aria-labelledby="o1-tab-work" hidden>
+          <p class="meta">The programme's work, week by week, as the WorkChart card draws it.</p>
         </div>
         <div role="tabpanel" id="o1-changes" aria-labelledby="o1-tab-changes" hidden>
           <ol class="log" data-testid="programme-changes">

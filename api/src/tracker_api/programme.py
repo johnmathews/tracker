@@ -66,7 +66,10 @@ KINDS: tuple[Kind, ...] = ("strength", "mobility", "cardio")
 type Field = Literal["target", "sets", "reps", "duration", "weight", "distance"]
 FIELDS: tuple[Field, ...] = ("target", "sets", "reps", "duration", "weight", "distance")
 
-MAX_WEEKS = 52
+#: A programme's weeks (K182): up to three years.
+MAX_WEEKS = 156
+#: An increase's `every` and a pause's `weeks`, which K182 left at a year.
+MAX_SPAN = 52
 MAX_DESCRIPTION = 2000
 MAX_PARAMS = 20
 MAX_ACTIVITIES = 30
@@ -759,9 +762,9 @@ class _Checker:
                 self.error(f"{path}.rate", "a progression has add or rate, not both.")
         every = 1
         if "every" in raw:
-            every = whole_in(raw["every"], 1, MAX_WEEKS) or 0
+            every = whole_in(raw["every"], 1, MAX_SPAN) or 0
             if not every:
-                self.error(f"{path}.every", f"give a whole number of weeks from 1 to {MAX_WEEKS}.")
+                self.error(f"{path}.every", f"give a whole number of weeks from 1 to {MAX_SPAN}.")
         top = None
         if "max" in raw:
             top = as_decimal(raw["max"])
@@ -1187,7 +1190,7 @@ def _value_schemas(kind: Kind, rule: FieldRule) -> dict[str, Any]:
                     reference,
                 ]
             },
-            "every": {"type": "integer", "minimum": 1, "maximum": MAX_WEEKS, "default": 1},
+            "every": {"type": "integer", "minimum": 1, "maximum": MAX_SPAN, "default": 1},
             "max": literal,
             "step": step | {"default": _json_number(rule.step)},
         },

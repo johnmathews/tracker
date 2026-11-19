@@ -149,7 +149,8 @@ function weekBy(move: () => void): () => boolean {
 }
 
 // The week's keys (K91): E in and out of Edit plan, Esc out of full screen and then out of Edit
-// plan, F full screen, P print and S Settings, as their buttons do. A opens Ask, or in Edit plan
+// plan, F full screen, P Programmes (K178) and S Settings, as their buttons do. Print has no key
+// of its own: ⌘P or Ctrl+P is the browser's, and prints the same page. A opens Ask, or in Edit plan
 // adds to the tracker on screen (K109). ← and → go to the previous and the next week (K133).
 useShortcuts(() => ({
   arrowleft: weekBy(store.prevWeek),
@@ -162,7 +163,7 @@ useShortcuts(() => ({
     else return false
   },
   f: fullscreen.supported ? () => void fullscreen.toggle() : undefined,
-  p: print,
+  p: openProgrammes,
   s: openSettings,
 }))
 
@@ -341,6 +342,7 @@ function skipToToday(): void {
         /></BarAction>
         <BarAction
           label="Programmes"
+          aria-keyshortcuts="P"
           class="folded:flex-1 folded:basis-0"
           data-testid="programmes-button"
           @click="openProgrammes"
@@ -349,11 +351,7 @@ function skipToToday(): void {
         <!-- Printing from a phone is rare, and the bar has no room for it there. Below `sm`
              (the folded bar at phone width) Print and Full screen hide, so Ask, Settings,
              Programmes and Profile share the row (K160). -->
-        <BarAction
-          label="Print…"
-          aria-keyshortcuts="P"
-          class="max-sm:hidden folded:flex-1 folded:basis-0"
-          @click="print"
+        <BarAction label="Print…" class="max-sm:hidden folded:flex-1 folded:basis-0" @click="print"
           ><Printer
         /></BarAction>
         <!-- Full screen (K34): left out where the browser has none, as on an iPhone, and hidden

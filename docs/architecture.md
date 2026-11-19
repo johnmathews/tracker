@@ -151,7 +151,7 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 │                       and Full screen (useFullscreen, where the browser has one), both left out
 │                       below 640px wide (K160), and Profile, which opens the profile Menu: Signed in
 │                       as, Profile and Sign out (useSignOut, K106); the week's keys E, Esc,
-│                       F, P, S and A, ← and → (useShortcuts, K91, K109, K133); full width, sized by main.css's --bar-* (K47, K49); on the
+│                       F, P, S and A, ← and → (useShortcuts, K91, K109, K133, K178); full width, sized by main.css's --bar-* (K47, K49); on the
 │                       planner's screens out of sight until a long press or the handle opens
 │                       Edit plan (useBarReveal, §6.6)
 ├── ConnectPage.vue     an OAuth consent link (#/connect/<id>, K73), signed in or out: who is
@@ -181,8 +181,9 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 │   │                   cardio item's or a food's, with Times a week
 │   ├── RecentWeeks.vue the RecentWeeks card: up to eight weeks, newest first, a met week's count
 │   │                   in pen
-│   └── ItemProgramme.vue  a programme activity's plan row (§8, K145): the step chart and the
-│                       activity's controls, in place of PlanFields
+│   └── ItemProgramme.vue  a programme activity's plan row (§8, K145): the step chart, the
+│                       activity's work chart under it (K180), and the activity's controls, in
+│                       place of PlanFields
 ├── NewItemPage.vue     the new item page, at #/new/<tracker> (K104): Back to the week, Cancel and
 │                       the kind's Add ("Add exercise"); "New exercise" and the Name field; then the plan
 │                       (PlanFields), Notes and Details as the type's arrangement shows them;
@@ -195,7 +196,10 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 ├── ProgrammesPage.vue  the Programmes page, at #/programmes (§8, K147, K161): the Started,
 │                       Library and Add tabs; Preview and start opens in place in the library
 ├── ProgrammeOverview.vue  a run's overview, at #/programme/<tracker> (§8, K142, K148): the
-│                       plan in ProgrammeGrid, the Changes tab with Undo and the ChangeSheet
+│                       plan in ProgrammeGrid, the Work tab, the Changes tab with Undo and the
+│                       ChangeSheet
+├── ProgrammeWork.vue   the overview's Work tab (K180): the whole programme's WorkChart, then a
+│                       chart per activity, two to a row
 ├── SyncStatus.vue      loading, offline and conflict Banners above the planner
 ├── EmailStatus.vue     "Confirm your email." Banner, with Send it again, until it is confirmed
 ├── ImportPrompt.vue    this browser's log from before accounts, offered once (§7)
@@ -746,7 +750,7 @@ import and export as well: the API's tests (`api/tests/test_parity.py`) run the 
   config mode (Edit plan), where the bar is in view. Another long press, E, Esc or the hidden
   button (reading "Done") turns it off; the bar has no Done (K91). `useShortcuts`
   (`src/composables/shortcuts.ts`) carries the week's keys: E, Esc (full screen first, then Edit
-  plan), F full screen, P print, S Settings, and A for Ask, or in Edit plan the Add button of the
+  plan), F full screen, P Programmes (K178; Print is the browser's ⌘P), S Settings, and A for Ask, or in Edit plan the Add button of the
   screen showing most under the bar (K109), and ← and → for the previous and the next week, unless
   focus is in a grid, a SegmentedControl, tabs, a menu, a list or a slider, which move by the
   arrows themselves (K133). `App.vue` adds H or B for back and L for forward,
@@ -886,7 +890,7 @@ component's own.
 | Overlays   | Dialog, ConfirmDialog with ConfirmHost, Popover, Menu with MenuItem (K106)                                                                                                                                                           |
 | Planner    | DayMark, Chip, SectionHeader                                                                                                                                                                                                         |
 | Feedback   | InlineMessage, Banner                                                                                                                                                                                                                |
-| Programmes | ProgrammeGrid (`programme-grid`, the plan's weeks, K142), ChangeSheet (`change-sheet`, the two-step change, K144), ProgrammeChart (`programme-chart`, an activity's step chart, K145)                                                |
+| Programmes | ProgrammeGrid (`programme-grid`, the plan's weeks, K142), ChangeSheet (`change-sheet`, the two-step change, K144), ProgrammeChart (`programme-chart`, an activity's step chart, K145), WorkChart (`work-chart`, work week by week, K180) |
 | Ask        | Transcript (the turns in rows, answers through `answer()` in `src/lib/markdown.ts`), AnswerProgress (main.css's `pen-write` keyframe), QuotaChip, SidePanel (S1), HistoryList                                                        |
 
 The other cards are composed in the screens: Header in `AppNavbar.vue`, Panel in `AuthCard.vue`
@@ -1469,14 +1473,27 @@ back.
   tracker's run again when the state lists a newer `rev`. A start, a confirmed change and an end
   call `sync.refresh()`, so the week reads the plans the server wrote. Nothing here queues: offline
   (`offline`), the controls are disabled with one line saying why. `src/lib/programmes.ts` holds
-  the API types, the wording, the change bodies and `runsFromState`.
+  the API types, the wording, the change bodies and `runsFromState`. `src/lib/work.ts` words the
+  work charts (K179, spec 2026-11-19-work-charts §5): amounts with a thousands separator, the line
+  over each chart, and the sentence naming what the total leaves out.
 - **The views.** `ProgrammesPage.vue` is `#/programmes`: the Started, Library and Add tabs (K161), and
   Preview and start in place in the library list (K147). `ProgrammeOverview.vue` is
   `#/programme/<tracker>`: the plan in `ui/programme-grid/ProgrammeGrid.vue` (K142, K143), the
   Changes tab with Undo, the controls, and Show it in the plan with its bar at the foot (K148).
   `ui/change-sheet/ChangeSheet.vue` is the two-step change sheet (K144) that the overview and the
   item page open. On an item page a programme activity's plan row is `ItemProgramme.vue`, with the
-  step chart (`ui/programme-chart/`, K145) and the activity's controls. In the week view,
+  step chart (`ui/programme-chart/`, K145), the activity's work and the activity's controls.
+- **The work charts** (K179–K181). The run's `work` is the server's (W4): a total over the
+  weighted activities and a series per activity, each a week per grid week. The overview's Work
+  tab, between Plan and Changes, is `ProgrammeWork.vue`: "The whole programme" with its line, the
+  legend, its chart (300px) and what it leaves out, then "By activity", a chart (200px) per
+  activity. The item page shows the activity's own chart under the step chart, headed "Work".
+  `ui/work-chart/WorkChart.vue` draws a column per week, outlined at the work planned and filled
+  with `pen` to the work done, this week on a `tile` band. Every chart lays its weeks on the
+  run's grid weeks (`workFrame`), so an activity added later or ended early lines up with the
+  total. Columns sit at least 18px apart; when they don't fit, the plot scrolls sideways inside
+  itself with the axis fixed at the left, opening on this week (K181). A run from an older
+  server, with no `work`, shows no Work tab and no chart. In the week view,
   `TrackerSection.vue` puts "Week 4 of 8" at the end of the title line, linked to the overview, and
   reads the run's week for each paused activity's sentence, which `TrackerRow.vue` shows in place
   of its boxes; `TrackerGrid.vue` puts a lock by a locked day's name, and `DayMark`'s `locked`

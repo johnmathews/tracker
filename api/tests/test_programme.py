@@ -94,6 +94,20 @@ def test_invalid_fixtures_have_unique_names_and_cover_every_python_only_rule() -
     assert {c["pythonOnly"] for c in INVALID if not c["schemaRejects"]} == PYTHON_ONLY
 
 
+def test_a_programme_runs_up_to_156_weeks_and_an_increase_every_52() -> None:
+    """K182: three years, with an override in the last week. `every` keeps 1 to 52 (the
+    invalid fixtures refuse 157 weeks and an `every` of 53)."""
+    doc = spec_example()
+    doc["weeks"] = 156
+    doc["overrides"][0]["weeks"] = [4, 156]
+    doc["activities"][0]["weight"]["max"] = 150
+    doc["activities"][1]["duration"]["every"] = 52
+    assert check_programme(doc) == []
+    assert Draft202012Validator(programme_schema()).is_valid(doc)
+    doc["weeks"] = 157
+    assert errors_of(doc) == [("weeks", "give a whole number from 1 to 156.")]
+
+
 def test_an_error_reads_as_its_path_then_its_sentence() -> None:
     """The spec's §3.4 example, word for word."""
     doc = spec_example()

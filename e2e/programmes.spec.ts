@@ -1,8 +1,9 @@
 // Programmes (docs/specs/2026-11-17-programmes.md): start one from the Library, pause an activity
 // from its item page, then see the pause in the overview and the week; a locked day at phone
 // width; Re-open and Restart on a run ended early (K168); the shared library (K171): a second
-// account copies from it, and the admin publishes to it; axe on the Programmes page, the overview,
-// the shared section, Publish and the Re-open sheet in both themes.
+// account copies from it, and the admin publishes to it; the work charts (K180) on the overview's
+// Work tab and an activity's page; axe on the Programmes page, the overview, its Work tab, the
+// shared section, Publish and the Re-open sheet in both themes.
 //
 // /api is mocked with replies saved from the real API (e2e/fixtures/programmes/generate.py): the
 // story runs on Thu 12 Nov 2026, so Monday and Tuesday of its week are locked (spec §8).
@@ -451,6 +452,62 @@ test('Restart from week 1 previews the new tracker before it starts', async ({ p
   ])
 })
 
+test('the Work tab shows the whole programme, then a chart per activity (K180)', async ({
+  page,
+}) => {
+  await openStory(page, { hash: `#/programme/${TRACKER}` })
+  await expect(page.getByRole('tab')).toHaveText(['Plan', 'Work', 'Changes'])
+  await page.getByTestId('programme-tab-work').click()
+  const work = page.getByTestId('programme-work')
+  await expect(work.getByRole('heading', { level: 2 })).toHaveText([
+    'The whole programme',
+    'By activity',
+  ])
+  await expect(work.getByTestId('work-total-line')).toHaveText(
+    /^Week 1: [\d,]+ kg of [\d,]+ kg planned\. [\d,]+ kg done so far\.$/,
+  )
+  await expect(work.getByTestId('work-left-out')).toHaveText(
+    'Plank has no weight, so it is not in the total.',
+  )
+  const total = work.getByTestId('work-total')
+  const chart = total.getByTestId('work-chart')
+  await expect(chart).toHaveAttribute('height', '300')
+  await expect(chart.locator('rect[data-planned]')).toHaveCount(8)
+  await expect(chart.locator('text[data-current]')).toHaveText('Wk 1')
+  await expect(chart.locator('rect[data-band]')).toHaveCount(1)
+  await expect(work.getByTestId('work-activity').locator('h3')).toHaveText([
+    'Back squat',
+    'Bench press',
+    'Barbell row',
+    'Deadlift',
+    'Plank, seconds held',
+  ])
+  await expect(work.getByTestId('work-activity-line').last()).toHaveText(
+    /^Week 1: [\d,]+ s of [\d,]+ s planned\.$/,
+  )
+  // Two to a row on a wide screen.
+  const tops = await work
+    .getByTestId('work-activity')
+    .evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)))
+  expect(tops[1]).toBe(tops[0])
+  expect(tops[2]).toBeGreaterThan(tops[0]!)
+  // Pointing at a week shows its numbers.
+  await chart.locator('rect[data-hit]').first().hover()
+  await expect(total.getByTestId('work-chart-tip')).toBeVisible()
+  await expect(total.getByTestId('work-chart-tip')).toContainText('Week 1 ·')
+})
+
+test('an activity’s page shows its work under the step chart (K180)', async ({ page }) => {
+  await openStory(page, { hash: `#/item/${TRACKER}/plank` })
+  const section = page.getByTestId('activity-work')
+  await expect(section.getByRole('heading', { name: 'Work' })).toBeVisible()
+  await expect(section.getByTestId('activity-work-line')).toHaveText(
+    /^Week 1: [\d,]+ s of [\d,]+ s planned\.$/,
+  )
+  await expect(section.getByTestId('work-chart')).toHaveAttribute('height', '200')
+  await expect(section.locator('text[data-unit]')).toHaveText('s')
+})
+
 test.describe('at phone width', () => {
   test.use({ viewport: { width: 375, height: 800 } })
 
@@ -477,6 +534,17 @@ test.describe('at phone width', () => {
     await expect(page.getByTestId('programme-grid')).toBeVisible()
     await expectNoSidewaysScroll(page)
   })
+
+  test('the Work tab has one chart to a row, and nothing scrolls sideways', async ({ page }) => {
+    await openStory(page, { hash: `#/programme/${TRACKER}` })
+    await page.getByTestId('programme-tab-work').click()
+    await expect(page.getByTestId('work-total')).toBeVisible()
+    const tops = await page
+      .getByTestId('work-activity')
+      .evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)))
+    expect(tops[1]).toBeGreaterThan(tops[0]!)
+    await expectNoSidewaysScroll(page)
+  })
 })
 
 test.describe('axe', () => {
@@ -493,6 +561,14 @@ test.describe('axe', () => {
     test(`the overview, with a paused activity, ${theme}`, async ({ page }) => {
       await openStory(page, { phase: 'paused', theme, hash: `#/programme/${TRACKER}` })
       await expect(page.getByTestId('programme-grid')).toBeVisible()
+      await expectNoAxeViolations(page)
+    })
+
+    test(`the overview's Work tab, ${theme}`, async ({ page }) => {
+      await openStory(page, { theme, hash: `#/programme/${TRACKER}` })
+      await page.getByTestId('programme-tab-work').click()
+      await expect(page.getByTestId('work-total')).toBeVisible()
+      await settle(page)
       await expectNoAxeViolations(page)
     })
 

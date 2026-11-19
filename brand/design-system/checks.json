@@ -47,7 +47,8 @@
     "ProgrammeGrid",
     "ChangeSheet",
     "ProgrammeChart",
-    "ProgrammesPage"
+    "ProgrammesPage",
+    "WorkChart"
   ],
   "extra_contrast_pairs": [
     [

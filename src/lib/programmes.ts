@@ -202,7 +202,27 @@ export type Run = {
   >
   log: LogEntry[]
   grid: Grid
+  /** The work planned and done, week by week (K179, work-charts spec §3); absent from an older
+   * server. */
+  work?: Work
 }
+/** One week of a work chart: the grid's week, its planned amount, and what was done (spec §3).
+ * `done` is null for a week wholly after today. */
+export type WorkWeek = {
+  monday: string
+  programmeWeeks: number[]
+  planned: number
+  done: number | null
+}
+/** What a work chart draws: one measure, in its unit, a week per entry in the grid's order. */
+export type WorkSeries = { unit: string; weeks: WorkWeek[] }
+/** What an activity's chart counts (spec §1): work in kg, reps, seconds held, km or minutes. */
+export type WorkMeasure = 'work' | 'reps' | 'seconds' | 'distance' | 'time'
+export type WorkActivity = WorkSeries & { key: string; name: string; measure: WorkMeasure }
+/** The programme's total: the work of its weighted activities, naming the others it leaves out. */
+export type WorkTotal = WorkSeries & { leftOut: string[] }
+/** A run's work (K179): the total, null when no activity has weight, then each activity's. */
+export type Work = { total: WorkTotal | null; activities: WorkActivity[] }
 /** A run as `/api/state` lists it, by its tracker's id (spec §9.1). */
 export type RunSummary = {
   programmeId: string | null

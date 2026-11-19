@@ -7,16 +7,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import App from '@/App.vue'
-import type { ChangePreview, Run } from '@/lib/programmes'
+import type { ChangePreview, Run, Work } from '@/lib/programmes'
 import type { Tracker } from '@/lib/trackers'
 import { USER, emptySection, emptyState, signedIn } from '@/lib/__tests__/signedIn'
 import { withProgrammes, type Call, type Route } from './programmesApi'
 import RUN_JSON from '@/lib/__tests__/programmes/run.json'
 import PREVIEW_JSON from '@/lib/__tests__/programmes/change-preview.json'
+import WORK_JSON from '@/lib/__tests__/programmes/work.json'
 
 const RUN = RUN_JSON as unknown as Run
 const PREVIEW = PREVIEW_JSON as unknown as ChangePreview
 const AFTER: Run = { ...RUN, rev: 'after', grid: PREVIEW.grid }
+/** The run as a server with work charts sends it (K179, work-charts spec §3). */
+const WORKED: Run = { ...RUN, work: WORK_JSON as unknown as Work }
 const NOW = new Date(2026, 10, 12, 9, 0)
 const WEEK = '2026-11-09'
 const PROGRAMME: Tracker = {
@@ -200,6 +203,64 @@ describe('the Programme row (K145)', () => {
     expect(byTestId('programme-error').text()).toBe(
       'The server had a problem, so the programme couldn’t load. Try again in a while.',
     )
+  })
+})
+
+describe('the activity’s work (K180)', () => {
+  const withWork = { 'GET /runs/t1': { body: WORKED } }
+
+  it('sits under the step chart, headed Work, with its line, legend and chart', async () => {
+    await openItem('row', withWork)
+    const section = byTestId('activity-work')
+    expect(section.get('h3').text()).toBe('Work')
+    const line = byTestId('activity-work-line')
+    expect(line.text()).toBe('Week 4: 525 kg of 1,575 kg planned. 6,275 kg done so far.')
+    expect(line.get('b').text()).toBe('525 kg')
+    expect(section.find('[data-testid="work-chart-legend"]').exists()).toBe(true)
+    const chart = section.get('[data-testid="work-chart"]')
+    expect(chart.attributes('height')).toBe('200')
+    expect(chart.attributes('aria-label')).toBe(
+      'Barbell row: work in kg planned and done, week by week',
+    )
+    expect(chart.find('rect[data-band]').exists()).toBe(true)
+    // After the step chart, before the controls.
+    const order = [...page().element.querySelectorAll('[data-testid]')]
+      .map((e) => e.getAttribute('data-testid'))
+      .filter((id) => ['programme-chart', 'activity-work', 'activity-controls'].includes(id!))
+    expect(order).toEqual(['programme-chart', 'activity-work', 'activity-controls'])
+  })
+
+  it('counts seconds held for an activity without weight, with no work so far', async () => {
+    await openItem('plank', withWork)
+    expect(byTestId('activity-work-line').text()).toBe('Week 4: 105 s of 315 s planned.')
+    expect(byTestId('activity-work').get('text[data-unit]').text()).toBe('s')
+  })
+
+  it('keeps an activity ended early in line with the grid’s weeks', async () => {
+    // Its work stops after week 6: no entries for weeks 7 and 8, which keep their places.
+    const work = structuredClone(WORKED.work!)
+    const row = work.activities.find((a) => a.key === 'row')!
+    row.weeks = row.weeks.slice(0, 6)
+    await openItem('row', { 'GET /runs/t1': { body: { ...WORKED, work } } })
+    const chart = byTestId('activity-work').get('[data-testid="work-chart"]')
+    expect(chart.findAll('rect[data-hit]')).toHaveLength(8)
+    expect(chart.findAll('rect[data-planned]')).toHaveLength(6)
+    expect(
+      chart
+        .findAll('text[data-label]')
+        .map((t) => t.text())
+        .at(-1),
+    ).toBe('8')
+  })
+
+  it('shows none when the server sends no work, or none for the activity', async () => {
+    await openItem()
+    expect(page().find('[data-testid="activity-work"]').exists()).toBe(false)
+    wrapper.unmount()
+    await openItem('row', {
+      'GET /runs/t1': { body: { ...WORKED, work: { total: null, activities: [] } } },
+    })
+    expect(page().find('[data-testid="activity-work"]').exists()).toBe(false)
   })
 })
 

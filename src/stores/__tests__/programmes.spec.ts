@@ -131,9 +131,9 @@ describe('the library', () => {
   })
 
   it('returns the validator’s problems, each with its path', async () => {
-    const errors = [{ path: 'weeks', message: 'give a whole number from 1 to 52.' }]
+    const errors = [{ path: 'weeks', message: 'give a whole number from 1 to 156.' }]
     serve({ 'POST /programmes': { status: 400, body: { error: 'invalid', errors } } })
-    expect(await useProgrammesStore().addProgramme('{"weeks": 60}')).toEqual({
+    expect(await useProgrammesStore().addProgramme('{"weeks": 160}')).toEqual({
       ok: false,
       problems: errors,
       message: null,

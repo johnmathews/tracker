@@ -35,6 +35,6 @@ Tracker is a weekly plan for exercise and diet: one row per exercise or food, on
 
 - Fake paper texture, handwriting fonts, leather, binding or any skeuomorphism.
 - Confetti, streak flames, badges, points, motivational slogans, exclamation marks.
-- The `pen` colours on anything but their marks (and `pen` on a met day's underlined name, K60, on a met week's underlined count in RecentWeeks, K64, and as the app icon's ground, K139; on a programme, the underline of a met week's count in the ProgrammeGrid, K143, and a met week's dot in the ProgrammeChart, K145).
+- The `pen` colours on anything but their marks (and `pen` on a met day's underlined name, K60, on a met week's underlined count in RecentWeeks, K64, and as the app icon's ground, K139; on a programme, the underline of a met week's count in the ProgrammeGrid, K143, a met week's dot in the ProgrammeChart, K145, and the work done filling a WorkChart's columns, K180).
 - `pen-missed` standing in for `error-ink`: a missed day is a record, never an error.
 - Uppercase letter-spaced labels, monospace numbers, gradients, glows, emoji.

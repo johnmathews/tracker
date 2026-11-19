@@ -279,22 +279,30 @@ describe('the planner’s screens (K24–K27)', () => {
       expect(editing()).toBe(false)
     })
 
-    it('P prints, S opens Settings, and each button names its key', async () => {
-      const print = vi.spyOn(window, 'print').mockImplementation(() => {})
+    it('S opens Settings, and each button names its key', async () => {
       mountApp()
-      await press('p')
-      expect(print).toHaveBeenCalledOnce()
       const keys = bar()
         .findAll('[data-slot="bar-action"]')
         .map((b) => [b.text(), b.attributes('aria-keyshortcuts')])
       expect(keys).toEqual(
         expect.arrayContaining([
           ['Settings', 'S'],
-          ['Print…', 'P'],
+          ['Programmes', 'P'],
+          ['Print…', undefined],
         ]),
       )
       await press('s')
       expect(location.hash).toBe('#/settings')
+      history.replaceState(null, '', location.pathname)
+    })
+
+    it('P opens Programmes, and no longer prints (K178)', async () => {
+      const print = vi.spyOn(window, 'print').mockImplementation(() => {})
+      mountApp()
+      await press('p')
+      // ⌘P or Ctrl+P is the browser's own print.
+      expect(print).not.toHaveBeenCalled()
+      expect(location.hash).toBe('#/programmes')
       history.replaceState(null, '', location.pathname)
       print.mockRestore()
     })

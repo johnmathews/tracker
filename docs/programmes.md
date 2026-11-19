@@ -76,7 +76,7 @@ numbers never disagree.
 | `name`        | 1 to 60 characters, trimmed. It becomes the tracker's name, which can be changed after the start. |
 | `description` | Optional markdown, up to 2,000 characters.                                                        |
 | `kind`        | `strength`, `mobility` or `cardio`. One kind per programme.                                       |
-| `weeks`       | A whole number from 1 to 52.                                                                      |
+| `weeks`       | A whole number from 1 to 156 (three years, K182).                                                 |
 | `dailyTarget` | 1 to 8 for strength and mobility, 3 when left out. A cardio programme has none.                   |
 | `params`      | Optional, up to 20 parameters (§2.2).                                                             |
 | `activities`  | 1 to 30 activities (§2.1).                                                                        |
@@ -178,13 +178,13 @@ sentence. A document with any problem is never stored. The same check runs in th
 - `POST /api/programmes` and `PUT /api/programmes/{id}` answer 400 `invalid` with `errors`;
 - the MCP's `save_programme` lists the problems one a line ([mcp.md](mcp.md) §1.1).
 
-The fixture's beginner programme with `weeks` set to 60, a `rate` beside the row's `add`, and the
+The fixture's beginner programme with `weeks` set to 160, a `rate` beside the row's `add`, and the
 plank's key written `Plank` gives:
 
 ```json
 {
   "errors": [
-    { "path": "weeks", "message": "give a whole number from 1 to 52." },
+    { "path": "weeks", "message": "give a whole number from 1 to 156." },
     {
       "path": "activities[2].weight.rate",
       "message": "a progression has add or rate, not both."
@@ -309,6 +309,22 @@ old run stays as it is.
 plan write answers 409 `programme-tracker`, and the MCP's `add_item`, `update_item` and
 `remove_item` refuse it and name `change_programme`. An item's note can still change, since it is
 no part of a plan.
+
+**Work, planned and done** (K179). The run counts, week by week, the work its plan asks for and
+the work its marks say was done. The server computes it and sends it as the run's `work`
+([api.md](api.md) §3.4); the app draws it. The spec is
+[specs/2026-11-19-work-charts.md](specs/2026-11-19-work-charts.md).
+
+- Work is weight × reps × sets, in kg, for an activity with a weight and reps. One without a
+  weight counts its total reps, and a hold its seconds held, a weighted hold included. A cardio
+  activity counts its distance in km, or its time in minutes without a distance. An activity done
+  each side counts both sides.
+- A week plans its sessions × each session's amount. A value changed during the week counts from
+  its day, and paused or ended days plan nothing.
+- Any mark counts a session's full planned amount, as any mark counts toward the goal. A mark past
+  the goal counts too, so done can pass planned.
+- The programme's total adds the weighted activities only, and names the ones it leaves out. A
+  programme with no weighted activity has no total.
 
 ## 8. Changes
 

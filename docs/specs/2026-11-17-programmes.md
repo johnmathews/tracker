@@ -95,7 +95,7 @@ tool, with a worked example. `docs/programmes.md` documents it for people.
 | `name`        | 1 to 60 characters. It becomes the tracker's name, which can be changed after the start. |
 | `description` | Optional, markdown, up to 2,000 characters.                                              |
 | `kind`        | `strength`, `mobility` or `cardio` (S1). One kind per programme.                         |
-| `weeks`       | 1 to 52.                                                                                 |
+| `weeks`       | 1 to 156 (K182; 52 before).                                                              |
 | `dailyTarget` | 1 to 8 for strength and mobility; absent for cardio, which has none.                     |
 | `params`      | Up to 20, each with a `label`, a `unit` and a `default`, and optional `min` and `max`.   |
 | `activities`  | 1 to 30. Each `key` is unique, 1 to 40 characters of `a-z`, `0-9` and `-`.               |

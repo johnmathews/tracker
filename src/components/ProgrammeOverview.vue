@@ -32,11 +32,13 @@ import {
   type GridWeek,
   type SheetStart,
 } from '@/lib/programmes'
+import { currentMonday, workFrame } from '@/lib/work'
 import { useProgrammesStore } from '@/stores/programmes'
 import { useTrackersStore } from '@/stores/trackers'
 import { Button } from '@/components/ui/button'
 import { ChangeSheet, RunActionSheet } from '@/components/ui/change-sheet'
 import { InlineMessage } from '@/components/ui/inline-message'
+import ProgrammeWork from '@/components/ProgrammeWork.vue'
 import { ProgrammeGrid } from '@/components/ui/programme-grid'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { TextLink } from '@/components/ui/text-link'
@@ -244,9 +246,10 @@ function backToProgrammes(ev: MouseEvent): void {
 
 <!--
   A programme's overview (ProgrammeGrid card, spec §9.2), at #/programme/<tracker>: ItemPage's head
-  with no bar, "Programme" and the tracker's name, the line saying where the run is, then Plan and
-  Changes. Plan is the server's grid (P4), what ends short, and the programme's controls; a later
-  week's cell opens Edit this week and Change from here. Changes is the log, newest first, with Undo
+  with no bar, "Programme" and the tracker's name, the line saying where the run is, then Plan, Work
+  and Changes. Plan is the server's grid (P4), what ends short, and the programme's controls; a later
+  week's cell opens Edit this week and Change from here. Work is the run's work charts (K180), left
+  out when an older server sends none. Changes is the log, newest first, with Undo
   where the change starts today or later. Every change goes through the ChangeSheet; Show it in the
   plan puts the sheet away and shows the change in the grid with a bar at the foot (K148). Offline,
   the controls, the cells and Undo are disabled with one line saying why.
@@ -313,6 +316,13 @@ function backToProgrammes(ev: MouseEvent): void {
           class="text-(length:--set-text) leading-[1.35]"
           data-testid="programme-tab-plan"
           >Plan</TabsTrigger
+        >
+        <TabsTrigger
+          v-if="run.work"
+          value="work"
+          class="text-(length:--set-text) leading-[1.35]"
+          data-testid="programme-tab-work"
+          >Work</TabsTrigger
         >
         <TabsTrigger
           value="changes"
@@ -428,6 +438,10 @@ function backToProgrammes(ev: MouseEvent): void {
             >
           </template>
         </div>
+      </TabsContent>
+
+      <TabsContent v-if="run.work" value="work">
+        <ProgrammeWork :work="run.work" :frame="workFrame(run)" :current="currentMonday(run)" />
       </TabsContent>
 
       <TabsContent value="changes">

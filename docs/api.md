@@ -287,7 +287,7 @@ but the same `Content-Type` header.
 | `DELETE /programmes/{id}`                  | session | deletes it; 204. Runs started from it keep their copy                                                                                               |
 | `POST /programmes/{id}/preview`            | session | `{params?, start?}` → what a start would write; writes nothing                                                                                      |
 | `POST /programmes/{id}/start`              | session | `{params?, start?, name?}` → 201 `{tracker, run}`: a programme tracker and its run                                                                  |
-| `GET /runs/{tracker}`                      | session | the run: its state, clocks, log and overview grid                                                                                                   |
+| `GET /runs/{tracker}`                      | session | the run: its state, clocks, log, overview grid and work                                                                                             |
 | `POST /runs/{tracker}/changes`             | session | `{change, from, reason?, preview?, rev?}` → a change's preview, or the change applied with the preview's `rev`                                      |
 | `POST /runs/{tracker}/end`                 | session | `{from?, reason?}` → `{tracker, run}`: End programme                                                                                                |
 | `POST /runs/{tracker}/restart`             | session | `{start?, name?, preview?, rev?}` → a restart's preview, or the new tracker and run, and the old tracker (K164)                                     |
@@ -788,17 +788,17 @@ and browse and copy the shared library (§3.5).
 | `reopen_programme`       | write | `tracker`, `from_date` (today), `reason`, `confirm` (false), `rev`                         | `idempotentHint` |
 
 The run objects they return keep REST's camelCase (§3.4), and `get_programme`'s, `start_programme`'s
-and `change_programme`'s carry the grid's weeks from this one on. A preview from
-`change_programme` leaves out the grid, since `cells` says what changes. `end_programme` ends a run
-as `POST /runs/{tracker}/end` does (§3.4), after a preview of its from day and last week, confirmed
-with the preview's `rev`. `restart_programme` starts a new run from week 1 as a new tracker, from
-the old run's `doc_json` and `params_json`, after a preview confirmed the same way. A run still
-going on the new start day ends from it in the same transaction, as End programme ends it (K164).
-`reopen_programme` re-opens a run End programme stopped part way, after a preview confirmed the
-same way (K165). No REST route restarts or re-opens a run. `copy_programme` copies a shared
-programme as `POST /shared-programmes/{id}/copy` does, and `list_shared_programmes` reads the
-shared library as its two `GET` routes do. No tool publishes: an MCP token carries no admin
-rights.
+and `change_programme`'s carry the grid's weeks from this one on, and `work` with every week. A
+preview from `change_programme` leaves out the grid, since `cells` says what changes.
+`end_programme` ends a run as `POST /runs/{tracker}/end` does (§3.4), after a preview of its from
+day and last week, confirmed with the preview's `rev`. `restart_programme` starts a new run from
+week 1 as a new tracker, from the old run's `doc_json` and `params_json`, after a preview confirmed
+the same way. A run still going on the new start day ends from it in the same transaction, as End
+programme ends it (K164). `reopen_programme` re-opens a run End programme stopped part way, after a
+preview confirmed the same way (K165). No REST route restarts or re-opens a run. `copy_programme`
+copies a shared programme as `POST /shared-programmes/{id}/copy` does, and `list_shared_programmes`
+reads the shared library as its two `GET` routes do. No tool publishes: an MCP token carries no
+admin rights.
 
 ### 3.2 Ask
 
@@ -1162,6 +1162,7 @@ endsShort, grid}`.
 | `clock`        | Today: `{programmeWeek, status, until, reason, activities}`, each activity `{state, activityWeek, until, reason}`                                                                                                                                                                |
 | `log`          | Every row, newest first: `{seq, madeAt, from, change, reason, source, undoneBy, undoable}`. `change` is a change's body, `{"type": "end-programme"}` (with `"restarted": true` when a restart wrote it) or `{"type": "reopen-programme"}`. `undoable` is true while Undo applies |
 | `grid`         | The overview: `{activities, weeks, whenResumed}`                                                                                                                                                                                                                                 |
+| `work`         | The work planned and done, week by week (K179): `{total, activities}`, below                                                                                                                                                                                                     |
 
 A day's `status` is `before-start`, `running` or `paused`, and an activity's `state` is `running`,
 `paused`, `ended` or `not-started`. In `grid`:
@@ -1182,6 +1183,28 @@ A day's `status` is `before-start`, `running` or `paused`, and an activity's `st
   `marks` is the item's seven marks.
 - `whenResumed` holds the weeks after an open-ended pause, as they will run when resumed:
   `{programmeWeek, label, cells}`, with no dates.
+
+In `work` ([specs/2026-11-19-work-charts.md](specs/2026-11-19-work-charts.md) §3), the server
+computes every amount (P4):
+
+- `activities` lists each activity of the grid, in its order: `{key, name, measure, unit, weeks}`.
+  `measure` is `work` (kg: weight × reps × sets) for an activity with a weight and reps. Without
+  a weight, it is `reps` (reps × sets), or `seconds` (`s`: seconds held × sets) for a hold. A
+  cardio activity counts `distance` (`km`), or `time` (`min`) when it has no distance. Each side
+  (`perSide`) doubles the reps and the seconds.
+- Each of `weeks` is `{monday, programmeWeeks, planned, done}`, from the grid's week of that
+  Monday. An activity has a week for each grid week it has a day in, ended days aside: none before
+  it was added, and none after it ended.
+- `planned` adds up, over the week's days the activity runs, the day's goal ÷ 7 × one session's
+  amount at that day's values. A week with one value all week plans the goal × the amount. Paused
+  days, ended days and the days after the run's last plan nothing.
+- `done` adds one session's amount at the day's values for each marked day, whatever the mark. A
+  day the activity is paused counts too. Done can pass planned. A week after today has `done`
+  null; this week counts its marks so far.
+- `total` adds up the `work` activities week by week, with a week for each grid week:
+  `{unit: "kg", leftOut, weeks}`. `leftOut` names the other activities, in the grid's order.
+  `total` is null when no activity has a weight.
+- Amounts are rounded half up to whole kg, reps, seconds and minutes, and to 0.1 km.
 
 **Changes.** `POST /runs/{tracker}/changes` takes `{change, from, reason?, preview?, rev?}`.
 `change` is one of the bodies in [programmes.md](programmes.md) §8. `from` is its first day,

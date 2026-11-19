@@ -4,8 +4,9 @@ import { createPinia, getActivePinia, setActivePinia } from 'pinia'
 import App from '@/App.vue'
 import { signedIn } from '@/lib/__tests__/signedIn'
 import { withProgrammes, type Call, type Route } from './programmesApi'
-import type { ChangePreview, Run } from '@/lib/programmes'
+import type { ChangePreview, Run, Work } from '@/lib/programmes'
 import RUN_JSON from '@/lib/__tests__/programmes/run.json'
+import WORK_JSON from '@/lib/__tests__/programmes/work.json'
 import PAUSED_JSON from '@/lib/__tests__/programmes/run-paused.json'
 import PREVIEW_JSON from '@/lib/__tests__/programmes/change-preview.json'
 
@@ -13,6 +14,9 @@ const RUN = RUN_JSON as unknown as Run
 const PAUSED = PAUSED_JSON as unknown as Run
 const PREVIEW = PREVIEW_JSON as unknown as ChangePreview
 const AFTER: Run = { ...RUN, rev: 'after', grid: PREVIEW.grid }
+const WORK = WORK_JSON as unknown as Work
+/** The run as a server with work charts sends it (K179, work-charts spec §3). */
+const WORKED: Run = { ...RUN, work: WORK }
 /** Ended by End programme from Mon 9 Nov, in week 3, for the knee: a re-open applies (K167). */
 const ENDED_EARLY: Run = {
   ...RUN,
@@ -654,5 +658,111 @@ describe('the overview offline (spec §11.2)', () => {
     expect(byTestId('programme-change-undo').attributes('disabled')).toBeDefined()
     window.dispatchEvent(new Event('online'))
     await settle()
+  })
+})
+
+describe('the Work tab (K180)', () => {
+  async function openWork(run: Run = WORKED) {
+    await openOverview({ 'GET /runs/t1': { body: run } })
+    await byTestId('programme-tab-work').trigger('mousedown')
+    await settle()
+  }
+  const work = () => byTestId('programme-work')
+  const activityRow = (key: string) =>
+    work().get(`[data-testid="work-activity"][data-activity="${key}"]`)
+
+  it('sits between Plan and Changes', async () => {
+    await openOverview({ 'GET /runs/t1': { body: WORKED } })
+    expect(
+      overview()
+        .findAll('[role="tab"]')
+        .map((t) => t.text()),
+    ).toEqual(['Plan', 'Work', 'Changes'])
+  })
+
+  it('shows the whole programme: its line, the legend, its chart and what it leaves out', async () => {
+    await openWork()
+    expect(
+      work()
+        .findAll('h2')
+        .map((h) => h.text()),
+    ).toEqual(['The whole programme', 'By activity'])
+    const line = byTestId('work-total-line')
+    expect(line.text()).toBe('Week 4: 1,575 kg of 5,400 kg planned. 23,601 kg done so far.')
+    expect(line.get('b').text()).toBe('1,575 kg')
+    expect(work().findAll('[data-testid="work-chart-legend"]')).toHaveLength(1)
+    const total = byTestId('work-total')
+    expect(total.get('[data-testid="work-chart"]').attributes('height')).toBe('300')
+    expect(total.get('[data-testid="work-chart"]').attributes('aria-label')).toBe(
+      'The whole programme: work in kg planned and done, week by week',
+    )
+    expect(total.find('rect[data-band]').exists()).toBe(true)
+    expect(byTestId('work-left-out').text()).toBe('Plank has no weight, so it is not in the total.')
+  })
+
+  it('then a chart per activity, with its name and line, two to a row', async () => {
+    await openWork()
+    const rows = work().findAll('[data-testid="work-activity"]')
+    expect(rows.map((r) => r.get('h3').text())).toEqual([
+      'Back squat',
+      'Bench press',
+      'Barbell row',
+      'Deadlift',
+      'Plank, seconds held',
+    ])
+    expect(rows[0]!.get('[data-testid="work-activity-line"]').text()).toBe(
+      'Week 4: 638 kg of 1,912 kg planned. 8,076 kg done so far.',
+    )
+    // An activity without weight leaves out the work so far (spec §5).
+    expect(rows[4]!.get('[data-testid="work-activity-line"]').text()).toBe(
+      'Week 4: 105 s of 315 s planned.',
+    )
+    expect(rows[4]!.get('[data-testid="work-chart"]').attributes('height')).toBe('200')
+    expect(rows[4]!.get('[data-testid="work-chart"]').attributes('aria-label')).toBe(
+      'Plank: seconds held planned and done, week by week',
+    )
+    expect(rows[0]!.element.parentElement!.className).toContain('grid-cols-2')
+    expect(rows[0]!.element.parentElement!.className).toContain('folded:grid-cols-1')
+  })
+
+  it('starts at By activity, with the legend, when no activity has weight', async () => {
+    await openWork({ ...RUN, work: { ...WORK, total: null } })
+    expect(
+      work()
+        .findAll('h2')
+        .map((h) => h.text()),
+    ).toEqual(['By activity'])
+    expect(work().find('[data-testid="work-total"]').exists()).toBe(false)
+    expect(work().find('[data-testid="work-left-out"]').exists()).toBe(false)
+    expect(work().findAll('[data-testid="work-chart-legend"]')).toHaveLength(1)
+    expect(byTestId('work-by-activity').classes()).not.toContain('border-t')
+  })
+
+  it('names nothing left out when every activity has weight', async () => {
+    await openWork({ ...RUN, work: { ...WORK, total: { ...WORK.total!, leftOut: [] } } })
+    expect(work().find('[data-testid="work-left-out"]').exists()).toBe(false)
+    expect(byTestId('work-by-activity').classes()).toContain('border-t')
+  })
+
+  it('lines an activity added later up with the total, week for week', async () => {
+    // Plank added in week 2: the server sends no entry for week 1.
+    const work = structuredClone(WORK)
+    const plank = work.activities.find((a) => a.key === 'plank')!
+    plank.weeks = plank.weeks.slice(1)
+    await openWork({ ...RUN, work })
+    const row = activityRow('plank')
+    expect(row.findAll('rect[data-hit]')).toHaveLength(8)
+    expect(row.findAll('rect[data-planned]').map((r) => r.attributes('data-week'))[0]).toBe('1')
+    expect(row.get('text[data-current]').text()).toBe('4')
+  })
+
+  it('has no Work tab when an older server sends no work', async () => {
+    await openOverview()
+    expect(overview().find('[data-testid="programme-tab-work"]').exists()).toBe(false)
+    expect(
+      overview()
+        .findAll('[role="tab"]')
+        .map((t) => t.text()),
+    ).toEqual(['Plan', 'Changes'])
   })
 })

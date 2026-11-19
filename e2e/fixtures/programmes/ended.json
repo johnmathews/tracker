@@ -355,6 +355,92 @@
         }
       ],
       "whenResumed": []
+    },
+    "work": {
+      "total": {
+        "unit": "kg",
+        "leftOut": ["Plank"],
+        "weeks": [
+          {
+            "monday": "2026-11-09",
+            "programmeWeeks": [1],
+            "planned": 0,
+            "done": 0
+          }
+        ]
+      },
+      "activities": [
+        {
+          "key": "squat",
+          "name": "Back squat",
+          "measure": "work",
+          "unit": "kg",
+          "weeks": [
+            {
+              "monday": "2026-11-09",
+              "programmeWeeks": [1],
+              "planned": 0,
+              "done": 0
+            }
+          ]
+        },
+        {
+          "key": "bench",
+          "name": "Bench press",
+          "measure": "work",
+          "unit": "kg",
+          "weeks": [
+            {
+              "monday": "2026-11-09",
+              "programmeWeeks": [1],
+              "planned": 0,
+              "done": 0
+            }
+          ]
+        },
+        {
+          "key": "row",
+          "name": "Barbell row",
+          "measure": "work",
+          "unit": "kg",
+          "weeks": [
+            {
+              "monday": "2026-11-09",
+              "programmeWeeks": [1],
+              "planned": 0,
+              "done": 0
+            }
+          ]
+        },
+        {
+          "key": "deadlift",
+          "name": "Deadlift",
+          "measure": "work",
+          "unit": "kg",
+          "weeks": [
+            {
+              "monday": "2026-11-09",
+              "programmeWeeks": [1],
+              "planned": 0,
+              "done": 0
+            }
+          ]
+        },
+        {
+          "key": "plank",
+          "name": "Plank",
+          "measure": "seconds",
+          "unit": "s",
+          "weeks": [
+            {
+              "monday": "2026-11-09",
+              "programmeWeeks": [1],
+              "planned": 0,
+              "done": 0
+            }
+          ]
+        }
+      ]
     }
   }
 }

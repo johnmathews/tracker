@@ -1201,7 +1201,7 @@ def test_an_agent_saves_starts_and_changes_a_programme_through_mcp_alone(
     broken["activities"][0]["weight"]["add"] = 2.5
     text = refused(agent, writer, "save_programme", {"doc": broken})
     assert text.startswith("doc: the programme has 2 problems, so nothing was saved.")
-    assert "\n- weeks: give a whole number from 1 to 52." in text
+    assert "\n- weeks: give a whole number from 1 to 156." in text
     assert "\n- activities[0].weight.rate: a progression has add or rate, not both." in text
     assert tool(agent, writer, "list_programmes")["programmes"] == []
 
@@ -1491,6 +1491,33 @@ def test_get_programme_reads_a_library_programme_or_a_run(
     mondays = [w["monday"] for w in run["grid"]["weeks"]]
     assert mondays[0] == NEXT_MONDAY
     assert len(mondays) == 7
+
+
+def test_get_programme_gives_a_runs_work_from_its_first_week(
+    agent: TestClient, uid: int, writer: str, clock: Clock
+) -> None:
+    """A run's `work` (K179), as the app has it: every week from the first, though its grid
+    starts at this week."""
+    tracker = running(agent, writer)["tracker"]["id"]
+    go_to(clock, "2026-10-28")
+    run = tool(agent, writer, "get_programme", tracker=tracker)["run"]
+    work = run["work"]
+    assert run["grid"]["weeks"][0]["monday"] == "2026-10-26"
+    assert [w["monday"] for w in work["total"]["weeks"]][:2] == [THIS_WEEK, "2026-10-26"]
+    assert work["total"]["leftOut"] == ["Plank"]
+    assert [(a["key"], a["measure"], a["unit"]) for a in work["activities"]] == [
+        ("squat", "work", "kg"),
+        ("plank", "seconds", "s"),
+    ]
+    # Friday to Sunday of week 1: 3 x 3/7 of 5 x 5 at 40 kg, and of 3 x 30 s.
+    assert work["total"]["weeks"][0] == {
+        "monday": THIS_WEEK,
+        "programmeWeeks": [1],
+        "planned": 1286,
+        "done": 0,
+    }
+    assert work["activities"][1]["weeks"][0]["planned"] == 116
+    assert work["total"]["weeks"][2]["done"] is None
 
 
 def broken_run(monkeypatch: pytest.MonkeyPatch, tracker: str) -> None:
