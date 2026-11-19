@@ -32,6 +32,9 @@ and `undone_by`. The body is a JSON object tagged by `type`, one per row of the 
 list of hand-edits (by `seq`) the change drops (§7.2). `check_change` returns every problem with a
 body as a JSON path and a sentence, as `check_programme` does.
 
+The log also holds two rows that are no change type: `end-programme` (End programme, K156) and
+`reopen-programme` (a re-open, K165). The replay passes an end by, unless a re-open follows it.
+
 ## How changes behave
 
 - **The programme week** advances at each Monday while the programme runs (§6.1). A pause stops it;
@@ -57,6 +60,9 @@ body as a JSON path and a sentence, as `check_programme` does.
 - **Undo** reverses one change whose effect starts today or later; the replay leaves the change
   out. A change that no longer applies because one before it was undone (a resume with nothing
   paused) does nothing.
+- **An end a re-open follows** (K165) is a pause of the whole programme from the end's day until
+  the re-open's day, which resumes it at the paused programme week. A programme pause already in
+  force at the end becomes part of it. The latest end before a re-open is the one it lifts.
 
 ## The output
 
@@ -66,8 +72,9 @@ body as a JSON path and a sentence, as `check_programme` does.
 rule's values (`base`), its hand-edit marks, and for a pause its until date and reason. The run's
 last day is `Replay.end`; an open-ended programme pause instead gives `open_pause`, paused weeks
 up to the run's last week, and `when_resumed`, the weeks that follow without dates (§5).
-`week_items` turns one calendar week into plan items for `plans` (a split week uses Sunday's
-target and values, §6.2), and `day_to_json`/`day_from_json` store a day for sealing.
+`week_items` turns one calendar week into plan items for `plans`: Sunday's values, or the last
+the activity ran with, and the week's goal from `week_goal`, which counts its days (§6.2, K163).
+`day_to_json`/`day_from_json` store a day for sealing.
 
 `preview_change` replays the log with and without one change: the cells it changes, the
 hand-edits that block it, the activities that end short, the log's `rev_of(log)`, and
@@ -77,10 +84,12 @@ hand-edits that block it, the activities that end short, the log's `rev_of(log)`
 import copy
 import hashlib
 import json
-from collections.abc import Mapping, Sequence
+import math
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from fractions import Fraction
 from typing import Any, Literal, cast
 
 from . import validate
@@ -124,6 +133,9 @@ CHANGE_TYPES = (
     "edit-week",
     "undo",
 )
+#: The log rows that are no change: End programme (K156) and a re-open (K165).
+END_PROGRAMME = "end-programme"
+REOPEN_PROGRAMME = "reopen-programme"
 #: The keys each type of change takes, besides `type`.
 CHANGE_KEYS: dict[str, tuple[str, ...]] = {
     "pause-programme": ("weeks",),
@@ -399,6 +411,20 @@ class _Hand:
     dropped_on: date | None = None
 
 
+def _reopened(changes: Sequence[Change]) -> dict[int, date]:
+    """Each End programme a re-open lifts, by its seq, with the re-open's day (K165): the latest
+    end before each re-open in the log."""
+    out: dict[int, date] = {}
+    end: Change | None = None
+    for c in sorted(changes, key=lambda c: c.seq):
+        kind = c.body.get("type")
+        if kind == END_PROGRAMME:
+            end = c
+        elif kind == REOPEN_PROGRAMME and end is not None:
+            out[end.seq], end = c.from_date, None
+    return out
+
+
 def _undone(changes: Sequence[Change]) -> dict[int, int]:
     undone = {c.seq: c.undone_by for c in changes if c.undone_by is not None}
     for c in sorted(changes, key=lambda c: c.seq):
@@ -418,6 +444,7 @@ class _Sim:
         self.params = dict(run.resolved.params)
         self.sealed = sealed
         self.undone = _undone(changes)
+        self.reopened = _reopened(changes)
         self.queue = sorted(
             (c for c in changes if c.seq not in self.undone and c.body.get("type") != "undo"),
             key=lambda c: (c.from_date, c.seq),
@@ -504,6 +531,13 @@ class _Sim:
 
     # -- state changes --
 
+    def _pause_programme(self, day: date, until: date | None, reason: str | None) -> None:
+        self.pause = _Pause(day, self.pw, until, reason)
+        self.status = "paused"
+        if until is None:
+            remaining = self.programme.weeks - self.pw + 1
+            self.horizon = _monday(day) + timedelta(weeks=remaining)
+
     def _resume_programme(self, at: str) -> None:
         assert self.pause is not None
         if at == "next" and self.pause.programme_week < self.programme.weeks:
@@ -585,13 +619,19 @@ class _Sim:
         if kind == "pause-programme" and self.status == "running":
             weeks = body.get("weeks")
             until = day + timedelta(weeks=weeks) if isinstance(weeks, int) else None
-            self.pause = _Pause(day, self.pw, until, change.reason)
-            self.status = "paused"
-            if until is None:
-                remaining = self.programme.weeks - self.pw + 1
-                self.horizon = _monday(day) + timedelta(weeks=remaining)
+            self._pause_programme(day, until, change.reason)
         elif kind == "resume-programme" and self.status == "paused":
             self._resume_programme(str(body.get("at", "paused")))
+        elif kind == END_PROGRAMME and change.seq in self.reopened:
+            # Paused until the re-open's day; a pause already in force runs to it (K165).
+            until = self.reopened[change.seq]
+            if self.pause is None:
+                self._pause_programme(day, until, change.reason)
+            else:
+                self.pause.until = until
+        elif kind == REOPEN_PROGRAMME and self.pause is not None and self.pause.until == day:
+            # Re-opened on the end's own day: `_step` resumes a pause due on any later one.
+            self._resume_programme("paused")
         elif kind == "go-to-week" and self.status == "running":
             delta = int(body["week"]) - self.pw
             self.pw += delta
@@ -1411,11 +1451,40 @@ def preview_change(
 # ---- For W4: plan items and sealed days ----
 
 
-def week_items(rp: Replay, week: WeekPlan, ids: Mapping[str, str]) -> list[Item]:
+def week_goal(days: Iterable[ActivityDay]) -> int:
+    """An item's goal for a calendar week (§6.2, K163): the sum of each day's target over 7,
+    rounded up. A day the activity isn't running counts 0: paused, not started, ended, or left
+    out (a day after the run's last). A week with one target all week keeps it: John's squat at
+    3, run Monday and Tuesday and paused from Wednesday, has a goal of 1. Exact: a Fraction, never
+    a float."""
+    total = sum(
+        (
+            Fraction(a.values.get("target", 0))
+            for a in days
+            if a.state == "running" and a.values is not None
+        ),
+        Fraction(0),
+    )
+    return math.ceil(total / 7)
+
+
+def week_days(week: WeekPlan, key: str, last: date | None = None) -> list[ActivityDay]:
+    """An activity's days in a calendar week, as its goal counts them: the days it exists on, up
+    to `last` (the run's last day after End programme, which the replay passes by)."""
+    return [
+        day.activities[key]
+        for day in week.days
+        if key in day.activities and (last is None or day.date <= last)
+    ]
+
+
+def week_items(
+    rp: Replay, week: WeekPlan, ids: Mapping[str, str], *, last: date | None = None
+) -> list[Item]:
     """One calendar week as `plans` items, given each activity's item id. An activity is in the
-    week when it runs or is paused on one of its days. The item has Sunday's values and target
-    (§6.2, Q1); an activity not running on Sunday keeps the last values it had in the week, with
-    a target of 0."""
+    week when it runs or is paused on one of its days. The item has Sunday's values, or the last
+    values it had in the week when it isn't running on Sunday, and the week's goal (`week_goal`,
+    K163). Days after `last` count 0 in the goal: End programme's day on."""
     normalise = validate.KIND_NORMALISERS[rp.run.programme.kind]
     items: list[Item] = []
     for activity in rp.activities:
@@ -1425,10 +1494,8 @@ def week_items(rp: Replay, week: WeekPlan, ids: Mapping[str, str]) -> list[Item]
             continue
         sunday = days[-1]
         running = [a for a in days if a.state == "running"]
-        if sunday.state == "running":
-            values, target = sunday.values or {}, (sunday.values or {}).get("target", 0)
-        else:
-            values, target = (running or present)[-1].values or {}, 0
+        values = (sunday if sunday.state == "running" else (running or present)[-1]).values or {}
+        target = week_goal(week_days(week, activity.key, last))
         item = normalise(
             {"id": ids[activity.key], "name": activity.name, **values, "target": target}
         )

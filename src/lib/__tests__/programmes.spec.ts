@@ -293,6 +293,15 @@ describe('the words around problems and failures', () => {
 })
 
 describe('changes in sentences', () => {
+  it('words End programme and a re-open for the log (K156, K165)', () => {
+    expect(logSentence({ type: 'end-programme' }, '2026-12-21', NAMES, RUN.log)).toBe(
+      'Programme ended, from Mon 21 Dec.',
+    )
+    expect(logSentence({ type: 'reopen-programme' }, '2026-12-28', NAMES, RUN.log)).toBe(
+      'Programme re-opened, from Mon 28 Dec.',
+    )
+  })
+
   it('words each kind of change for the log', () => {
     const say = (change: Record<string, unknown>, from = '2026-12-21') =>
       logSentence({ type: 'set-value', ...change } as never, from, NAMES, RUN.log)

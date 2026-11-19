@@ -314,7 +314,7 @@
               "reps": 5,
               "weight": 40
             },
-            "target": 3,
+            "target": 2,
             "splits": {},
             "hand": {},
             "until": null,
@@ -330,7 +330,7 @@
               "reps": 5,
               "weight": 30
             },
-            "target": 3,
+            "target": 2,
             "splits": {},
             "hand": {},
             "until": null,
@@ -346,7 +346,7 @@
               "reps": 5,
               "weight": 30
             },
-            "target": 3,
+            "target": 2,
             "splits": {},
             "hand": {},
             "until": null,
@@ -362,7 +362,7 @@
               "reps": 5,
               "weight": 60
             },
-            "target": 3,
+            "target": 2,
             "splits": {},
             "hand": {},
             "until": null,
@@ -377,7 +377,7 @@
               "sets": 3,
               "duration": 30
             },
-            "target": 3,
+            "target": 2,
             "splits": {},
             "hand": {},
             "until": null,
@@ -769,7 +769,7 @@
               "reps": 5,
               "weight": 67.5
             },
-            "target": 0,
+            "target": 2,
             "splits": {},
             "hand": {},
             "until": "2026-11-26",
@@ -1039,7 +1039,7 @@
               "reps": 5,
               "weight": 80
             },
-            "target": 3,
+            "target": 2,
             "splits": {},
             "hand": {},
             "until": "2026-11-26",

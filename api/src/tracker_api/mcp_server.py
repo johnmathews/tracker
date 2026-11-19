@@ -6,8 +6,9 @@ again each time. Tools are registered in `_add_tools`. A tool finds its account 
 the connection's name with `source()`, and opens the database with `connection(config)`.
 
 The programme tools (docs/specs/2026-11-17-programmes.md §11.3) let an agent write a programme
-in the `tracker-programme/1` format, save it to the library, start it and change it. A change
-previews first and applies only when it comes back with `confirm` and the preview's `rev` (P2).
+in the `tracker-programme/1` format, save it to the library, start it, change it and end it. A
+change or an end previews first and applies only when it comes back with `confirm` and the
+preview's `rev` (P2).
 Every change and every mark on a programme tracker records the connection as its source (P5)."""
 
 import json
@@ -386,6 +387,59 @@ class ProgrammeChange(TypedDict):
     run: NotRequired[dict[str, Any]]
 
 
+class ProgrammeEnd(TypedDict):
+    """End programme previewed (`preview` true), or the run ended. `stale` says a confirm came
+    with a rev that isn't this end's preview on the run as it is, so this is a fresh preview and
+    nothing changed. `message` says what the end does and what to do next."""
+
+    preview: bool
+    stale: bool
+    message: str
+    #: A preview's: the rev that confirms this end alone, and the end: `{from, reason,
+    #: lastWeek}`, the Monday of the last week the tracker shows (null for none).
+    rev: NotRequired[str]
+    end: NotRequired[dict[str, Any]]
+    #: An ended run's tracker, with its `endWeek`, and the run, as `get_programme` gives it.
+    tracker: NotRequired[Tracker]
+    run: NotRequired[dict[str, Any]]
+
+
+class ProgrammeRestart(TypedDict):
+    """A restart previewed (`preview` true), or the new run started. `stale` says a confirm came
+    with a rev that isn't this restart's preview as things are now, so this is a fresh preview and
+    nothing changed. `message` says what the restart does and what to do next."""
+
+    preview: bool
+    stale: bool
+    message: str
+    #: A preview's: the rev that confirms this restart alone, and the restart: `{name, start,
+    #: firstWeek: {from, to}, weeks, end, oldEndsFrom}`, `oldEndsFrom` null when the old run has
+    #: ended by the start.
+    rev: NotRequired[str]
+    restart: NotRequired[dict[str, Any]]
+    #: A restart's new tracker and its run, as `get_programme` gives it, and the old tracker.
+    tracker: NotRequired[Tracker]
+    run: NotRequired[dict[str, Any]]
+    old: NotRequired[Tracker]
+
+
+class ProgrammeReopen(TypedDict):
+    """A re-open previewed (`preview` true), or the run re-opened. `stale` says a confirm came
+    with a rev that isn't this re-open's preview on the run as it is, so this is a fresh preview
+    and nothing changed. `message` says what the re-open does and what to do next."""
+
+    preview: bool
+    stale: bool
+    message: str
+    #: A preview's: the rev that confirms this re-open alone, and the re-open: `{from, reason,
+    #: week, paused: {from, to} | null, end, lastWeek}`.
+    rev: NotRequired[str]
+    reopen: NotRequired[dict[str, Any]]
+    #: A re-opened run's tracker, with its `endWeek`, and the run, as `get_programme` gives it.
+    tracker: NotRequired[Tracker]
+    run: NotRequired[dict[str, Any]]
+
+
 #: The tracker a tool acts on when it is given none: the account's first strength tracker, the
 #: one every tool acted on before trackers were the account's own.
 DEFAULT_TRACKER = "exercise"
@@ -496,8 +550,11 @@ PROGRAMMES_HELP = (
     "`save_programme`, which checks it, lists every problem to fix, and adds it to the person's "
     "library. `start_programme` starts it as a tracker of its own. A programme tracker's plan "
     "comes from its programme: change it with `change_programme`, which shows a preview before "
-    "anything changes, never with `add_item`, `update_item` or `remove_item`. Its days before "
-    "today are locked, and its marks stay open for today and yesterday."
+    "anything changes, never with `add_item`, `update_item` or `remove_item`. End a run early "
+    "with `end_programme`, which previews the end first. `restart_programme` starts a run again "
+    "from week 1 as a new tracker, after a preview too, and `reopen_programme` carries on a run "
+    "End programme stopped, where it stopped. Its days before today are locked, and its marks "
+    "stay open for today and yesterday."
 )
 PROGRAMME_TRACKER_HELP = (
     "A programme tracker's items are refused: its plan comes from its programme, so change it "
@@ -585,6 +642,14 @@ FORMAT_NOTES = [
     "the preview's rev.",
     "set-value, set-increase, set-parameter and resume-activity also take `dropHandEdits`: the "
     "seqs of the hand-edits a preview says block it, dropped with the change.",
+    "end_programme ends a run from a day today or later, keeping its marks, weeks and log. It "
+    "previews first too: show the person, then send the same call with confirm true and the "
+    "preview's rev.",
+    "restart_programme starts a run again from week 1 as a new tracker, from the run's own copy "
+    "of the programme, ending the old run from that day if it is still going. It previews first "
+    "too.",
+    "reopen_programme carries on a run End programme stopped part way, at the programme week it "
+    "stopped in: the days from the end count as a pause. It previews first too.",
     "Days before today are locked: no change reaches them. Marks stay open for today and "
     "yesterday, and yesterday's is recorded as late.",
 ]
@@ -1254,11 +1319,7 @@ def _add_tools(server: MCPServer, config: Config) -> None:
             except ProgrammeInvalid as e:
                 raise _problems("programme", "start", "started", e.errors) from None
             except data.TooManyTrackers:
-                held = len(data.load_trackers(c, uid))
-                raise ToolError(
-                    f"tracker: the account has {held} trackers, the most it can hold; delete one "
-                    "in the app first"
-                ) from None
+                raise _too_many_trackers(c, uid) from None
             except data.QuotaExceeded:
                 raise ToolError(QUOTA.format("started")) from None
             if started is None:
@@ -1341,7 +1402,8 @@ def _add_tools(server: MCPServer, config: Config) -> None:
             except data.RunEnded:
                 raise ToolError(
                     f"tracker: {found['name']} has ended, so its programme takes no more "
-                    "changes. start_programme starts it again as a new run"
+                    "changes. restart_programme starts it again as a new run from week 1, and "
+                    "reopen_programme carries it on where it stopped"
                 ) from None
             except data.StaleRun as e:
                 return _previewed(
@@ -1375,6 +1437,394 @@ def _add_tools(server: MCPServer, config: Config) -> None:
             }
 
         return _writing(config, write)
+
+    @server.tool(
+        title="End programme",
+        description="End a programme tracker's run from a day, today or later, as End programme "
+        "does in the app. The tracker then shows in no week after the one holding the day "
+        "before; its marks, weeks, notes and log stay, days from that day on aren't sealed, and "
+        "the run takes no more changes. It previews first: the result's `end` gives the from "
+        "day, the reason and `lastWeek`, the Monday of the last week the tracker shows. Show the "
+        "person the preview; nothing changes until the same call comes back with `confirm` true "
+        "and the preview's `rev`, which confirms that day and reason alone. If the programme "
+        "changed since, or the confirm differs, the result is a fresh preview with `stale` true, "
+        "and nothing changed. Needs a write token.",
+        # Like change_programme: it deletes nothing, and a second confirm is refused as ended.
+        annotations=SETTING,
+    )
+    def end_programme(
+        tracker: Annotated[
+            str, Field(description="The programme tracker's id, or its name in any case.")
+        ],
+        from_date: Annotated[
+            str | None,
+            Field(
+                description="The first day without the programme, YYYY-MM-DD, today or later. "
+                "Defaults to today."
+            ),
+        ] = None,
+        reason: Annotated[
+            str | None,
+            Field(description="Why, in the person's words, up to 500 characters. Kept in the log."),
+        ] = None,
+        confirm: Annotated[
+            bool, Field(description="True to end it as previewed with `rev`.")
+        ] = False,
+        rev: Annotated[
+            str | None, Field(description="With `confirm`: the preview's `rev`.")
+        ] = None,
+    ) -> ProgrammeEnd:
+        who = source()
+
+        def write(c: sqlite3.Connection, uid: int) -> ProgrammeEnd:
+            found = edits.find(c, uid, tracker)
+            when = _when(config)
+            name = found["name"]
+            try:
+                if not confirm:
+                    preview = data.preview_end(
+                        c, uid, found["id"], from_date, reason=reason, when=when
+                    )
+                    if preview is None:
+                        raise _not_a_run(found)
+                    return _end_previewed(name, preview, stale=False)
+                out = data.end_run(
+                    c,
+                    uid,
+                    found["id"],
+                    from_date,
+                    reason=reason,
+                    when=when,
+                    source=who,
+                    previewed=True,
+                    rev=rev,
+                )
+            except ProgrammeInvalid as e:
+                raise _problems(
+                    "tracker", "end", "ended", e.errors, {"from": "from_date"}
+                ) from None
+            except data.RunEnded:
+                raise ToolError(
+                    f"tracker: {name} has ended, or already has an end day, so there is nothing "
+                    "to end. restart_programme starts it again as a new run from week 1. "
+                    "reopen_programme carries on a run that End programme ended."
+                ) from None
+            except data.StaleRun as e:
+                return _end_previewed(name, e.preview, stale=True)
+            except data.RunUnreadable as e:
+                raise _unreadable(found, e, changing=True) from None
+            if out is None:
+                raise _not_a_run(found)
+            return {
+                "preview": False,
+                "stale": False,
+                "message": f"Ended from {out.run['ended']['from']}.",
+                "tracker": out.tracker,
+                "run": _upcoming(out.run, when.today),
+            }
+
+        return _writing(config, write)
+
+    @server.tool(
+        title="Restart programme",
+        description="Start a programme tracker's run again from week 1, as a new tracker: from "
+        "`start`, today or later (today when left out), named `name` (the old tracker's name when "
+        "left out). It starts from the run's own copy of the programme and the parameters the run "
+        "started with, so it works after the library programme is edited or deleted. A run still "
+        "going on that day ends from it, as end_programme ends one, keeping its marks, weeks, "
+        "notes and log. It previews first: the result's `restart` gives the new tracker's name, "
+        "its start, week 1's dates (`firstWeek`), its weeks, its last day, and `oldEndsFrom`, the "
+        "day the old run ends from (null when it has ended by then). Show the person the preview; "
+        "nothing changes until the same call comes back with `confirm` true and the preview's "
+        "`rev`. If the programme or the account's trackers changed since, or the confirm differs, "
+        "the result is a fresh preview with `stale` true, and nothing changed. Problems are "
+        "listed one a line, each with its path. Needs a write token.",
+        # Like start_programme: each confirm adds a tracker. The end it may write deletes nothing.
+        annotations=ADDING,
+    )
+    def restart_programme(
+        tracker: Annotated[
+            str, Field(description="The programme tracker's id, or its name in any case.")
+        ],
+        start: Annotated[
+            str | None,
+            Field(
+                description="The new run's first day, YYYY-MM-DD, today or later. Defaults to "
+                "today."
+            ),
+        ] = None,
+        name: Annotated[
+            str | None,
+            Field(
+                description="The new tracker's name, up to 60 characters. Defaults to the old "
+                "tracker's."
+            ),
+        ] = None,
+        confirm: Annotated[
+            bool, Field(description="True to restart it as previewed with `rev`.")
+        ] = False,
+        rev: Annotated[
+            str | None, Field(description="With `confirm`: the preview's `rev`.")
+        ] = None,
+    ) -> ProgrammeRestart:
+        who = source()
+
+        def write(c: sqlite3.Connection, uid: int) -> ProgrammeRestart:
+            found = edits.find(c, uid, tracker)
+            when = _when(config)
+            old = found["name"]
+            try:
+                if not confirm:
+                    preview = data.preview_restart(
+                        c, uid, found["id"], start=start, name=name, when=when
+                    )
+                    if preview is None:
+                        raise _not_a_run(found)
+                    return _restart_previewed(old, preview, stale=False)
+                out = data.restart_run(
+                    c,
+                    uid,
+                    found["id"],
+                    start=start,
+                    name=name,
+                    rev=rev,
+                    when=when,
+                    quota=config.user_quota_bytes,
+                    make_id=edits.new_id,
+                    source=who,
+                )
+            except ProgrammeInvalid as e:
+                raise _problems("tracker", "restart", "restarted", e.errors) from None
+            except data.StaleRun as e:
+                return _restart_previewed(old, e.preview, stale=True)
+            except data.TooManyTrackers:
+                raise _too_many_trackers(c, uid) from None
+            except data.QuotaExceeded:
+                raise ToolError(QUOTA.format("restarted")) from None
+            except data.RunUnreadable as e:
+                raise _unreadable(found, e, changing=True) from None
+            if out is None:
+                raise _not_a_run(found)
+            new = out.new
+            return {
+                "preview": False,
+                "stale": False,
+                "message": f"Restarted from {new.run['start']}.",
+                "tracker": new.tracker,
+                "run": _upcoming(new.run, when.today),
+                "old": out.old,
+            }
+
+        return _writing(config, write)
+
+    @server.tool(
+        title="Re-open programme",
+        description="Carry on a programme tracker's run that End programme stopped part way, "
+        "from a day, today or later and no earlier than the end's own day. The days from the end "
+        "to the day before count as a pause of the whole programme, and the run resumes at the "
+        "programme week it stopped in. Days before the end stay as they are, and the run takes "
+        "changes again. A run that ran to its last week has nothing to re-open: restart_programme "
+        "starts it again. It previews first: the result's `reopen` gives the day, the reason, "
+        "`week` (the programme week it resumes at), `paused` (the paused days, null for none), "
+        "the run's new last day and `lastWeek`, the Monday of its last week. Show the person the "
+        "preview; nothing changes until the same call comes back with `confirm` true and the "
+        "preview's `rev`, which confirms that day and reason alone. If the programme changed "
+        "since, or the confirm differs, the result is a fresh preview with `stale` true, and "
+        "nothing changed. Needs a write token.",
+        # Like end_programme: it deletes nothing, and a second confirm is refused as not ended.
+        annotations=SETTING,
+    )
+    def reopen_programme(
+        tracker: Annotated[
+            str, Field(description="The programme tracker's id, or its name in any case.")
+        ],
+        from_date: Annotated[
+            str | None,
+            Field(
+                description="The first day the programme runs again, YYYY-MM-DD, today or "
+                "later. Defaults to today."
+            ),
+        ] = None,
+        reason: Annotated[
+            str | None,
+            Field(description="Why, in the person's words, up to 500 characters. Kept in the log."),
+        ] = None,
+        confirm: Annotated[
+            bool, Field(description="True to re-open it as previewed with `rev`.")
+        ] = False,
+        rev: Annotated[
+            str | None, Field(description="With `confirm`: the preview's `rev`.")
+        ] = None,
+    ) -> ProgrammeReopen:
+        who = source()
+
+        def write(c: sqlite3.Connection, uid: int) -> ProgrammeReopen:
+            found = edits.find(c, uid, tracker)
+            when = _when(config)
+            name = found["name"]
+            try:
+                if not confirm:
+                    preview = data.preview_reopen(
+                        c, uid, found["id"], from_date, reason=reason, when=when
+                    )
+                    if preview is None:
+                        raise _not_a_run(found)
+                    return _reopen_previewed(name, preview, stale=False)
+                out = data.reopen_run(
+                    c,
+                    uid,
+                    found["id"],
+                    from_date,
+                    reason=reason,
+                    rev=rev,
+                    when=when,
+                    quota=config.user_quota_bytes,
+                    source=who,
+                )
+            except ProgrammeInvalid as e:
+                raise _problems(
+                    "tracker", "re-open", "re-opened", e.errors, {"from": "from_date"}
+                ) from None
+            except data.CantReopen as e:
+                raise ToolError(
+                    f"tracker: {name} ran to its end, or was ended before it started, so there "
+                    "is nothing to re-open. restart_programme starts it again from week 1"
+                    if e.finished
+                    else f"tracker: {name} hasn't been ended, so there is nothing to re-open"
+                ) from None
+            except data.StaleRun as e:
+                return _reopen_previewed(name, e.preview, stale=True)
+            except data.QuotaExceeded:
+                raise ToolError(QUOTA.format("re-opened")) from None
+            except data.RunUnreadable as e:
+                raise _unreadable(found, e, changing=True) from None
+            if out is None:
+                raise _not_a_run(found)
+            return {
+                "preview": False,
+                "stale": False,
+                "message": f"Re-opened from {out.run['log'][0]['from']}.",
+                "tracker": out.tracker,
+                "run": _upcoming(out.run, when.today),
+            }
+
+        return _writing(config, write)
+
+
+def _reopen_previewed(name: str, preview: dict[str, Any], *, stale: bool) -> ProgrammeReopen:
+    """A re-open's preview, with a message that says what it does and how to confirm it: first
+    that nothing has changed yet, or for a stale confirm, why nothing changed."""
+    reopen = preview["reopen"]
+    on, paused, week = reopen["from"], reopen["paused"], reopen["lastWeek"]
+    gap = (
+        "It re-opens on the day it was to end, so no day is paused."
+        if paused is None
+        else f"The days from {paused['from']} to {paused['to']} count as a pause of the whole "
+        "programme."
+    )
+    last = (
+        "It has no last week while the programme is paused with no end date."
+        if week is None
+        else f"Its last week is now the week of {week}."
+    )
+    ended = on if paused is None else paused["from"]
+    said = (
+        f"{name} re-opens from {on}, at programme week {reopen['week']}. {gap} {last} Days "
+        f"before {ended} stay as they are, and the run takes changes again. Show the person this "
+        "preview; to re-open it, call reopen_programme again with the same arguments, confirm "
+        f"true and rev {preview['rev']}."
+    )
+    first = (
+        "That rev doesn't confirm this re-open: the programme changed since its preview, or its "
+        "day or its reason isn't the one previewed. Nothing was changed. This is the re-open "
+        "sent, previewed on the programme as it is now."
+        if stale
+        else "Nothing has changed yet."
+    )
+    return {
+        "preview": True,
+        "stale": stale,
+        "message": f"{first} {said}",
+        "rev": preview["rev"],
+        "reopen": reopen,
+    }
+
+
+def _too_many_trackers(conn: sqlite3.Connection, user_id: int) -> ToolError:
+    held = len(data.load_trackers(conn, user_id))
+    return ToolError(
+        f"tracker: the account has {held} trackers, the most it can hold; delete one in the app "
+        "first"
+    )
+
+
+def _restart_previewed(old: str, preview: dict[str, Any], *, stale: bool) -> ProgrammeRestart:
+    """A restart's preview, with a message that says what it does and how to confirm it: first
+    that nothing has changed yet, or for a stale confirm, why nothing changed."""
+    restart = preview["restart"]
+    start, week = restart["start"], restart["firstWeek"]
+    ends = restart["oldEndsFrom"]
+    before = date.fromisoformat(ends) - timedelta(days=1) if ends is not None else None
+    stops = (
+        f"{old}, the run now, has ended and stays as it is."
+        if before is None
+        else f"{old}, the run now, ends from {ends}, so its last day is {before.isoformat()}. "
+        "Its marks, weeks, notes and log stay."
+    )
+    said = (
+        f"{restart['name']} starts again from week 1 on {start}, as a new tracker. Week 1 runs "
+        f"{week['from']} to {week['to']}, and the run has {_count(restart['weeks'], 'week')}, to "
+        f"{restart['end']}. {stops} Show the person this preview; to restart it, call "
+        "restart_programme again with the same arguments, confirm true and rev "
+        f"{preview['rev']}."
+    )
+    first = (
+        "That rev doesn't confirm this restart: the programme or the account's trackers changed "
+        "since its preview, or its start or its name isn't the one previewed. Nothing was "
+        "changed. This is the restart sent, previewed as things are now."
+        if stale
+        else "Nothing has changed yet."
+    )
+    return {
+        "preview": True,
+        "stale": stale,
+        "message": f"{first} {said}",
+        "rev": preview["rev"],
+        "restart": restart,
+    }
+
+
+def _end_previewed(name: str, preview: dict[str, Any], *, stale: bool) -> ProgrammeEnd:
+    """End programme's preview, with a message that says what the end does and how to confirm
+    it: first that nothing has changed yet, or for a stale confirm, why nothing changed."""
+    end = preview["end"]
+    on = end["from"]
+    week = end["lastWeek"]
+    shows = (
+        f"{name} then shows in no week."
+        if week is None
+        else f"Its last week is the week of {week}."
+    )
+    said = (
+        f"{name} ends from {on}. {shows} Its marks, weeks, notes and log stay. Days from {on} on "
+        "aren't sealed, and the run takes no more changes. Show the person this preview; to end "
+        "it, call end_programme again with the same arguments, confirm true and rev "
+        f"{preview['rev']}."
+    )
+    first = (
+        "That rev doesn't confirm this end: the programme changed since its preview, or its day "
+        "or its reason isn't the one previewed. Nothing was changed. This is the end sent, "
+        "previewed on the programme as it is now."
+        if stale
+        else "Nothing has changed yet."
+    )
+    return {
+        "preview": True,
+        "stale": stale,
+        "message": f"{first} {said}",
+        "rev": preview["rev"],
+        "end": end,
+    }
 
 
 def _previewed(preview: dict[str, Any], *, stale: bool, message: str) -> ProgrammeChange:

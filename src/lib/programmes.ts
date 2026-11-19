@@ -114,12 +114,17 @@ export type ChangeKind =
   | 'undo'
 /** A change as the API takes it (`programme_replay`'s format), tagged by `type`. */
 export type Change = { type: ChangeKind } & Record<string, unknown>
+/** A log row: a change, or End programme (K156) or a re-open (K165), which are no change. */
+export type LogRow = { type: ChangeKind | 'end-programme' | 'reopen-programme' } & Record<
+  string,
+  unknown
+>
 /** One entry in a run's log, newest first. */
 export type LogEntry = {
   seq: number
   madeAt: number
   from: string
-  change: Change
+  change: LogRow
   reason: string | null
   source: string
   undoneBy: number | null
@@ -501,13 +506,13 @@ function weeksText(weeks: unknown): string {
   return typeof weeks === 'number' ? `for ${countOf(weeks, 'week')}` : 'until resumed'
 }
 
-function increaseText(change: Change): string {
+function increaseText(change: LogRow): string {
   if (typeof change.rate === 'number') return `${change.rate}% a week`
   return `${change.add} ${INCREASE_UNIT[String(change.field) as Field]} a week`
 }
 
 /** A change for the log (spec §9.2): "Barbell row set to 45 kg, from Mon 21 Dec." */
-export function logSentence(change: Change, from: string, names: Names, log: LogEntry[]): string {
+export function logSentence(change: LogRow, from: string, names: Names, log: LogEntry[]): string {
   const name = (key: unknown) => names[String(key)] ?? String(key)
   const on = `, from ${dayText(from)}.`
   switch (change.type) {
@@ -531,6 +536,10 @@ export function logSentence(change: Change, from: string, names: Names, log: Log
       return `Programme resumed at the ${change.at === 'next' ? 'next' : 'paused'} week${on}`
     case 'go-to-week':
       return `Programme moved to week ${change.week}${on}`
+    case 'end-programme':
+      return `Programme ended${on}`
+    case 'reopen-programme':
+      return `Programme re-opened${on}`
     case 'set-parameter':
       return `Parameter ${change.param} set to ${change.value}${on}`
     case 'undo': {

@@ -258,14 +258,35 @@ The run keeps its own copy of the document. Editing or deleting the library prog
 changes a run. Several runs can be live at once, two of the same programme included.
 
 **A run's status** is `upcoming` before its start, `running`, `paused` while the whole programme
-is paused, or `ended` (K157).
+is paused, or `ended` (K157). A re-opened run reads `paused` until its re-open day, then `running`.
 
 **Ending.** A run ends after its last programme week's Sunday. **End programme** ends it early,
 from today or a later day: the tracker shows in no week after the one before that day, and its
-weeks, marks, notes and log stay. It is its own route, `POST /api/runs/{tracker}/end`, and goes
+weeks, marks, notes and log stay. In the week holding that day, each goal counts the days before
+it only (K163). It is its own route, `POST /api/runs/{tracker}/end`, and goes
 into the log, not a change type (K156). Delete tracker on a programme tracker ends the run the
 same way, from the week on screen's Monday or today, whichever is later. A run ended this way
-takes no more changes.
+takes no more changes unless it is re-opened.
+
+**Restarting.** An agent's `restart_programme` starts a run again from week 1, as a new tracker,
+from today or a later day (K164). The new run starts from the old run's own copy of the document
+and the parameters the old run started with, so it works after the library programme is edited or
+deleted. The new tracker takes the old one's name unless the agent gives another. A run still
+going on the new start day ends from that day in the same confirm, as End programme ends it, with
+the reason "Restarted from week 1.". Its weeks, marks, notes and log stay.
+
+**Re-opening.** An agent's `reopen_programme` carries on a run that End programme stopped part
+way, from today or a later day, and no earlier than the end's own day (K165). The days from the
+end to the day before the re-open count as a pause of the whole programme. The run resumes at the
+programme week it stopped in, and each activity's week moves as it does across any programme
+pause (§8.2). The re-open goes into the log as a `reopen-programme` row. The tracker shows again in
+the weeks the end had hidden, which read as paused, and in every week to the run's new last day.
+Days before the end keep their sealed record, and the days from the end to yesterday are sealed as
+paused. A run that ran to its last Sunday, or was ended before it started, has nothing to
+re-open: restart it instead. A re-opened run takes changes again, and can be ended and re-opened
+again. Undo never applies to an end or a re-open; ending again is the way back. The overview's
+log reads "Programme re-opened, from Wed 11 Nov.", as it reads "Programme ended, from Wed 4 Nov."
+for the end.
 
 **Its plans are the engine's.** A programme tracker's plans can't be written by hand: the generic
 plan write answers 409 `programme-tracker`, and the MCP's `add_item`, `update_item` and
@@ -335,9 +356,18 @@ shown as 14, then 15.87, shown as 16.
 
 - Weeks stay aligned to the calendar. Going to week 5 on a Wednesday makes Wednesday to Sunday
   week 5 and the next Monday week 6. The log keeps both parts of a split week.
-- A week's plan holds one value per item, so its row carries Sunday's values and target. A split
-  week's days before the change keep theirs in the run's grid, which shows "35 → 32.5 kg from
-  Wed". An activity not running on Sunday has a target of 0 that week.
+- A week's plan holds one value per item, so its row carries Sunday's values, or the last values
+  the activity ran with that week. A split week's days before the change keep theirs in the run's
+  grid, which shows "35 → 32.5 kg from Wed".
+- An item's goal for the week counts its days (K163). It is the sum of each day's target over 7,
+  rounded up. A day the activity is paused, a day before the run starts, and a day from End
+  programme's on count 0. A week with one target all week keeps it.
+- The squat at 3, done Monday and Tuesday and paused from Wednesday, has a goal of 1 that week:
+  "2 of 1", met. Done on neither day, it reads "0 of 1". A Thursday start at 3 has a goal of 2.
+- The week view, the history, the grid, the insights, Ask and the MCP tools all read this goal,
+  since each reads the week's plan. A week written under the old rule, the target in force on
+  Sunday, gets the new goal at the run's next seal, the first read of a day. Earlier weeks keep
+  theirs (P1).
 - A paused activity's activity week stops while the programme week runs on, so it comes back at
   the value it paused on. A resume on any day of a week gives the same value as a resume on its
   Monday (K151).
@@ -397,8 +427,8 @@ Past days are a record, and evidence for later decisions. They never change (spe
 
 ## 10. For agents: the MCP tools
 
-An agent connected over MCP ([mcp.md](mcp.md)) writes, saves, starts and changes a programme with
-six tools:
+An agent connected over MCP ([mcp.md](mcp.md)) writes, saves, starts, changes, ends, restarts and
+re-opens a programme with nine tools:
 
 1. `programme_format` gives the schema, the example in §2, each change type with its keys and what
    it does, and short notes. Call it first.
@@ -412,10 +442,21 @@ six tools:
    (today by default) and `reason`, returns a preview. Show the person its `cells`, `blocking` and
    `endsShort`. Then call it again with the same arguments, `confirm: true` and the preview's
    `rev`. A result with `stale: true` is a fresh preview: nothing changed.
+5. `end_programme` with `tracker`, and optionally `from_date` (today by default) and `reason`,
+   returns a preview of End programme (§7): the from day and the last week the tracker shows. Show
+   it to the person, then call it again with the same arguments, `confirm: true` and the
+   preview's `rev`. The run's marks, weeks, notes and log stay, and it takes no more changes.
+6. `restart_programme` with `tracker`, and optionally `start` (today by default) and `name`,
+   returns a preview of a new run from week 1 (§7): the new tracker's name, its start, week 1's
+   dates, its weeks, and the day the old run ends from when it is still going then. Confirm it as
+   above. The result is the new tracker and its run, and the old tracker.
+7. `reopen_programme` with `tracker`, and optionally `from_date` (today by default) and `reason`,
+   returns a preview of a re-open (§7): its day, the programme week it resumes at, the paused days
+   from the end, and the new last day and week. Confirm it as above. The result is the tracker and
+   its run, running again.
 
 `list_programmes` lists the library and every run, and `get_programme` reads one library
-programme or one run with its clock, its log and its weeks from this one on. End programme has no
-tool yet: the person ends a run in the app (issue #83).
+programme or one run with its clock, its log and its weeks from this one on.
 
 ```text
 programme_format()
@@ -427,6 +468,18 @@ change_programme(tracker="Beginner 5×5",
                  reason="Knee")                 → {preview: true, rev: "3f…", cells: [...]}
 change_programme(tracker="Beginner 5×5", change={...the same}, reason="Knee",
                  confirm=true, rev="3f…")       → {preview: false, change: {...}, run: {...}}
+end_programme(tracker="Beginner 5×5", reason="Moving house")
+                                                → {preview: true, rev: "9a…", end: {...}}
+end_programme(tracker="Beginner 5×5", reason="Moving house", confirm=true, rev="9a…")
+                                                → {preview: false, tracker: {...}, run: {...}}
+restart_programme(tracker="Beginner 5×5", start="2027-01-04")
+                                                → {preview: true, rev: "c4…", restart: {...}}
+restart_programme(tracker="Beginner 5×5", start="2027-01-04", confirm=true, rev="c4…")
+                                                → {preview: false, tracker: {...}, run: {...}, old: {...}}
+reopen_programme(tracker="Beginner 5×5", reason="Knee is better")
+                                                → {preview: true, rev: "71…", reopen: {...}}
+reopen_programme(tracker="Beginner 5×5", reason="Knee is better", confirm=true, rev="71…")
+                                                → {preview: false, tracker: {...}, run: {...}}
 ```
 
 The read tools (`week_summary`, `weeks`, `item_history`, `goals`, `consistency`) read a

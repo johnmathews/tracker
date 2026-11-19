@@ -822,7 +822,8 @@ have no `<style>` blocks. Everything global is in `src/styles/main.css`.
   `bg-canvas`, `text-ink-secondary` or `border-control-border`, and both themes follow without
   `dark:` variants. The roles are `canvas`, `panel`, `tile`, `line`, `control-border`, `ink`,
   `on-ink`, `ink-secondary`, `error-ink`, `focus`, `pen`, `pen-partial`, `pen-missed`,
-  `caution-ink`, `edit` and `scrim`. `edit` draws only Edit plan's frame (K112): App.vue's
+  `caution-ink`, `paused-ink`, `edit` and `scrim`. `paused-ink` draws only the programme grid's
+  "Paused until …" line (K166). `edit` draws only Edit plan's frame (K112): App.vue's
   `data-slot="edit-frame"`, fixed round the window, `--edit-frame` wide (8px; on a phone a 4px line along the top only, K117, K162).
 - **No palette.** `--color-*: initial` switches Tailwind's default colours off, keeping only
   `transparent` and `current`, so a palette class such as `bg-red-500` or `text-white` generates
@@ -1362,18 +1363,24 @@ MCP's item tools refuse one.
   computed, and every client shows that grid rather than computing a week.
 - **P5, every change recorded.** `run_changes` keeps each change with when it was made, its from
   day, the change, the reason, the source (`app`, or an MCP connection's name) and the undo that
-  reversed it. End programme is a row there too (K156), which the replay passes by.
+  reversed it. End programme is a row there too (K156), which the replay passes by. A re-open
+  (K165) is a row too: the replay reads an end that a re-open follows as a pause of the whole
+  programme from the end's day, resumed on the re-open's day at the paused week.
 
 **The log is the source of truth.** The weeks are what the replay computes from the run's
 document, parameters, start date and log. Changes apply in from-day order, then by `seq`. An undo
 leaves its change out of the replay. The same log gives the same weeks on every machine, since the
 engine works in decimals and never reads the clock.
 
-**Writing the weeks.** A start writes every week of the run. A change writes today's calendar
-week and every later one from the new replay (`_write_weeks`), never an earlier one. A week whose
-items read as stored keeps its revision, and a later week the run no longer has is deleted. A
-week's row holds one value per item, so the current week carries Sunday's values and target; its
-days before today keep their own in the sealed record, which the grid reads (`splits`). The
+**Writing the weeks.** A start writes every week of the run. A change writes today's calendar week
+and every later one from the new replay (`_write_weeks`), never an earlier one. A week whose items
+read as stored keeps its revision, and a later week the run no longer has is deleted. A week's row
+holds one value per item, so the current week carries Sunday's values; its days before today keep
+their own in the sealed record, which the grid reads (`splits`). Its goal counts its days (K163):
+`week_goal` sums each day's target, 0 on a day the activity doesn't run, over 7 and rounds up.
+`week_items` and the grid's cells both call it. After End programme, the days from its day count 0,
+and `end_run` rewrites the weeks up to it. Each seal also rewrites today's week and later ones, so a
+week written before K163 takes the new goal once; a week that reads the same keeps its rev. The
 tracker's `endWeek` follows the run's last day: the Monday after it, or none while the programme is
 paused with no end date.
 
@@ -1384,7 +1391,8 @@ later read will read it. A read takes the write lock only when it has a day to s
 store, so only the first read each day writes. Sealing never checks the quota. A change that
 continues from a sealed day's value reads it from the record (`ActivityDay.base`), so a later
 engine fix can't move it. Days from End programme's day on are no longer the run's and are never
-sealed.
+sealed, unless a re-open follows: then they are sealed as paused, up to yesterday. A re-open also
+writes the weeks the end had hidden, as paused, and moves `endWeek` later (K165).
 
 **The lock.** A change's from day is today or later. `data.set_tick` on a programme tracker takes
 today, any later day (K159) and yesterday, which it records as late; it raises `LockedDay` for an
@@ -1408,8 +1416,9 @@ started, so loading it again skips that check (`check_ranges=False`). A run that
 load, seal or replay raises `RunUnreadable` and never takes another tracker down: `/api/state`
 leaves its summary out and logs it, `seal_runs` passes over it, and its own routes answer 500
 `run-unreadable`. Ask's context leaves it out and logs it (`ask.programme_runs`), so Ask still
-answers. The MCP's `list_programmes` lists the other runs, and `get_programme` and
-`change_programme` refuse it with a sentence that names the tracker.
+answers. The MCP's `list_programmes` lists the other runs, and `get_programme`,
+`change_programme`, `end_programme` and `restart_programme` refuse it with a sentence that names
+the tracker.
 
 **Export and import.** The export carries the library and each run whole: its copy, parameters,
 log, sealed days and mark events, with no new file version. An import adds a run only with a

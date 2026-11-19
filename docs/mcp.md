@@ -77,17 +77,20 @@ the whole note, so read it with `item_history` before writing it back.
 
 A programme is a plan of several weeks, written as one JSON document in the
 `tracker-programme/1` format ([programmes.md](programmes.md)). An agent can write one, save it to
-your library, start it and change it. A started programme is a tracker of its own, a **programme
-tracker**, whose weekly plans the server writes from the programme.
+your library, start it, change it, end it, restart it and re-open it. A started programme is a tracker of its own, a
+**programme tracker**, whose weekly plans the server writes from the programme.
 
-| Tool               | Scope | Does                                                                                         |
-| ------------------ | ----- | -------------------------------------------------------------------------------------------- |
-| `programme_format` | read  | The format's JSON Schema, a worked example, each type of change, and how to use them.        |
-| `list_programmes`  | read  | Your library, and every run with its status and week.                                         |
-| `get_programme`    | read  | One library programme with its document, or one run with its clock, log and coming weeks.    |
-| `save_programme`   | write | Checks a document and adds it to the library, or replaces one. Lists every problem.          |
-| `start_programme`  | write | Starts a library programme as a new tracker, from today or a later day.                      |
-| `change_programme` | write | Previews one change to a run, then applies it when confirmed with the preview's `rev`.        |
+| Tool                | Scope | Does                                                                                      |
+| ------------------- | ----- | ----------------------------------------------------------------------------------------- |
+| `programme_format`  | read  | The format's JSON Schema, a worked example, each type of change, and how to use them.     |
+| `list_programmes`   | read  | Your library, and every run with its status and week.                                     |
+| `get_programme`     | read  | One library programme with its document, or one run with its clock, log and coming weeks. |
+| `save_programme`    | write | Checks a document and adds it to the library, or replaces one. Lists every problem.       |
+| `start_programme`   | write | Starts a library programme as a new tracker, from today or a later day.                   |
+| `change_programme`  | write | Previews one change to a run, then applies it when confirmed with the preview's `rev`.    |
+| `end_programme`     | write | Previews ending a run from a day, then ends it when confirmed with the preview's `rev`.   |
+| `restart_programme` | write | Previews a new run of a run's programme from week 1, then starts it when confirmed.       |
+| `reopen_programme`  | write | Previews carrying on a run End programme stopped, then re-opens it when confirmed.        |
 
 **What each returns:**
 
@@ -122,6 +125,46 @@ tracker**, whose weekly plans the server writes from the programme.
   and `reason`. If the run changed since the preview, or the confirm sends another change, day or
   reason, or the run's own `rev` from `get_programme`, the result is a fresh preview of the change
   sent with `stale: true`, and nothing changed.
+- `end_programme(tracker, from_date?, reason?, confirm?, rev?)` ends a run as End programme does
+  in the app: from `from_date`, today by default or a later day, with an optional reason in the
+  person's words. Without `confirm` it returns a preview: `{preview: true, stale: false, message,
+  rev, end}`, and nothing changes. `end` is `{from, reason, lastWeek}`. `lastWeek` is the Monday
+  of the last week the tracker shows, or null when it then shows in no week. `message` says the
+  rest in sentences: the marks, weeks, notes and log stay, days from `from` on aren't sealed, and
+  the run takes no more changes. Show the person the preview, then send the same call with
+  `confirm: true` and the preview's `rev`. That returns `{preview: false, stale: false, message,
+  tracker, run}`, with `message` "Ended from 2026-11-18.". The preview's `rev` covers the run's
+  log, `from_date` and `reason`. If the run changed since, or the confirm sends another day or
+  reason, the result is a fresh preview with `stale: true`, and nothing changed.
+- `restart_programme(tracker, start?, name?, confirm?, rev?)` starts a run again from week 1 as a
+  new tracker (K164). `start` is `YYYY-MM-DD`, today or later, today by default. `name` is the new
+  tracker's, up to 60 characters, the old tracker's by default. The new run starts from the old
+  run's own copy of the programme and the parameters it started with, so it works after the
+  library programme is edited or deleted. Without `confirm` it returns a preview:
+  `{preview: true, stale: false, message, rev, restart}`, and nothing changes. `restart` is
+  `{name, start, firstWeek, weeks, end, oldEndsFrom}`: the new tracker's name, its first day, week
+  1's `{from, to}`, the programme's weeks, the new run's last day, and the day the old run ends
+  from. `oldEndsFrom` is the new start when the old run is still going then, and null when it has
+  ended by then. Show the person the preview, then send the same call with `confirm: true` and the
+  preview's `rev`. That returns `{preview: false, stale: false, message, tracker, run, old}`: the
+  new tracker, its run, and the old tracker with its `endWeek`. `message` reads "Restarted from
+  2026-11-18.". The preview's `rev` covers the old run's log, `start`, `name` and the account's
+  trackers. If the run changed since, a tracker was added, or the confirm sends another day or
+  name, the result is a fresh preview with `stale: true`, and nothing changed. A confirm sent twice
+  previews again.
+- `reopen_programme(tracker, from_date?, reason?, confirm?, rev?)` carries on a run that End
+  programme stopped part way (K165). `from_date` is today by default, or a later day, and no
+  earlier than the end's own day. The days from the end to the day before `from_date` count as a
+  pause of the whole programme, and the run resumes at the programme week it stopped in. Without
+  `confirm` it returns a preview: `{preview: true, stale: false, message, rev, reopen}`, and
+  nothing changes. `reopen` is `{from, reason, week, paused, end, lastWeek}`: the re-open's day and
+  reason, the programme week it resumes at, the paused days as `{from, to}` (null when it re-opens
+  on the end's own day), the run's new last day, and the Monday of its new last week. Show the
+  person the preview, then send the same call with `confirm: true` and the preview's `rev`. That
+  returns `{preview: false, stale: false, message, tracker, run}`, with `message` "Re-opened from
+  2026-11-18." and the run's `ended` null again. The preview's `rev` covers the run's log,
+  `from_date` and `reason`. If the run changed since, or the confirm sends another day or reason,
+  the result is a fresh preview with `stale: true`, and nothing changed.
 
 **Refusals** come back as tool errors whose first word names the argument:
 
@@ -135,12 +178,18 @@ tracker**, whose weekly plans the server writes from the programme.
 | `programme: no programme x… in the library; list_programmes lists them`                                                                   | No library programme has that id.                                                                 |
 | `programme: give programme (a library id) or tracker (a running one), not both`                                                           | `get_programme` takes exactly one of the two.                                                     |
 | `programme: the start has 1 problem, so nothing was started. …` then `- start: a programme starts today or later.`                        | A start date, name or parameter that doesn't fit.                                                 |
-| `tracker: the account has 100 trackers, the most it can hold; delete one in the app first`                                                | A start would add a tracker past the cap.                                                         |
-| `tracker: Yoga is not a programme tracker; list_programmes lists the runs`                                                                | `get_programme` or `change_programme` named an ordinary tracker.                                  |
+| `tracker: the account has 100 trackers, the most it can hold; delete one in the app first`                                                | A start or a restart would add a tracker past the cap.                                            |
+| `tracker: Yoga is not a programme tracker; list_programmes lists the runs`                                                                | `get_programme`, `change_programme`, `end_programme`, `restart_programme` or `reopen_programme` named an ordinary tracker. |
 | `change: the change has 1 problem, so nothing was changed. …` then `- change.activity: deadlift is already paused on Wed 7 Oct.`          | The change doesn't fit the run on its from day. A from day before today reads `from_date: a change starts today or later.` |
-| `tracker: Beginner 5×5 has ended, so its programme takes no more changes. start_programme starts it again as a new run`                   | The run was ended with End programme.                                                             |
-| `quota: the account is full, so nothing was saved` (or started, or changed)                                                              | The account's 5 MiB are used.                                                                     |
-| `tracker: Beginner 5×5's programme can't be read right now, so nothing was changed. The fault is the server's and is logged; the other trackers still answer. Try again later.` | `get_programme` (without "so nothing was changed") or `change_programme` met a stored run that fails to load or replay. The server logs the cause. |
+| `tracker: Beginner 5×5 has ended, so its programme takes no more changes. restart_programme starts it again as a new run from week 1, and reopen_programme carries it on where it stopped` | The run was ended with End programme.                                  |
+| `tracker: Beginner 5×5 has ended, or already has an end day, so there is nothing to end. …` then the tools that carry on it: `restart_programme` and `reopen_programme` | `end_programme` named a run that ran to its last week, or one End programme has ended. |
+| `tracker: the end has 1 problem, so nothing was ended. …` then `- from_date: the programme ends today or later.`                          | An end from a day before today, a long reason, or a confirm without a `rev`.                      |
+| `tracker: the restart has 1 problem, so nothing was restarted. …` then `- start: a programme starts today or later.`                      | A start before today, a name that doesn't fit, or a confirm without a `rev`.                      |
+| `tracker: Beginner 5×5 hasn't been ended, so there is nothing to re-open`                                                                   | `reopen_programme` named a run that is still going, with no End programme.                         |
+| `tracker: Beginner 5×5 ran to its end, or was ended before it started, so there is nothing to re-open. restart_programme starts it again from week 1` | `reopen_programme` named a run End programme didn't stop part way.                     |
+| `tracker: the re-open has 1 problem, so nothing was re-opened. …` then `- from_date: the programme re-opens today or later.`                | A day before today or before the end's own day, a long reason, or a confirm without a `rev`.      |
+| `quota: the account is full, so nothing was saved` (or started, changed, restarted or re-opened)                                                            | The account's 5 MiB are used.                                                                     |
+| `tracker: Beginner 5×5's programme can't be read right now, so nothing was changed. The fault is the server's and is logged; the other trackers still answer. Try again later.` | `get_programme` (without "so nothing was changed"), `change_programme` or `end_programme` met a stored run that fails to load or replay, and so did `restart_programme` or `reopen_programme`. The server logs the cause. |
 
 **A programme tracker's own rules:**
 
@@ -157,7 +206,12 @@ tracker**, whose weekly plans the server writes from the programme.
   the app's name for an OAuth connection ("Claude"). The run's log keeps it with each change.
 - The read tools (`week_summary`, `weeks`, `item_history`, `goals`, `consistency`) read a programme
   tracker as any other, since its weeks are ordinary plans.
-- **End programme has no tool yet** (issue #83). Ask the person to end a run in the app.
+- `end_programme` ends a run as End programme does in the app, after a preview. Days before the
+  end stay as they are, and an ended run takes no more changes.
+- `restart_programme` starts a run again from week 1 as a new tracker, after a preview. A run
+  still going on the new start day ends from it in the same confirm, its history kept.
+- `reopen_programme` carries on a run End programme stopped part way, after a preview. Days before
+  the end stay as they are, and the days from the end read as a programme pause.
 
 ## 2. Two ways to connect
 
@@ -399,9 +453,9 @@ to restore the `before` values, or edit the plan in the app.
 | 400 "Invalid Content-Type header"                                                    | The `Content-Type` is not `application/json`. MCP clients send it; a hand-made `curl` must too.                                                                                                                                                                                                                           |
 | "doesn't show it" in a tool error                                                    | The tracker was deleted from that week on, or starts after it. Its earlier weeks still take reads and changes. `list_trackers` gives each tracker's `start_week` and `end_week`.                                                                                                                                          |
 | `tracker` in a tool error                                                            | No tracker has that id or name, or two trackers share the name. The error lists the ids; send one.                                                                                                                                                                                                                        |
-| "is locked" in a `mark_day` error                                                    | The tracker follows a programme, and its days before yesterday are a record. Only today's, yesterday's and later days take a mark.                                                                                         |
-| "is a programme tracker" in an item tool's error                                     | Its plan comes from its programme. Change it with `change_programme`, which previews the change first.                                                                                                                     |
-| `stale: true` from `change_programme`                                                | The programme changed since the preview, so nothing changed. Show the fresh preview, then confirm with its `rev`.                                                                                                         |
+| "is locked" in a `mark_day` error                                                    | The tracker follows a programme, and its days before yesterday are a record. Only today's, yesterday's and later days take a mark.                                                                                                                                                                                        |
+| "is a programme tracker" in an item tool's error                                     | Its plan comes from its programme. Change it with `change_programme`, which previews the change first.                                                                                                                                                                                                                    |
+| `stale: true` from `change_programme` or another programme tool                      | The programme changed since the preview, so nothing changed. Show the fresh preview, then confirm with its `rev`.                                                                                                                                                                                                         |
 | `quota` in a tool error                                                              | The account is full (5 MiB). Remove old plans or marks in the app, then retry.                                                                                                                                                                                                                                            |
 | 405                                                                                  | The client sent a GET or a `DELETE`. The server accepts POST only, so use a client that supports it.                                                                                                                                                                                                                      |
 | 503 `busy`                                                                           | The server could not check the token because its database was busy or failing. This is not a bad token. Retry in a few seconds; the API log has the error.                                                                                                                                                                |

@@ -27,6 +27,8 @@ from .programme import (
     resolve,
 )
 from .programme_replay import (
+    END_PROGRAMME,
+    REOPEN_PROGRAMME,
     ActivityDay,
     Change,
     DayPlan,
@@ -34,11 +36,15 @@ from .programme_replay import (
     Replay,
     Run,
     WeekPlan,
+    confirm_token,
     day_from_json,
     day_to_json,
     preview_change,
     replay,
+    rev_of,
     start_run,
+    week_days,
+    week_goal,
     week_items,
 )
 from .types import SECTION_TYPES, TYPES, PickKey, TypeId
@@ -121,9 +127,9 @@ class TooManyTrackers(Exception):
 
 #: What a run reads as today: before its start, running, the programme paused, or ended.
 type RunStatus = Literal["upcoming", "running", "paused", "ended"]
-#: The log row End programme writes. The engine has no such change, so its replay passes it by,
-#: but the row is in the log (P5) and in the log's `rev`.
-END_PROGRAMME = "end-programme"
+# The log rows End programme and a re-open write (`END_PROGRAMME`, `REOPEN_PROGRAMME`) are no
+# change type. The replay passes an end by unless a re-open follows it (K165); both are in the log
+# (P5) and in the log's `rev`.
 #: The source of a change or a mark made in the web app. An agent's connection passes its own.
 APP = "app"
 _DAY = timedelta(days=1)
@@ -147,6 +153,16 @@ class RunEnded(Exception):
     """A change, or a second end, for a run End programme has ended; nothing was changed."""
 
 
+class CantReopen(Exception):
+    """A re-open of a run End programme didn't stop part way (K165): one still going, with no
+    end (`finished` False), or one that ran to its last Sunday or was ended before it started
+    (`finished` True). Nothing was changed."""
+
+    def __init__(self, *, finished: bool) -> None:
+        super().__init__("finished" if finished else "going")
+        self.finished = finished
+
+
 class RunUnreadable(Exception):
     """A stored run whose document, log or replay fails to read (an engine change since, or a
     bad row). It never takes another tracker down: the state leaves its summary out and logs it,
@@ -160,7 +176,9 @@ class RunUnreadable(Exception):
 class StaleRun(Exception):
     """A confirmed change whose `rev` isn't its preview's token on the log as it is now: the log
     changed since, or the change, its from day or its reason isn't the one previewed. Nothing was
-    changed. `preview` is the change sent, previewed against the log as it is (§7.3)."""
+    changed. `preview` is the change sent, previewed against the log as it is (§7.3). A confirmed
+    End programme from an agent (`end_run` with `previewed`) raises it too, with End programme's
+    preview."""
 
     def __init__(self, preview: dict[str, Any]) -> None:
         super().__init__("stale")
@@ -1204,8 +1222,9 @@ def delete_programme(conn: sqlite3.Connection, user_id: int, programme_id: str) 
 # replay reads those sealed days rather than its own output, so no later change or engine fix can
 # rewrite what a past day planned (P1). Each activity's item id is its key, unique within the run.
 #
-# A week of plans holds one value per item, so the current week's row carries Sunday's values (§6.2,
-# Q1). Its days before today keep theirs in `programme_days`, which the run's grid reads.
+# A week of plans holds one value per item, so the current week's row carries Sunday's values. Its
+# days before today keep theirs in `programme_days`, which the run's grid reads. Its goal counts its
+# days (§6.2, K163): `week_goal`, which the plans and the grid both use.
 
 
 def _monday(day: date) -> date:
@@ -1267,6 +1286,7 @@ class _Loaded:
     sources: Mapping[int, str]
     made: Mapping[int, int]
     sealed: Mapping[date, DayPlan]
+    #: The latest End programme no re-open follows (K165).
     ending: _Ending | None
     #: The status last stored: what the run read as at its last write or seal.
     stored_status: str
@@ -1274,11 +1294,18 @@ class _Loaded:
     def replay(self, until: date | None = None) -> Replay:
         return replay(self.run, self.changes, sealed=self.sealed, until=until)
 
+    @property
+    def ended_after(self) -> date | None:
+        """The day before End programme's, or None for a run not ended that way (or re-opened
+        since, K165). The replay passes the end by, so its days from the end read as running:
+        the weeks cut them here."""
+        return None if self.ending is None else self.ending.from_date - _DAY
+
     def last_day(self, rp: Replay) -> date | None:
         """The run's last day: the replay's, or the day before End programme's."""
-        if self.ending is None:
+        cut = self.ended_after
+        if cut is None:
             return rp.end
-        cut = self.ending.from_date - _DAY
         return cut if rp.end is None else min(rp.end, cut)
 
     def status(self, rp: Replay, today: date) -> RunStatus:
@@ -1356,6 +1383,8 @@ def _load_run(
         sources[r["seq"]], made[r["seq"]] = r["source"], r["made_at"]
         if body.get("type") == END_PROGRAMME:
             ending = _Ending(r["seq"], from_date, reason)
+        elif body.get("type") == REOPEN_PROGRAMME:
+            ending = None  # K165
     sealed = {
         date.fromisoformat(r["date"]): day_from_json(json.loads(r["items_json"]))
         for r in conn.execute(
@@ -1381,7 +1410,8 @@ def _load_run(
 
 def _seal_span(loaded: _Loaded, when: When) -> tuple[date, date]:
     """The days a seal would copy: from the first unsealed day to yesterday, or to the day
-    before End programme's."""
+    before End programme's. After a re-open (K165) the run has no end, so the next seal copies
+    the days from the end's day on, which the replay reads as paused."""
     stop = when.today - _DAY
     if loaded.ending is not None:
         stop = min(stop, loaded.ending.from_date - _DAY)
@@ -1442,7 +1472,10 @@ def _seal_and_replay(
     conn: sqlite3.Connection, user_id: int, tracker_id: str, when: When
 ) -> tuple[_Loaded, Replay] | None:
     """`_sealed_run`'s work. Only a read with a day to seal, or a status to store, takes the
-    write lock: the first read each day, not every read."""
+    write lock: the first read each day, not every read. That write also rewrites today's week
+    and the later ones (`_write_weeks`), so a week written before a rule changed, such as a goal
+    under Q1's Sunday rule before K163, reads the rule now; a week that reads the same keeps its
+    rev."""
     loaded = _load_run(conn, user_id, tracker_id, when)
     if loaded is None:
         return None
@@ -1457,6 +1490,7 @@ def _seal_and_replay(
         loaded = _seal(conn, user_id, fresh, when)
         rp = loaded.replay(until=when.today)
         _store_status(conn, user_id, loaded, rp, when.today)
+        _write_weeks(conn, user_id, tracker_id, rp, when.today, ended_after=loaded.ended_after)
     return loaded, rp
 
 
@@ -1481,17 +1515,29 @@ def _run_ids(conn: sqlite3.Connection, user_id: int) -> list[str]:
 
 
 def _write_weeks(
-    conn: sqlite3.Connection, user_id: int, tracker_id: str, rp: Replay, today: date
+    conn: sqlite3.Connection,
+    user_id: int,
+    tracker_id: str,
+    rp: Replay,
+    today: date,
+    *,
+    ended_after: date | None = None,
+    hidden: date | None = None,
 ) -> None:
     """Write today's calendar week and every later week of the run into `plans` from the replay
     (§5), never an earlier one. A week whose items read as stored keeps its rev. A later week the
-    run no longer has (it now ends sooner) is deleted. Inside the caller's transaction."""
-    first = _monday(today).isoformat()
+    run no longer has (it now ends sooner) is deleted. After End programme, `ended_after` is the
+    day before its day: the days after it count 0 in a goal (K163), and only the weeks up to it are
+    written; the weeks after them stay as they are (K122). A re-open (K165) passes `hidden`, the
+    first week the end hid: the weeks from it are written too, since no reader showed them. Inside
+    the caller's transaction."""
+    first = _monday(today if hidden is None else min(today, hidden)).isoformat()
+    stop = None if ended_after is None else _week_after(ended_after)
     ids = {a.key: a.key for a in rp.activities}
     wanted = {
-        w.monday.isoformat(): week_items(rp, w, ids)
+        w.monday.isoformat(): week_items(rp, w, ids, last=ended_after)
         for w in rp.weeks
-        if w.monday.isoformat() >= first
+        if w.monday.isoformat() >= first and (stop is None or w.monday.isoformat() < stop)
     }
     stored: dict[str, tuple[Any, int]] = {
         r["week"]: (json.loads(r["items_json"]), int(r["rev"]))
@@ -1500,6 +1546,7 @@ def _write_weeks(
             " AND week >= ?",
             (user_id, tracker_id, first),
         )
+        if stop is None or r["week"] < stop
     }
     for week, items in wanted.items():
         old = stored.get(week)
@@ -1540,7 +1587,8 @@ def _set_end_week(
     conn: sqlite3.Connection, user_id: int, tracker_id: str, last_day: date | None
 ) -> None:
     """The tracker shows in no week after the run's last day (§4); with no last day (an
-    open-ended pause), in every week. A change moves the tracker's rev on."""
+    open-ended pause), in every week. A change moves the tracker's rev on. After a re-open the
+    week moves later (K165)."""
     week = None if last_day is None else _week_after(last_day)
     conn.execute(
         "UPDATE trackers SET end_week = ?, rev = rev + 1"
@@ -1564,17 +1612,21 @@ def _hand_json(act: ActivityDay) -> dict[str, Any]:
 
 
 def _cell_json(
-    days: list[ActivityDay], splits: dict[str, list[dict[str, Any]]], marks: Days | None
+    days: list[ActivityDay],
+    splits: dict[str, list[dict[str, Any]]],
+    marks: Days | None,
+    counted: list[ActivityDay],
+    *,
+    back_on: date | None = None,
 ) -> dict[str, Any]:
-    """One activity's cell for a week, as `week_items` writes its item: Sunday's values and
-    target when it runs on Sunday, else the last values it had with a target of 0."""
+    """One activity's cell for a week, as `week_items` writes its item: Sunday's values when it
+    runs on Sunday, else the last values it had, and the week's goal from the days in `counted`
+    (`week_goal`, K163)."""
     running = [a for a in days if a.state == "running"]
     present = [a for a in days if a.state in ("running", "paused") and a.values is not None]
     sunday = days[-1]
-    if sunday.state == "running":
-        source, target = sunday, (sunday.values or {}).get("target", 0)
-    else:
-        source, target = (running or present or [sunday])[-1], 0
+    source = sunday if sunday.state == "running" else (running or present or [sunday])[-1]
+    target = week_goal(counted)
     state = "running" if running else "paused" if present else sunday.state
     paused = [a for a in days if a.state == "paused"]
     hand: dict[str, Any] = {}
@@ -1587,7 +1639,7 @@ def _cell_json(
         "target": target,
         "splits": splits,
         "hand": hand,
-        "until": _iso(paused[-1].until) if paused else None,
+        "until": _iso(back_on or paused[-1].until) if paused else None,
         "reason": paused[-1].reason if paused else None,
     }
     if marks is not None:
@@ -1595,7 +1647,20 @@ def _cell_json(
     return cell
 
 
-def _week_json(rp: Replay, week: WeekPlan, today: date, log: Log) -> dict[str, Any]:
+def _back_on(week: WeekPlan, key: str) -> date | None:
+    """The day an activity runs again after its last paused day in the week, or None. A sealed
+    paused day keeps the "until" it was planned with; a resume later in the week ends that pause
+    sooner, and the week's cell says so (W6)."""
+    dated = [(d.date, d.activities[key].state) for d in week.days if key in d.activities]
+    last = max((i for i, (_, state) in enumerate(dated) if state == "paused"), default=None)
+    if last is None:
+        return None
+    return next((day for day, state in dated[last + 1 :] if state == "running"), None)
+
+
+def _week_json(
+    rp: Replay, week: WeekPlan, today: date, log: Log, last_day: date | None
+) -> dict[str, Any]:
     sunday = week.monday + timedelta(days=6)
     cells: dict[str, Any] = {}
     for activity in rp.activities:
@@ -1608,7 +1673,11 @@ def _week_json(rp: Replay, week: WeekPlan, today: date, log: Log) -> dict[str, A
             for name in fields
             if len(found := week.splits(activity.key, name)) > 1
         }
-        cells[activity.key] = _cell_json(days, splits, _marks_of(log, week.monday, activity.key))
+        marks = _marks_of(log, week.monday, activity.key)
+        counted = week_days(week, activity.key, last_day)
+        cells[activity.key] = _cell_json(
+            days, splits, marks, counted, back_on=_back_on(week, activity.key)
+        )
     labels = [d.label for d in week.days if d.label is not None]
     return {
         "monday": week.monday.isoformat(),
@@ -1631,7 +1700,9 @@ def _week_json(rp: Replay, week: WeekPlan, today: date, log: Log) -> dict[str, A
 
 def _grid_json(rp: Replay, today: date, log: Log, last_day: date | None) -> dict[str, Any]:
     """The overview grid (§9.2): a column per calendar week up to the run's last day, a cell per
-    activity, and the weeks after an open-ended pause as they will run when resumed."""
+    activity, and the weeks after an open-ended pause as they will run when resumed. A goal
+    counts no day after `last_day` (K163). A week when resumed holds its Sunday's plan, which runs
+    all seven days."""
     cut = None if last_day is None else _week_after(last_day)
     return {
         "activities": [
@@ -1646,7 +1717,7 @@ def _grid_json(rp: Replay, today: date, log: Log, last_day: date | None) -> dict
             if not a.deleted
         ],
         "weeks": [
-            _week_json(rp, w, today, log)
+            _week_json(rp, w, today, log, last_day)
             for w in rp.weeks
             if cut is None or w.monday.isoformat() < cut
         ],
@@ -1654,7 +1725,9 @@ def _grid_json(rp: Replay, today: date, log: Log, last_day: date | None) -> dict
             {
                 "programmeWeek": w.programme_week,
                 "label": w.label,
-                "cells": {key: _cell_json([act], {}, None) for key, act in w.activities.items()},
+                "cells": {
+                    key: _cell_json([act], {}, None, [act] * 7) for key, act in w.activities.items()
+                },
             }
             for w in rp.when_resumed
         ],
@@ -1670,11 +1743,11 @@ def _ends_short_json(rp: Replay) -> list[dict[str, Any]]:
 
 def _change_json(loaded: _Loaded, c: Change, rp: Replay, today: date) -> dict[str, Any]:
     """A log entry. Undo shows on a change whose effect starts today or later (§9.2) while the
-    run hasn't been ended; never on an undo or on End programme."""
+    run hasn't been ended; never on an undo, on End programme or on a re-open (K165)."""
     undone_by = rp.undone.get(c.seq, c.undone_by)
     undoable = (
         loaded.ending is None
-        and c.body.get("type") not in ("undo", END_PROGRAMME)
+        and c.body.get("type") not in ("undo", END_PROGRAMME, REOPEN_PROGRAMME)
         and undone_by is None
         and c.from_date >= today
     )
@@ -1905,47 +1978,78 @@ def start_programme(
         return None
     programme = parse_programme(record["doc"])
     run, title = _start_inputs(programme, start=start, params=params, name=name, today=when.today)
-    rp = replay(run, [], until=when.today)
     with transaction(conn):
-        trackers = load_trackers(conn, user_id)
-        if len(trackers) >= MAX_TRACKERS:
-            raise TooManyTrackers
         before = usage(conn, user_id)
-        tracker_id = make_id({t["id"] for t in trackers})
-        daily = programme.daily_target
-        tracker: Tracker = {
-            "id": tracker_id,
-            "name": title,
-            "kind": programme.kind,
-            "position": _next_position(conn, user_id),
-            "dailyTarget": TYPES[programme.kind].daily_target if daily is None else daily,
-            "startWeek": _monday(run.start).isoformat(),
-            "endWeek": None if rp.end is None else _week_after(rp.end),
-            "rev": 1,
-        }
-        _insert_tracker(conn, user_id, tracker)
-        conn.execute(
-            "INSERT INTO programme_runs"
-            " (user_id, tracker_id, programme_id, doc_json, params_json, start_date, status, rev)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, 1)",
-            (
-                user_id,
-                tracker_id,
-                programme_id,
-                encode_programme(record["doc"]),
-                json.dumps(params or {}),
-                run.start.isoformat(),
-                "upcoming" if when.today < run.start else "running",
-            ),
+        tracker, loaded = _new_run(
+            conn,
+            user_id,
+            programme_id,
+            record["doc"],
+            params,
+            run,
+            title,
+            when=when,
+            make_id=make_id,
         )
-        for activity in programme.activities:
-            _write_activity_details(conn, user_id, tracker_id, activity)
-        _write_weeks(conn, user_id, tracker_id, rp, when.today)
-        loaded = _load_run(conn, user_id, tracker_id, when)
-        assert loaded is not None  # written just now
-        loaded = _seal(conn, user_id, loaded, when)
         _check_growth(before, usage(conn, user_id), quota)
     return TrackerRun(tracker, _run_json(conn, user_id, loaded, loaded.replay(when.today), when))
+
+
+def _new_run(
+    conn: sqlite3.Connection,
+    user_id: int,
+    programme_id: str | None,
+    doc: object,
+    params: object,
+    run: Run,
+    title: str,
+    *,
+    when: When,
+    make_id: Callable[[Container[str]], str],
+) -> tuple[Tracker, _Loaded]:
+    """A start's writes (§4), for Start programme and a restart (K164): the tracker, last in the
+    week, from the start date's Monday, with the document's daily target, ending after the run's
+    last Sunday; the run with its own copy of `doc` and `params`; each activity's notes and link
+    as its item's details; every week of the run; and the start week's days before today, sealed.
+    Inside the caller's transaction. Raises TooManyTrackers past MAX_TRACKERS."""
+    trackers = load_trackers(conn, user_id)
+    if len(trackers) >= MAX_TRACKERS:
+        raise TooManyTrackers
+    programme = run.programme
+    rp = replay(run, [], until=when.today)
+    tracker_id = make_id({t["id"] for t in trackers})
+    daily = programme.daily_target
+    tracker: Tracker = {
+        "id": tracker_id,
+        "name": title,
+        "kind": programme.kind,
+        "position": _next_position(conn, user_id),
+        "dailyTarget": TYPES[programme.kind].daily_target if daily is None else daily,
+        "startWeek": _monday(run.start).isoformat(),
+        "endWeek": None if rp.end is None else _week_after(rp.end),
+        "rev": 1,
+    }
+    _insert_tracker(conn, user_id, tracker)
+    conn.execute(
+        "INSERT INTO programme_runs"
+        " (user_id, tracker_id, programme_id, doc_json, params_json, start_date, status, rev)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, 1)",
+        (
+            user_id,
+            tracker_id,
+            programme_id,
+            encode_programme(doc),
+            json.dumps(params or {}),
+            run.start.isoformat(),
+            "upcoming" if when.today < run.start else "running",
+        ),
+    )
+    for activity in programme.activities:
+        _write_activity_details(conn, user_id, tracker_id, activity)
+    _write_weeks(conn, user_id, tracker_id, rp, when.today)
+    loaded = _load_run(conn, user_id, tracker_id, when)
+    assert loaded is not None  # written just now
+    return tracker, _seal(conn, user_id, loaded, when)
 
 
 # -- changes (§7) --
@@ -2128,6 +2232,80 @@ def change_run(
     }
 
 
+def _row_token(
+    loaded: _Loaded, body: Mapping[str, Any], on: date, why: str | None, when: When
+) -> str:
+    """The token a preview of a log row that isn't a change gives, and its confirm sends back
+    (§7.3, P2): `confirm_token` over the log's rev and the row's body, from day and reason, as a
+    change's own is. End programme's preview uses it. A row written to the log since, or another
+    day or reason, gives another token."""
+    row = Change(
+        seq=max((c.seq for c in loaded.changes), default=0) + 1,
+        from_date=on,
+        made_at=when.local(when.now),
+        body=body,
+        reason=why,
+    )
+    return confirm_token(rev_of(loaded.changes), row)
+
+
+def _end_args(
+    from_day: object, reason: object, today: date, errors: list[ProgrammeError]
+) -> tuple[date | None, str | None]:
+    """End programme's from day (today, the default, or later) and its reason."""
+    on = today if from_day is None else _parse_day(from_day, "from", errors)
+    if on is not None and on < today:
+        errors.append(ProgrammeError("from", "the programme ends today or later."))
+    return on, _parse_reason(reason, errors)
+
+
+def _end_preview_json(
+    loaded: _Loaded, rp: Replay, on: date, why: str | None, when: When
+) -> dict[str, Any]:
+    """End programme's preview (P2): its token (`_row_token`), its from day and reason, and the
+    Monday of the last week the tracker would show, None when it would show in no week."""
+    last = on - _DAY
+    if (run_last := loaded.last_day(rp)) is not None:
+        last = min(last, run_last)
+    week = _monday(last)
+    return {
+        "preview": True,
+        "rev": _row_token(loaded, {"type": END_PROGRAMME}, on, why, when),
+        "end": {
+            "from": on.isoformat(),
+            "reason": why,
+            "lastWeek": None if week < _monday(loaded.run.start) else week.isoformat(),
+        },
+    }
+
+
+def preview_end(
+    conn: sqlite3.Connection,
+    user_id: int,
+    tracker_id: str,
+    from_day: object = None,
+    *,
+    reason: object = None,
+    when: When,
+) -> dict[str, Any] | None:
+    """End programme previewed, for an agent (P2): what `end_run` with `previewed` would do, and
+    the token that confirms it. Writes nothing beyond sealing. None when the tracker has no run.
+
+    Raises ProgrammeInvalid, or RunEnded for a run ended before or run to its last day."""
+    errors: list[ProgrammeError] = []
+    on, why = _end_args(from_day, reason, when.today, errors)
+    found = _sealed_run(conn, user_id, tracker_id, when)
+    if found is None:
+        return None
+    loaded, rp = found
+    if loaded.ending is not None or loaded.status(rp, when.today) == "ended":
+        raise RunEnded
+    if errors:
+        raise ProgrammeInvalid(errors)
+    assert on is not None
+    return _end_preview_json(loaded, rp, on, why, when)
+
+
 def end_run(
     conn: sqlite3.Connection,
     user_id: int,
@@ -2137,33 +2315,418 @@ def end_run(
     reason: object = None,
     when: When,
     source: str = APP,
+    previewed: bool = False,
+    rev: object = None,
 ) -> TrackerRun | None:
     """End programme (§4): end the run from a day, today (the default) or later, as Delete
     tracker does (K122). The tracker shows in no week after the one before that day, so the week
-    holding it still shows unless the day is a Monday; its weeks, marks, notes and log stay. The
-    end goes into the log; no change follows it, and days from it on are never sealed. None when
-    the tracker has no run.
+    holding it still shows unless the day is a Monday; its weeks, marks, notes and log stay, and
+    the weeks up to the end count no day from it in a goal (K163). The end goes into the log; no
+    change follows it, and days from it on are never sealed. None when the tracker has no run.
+
+    `previewed` is an agent's confirm of `preview_end` (P2). It ends the run only when `rev` is
+    the preview's token on the log as it is now, checked inside the write's transaction, and
+    otherwise raises StaleRun with a fresh preview. It also refuses a run that ran to its last day.
 
     Raises ProgrammeInvalid, or RunEnded for a run ended before."""
     errors: list[ProgrammeError] = []
-    on = when.today if from_day is None else _parse_day(from_day, "from", errors)
-    if on is not None and on < when.today:
-        errors.append(ProgrammeError("from", "the programme ends today or later."))
-    why = _parse_reason(reason, errors)
+    on, why = _end_args(from_day, reason, when.today, errors)
+    if previewed and not isinstance(rev, str):
+        errors.append(ProgrammeError("rev", "give the rev of the preview."))
     found = _sealed_run(conn, user_id, tracker_id, when)
     if found is None:
         return None
     if found[0].ending is not None:
         raise RunEnded
+    if previewed and found[0].status(found[1], when.today) == "ended":
+        raise RunEnded
     if errors:
         raise ProgrammeInvalid(errors)
     assert on is not None
-    week = _week_after(on - _DAY)
     with transaction(conn):
         loaded = _load_run(conn, user_id, tracker_id, when)
         assert loaded is not None  # runs are never deleted
         if loaded.ending is not None:  # pragma: no cover (ended since the check above)
             raise RunEnded
+        if previewed and rev != _row_token(loaded, {"type": END_PROGRAMME}, on, why, when):
+            rp = loaded.replay(until=when.today)
+            raise StaleRun(_end_preview_json(loaded, rp, on, why, when))
+        loaded, rp = _write_end(conn, user_id, loaded, on, why, when=when, source=source)
+    tracker = load_tracker(conn, user_id, tracker_id)
+    assert tracker is not None
+    return TrackerRun(tracker, _run_json(conn, user_id, loaded, rp, when))
+
+
+def _write_end(
+    conn: sqlite3.Connection,
+    user_id: int,
+    loaded: _Loaded,
+    on: date,
+    why: str | None,
+    *,
+    when: When,
+    source: str,
+) -> tuple[_Loaded, Replay]:
+    """End programme's writes, for `end_run` and a restart (K164): the `end-programme` row, the
+    tracker's end week moved earlier (never later, K122), the weeks up to the end rewritten and the
+    status stored. Inside the caller's transaction. Returns the run as it now is."""
+    tracker_id = loaded.tracker_id
+    week = _week_after(on - _DAY)
+    conn.execute(
+        "INSERT INTO run_changes"
+        " (user_id, tracker_id, seq, made_at, from_date, change_json, reason, source)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            user_id,
+            tracker_id,
+            max((c.seq for c in loaded.changes), default=0) + 1,
+            when.now,
+            on.isoformat(),
+            json.dumps({"type": END_PROGRAMME}),
+            why or "",
+            source,
+        ),
+    )
+    # An end never brings a week back (K122).
+    conn.execute(
+        "UPDATE trackers SET end_week = ?, rev = rev + 1"
+        " WHERE user_id = ? AND id = ? AND (end_week IS NULL OR end_week > ?)",
+        (week, user_id, tracker_id, week),
+    )
+    ended = _load_run(conn, user_id, tracker_id, when)
+    assert ended is not None
+    rp = ended.replay(until=when.today)
+    # The week holding the end counts only its days before it (K163).
+    _write_weeks(conn, user_id, tracker_id, rp, when.today, ended_after=ended.ended_after)
+    _store_status(conn, user_id, ended, rp, when.today)
+    conn.execute(
+        "UPDATE programme_runs SET rev = rev + 1 WHERE user_id = ? AND tracker_id = ?",
+        (user_id, tracker_id),
+    )
+    return ended, rp
+
+
+# -- restarting a run (K164) --
+
+#: The reason a restart gives the end it writes on the run it replaces.
+RESTARTED = "Restarted from week 1."
+
+
+@dataclass(frozen=True)
+class RunRestarted:
+    """A restart's new tracker and run, and the old tracker as it now is."""
+
+    new: TrackerRun
+    old: Tracker
+
+
+def _restart_args(
+    conn: sqlite3.Connection,
+    user_id: int,
+    loaded: _Loaded,
+    *,
+    start: object,
+    name: object,
+    today: date,
+    errors: list[ProgrammeError],
+) -> tuple[Run, str] | None:
+    """The new run a restart makes and its tracker's name: from the run's own copy of the
+    document and the parameters it started with, never the library's (F5). The name defaults to
+    the old tracker's. Each problem goes into `errors`."""
+    old = load_tracker(conn, user_id, loaded.tracker_id)
+    assert old is not None  # a run's tracker is never deleted
+    try:
+        return _start_inputs(
+            parse_programme(loaded.doc),
+            start=start,
+            params=loaded.params,
+            name=old["name"] if name is None else name,
+            today=today,
+        )
+    except ProgrammeInvalid as e:
+        errors.extend(e.errors)
+        return None
+
+
+def _old_ends_from(loaded: _Loaded, rp: Replay, start: date) -> date | None:
+    """The day a restart ends the old run from: the new run's start, when the old one is still
+    going then (not ended, or ending later); None when it has ended by then."""
+    last = loaded.last_day(rp)
+    return None if last is not None and last < start else start
+
+
+def _restart_token(
+    conn: sqlite3.Connection, user_id: int, loaded: _Loaded, run: Run, title: str, when: When
+) -> str:
+    """The token a restart's preview gives (P2, `_row_token`): over the old run's log, the start,
+    the name and the account's trackers, so a confirm sent twice previews again."""
+    trackers = sorted(t["id"] for t in load_trackers(conn, user_id))
+    body = {"type": "restart-programme", "name": title, "trackers": trackers}
+    return _row_token(loaded, body, run.start, None, when)
+
+
+def _restart_preview_json(
+    conn: sqlite3.Connection,
+    user_id: int,
+    loaded: _Loaded,
+    rp: Replay,
+    run: Run,
+    title: str,
+    when: When,
+) -> dict[str, Any]:
+    """A restart's preview: its token, the new tracker's name, its first day, week 1's days, the
+    programme's weeks, the new run's last day, and the day the old run ends from (None when it has
+    ended by then)."""
+    new = replay(run, [], until=when.today)
+    return {
+        "preview": True,
+        "rev": _restart_token(conn, user_id, loaded, run, title, when),
+        "restart": {
+            "name": title,
+            "start": run.start.isoformat(),
+            "firstWeek": {
+                "from": run.start.isoformat(),
+                "to": (_monday(run.start) + timedelta(days=6)).isoformat(),
+            },
+            "weeks": run.programme.weeks,
+            "end": _iso(new.end),
+            "oldEndsFrom": _iso(_old_ends_from(loaded, rp, run.start)),
+        },
+    }
+
+
+def preview_restart(
+    conn: sqlite3.Connection,
+    user_id: int,
+    tracker_id: str,
+    *,
+    start: object = None,
+    name: object = None,
+    when: When,
+) -> dict[str, Any] | None:
+    """A restart previewed, for an agent (P2): what `restart_run` would do, and the token that
+    confirms it. Writes nothing beyond sealing. None when the tracker has no run. Raises
+    ProgrammeInvalid with every problem."""
+    found = _sealed_run(conn, user_id, tracker_id, when)
+    if found is None:
+        return None
+    loaded, rp = found
+    errors: list[ProgrammeError] = []
+    args = _restart_args(
+        conn, user_id, loaded, start=start, name=name, today=when.today, errors=errors
+    )
+    if args is None:
+        raise ProgrammeInvalid(errors)
+    return _restart_preview_json(conn, user_id, loaded, rp, *args, when)
+
+
+def restart_run(
+    conn: sqlite3.Connection,
+    user_id: int,
+    tracker_id: str,
+    *,
+    start: object = None,
+    name: object = None,
+    rev: object,
+    when: When,
+    quota: int,
+    make_id: Callable[[Container[str]], str],
+    source: str = APP,
+) -> RunRestarted | None:
+    """Restart a run from week 1 (K164), as a confirm of `preview_restart`: a new tracker and run
+    from `start` (today or later, default today) through Start programme's writes, from the old
+    run's own copy of the document and its parameters. An old run still going on that day is
+    ended from it in the same transaction, as End programme ends it, with the reason RESTARTED.
+    None when the tracker has no run.
+
+    `rev` must be the preview's token on the run and the trackers as they are now, checked inside
+    the write's transaction; otherwise it raises StaleRun with a fresh preview. Raises
+    ProgrammeInvalid with every problem, TooManyTrackers past MAX_TRACKERS, or QuotaExceeded; any
+    of them writes nothing."""
+    found = _sealed_run(conn, user_id, tracker_id, when)
+    if found is None:
+        return None
+    errors: list[ProgrammeError] = []
+    args = _restart_args(
+        conn, user_id, found[0], start=start, name=name, today=when.today, errors=errors
+    )
+    if not isinstance(rev, str):
+        errors.append(ProgrammeError("rev", "give the rev of the preview."))
+    if args is None or errors:
+        raise ProgrammeInvalid(errors)
+    run, title = args
+    with transaction(conn):
+        loaded = _load_run(conn, user_id, tracker_id, when)
+        assert loaded is not None  # runs are never deleted
+        loaded = _seal(conn, user_id, loaded, when)
+        rp = loaded.replay(until=when.today)
+        if rev != _restart_token(conn, user_id, loaded, run, title, when):
+            raise StaleRun(_restart_preview_json(conn, user_id, loaded, rp, run, title, when))
+        before = usage(conn, user_id)
+        on = _old_ends_from(loaded, rp, run.start)
+        if on is not None:
+            _write_end(conn, user_id, loaded, on, RESTARTED, when=when, source=source)
+        tracker, new = _new_run(
+            conn,
+            user_id,
+            loaded.programme_id,
+            loaded.doc,
+            loaded.params,
+            run,
+            title,
+            when=when,
+            make_id=make_id,
+        )
+        _check_growth(before, usage(conn, user_id), quota)
+    old = load_tracker(conn, user_id, tracker_id)
+    assert old is not None
+    return RunRestarted(
+        TrackerRun(tracker, _run_json(conn, user_id, new, new.replay(when.today), when)), old
+    )
+
+
+# -- re-opening a run (K165) --
+
+
+def _reopen_args(
+    from_day: object, reason: object, today: date, errors: list[ProgrammeError]
+) -> tuple[date | None, str | None]:
+    """A re-open's day (today, the default, or later) and its reason."""
+    on = today if from_day is None else _parse_day(from_day, "from", errors)
+    if on is not None and on < today:
+        errors.append(ProgrammeError("from", "the programme re-opens today or later."))
+    return on, _parse_reason(reason, errors)
+
+
+def _reopenable(loaded: _Loaded, rp: Replay, today: date) -> _Ending:
+    """The end a re-open lifts: one that stopped the run part way, from its start or later and
+    no later than its last day. Raises CantReopen for any other run."""
+    ending = loaded.ending
+    if ending is None:
+        raise CantReopen(finished=loaded.status(rp, today) == "ended")
+    if ending.from_date < loaded.run.start or (rp.end is not None and ending.from_date > rp.end):
+        raise CantReopen(finished=True)
+    return ending
+
+
+def _reopen_preview_json(
+    loaded: _Loaded, ending: _Ending, on: date, why: str | None, when: When
+) -> dict[str, Any]:
+    """A re-open's preview (P2): its token (`_row_token`), its day and reason, the programme
+    week it resumes at, the paused days from the end to the day before it (None when it re-opens
+    on the end's own day), and the run's new last day and the Monday of its week."""
+    body = {"type": REOPEN_PROGRAMME}
+    row = Change(
+        seq=max(c.seq for c in loaded.changes) + 1,
+        from_date=on,
+        made_at=when.local(when.now),
+        body=body,
+        reason=why,
+    )
+    after = replay(loaded.run, [*loaded.changes, row], sealed=loaded.sealed, until=when.today)
+    last = after.end
+    gap = ending.from_date < on
+    return {
+        "preview": True,
+        "rev": _row_token(loaded, body, on, why, when),
+        "reopen": {
+            "from": on.isoformat(),
+            "reason": why,
+            "week": after.day(on).programme_week,
+            "paused": {"from": ending.from_date.isoformat(), "to": (on - _DAY).isoformat()}
+            if gap
+            else None,
+            "end": _iso(last),
+            "lastWeek": None if last is None else _monday(last).isoformat(),
+        },
+    }
+
+
+def _reopen_checked(
+    loaded: _Loaded, rp: Replay, on: date | None, errors: list[ProgrammeError], today: date
+) -> tuple[_Ending, date]:
+    """The end a re-open lifts and its day, once the run is one to re-open and the day is no
+    earlier than the end's own. Raises CantReopen, or ProgrammeInvalid with every problem."""
+    ending = _reopenable(loaded, rp, today)
+    if on is not None and today <= on < ending.from_date:
+        errors.append(
+            ProgrammeError(
+                "from",
+                f"the programme ends from {ending.from_date.isoformat()}, so it re-opens from that "
+                "day or later.",
+            )
+        )
+    if errors:
+        raise ProgrammeInvalid(errors)
+    assert on is not None
+    return ending, on
+
+
+def preview_reopen(
+    conn: sqlite3.Connection,
+    user_id: int,
+    tracker_id: str,
+    from_day: object = None,
+    *,
+    reason: object = None,
+    when: When,
+) -> dict[str, Any] | None:
+    """A re-open previewed, for an agent (P2): what `reopen_run` would do, and the token that
+    confirms it. Writes nothing beyond sealing. None when the tracker has no run.
+
+    Raises CantReopen, or ProgrammeInvalid with every problem."""
+    errors: list[ProgrammeError] = []
+    on, why = _reopen_args(from_day, reason, when.today, errors)
+    found = _sealed_run(conn, user_id, tracker_id, when)
+    if found is None:
+        return None
+    loaded, rp = found
+    ending, on = _reopen_checked(loaded, rp, on, errors, when.today)
+    return _reopen_preview_json(loaded, ending, on, why, when)
+
+
+def reopen_run(
+    conn: sqlite3.Connection,
+    user_id: int,
+    tracker_id: str,
+    from_day: object = None,
+    *,
+    reason: object = None,
+    rev: object,
+    when: When,
+    quota: int,
+    source: str = APP,
+) -> TrackerRun | None:
+    """Re-open a run End programme stopped part way (K165), as a confirm of `preview_reopen`:
+    from a day, today (the default) or later, and no earlier than the end's own. It appends a
+    `reopen-programme` row; the replay then reads the days from the end to the day before as a
+    pause of the whole programme, resumed at the paused week. It seals those days up to yesterday,
+    writes the weeks the end hid and today's week and every later one, moves the tracker's end
+    week to the run's new last day (later: K122's one exception), and stores the status. None when
+    the tracker has no run.
+
+    `rev` must be the preview's token on the log as it is now, checked inside the write's
+    transaction; otherwise it raises StaleRun with a fresh preview. Raises CantReopen,
+    ProgrammeInvalid with every problem, or QuotaExceeded; any of them writes nothing."""
+    errors: list[ProgrammeError] = []
+    on, why = _reopen_args(from_day, reason, when.today, errors)
+    if not isinstance(rev, str):
+        errors.append(ProgrammeError("rev", "give the rev of the preview."))
+    found = _sealed_run(conn, user_id, tracker_id, when)
+    if found is None:
+        return None
+    _, on = _reopen_checked(*found, on, errors, when.today)
+    with transaction(conn):
+        loaded = _load_run(conn, user_id, tracker_id, when)
+        assert loaded is not None  # runs are never deleted
+        loaded = _seal(conn, user_id, loaded, when)
+        if loaded.ending is None:  # pragma: no cover (re-opened since the check above)
+            raise CantReopen(finished=False)
+        if rev != _row_token(loaded, {"type": REOPEN_PROGRAMME}, on, why, when):
+            raise StaleRun(_reopen_preview_json(loaded, loaded.ending, on, why, when))
+        before = usage(conn, user_id)
+        ended = load_tracker(conn, user_id, tracker_id)
+        assert ended is not None and ended["endWeek"] is not None  # an end always sets it
         conn.execute(
             "INSERT INTO run_changes"
             " (user_id, tracker_id, seq, made_at, from_date, change_json, reason, source)"
@@ -2171,28 +2734,28 @@ def end_run(
             (
                 user_id,
                 tracker_id,
-                max((c.seq for c in loaded.changes), default=0) + 1,
+                max(c.seq for c in loaded.changes) + 1,
                 when.now,
                 on.isoformat(),
-                json.dumps({"type": END_PROGRAMME}),
+                json.dumps({"type": REOPEN_PROGRAMME}),
                 why or "",
                 source,
             ),
         )
-        # An end never brings a week back (K122).
-        conn.execute(
-            "UPDATE trackers SET end_week = ?, rev = rev + 1"
-            " WHERE user_id = ? AND id = ? AND (end_week IS NULL OR end_week > ?)",
-            (week, user_id, tracker_id, week),
-        )
         loaded = _load_run(conn, user_id, tracker_id, when)
         assert loaded is not None
+        # The days from the end to yesterday, never sealed while it was ended, read as paused.
+        loaded = _seal(conn, user_id, loaded, when)
         rp = loaded.replay(until=when.today)
+        hidden = date.fromisoformat(ended["endWeek"])
+        _write_weeks(conn, user_id, tracker_id, rp, when.today, hidden=hidden)
+        _set_end_week(conn, user_id, tracker_id, loaded.last_day(rp))
         _store_status(conn, user_id, loaded, rp, when.today)
         conn.execute(
             "UPDATE programme_runs SET rev = rev + 1 WHERE user_id = ? AND tracker_id = ?",
             (user_id, tracker_id),
         )
+        _check_growth(before, usage(conn, user_id), quota)
     tracker = load_tracker(conn, user_id, tracker_id)
     assert tracker is not None
     return TrackerRun(tracker, _run_json(conn, user_id, loaded, rp, when))

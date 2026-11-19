@@ -283,7 +283,7 @@ end to end.
 | [docs/decisions.md](docs/decisions.md)                                                 | Why accounts, sync and the design system are built the way they are                                                          |
 | [docs/specs/2026-10-24-brand-design.md](docs/specs/2026-10-24-brand-design.md)         | The approved brand spec (Notebook): intent, rules and calls K1–K8                                                            |
 | [docs/specs/2026-11-14-account-trackers.md](docs/specs/2026-11-14-account-trackers.md) | The account trackers spec: kinds, ids, the weeks a tracker shows in, state and export v6 (K122–K126)                         |
-| [docs/specs/2026-11-17-programmes.md](docs/specs/2026-11-17-programmes.md)             | The programmes spec: the format, runs, changes on any day, the lock and the views (K142–K162)                                |
+| [docs/specs/2026-11-17-programmes.md](docs/specs/2026-11-17-programmes.md)             | The programmes spec: the format, runs, changes on any day, the lock and the views (K142–K166)                                |
 | [design_handoff_exercise_planner/](design_handoff_exercise_planner/README.md)          | The original design spec and HTML prototype                                                                                  |
 
 Development history lives in [`journal/`](journal/).

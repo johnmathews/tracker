@@ -51,6 +51,9 @@ WRITE_TOOLS = [
     "save_programme",
     "start_programme",
     "change_programme",
+    "end_programme",
+    "restart_programme",
+    "reopen_programme",
 ]
 INITIALIZE = {
     "protocolVersion": "2025-11-25",
@@ -696,6 +699,12 @@ WRITE_HINTS = {
     "start_programme": {"destructiveHint": False, "idempotentHint": False},
     # A confirm moves the log's rev on, so the same confirm again only previews.
     "change_programme": {"destructiveHint": False, "idempotentHint": True},
+    # Deletes nothing, and a second confirm is refused as ended.
+    "end_programme": {"destructiveHint": False, "idempotentHint": True},
+    # Adds a tracker, as start_programme does; the end it may write deletes nothing.
+    "restart_programme": {"destructiveHint": False, "idempotentHint": False},
+    # Like end_programme: deletes nothing, and a second confirm is refused as not ended.
+    "reopen_programme": {"destructiveHint": False, "idempotentHint": True},
 }
 WRITE_CALLS: dict[str, dict[str, Any]] = {
     "add_item": {"name": "Dips"},
@@ -706,6 +715,9 @@ WRITE_CALLS: dict[str, dict[str, Any]] = {
     "save_programme": {"doc": {"format": "tracker-programme/1"}},
     "start_programme": {"programme": "x1"},
     "change_programme": {"tracker": "exercise", "change": {"type": "go-to-week", "week": 2}},
+    "end_programme": {"tracker": "exercise"},
+    "restart_programme": {"tracker": "exercise"},
+    "reopen_programme": {"tracker": "exercise"},
 }
 
 
@@ -1228,8 +1240,82 @@ def test_an_agent_saves_starts_and_changes_a_programme_through_mcp_alone(
     week = tool(agent, writer, "week_summary", tracker=tracker, week=NEXT_MONDAY)
     assert week["tracker"] == tracker
     assert targets(week) == {"squat": 0, "plank": 3}
-    # This week, before the change's from day, is as it was.
-    assert targets(tool(agent, writer, "week_summary", tracker=tracker)) == {"squat": 3, "plank": 3}
+    # This week, before the change's from day, is as it was: started on a Friday, so each goal
+    # at 3 counts Friday to Sunday, 3 x 3 / 7 rounded up (K163).
+    assert targets(tool(agent, writer, "week_summary", tracker=tracker)) == {"squat": 2, "plank": 2}
+
+
+#: Wednesday of the week of NEXT_MONDAY.
+WEDNESDAY = "2026-10-28"
+
+
+@pytest.mark.parametrize(
+    ("marked", "done", "met"),
+    [
+        ([NEXT_MONDAY, "2026-10-27"], 2, True),  # on pace before the pause: "2 of 1", met
+        ([], 0, False),  # behind before the pause: "0 of 1", missed
+    ],
+)
+def test_every_read_tool_counts_a_split_weeks_goal_by_its_days(
+    agent: TestClient,
+    uid: int,
+    writer: str,
+    clock: Clock,
+    marked: list[str],
+    done: int,
+    met: bool,
+) -> None:
+    """John's squat (#86, K163): 3 a week, paused from Wednesday. Its goal for the week is 3 x 2 /
+    7, rounded up: 1, and every read tool says so, this week and once it is past."""
+    tracker = running(agent, writer, start=NEXT_MONDAY)["tracker"]["id"]
+    go_to(clock, "2026-10-27")
+    for day in marked:
+        write(
+            agent,
+            writer,
+            "mark_day",
+            {"tracker": tracker, "item_id": "squat", "date": day, "mark": "great"},
+        )
+    pause = {"type": "pause-activity", "activity": "squat"}
+    confirmed(agent, writer, tracker, pause, from_date=WEDNESDAY, reason="Knee.")
+
+    def squat_of(items: list[dict[str, Any]]) -> dict[str, Any]:
+        return next(it for it in items if it["id"] == "squat")
+
+    week = tool(agent, writer, "week_summary", tracker=tracker)
+    squat = squat_of(week["items"])
+    assert (squat["done"], squat["target"], squat["goal_met"]) == (done, 1, met)
+    assert targets(week) == {"squat": 1, "plank": 3}
+    assert squat_of(goal_items(tool(agent, writer, "goals"), tracker))["target"] == 1
+
+    # The week past: the record says the same.
+    go_to(clock, "2026-11-03")
+    (past,) = tool(agent, writer, "weeks", tracker=tracker, start=NEXT_MONDAY, end=NEXT_MONDAY)[
+        "weeks"
+    ]
+    squat = squat_of(past["items"])
+    assert (squat["done"], squat["target"], squat["goal_met"]) == (done, 1, met)
+    assert past["goals_met"] == (1 if met else 0)
+    history = tool(agent, writer, "item_history", tracker=tracker, item_id="squat", weeks=2)
+    first, now = history["weeks"]
+    assert first["week"] == NEXT_MONDAY
+    assert (first["in_plan"], first["done"], first["target"], first["goal_met"]) == (
+        True,
+        done,
+        1,
+        met,
+    )
+    # Paused all of this week: no goal.
+    assert (now["in_plan"], now["target"], now["goal_met"]) == (True, 0, False)
+    steady = tool(agent, writer, "consistency", tracker=tracker, weeks=2)
+    # One finished week, with two goals: the squat's 1 and the plank's 3, not done.
+    assert (steady["finished_weeks"], steady["goals"], steady["goals_met"]) == (
+        1,
+        2,
+        1 if met else 0,
+    )
+    # The goals tool reads this week: paused, so 0.
+    assert squat_of(goal_items(tool(agent, writer, "goals"), tracker))["target"] == 0
 
 
 def test_programme_format_gives_the_schema_a_worked_example_and_the_changes(
@@ -1616,7 +1702,11 @@ def test_change_programme_refuses_an_ordinary_or_an_ended_tracker(
     tracker = running(agent, writer)["tracker"]["id"]
     data.end_run(conn, uid, tracker, when=data.When(START, config.timezone))
     text = refused(agent, writer, "change_programme", {"tracker": tracker, "change": PAUSE_SQUAT})
-    assert text.startswith(f"tracker: {NAME} has ended, so its programme takes no more changes.")
+    assert text == (
+        f"tracker: {NAME} has ended, so its programme takes no more changes. restart_programme "
+        "starts it again as a new run from week 1, and reopen_programme carries it on where it "
+        "stopped"
+    )
 
 
 @pytest.mark.parametrize(
@@ -1720,3 +1810,908 @@ def test_the_instructions_tell_an_agent_how_to_add_a_programme(
     for words in ("programme_format", "save_programme", "start_programme", "change_programme"):
         assert words in text, words
     assert "add_item, update_item or remove_item" in text.replace("`", "")
+
+
+# --- end_programme (#83) ------------------------------------------------------------------------
+
+
+def end(client: TestClient, token: str, tracker: str, **extra: Any) -> Any:
+    return write(client, token, "end_programme", {"tracker": tracker, **extra})
+
+
+def ended(client: TestClient, token: str, tracker: str, **extra: Any) -> Any:
+    """Preview an end, then confirm it with the preview's rev."""
+    preview = end(client, token, tracker, **extra)
+    return end(client, token, tracker, confirm=True, rev=preview["rev"], **extra)
+
+
+def test_end_programme_previews_then_ends_with_the_previews_rev(
+    agent: TestClient, conn: sqlite3.Connection, uid: int, writer: str, clock: Clock
+) -> None:
+    """The plan's W3 acceptance: a preview changes nothing, and its rev ends the run."""
+    started = running(agent, writer)
+    tracker = started["tracker"]["id"]
+    before = tool(agent, writer, "get_programme", tracker=tracker)["run"]
+    preview = end(agent, writer, tracker, from_date=NEXT_MONDAY, reason="Moving house.")
+    assert (preview["preview"], preview["stale"]) == (True, False)
+    assert preview["end"] == {"from": NEXT_MONDAY, "reason": "Moving house.", "lastWeek": THIS_WEEK}
+    message = preview["message"]
+    assert message.startswith(f"Nothing has changed yet. {NAME} ends from {NEXT_MONDAY}.")
+    for words in (
+        f"Its last week is the week of {THIS_WEEK}.",
+        "Its marks, weeks, notes and log stay.",
+        f"Days from {NEXT_MONDAY} on aren't sealed, and the run takes no more changes.",
+        f"confirm true and rev {preview['rev']}.",
+    ):
+        assert words in message, words
+    # Nothing changed: the run, its log and the tracker's weeks are as they were.
+    assert tool(agent, writer, "get_programme", tracker=tracker)["run"] == before
+    assert data.load_tracker(conn, uid, tracker) == started["tracker"]
+
+    out = end(
+        agent,
+        writer,
+        tracker,
+        from_date=NEXT_MONDAY,
+        reason="Moving house.",
+        confirm=True,
+        rev=preview["rev"],
+    )
+    assert (out["preview"], out["stale"], out["message"]) == (
+        False,
+        False,
+        f"Ended from {NEXT_MONDAY}.",
+    )
+    assert out["tracker"]["endWeek"] == NEXT_MONDAY
+    run = out["run"]
+    assert run["ended"] == {"from": NEXT_MONDAY, "reason": "Moving house.", "seq": 1}
+    (entry,) = run["log"]
+    assert (entry["change"], entry["from"], entry["source"]) == (
+        {"type": "end-programme"},
+        NEXT_MONDAY,
+        "agent",
+    )
+    assert data.load_tracker(conn, uid, tracker)["endWeek"] == NEXT_MONDAY  # type: ignore[index]
+    go_to(clock, NEXT_MONDAY)
+    assert tool(agent, writer, "get_programme", tracker=tracker)["run"]["status"] == "ended"
+
+
+def test_end_programme_defaults_to_today(agent: TestClient, uid: int, writer: str) -> None:
+    tracker = running(agent, writer)["tracker"]["id"]
+    preview = end(agent, writer, tracker)
+    assert preview["end"] == {"from": TODAY, "reason": None, "lastWeek": THIS_WEEK}
+    out = ended(agent, writer, tracker)
+    assert out["message"] == f"Ended from {TODAY}."
+    assert out["run"]["status"] == "ended"
+
+
+def test_end_programme_says_a_run_not_yet_started_shows_in_no_week(
+    agent: TestClient, uid: int, writer: str
+) -> None:
+    tracker = running(agent, writer, start="2026-11-02")["tracker"]["id"]
+    preview = end(agent, writer, tracker)
+    assert preview["end"]["lastWeek"] is None
+    assert f"{NAME} then shows in no week." in preview["message"]
+    assert ended(agent, writer, tracker)["tracker"]["endWeek"] == NEXT_MONDAY
+
+
+def test_end_programme_on_a_run_paused_until_resumed_keeps_the_week_before_its_day(
+    agent: TestClient, uid: int, writer: str
+) -> None:
+    """A programme paused with no end has no last day of its own: the end's day sets it."""
+    tracker = running(agent, writer)["tracker"]["id"]
+    confirmed(agent, writer, tracker, {"type": "pause-programme"})
+    preview = end(agent, writer, tracker, from_date="2026-11-04")
+    assert preview["end"]["lastWeek"] == "2026-11-02"
+
+
+@pytest.mark.parametrize(
+    "confirm",
+    [
+        {"rev": "0123456789abcdef"},
+        {"reason": "Another reason."},
+        {"from_date": "2026-10-27"},
+    ],
+)
+def test_end_programme_with_another_rev_day_or_reason_previews_again(
+    agent: TestClient, uid: int, writer: str, confirm: dict[str, Any]
+) -> None:
+    tracker = running(agent, writer)["tracker"]["id"]
+    first = end(agent, writer, tracker, from_date=NEXT_MONDAY)
+    arguments = {"from_date": NEXT_MONDAY, "rev": first["rev"], **confirm}
+    out = end(agent, writer, tracker, confirm=True, **arguments)
+    assert (out["preview"], out["stale"]) == (True, True)
+    assert out["rev"] != arguments["rev"]
+    assert out["message"].startswith("That rev doesn't confirm this end:")
+    run = tool(agent, writer, "get_programme", tracker=tracker)["run"]
+    assert (run["ended"], run["log"]) == (None, [])
+
+
+def test_end_programme_after_a_change_since_its_preview_previews_again(
+    agent: TestClient, uid: int, writer: str
+) -> None:
+    tracker = running(agent, writer)["tracker"]["id"]
+    first = end(agent, writer, tracker, from_date=NEXT_MONDAY)
+    confirmed(agent, writer, tracker, LONGER_PLANK, from_date=NEXT_MONDAY)
+    out = end(agent, writer, tracker, from_date=NEXT_MONDAY, confirm=True, rev=first["rev"])
+    assert (out["preview"], out["stale"]) == (True, True)
+    assert out["end"] == {"from": NEXT_MONDAY, "reason": None, "lastWeek": THIS_WEEK}
+    assert tool(agent, writer, "get_programme", tracker=tracker)["run"]["ended"] is None
+    out = end(agent, writer, tracker, from_date=NEXT_MONDAY, confirm=True, rev=out["rev"])
+    assert (out["preview"], out["stale"]) == (False, False)
+    assert [e["seq"] for e in out["run"]["log"]] == [2, 1]
+
+
+@pytest.mark.parametrize("confirm", [{}, {"confirm": True, "rev": "0123456789abcdef"}])
+def test_end_programme_refuses_an_ended_or_a_finished_run(
+    agent: TestClient,
+    conn: sqlite3.Connection,
+    config: Config,
+    uid: int,
+    writer: str,
+    clock: Clock,
+    confirm: dict[str, Any],
+) -> None:
+    """Ended with End programme, from today or a later day, or run to its last Sunday: there is
+    nothing to end, and the refusal names the tools that carry a run on."""
+    tracker = running(agent, writer)["tracker"]["id"]
+    data.end_run(conn, uid, tracker, NEXT_MONDAY, when=data.When(START, config.timezone))
+    finished = running(agent, writer, name="Finished")["tracker"]["id"]
+    go_to(clock, "2026-12-14")  # the Monday after the run's last week
+    for found, name in ((tracker, NAME), (finished, "Finished")):
+        text = refused(agent, writer, "end_programme", {"tracker": found, **confirm})
+        assert text == (
+            f"tracker: {name} has ended, or already has an end day, so there is nothing to end. "
+            "restart_programme starts it again as a new run from week 1. reopen_programme "
+            "carries on a run that End programme ended."
+        )
+    run = tool(agent, writer, "get_programme", tracker=finished)["run"]
+    assert (run["ended"], run["log"]) == (None, [])
+
+
+@pytest.mark.parametrize("confirm", [{}, {"confirm": True, "rev": "0123456789abcdef"}])
+def test_end_programme_refuses_an_ordinary_tracker(
+    agent: TestClient, uid: int, writer: str, confirm: dict[str, Any]
+) -> None:
+    text = refused(agent, writer, "end_programme", {"tracker": "exercise", **confirm})
+    assert text == "tracker: Strength is not a programme tracker; list_programmes lists the runs"
+
+
+@pytest.mark.parametrize(
+    ("arguments", "line"),
+    [
+        ({"from_date": YESTERDAY}, "- from_date: the programme ends today or later."),
+        ({"from_date": "next week"}, "- from_date: give a date written YYYY-MM-DD."),
+        ({"reason": "x" * 501}, "- reason: a reason is at most 500 characters."),
+        ({"confirm": True}, "- rev: give the rev of the preview."),
+    ],
+)
+def test_a_refused_end_lists_its_problems_and_ends_nothing(
+    agent: TestClient, uid: int, writer: str, arguments: dict[str, Any], line: str
+) -> None:
+    tracker = running(agent, writer)["tracker"]["id"]
+    text = refused(agent, writer, "end_programme", {"tracker": tracker, **arguments})
+    assert text == (
+        "tracker: the end has 1 problem, so nothing was ended. Fix each one and send it again.\n"
+        + line
+    )
+    run = tool(agent, writer, "get_programme", tracker=tracker)["run"]
+    assert (run["ended"], run["log"]) == (None, [])
+
+
+def test_a_past_day_is_refused_on_a_confirm_too(agent: TestClient, uid: int, writer: str) -> None:
+    tracker = running(agent, writer)["tracker"]["id"]
+    preview = end(agent, writer, tracker)
+    arguments = {"tracker": tracker, "from_date": YESTERDAY, "confirm": True, "rev": preview["rev"]}
+    text = refused(agent, writer, "end_programme", arguments)
+    assert text.endswith("\n- from_date: the programme ends today or later.")
+    assert tool(agent, writer, "get_programme", tracker=tracker)["run"]["ended"] is None
+
+
+def test_end_programme_on_a_run_that_cant_be_read_ends_nothing(
+    agent: TestClient, uid: int, writer: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tracker = running(agent, writer, name="Autumn block")["tracker"]["id"]
+    broken_run(monkeypatch, tracker)
+    for confirm in ({}, {"confirm": True, "rev": "0123456789abcdef"}):
+        text = refused(agent, writer, "end_programme", {"tracker": tracker, **confirm})
+        assert text.startswith(
+            "tracker: Autumn block's programme can't be read right now, so nothing was changed."
+        )
+
+
+def test_the_instructions_name_end_programme(agent: TestClient, token: str) -> None:
+    text = result(call(agent, "initialize", INITIALIZE, token=token))["instructions"]
+    assert "`end_programme`, which previews the end first" in text
+
+
+# --- restart_programme (#83, K164) ----------------------------------------------------------------
+
+RESTARTED = "Restarted from week 1."
+
+
+def restart(client: TestClient, token: str, tracker: str, **extra: Any) -> Any:
+    return write(client, token, "restart_programme", {"tracker": tracker, **extra})
+
+
+def restarted(client: TestClient, token: str, tracker: str, **extra: Any) -> Any:
+    """Preview a restart, then confirm it with the preview's rev."""
+    preview = restart(client, token, tracker, **extra)
+    return restart(client, token, tracker, confirm=True, rev=preview["rev"], **extra)
+
+
+def sealed_days(conn: sqlite3.Connection, tracker: str) -> list[tuple[Any, ...]]:
+    return [
+        tuple(r)
+        for r in conn.execute(
+            "SELECT date, programme_week, items_json, sealed_at FROM programme_days"
+            " WHERE tracker_id = ? ORDER BY date",
+            (tracker,),
+        )
+    ]
+
+
+def past_weeks(conn: sqlite3.Connection, uid: int, config: Config, tracker: str) -> Any:
+    """The run's grid weeks before this one, and their plans rows: its history."""
+    run = data.read_run(conn, uid, tracker, data.When(config.clock(), config.timezone))
+    assert run is not None
+    this_week = insights_monday(config)
+    grid = [w for w in run["grid"]["weeks"] if w["monday"] < this_week]
+    stored = conn.execute(
+        "SELECT week, items_json, rev FROM plans WHERE section = ? AND week < ? ORDER BY week",
+        (tracker, this_week),
+    ).fetchall()
+    return grid, [tuple(r) for r in stored]
+
+
+def insights_monday(config: Config) -> str:
+    today = data.When(config.clock(), config.timezone).today
+    return date.fromordinal(today.toordinal() - today.weekday()).isoformat()
+
+
+def test_restart_programme_previews_then_starts_week_1_and_ends_the_running_run(
+    agent: TestClient, conn: sqlite3.Connection, config: Config, uid: int, writer: str, clock: Clock
+) -> None:
+    """The plan's W4 acceptance: after a confirm, a new tracker runs week 1 from the start day,
+    and the old run ends the day before it with its history intact."""
+    started = running(agent, writer, name="Autumn squats", params={"squat": 50})
+    old = started["tracker"]["id"]
+    go_to(clock, "2026-11-04")  # a Wednesday, in programme week 3
+    before = tool(agent, writer, "get_programme", tracker=old)["run"]
+    days, history = sealed_days(conn, old), past_weeks(conn, uid, config, old)
+    assert days[-1][0] == "2026-11-03"
+    trackers = data.load_trackers(conn, uid)
+
+    preview = restart(agent, writer, old, start="2026-11-09")
+    assert (preview["preview"], preview["stale"]) == (True, False)
+    assert preview["restart"] == {
+        "name": "Autumn squats",
+        "start": "2026-11-09",
+        "firstWeek": {"from": "2026-11-09", "to": "2026-11-15"},
+        "weeks": 8,
+        "end": "2027-01-03",
+        "oldEndsFrom": "2026-11-09",
+    }
+    message = preview["message"]
+    assert message.startswith(
+        "Nothing has changed yet. Autumn squats starts again from week 1 on 2026-11-09, as a new "
+        "tracker."
+    )
+    for words in (
+        "Week 1 runs 2026-11-09 to 2026-11-15, and the run has 8 weeks, to 2027-01-03.",
+        "Autumn squats, the run now, ends from 2026-11-09, so its last day is 2026-11-08.",
+        "Its marks, weeks, notes and log stay.",
+        f"confirm true and rev {preview['rev']}.",
+    ):
+        assert words in message, words
+    # A preview changes nothing.
+    assert tool(agent, writer, "get_programme", tracker=old)["run"] == before
+    assert data.load_trackers(conn, uid) == trackers
+
+    out = restart(agent, writer, old, start="2026-11-09", confirm=True, rev=preview["rev"])
+    assert (out["preview"], out["stale"], out["message"]) == (
+        False,
+        False,
+        "Restarted from 2026-11-09.",
+    )
+    new = out["tracker"]
+    assert new["id"] not in {t["id"] for t in trackers}
+    assert (new["name"], new["kind"], new["startWeek"], new["endWeek"]) == (
+        "Autumn squats",
+        "strength",
+        "2026-11-09",
+        "2027-01-04",
+    )
+    run = out["run"]
+    assert (run["status"], run["start"], run["end"], run["log"]) == (
+        "upcoming",
+        "2026-11-09",
+        "2027-01-03",
+        [],
+    )
+    assert run["params"] == before["params"] == {"squat": 50, "rate": 5}
+    assert run["doc"] == before["doc"]
+    # The old run ends the day before the new one's first, in the same confirm.
+    assert (out["old"]["id"], out["old"]["endWeek"]) == (old, "2026-11-09")
+    after = tool(agent, writer, "get_programme", tracker=old)["run"]
+    assert after["ended"] == {"from": "2026-11-09", "reason": RESTARTED, "seq": 1}
+    assert after["end"] == "2026-11-08"
+    (entry,) = after["log"]
+    assert (entry["change"], entry["source"], entry["undoable"]) == (
+        {"type": "end-programme"},
+        "agent",
+        False,
+    )
+    # Its history is as it was: the sealed days, the past weeks and their plans.
+    assert sealed_days(conn, old) == days
+    assert past_weeks(conn, uid, config, old) == history
+
+    go_to(clock, "2026-11-09")
+    now = tool(agent, writer, "get_programme", tracker=new["id"])["run"]
+    assert (now["status"], now["week"]) == ("running", 1)
+    assert tool(agent, writer, "get_programme", tracker=old)["run"]["status"] == "ended"
+    assert sealed_days(conn, old)[-1][0] == "2026-11-08"
+
+
+@pytest.mark.parametrize("how", ["ended", "finished"])
+def test_restart_programme_of_a_run_that_has_ended_ends_nothing_more(
+    agent: TestClient,
+    conn: sqlite3.Connection,
+    config: Config,
+    uid: int,
+    writer: str,
+    clock: Clock,
+    how: str,
+) -> None:
+    """Ended with End programme, or run to its last Sunday: the old run stays as it is, and the
+    new one runs week 1 from today."""
+    old = running(agent, writer)["tracker"]["id"]
+    if how == "ended":
+        data.end_run(conn, uid, old, when=data.When(START, config.timezone))
+    today = "2026-11-04" if how == "ended" else "2026-12-16"
+    go_to(clock, today)
+    log = tool(agent, writer, "get_programme", tracker=old)["run"]["log"]
+    preview = restart(agent, writer, old)
+    assert preview["restart"]["start"] == today
+    assert preview["restart"]["oldEndsFrom"] is None
+    assert f"{NAME}, the run now, has ended and stays as it is." in preview["message"]
+    out = restart(agent, writer, old, confirm=True, rev=preview["rev"])
+    assert (out["run"]["status"], out["run"]["week"], out["run"]["start"]) == (
+        "running",
+        1,
+        today,
+    )
+    assert out["tracker"]["name"] == NAME
+    assert tool(agent, writer, "get_programme", tracker=old)["run"]["log"] == log
+
+
+def test_restart_programme_starts_from_the_runs_own_copy_when_the_library_one_is_gone(
+    agent: TestClient, conn: sqlite3.Connection, uid: int, writer: str
+) -> None:
+    """F5: the library programme may have been deleted since the run started."""
+    started = running(agent, writer)
+    programme_id = started["run"]["programmeId"]
+    assert data.delete_programme(conn, uid, programme_id)
+    assert tool(agent, writer, "list_programmes")["programmes"] == []
+    out = restarted(agent, writer, started["tracker"]["id"], start=NEXT_MONDAY)
+    run = out["run"]
+    assert (run["programmeId"], run["doc"], run["start"]) == (
+        programme_id,
+        started["run"]["doc"],
+        NEXT_MONDAY,
+    )
+    assert run["grid"]["weeks"][0]["cells"]["squat"]["values"]["weight"] == 40
+
+
+def test_restart_programme_refuses_past_the_tracker_cap(
+    agent: TestClient, uid: int, writer: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    old = running(agent, writer)["tracker"]["id"]
+    preview = restart(agent, writer, old, start=NEXT_MONDAY)
+    monkeypatch.setattr(data, "MAX_TRACKERS", 4)
+    arguments = {"tracker": old, "start": NEXT_MONDAY, "confirm": True, "rev": preview["rev"]}
+    text = refused(agent, writer, "restart_programme", arguments)
+    assert text == (
+        "tracker: the account has 4 trackers, the most it can hold; delete one in the app first"
+    )
+    # Nothing was written: the old run isn't ended.
+    run = tool(agent, writer, "get_programme", tracker=old)["run"]
+    assert (run["ended"], run["log"]) == (None, [])
+    assert len(tool(agent, writer, "list_trackers")["trackers"]) == 4
+
+
+def test_a_full_account_restarts_nothing(
+    full: tuple[TestClient, str], conn: sqlite3.Connection, config: Config, uid: int
+) -> None:
+    """The quota refuses the restart, and the end it would write goes with it."""
+    client, token = full
+    stored = data.add_programme(conn, uid, EXAMPLE, START, quota=10**9, make_id=lambda _: "p1")
+    when = data.When(START, config.timezone)
+    data.start_programme(conn, uid, stored["id"], when=when, quota=10**9, make_id=lambda _: "x1")
+    preview = restart(client, token, "x1", start=NEXT_MONDAY)
+    assert preview["restart"]["oldEndsFrom"] == NEXT_MONDAY
+    arguments = {"tracker": "x1", "start": NEXT_MONDAY, "confirm": True, "rev": preview["rev"]}
+    text = refused(client, token, "restart_programme", arguments)
+    assert text == "quota: the account is full, so nothing was restarted"
+    run = data.read_run(conn, uid, "x1", when)
+    assert run is not None
+    assert (run["ended"], run["log"]) == (None, [])
+    assert [t["id"] for t in data.load_trackers(conn, uid)] == ["exercise", "cardio", "diet", "x1"]
+
+
+@pytest.mark.parametrize(
+    "confirm",
+    [
+        {"rev": "0123456789abcdef"},
+        {"name": "Winter squats"},
+        {"start": "2026-11-02"},
+    ],
+)
+def test_restart_programme_with_another_rev_start_or_name_previews_again(
+    agent: TestClient, conn: sqlite3.Connection, uid: int, writer: str, confirm: dict[str, Any]
+) -> None:
+    old = running(agent, writer)["tracker"]["id"]
+    first = restart(agent, writer, old, start=NEXT_MONDAY)
+    arguments = {"start": NEXT_MONDAY, "rev": first["rev"], **confirm}
+    out = restart(agent, writer, old, confirm=True, **arguments)
+    assert (out["preview"], out["stale"]) == (True, True)
+    assert out["rev"] != arguments["rev"]
+    assert out["restart"]["start"] == arguments["start"]
+    assert out["message"].startswith(
+        "That rev doesn't confirm this restart: the programme or the account's trackers changed "
+        "since its preview, or its start or its name isn't the one previewed. Nothing was "
+        "changed. This is the restart sent, previewed as things are now."
+    )
+    run = tool(agent, writer, "get_programme", tracker=old)["run"]
+    assert (run["ended"], run["log"]) == (None, [])
+    assert len(data.load_trackers(conn, uid)) == 4
+
+
+def test_a_restart_confirmed_twice_or_after_a_change_previews_again(
+    agent: TestClient, conn: sqlite3.Connection, config: Config, uid: int, writer: str
+) -> None:
+    old = running(agent, writer)["tracker"]["id"]
+    first = restart(agent, writer, old, start=NEXT_MONDAY)
+    confirmed(agent, writer, old, LONGER_PLANK, from_date=NEXT_MONDAY)
+    out = restart(agent, writer, old, start=NEXT_MONDAY, confirm=True, rev=first["rev"])
+    assert (out["preview"], out["stale"]) == (True, True)
+    assert len(data.load_trackers(conn, uid)) == 4
+    # An ended run's log doesn't move with a restart; the new tracker still makes a second
+    # confirm a fresh preview.
+    data.end_run(conn, uid, old, when=data.When(config.clock(), config.timezone))
+    preview = restart(agent, writer, old)
+    done = restart(agent, writer, old, confirm=True, rev=preview["rev"])
+    assert done["preview"] is False
+    again = restart(agent, writer, old, confirm=True, rev=preview["rev"])
+    assert (again["preview"], again["stale"]) == (True, True)
+    assert len(data.load_trackers(conn, uid)) == 5
+
+
+@pytest.mark.parametrize("confirm", [{}, {"confirm": True, "rev": "0123456789abcdef"}])
+def test_restart_programme_refuses_an_ordinary_tracker(
+    agent: TestClient, uid: int, writer: str, confirm: dict[str, Any]
+) -> None:
+    text = refused(agent, writer, "restart_programme", {"tracker": "exercise", **confirm})
+    assert text == "tracker: Strength is not a programme tracker; list_programmes lists the runs"
+
+
+@pytest.mark.parametrize(
+    ("arguments", "line"),
+    [
+        ({"start": YESTERDAY}, "- start: a programme starts today or later."),
+        ({"start": "next week"}, "- start: give a date written YYYY-MM-DD."),
+        ({"name": "x" * 61}, "- name: give a name of 1 to 60 characters."),
+        ({"confirm": True}, "- rev: give the rev of the preview."),
+    ],
+)
+def test_a_refused_restart_lists_its_problems_and_restarts_nothing(
+    agent: TestClient,
+    conn: sqlite3.Connection,
+    uid: int,
+    writer: str,
+    arguments: dict[str, Any],
+    line: str,
+) -> None:
+    old = running(agent, writer)["tracker"]["id"]
+    text = refused(agent, writer, "restart_programme", {"tracker": old, **arguments})
+    assert text == (
+        "tracker: the restart has 1 problem, so nothing was restarted. Fix each one and send it "
+        "again.\n" + line
+    )
+    run = tool(agent, writer, "get_programme", tracker=old)["run"]
+    assert (run["ended"], run["log"]) == (None, [])
+    assert len(data.load_trackers(conn, uid)) == 4
+
+
+def test_restart_programme_on_a_run_that_cant_be_read_restarts_nothing(
+    agent: TestClient,
+    conn: sqlite3.Connection,
+    uid: int,
+    writer: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tracker = running(agent, writer, name="Autumn block")["tracker"]["id"]
+    broken_run(monkeypatch, tracker)
+    for confirm in ({}, {"confirm": True, "rev": "0123456789abcdef"}):
+        text = refused(agent, writer, "restart_programme", {"tracker": tracker, **confirm})
+        assert text.startswith(
+            "tracker: Autumn block's programme can't be read right now, so nothing was changed."
+        )
+    assert len(data.load_trackers(conn, uid)) == 4
+
+
+def test_the_instructions_name_restart_programme(agent: TestClient, token: str) -> None:
+    text = result(call(agent, "initialize", INITIALIZE, token=token))["instructions"]
+    assert "`restart_programme` starts a run again from week 1" in text
+    notes = " ".join(tool(agent, token, "programme_format")["notes"])
+    assert "restart_programme" in notes
+
+
+def test_restart_programme_ends_a_run_not_yet_started_from_the_new_start(
+    agent: TestClient, uid: int, writer: str
+) -> None:
+    """An upcoming run ends from the restart's day, as End programme ends one: it then shows in
+    no week."""
+    old = running(agent, writer, start=NEXT_MONDAY)["tracker"]["id"]
+    preview = restart(agent, writer, old)
+    assert preview["restart"]["oldEndsFrom"] == TODAY
+    out = restart(agent, writer, old, confirm=True, rev=preview["rev"])
+    assert (out["old"]["startWeek"], out["old"]["endWeek"]) == (NEXT_MONDAY, NEXT_MONDAY)
+    assert (out["run"]["status"], out["run"]["start"]) == ("running", TODAY)
+    run = tool(agent, writer, "get_programme", tracker=old)["run"]
+    assert (run["status"], run["ended"]["from"]) == ("ended", TODAY)
+
+
+def test_restart_programme_brings_a_later_end_day_forward_to_the_new_start(
+    agent: TestClient, conn: sqlite3.Connection, config: Config, uid: int, writer: str
+) -> None:
+    """A run already set to end after the new start ends from the new start instead: a second
+    end row, which the run now reads as its end."""
+    old = running(agent, writer)["tracker"]["id"]
+    data.end_run(conn, uid, old, "2026-12-07", when=data.When(START, config.timezone))
+    out = restarted(agent, writer, old, start="2026-11-02")
+    assert out["old"]["endWeek"] == "2026-11-02"
+    run = tool(agent, writer, "get_programme", tracker=old)["run"]
+    assert run["ended"] == {"from": "2026-11-02", "reason": RESTARTED, "seq": 2}
+    assert [e["from"] for e in run["log"]] == ["2026-11-02", "2026-12-07"]
+    assert run["end"] == "2026-11-01"
+
+
+# --- reopen_programme (#83, K165) -----------------------------------------------------------------
+
+
+def reopen(client: TestClient, token: str, tracker: str, **extra: Any) -> Any:
+    return write(client, token, "reopen_programme", {"tracker": tracker, **extra})
+
+
+def reopened(client: TestClient, token: str, tracker: str, **extra: Any) -> Any:
+    """Preview a re-open, then confirm it with the preview's rev."""
+    preview = reopen(client, token, tracker, **extra)
+    return reopen(client, token, tracker, confirm=True, rev=preview["rev"], **extra)
+
+
+def plan_row(conn: sqlite3.Connection, tracker: str, week: str) -> tuple[Any, ...]:
+    row = conn.execute(
+        "SELECT items_json, rev FROM plans WHERE section = ? AND week = ?", (tracker, week)
+    ).fetchone()
+    return tuple(row)
+
+
+def full_run(conn: sqlite3.Connection, uid: int, config: Config, tracker: str) -> dict[str, Any]:
+    run = data.read_run(conn, uid, tracker, data.When(config.clock(), config.timezone))
+    assert run is not None
+    return run
+
+
+def grid_week(run: dict[str, Any], monday: str) -> dict[str, Any]:
+    found: dict[str, Any] = next(w for w in run["grid"]["weeks"] if w["monday"] == monday)
+    return found
+
+
+def test_reopen_programme_carries_a_run_on_at_the_week_it_stopped_in(
+    agent: TestClient, conn: sqlite3.Connection, config: Config, uid: int, writer: str, clock: Clock
+) -> None:
+    """The plan's W5 acceptance: ended in its week 3 and re-opened a week later, the run is
+    running at week 3 from the re-open day, and its days before the end are unchanged."""
+    tracker = running(agent, writer)["tracker"]["id"]
+    go_to(clock, "2026-11-04")  # a Wednesday, in programme week 3
+    ended(agent, writer, tracker, reason="Knee")
+    go_to(clock, "2026-11-11")  # a week later
+    before = tool(agent, writer, "get_programme", tracker=tracker)["run"]
+    assert (before["status"], before["end"]) == ("ended", "2026-11-03")
+    days = sealed_days(conn, tracker)
+    assert days[-1][0] == "2026-11-03"
+    end_week = plan_row(conn, tracker, "2026-11-02")
+    stored = data.load_tracker(conn, uid, tracker)
+    assert stored is not None
+    assert stored["endWeek"] == "2026-11-09"
+
+    preview = reopen(agent, writer, tracker, reason="Knee is better")
+    assert (preview["preview"], preview["stale"]) == (True, False)
+    assert preview["reopen"] == {
+        "from": "2026-11-11",
+        "reason": "Knee is better",
+        "week": 3,
+        "paused": {"from": "2026-11-04", "to": "2026-11-10"},
+        "end": "2026-12-20",
+        "lastWeek": "2026-12-14",
+    }
+    message = preview["message"]
+    assert message.startswith(
+        f"Nothing has changed yet. {NAME} re-opens from 2026-11-11, at programme week 3."
+    )
+    for words in (
+        "The days from 2026-11-04 to 2026-11-10 count as a pause of the whole programme.",
+        "Its last week is now the week of 2026-12-14.",
+        "Days before 2026-11-04 stay as they are, and the run takes changes again.",
+        f"confirm true and rev {preview['rev']}.",
+    ):
+        assert words in message, words
+    # A preview changes nothing.
+    assert tool(agent, writer, "get_programme", tracker=tracker)["run"] == before
+    assert sealed_days(conn, tracker) == days
+    assert data.load_tracker(conn, uid, tracker) == stored
+
+    out = reopen(agent, writer, tracker, reason="Knee is better", confirm=True, rev=preview["rev"])
+    assert (out["preview"], out["stale"], out["message"]) == (
+        False,
+        False,
+        "Re-opened from 2026-11-11.",
+    )
+    assert out["tracker"]["endWeek"] == "2026-12-21"
+    run = out["run"]
+    assert (run["status"], run["week"], run["ended"], run["end"]) == (
+        "running",
+        3,
+        None,
+        "2026-12-20",
+    )
+    entry, end_entry = run["log"]
+    assert (entry["change"], entry["from"], entry["reason"], entry["source"]) == (
+        {"type": "reopen-programme"},
+        "2026-11-11",
+        "Knee is better",
+        "agent",
+    )
+    assert (entry["undoable"], end_entry["undoable"]) == (False, False)
+    assert (
+        data.run_summaries(conn, uid, data.When(clock.now, config.timezone))[tracker]["status"]
+        == "running"
+    )
+    # P1: the days before the end are as they were sealed.
+    after = sealed_days(conn, tracker)
+    assert [r for r in after if r[0] < "2026-11-04"] == days
+    # The days from the end to yesterday are sealed now, paused at programme week 3.
+    gap = [r for r in after if r[0] >= "2026-11-04"]
+    assert [r[0] for r in gap] == [f"2026-11-{n:02}" for n in range(4, 11)]
+    assert {(r[1], json.loads(r[2])["status"], json.loads(r[2])["reason"]) for r in gap} == {
+        (3, "paused", "Knee")
+    }
+    # The end's week is past and keeps its plan.
+    assert plan_row(conn, tracker, "2026-11-02") == end_week
+    week = grid_week(full_run(conn, uid, config, tracker), "2026-11-09")
+    assert [d["status"] for d in week["days"]] == ["paused"] * 2 + ["running"] * 5
+    assert week["programmeWeeks"] == [3]
+    # A re-opened run takes changes again.
+    assert confirmed(agent, writer, tracker, LONGER_PLANK)["preview"] is False
+
+
+def test_a_reopen_writes_the_weeks_the_end_hid_as_paused(
+    agent: TestClient, conn: sqlite3.Connection, config: Config, uid: int, writer: str, clock: Clock
+) -> None:
+    """Re-opened two weeks after the end: the week between, which the end hid and no reader
+    showed, is written as paused, with goals of 0."""
+    tracker = running(agent, writer)["tracker"]["id"]
+    go_to(clock, "2026-11-04")
+    ended(agent, writer, tracker)
+    go_to(clock, "2026-11-18")
+    stale_items, stale_rev = plan_row(conn, tracker, "2026-11-09")
+    assert {i["target"] for i in json.loads(stale_items)} == {3}
+    out = reopened(agent, writer, tracker)
+    assert out["run"]["end"] == "2026-12-27"
+    items, rev = plan_row(conn, tracker, "2026-11-09")
+    assert ({i["target"] for i in json.loads(items)}, rev) == ({0}, stale_rev + 1)
+    run = full_run(conn, uid, config, tracker)
+    assert {d["status"] for d in grid_week(run, "2026-11-09")["days"]} == {"paused"}
+    this_week = grid_week(run, "2026-11-16")
+    squat = item_of(json.loads(plan_row(conn, tracker, "2026-11-16")[0]), "squat")
+    assert squat["target"] == this_week["cells"]["squat"]["target"] == 3  # 3 x 5 / 7, rounded up
+    assert data.shows_in(out["tracker"], "2026-11-09")
+
+
+def item_of(items: list[dict[str, Any]], key: str) -> dict[str, Any]:
+    return next(i for i in items if i["id"] == key)
+
+
+def test_a_run_ended_and_reopened_twice_has_two_paused_gaps(
+    agent: TestClient, uid: int, writer: str, clock: Clock
+) -> None:
+    tracker = running(agent, writer)["tracker"]["id"]
+    go_to(clock, "2026-11-04")
+    ended(agent, writer, tracker)
+    go_to(clock, "2026-11-11")
+    reopened(agent, writer, tracker)
+    go_to(clock, "2026-11-18")
+    assert ended(agent, writer, tracker)["run"]["status"] == "ended"
+    go_to(clock, "2026-11-25")
+    run = reopened(agent, writer, tracker)["run"]
+    assert (run["status"], run["week"], run["ended"], run["end"]) == (
+        "running",
+        4,
+        None,
+        "2026-12-27",
+    )
+    assert [e["change"]["type"] for e in run["log"]] == [
+        "reopen-programme",
+        "end-programme",
+        "reopen-programme",
+        "end-programme",
+    ]
+
+
+def test_reopen_programme_on_a_future_ends_own_day_lifts_it(
+    agent: TestClient, uid: int, writer: str
+) -> None:
+    """An end set for a later day can be lifted from that day: nothing is paused, and the
+    tracker shows to the run's own last week again. A day before the end's is refused."""
+    tracker = running(agent, writer)["tracker"]["id"]
+    assert ended(agent, writer, tracker, from_date=NEXT_MONDAY)["tracker"]["endWeek"] == NEXT_MONDAY
+    text = refused(agent, writer, "reopen_programme", {"tracker": tracker})
+    assert text.endswith(
+        f"\n- from_date: the programme ends from {NEXT_MONDAY}, so it re-opens from that day or "
+        "later."
+    )
+    preview = reopen(agent, writer, tracker, from_date=NEXT_MONDAY)
+    assert (preview["reopen"]["paused"], preview["reopen"]["week"]) == (None, 2)
+    assert "It re-opens on the day it was to end, so no day is paused." in preview["message"]
+    out = reopen(agent, writer, tracker, from_date=NEXT_MONDAY, confirm=True, rev=preview["rev"])
+    assert out["tracker"]["endWeek"] == "2026-12-14"
+    assert (out["run"]["status"], out["run"]["ended"], out["run"]["end"]) == (
+        "running",
+        None,
+        "2026-12-13",
+    )
+
+
+def test_reopen_programme_refuses_a_run_not_ended(agent: TestClient, uid: int, writer: str) -> None:
+    tracker = running(agent, writer)["tracker"]["id"]
+    for confirm in ({}, {"confirm": True, "rev": "0123456789abcdef"}):
+        text = refused(agent, writer, "reopen_programme", {"tracker": tracker, **confirm})
+        assert text == f"tracker: {NAME} hasn't been ended, so there is nothing to re-open"
+
+
+@pytest.mark.parametrize(
+    "how", ["finished", "ended after its last week", "ended before it started"]
+)
+def test_reopen_programme_refuses_a_run_end_programme_didnt_stop_part_way(
+    agent: TestClient,
+    conn: sqlite3.Connection,
+    config: Config,
+    uid: int,
+    writer: str,
+    clock: Clock,
+    how: str,
+) -> None:
+    when = data.When(START, config.timezone)
+    if how == "ended before it started":
+        tracker = running(agent, writer, start=NEXT_MONDAY)["tracker"]["id"]
+        data.end_run(conn, uid, tracker, when=when)
+    else:
+        tracker = running(agent, writer)["tracker"]["id"]
+        if how == "ended after its last week":
+            data.end_run(conn, uid, tracker, "2026-12-14", when=when)
+        go_to(clock, "2026-12-16")
+    for confirm in ({}, {"confirm": True, "rev": "0123456789abcdef"}):
+        text = refused(agent, writer, "reopen_programme", {"tracker": tracker, **confirm})
+        assert text == (
+            f"tracker: {NAME} ran to its end, or was ended before it started, so there is "
+            "nothing to re-open. restart_programme starts it again from week 1"
+        )
+
+
+@pytest.mark.parametrize("confirm", [{}, {"confirm": True, "rev": "0123456789abcdef"}])
+def test_reopen_programme_refuses_an_ordinary_tracker(
+    agent: TestClient, uid: int, writer: str, confirm: dict[str, Any]
+) -> None:
+    text = refused(agent, writer, "reopen_programme", {"tracker": "exercise", **confirm})
+    assert text == "tracker: Strength is not a programme tracker; list_programmes lists the runs"
+
+
+@pytest.mark.parametrize(
+    ("arguments", "line"),
+    [
+        ({"from_date": YESTERDAY}, "- from_date: the programme re-opens today or later."),
+        ({"from_date": "next week"}, "- from_date: give a date written YYYY-MM-DD."),
+        ({"reason": "x" * 501}, "- reason: a reason is at most 500 characters."),
+        ({"confirm": True}, "- rev: give the rev of the preview."),
+    ],
+)
+def test_a_refused_reopen_lists_its_problems_and_reopens_nothing(
+    agent: TestClient,
+    conn: sqlite3.Connection,
+    config: Config,
+    uid: int,
+    writer: str,
+    arguments: dict[str, Any],
+    line: str,
+) -> None:
+    tracker = running(agent, writer)["tracker"]["id"]
+    data.end_run(conn, uid, tracker, when=data.When(START, config.timezone))
+    text = refused(agent, writer, "reopen_programme", {"tracker": tracker, **arguments})
+    assert text == (
+        "tracker: the re-open has 1 problem, so nothing was re-opened. Fix each one and send it "
+        "again.\n" + line
+    )
+    assert tool(agent, writer, "get_programme", tracker=tracker)["run"]["ended"] is not None
+
+
+@pytest.mark.parametrize(
+    "confirm",
+    [
+        {"rev": "0123456789abcdef"},
+        {"reason": "Another reason."},
+        {"from_date": "2026-11-12"},
+    ],
+)
+def test_reopen_programme_with_another_rev_day_or_reason_previews_again(
+    agent: TestClient, uid: int, writer: str, clock: Clock, confirm: dict[str, Any]
+) -> None:
+    tracker = running(agent, writer)["tracker"]["id"]
+    go_to(clock, "2026-11-04")
+    ended(agent, writer, tracker)
+    go_to(clock, "2026-11-11")
+    first = reopen(agent, writer, tracker)
+    arguments = {"from_date": "2026-11-11", "rev": first["rev"], **confirm}
+    out = reopen(agent, writer, tracker, confirm=True, **arguments)
+    assert (out["preview"], out["stale"]) == (True, True)
+    assert out["rev"] != arguments["rev"]
+    assert out["reopen"]["from"] == arguments["from_date"]
+    assert out["message"].startswith(
+        "That rev doesn't confirm this re-open: the programme changed since its preview, or its "
+        "day or its reason isn't the one previewed. Nothing was changed. This is the re-open "
+        "sent, previewed on the programme as it is now."
+    )
+    run = tool(agent, writer, "get_programme", tracker=tracker)["run"]
+    assert (run["status"], len(run["log"])) == ("ended", 1)
+    # The fresh preview's rev confirms the re-open sent; the same confirm again is refused, since
+    # the run isn't ended any more.
+    sent = {**arguments, "rev": out["rev"]}
+    assert reopen(agent, writer, tracker, confirm=True, **sent)["preview"] is False
+    text = refused(agent, writer, "reopen_programme", {"tracker": tracker, "confirm": True, **sent})
+    assert text == f"tracker: {NAME} hasn't been ended, so there is nothing to re-open"
+
+
+def test_a_full_account_reopens_nothing(
+    full: tuple[TestClient, str], conn: sqlite3.Connection, config: Config, uid: int
+) -> None:
+    client, token = full
+    stored = data.add_programme(conn, uid, EXAMPLE, START, quota=10**9, make_id=lambda _: "p1")
+    when = data.When(START, config.timezone)
+    data.start_programme(conn, uid, stored["id"], when=when, quota=10**9, make_id=lambda _: "x1")
+    data.end_run(conn, uid, "x1", when=when)
+    preview = reopen(client, token, "x1")
+    arguments = {"tracker": "x1", "confirm": True, "rev": preview["rev"]}
+    text = refused(client, token, "reopen_programme", arguments)
+    assert text == "quota: the account is full, so nothing was re-opened"
+    run = data.read_run(conn, uid, "x1", when)
+    assert run is not None
+    assert (run["status"], len(run["log"])) == ("ended", 1)
+
+
+def test_reopen_programme_on_a_run_that_cant_be_read_reopens_nothing(
+    agent: TestClient, uid: int, writer: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tracker = running(agent, writer, name="Autumn block")["tracker"]["id"]
+    broken_run(monkeypatch, tracker)
+    for confirm in ({}, {"confirm": True, "rev": "0123456789abcdef"}):
+        text = refused(agent, writer, "reopen_programme", {"tracker": tracker, **confirm})
+        assert text.startswith(
+            "tracker: Autumn block's programme can't be read right now, so nothing was changed."
+        )
+
+
+def test_the_instructions_name_reopen_programme(agent: TestClient, token: str) -> None:
+    text = result(call(agent, "initialize", INITIALIZE, token=token))["instructions"]
+    assert "`reopen_programme` carries on a run End programme stopped" in text
+    notes = " ".join(tool(agent, token, "programme_format")["notes"])
+    assert "reopen_programme" in notes

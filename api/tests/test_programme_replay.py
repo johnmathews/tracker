@@ -18,6 +18,9 @@ from tracker_api import validate
 from tracker_api.programme import ProgrammeInvalid, Series, parse_programme
 from tracker_api.programme_replay import (
     CHANGE_TYPES,
+    END_PROGRAMME,
+    REOPEN_PROGRAMME,
+    ActivityDay,
     Change,
     DayPlan,
     Replay,
@@ -30,6 +33,7 @@ from tracker_api.programme_replay import (
     replay,
     rev_of,
     start_run,
+    week_goal,
     week_items,
 )
 
@@ -1272,11 +1276,50 @@ def test_the_confirm_token_covers_the_log_and_the_change() -> None:
 # ---- Plan items for W4 ----
 
 
+def running_at(target: int) -> ActivityDay:
+    return ActivityDay(state="running", activity_week=1, values={"target": target, "reps": 5})
+
+
+PAUSED = ActivityDay(state="paused", activity_week=2, values={"target": 3, "reps": 5})
+
+
+@pytest.mark.parametrize(
+    ("days", "goal"),
+    [
+        # John's squat (K163): 3 a week, run Monday and Tuesday, paused from Wednesday.
+        ([running_at(3)] * 2 + [PAUSED] * 5, 1),
+        # A Thursday start at 3: Monday to Wednesday come before the run.
+        ([ActivityDay(state="not-started")] * 3 + [running_at(3)] * 4, 2),
+        # One target all week keeps it.
+        ([running_at(3)] * 7, 3),
+        ([running_at(7)] * 7, 7),
+        ([running_at(1)] * 7, 1),
+        # A target that changes in the week counts each day's.
+        ([running_at(3)] * 2 + [running_at(5)] * 5, 5),
+        ([running_at(5)] * 2 + [running_at(2)] * 5, 3),
+        # Ended from Wednesday; a day left out (after End programme) counts 0 too.
+        ([running_at(3)] * 2 + [ActivityDay(state="ended")] * 5, 1),
+        ([running_at(4)] * 2, 2),
+        # Not running at all, and a single day at 1.
+        ([PAUSED] * 7, 0),
+        ([], 0),
+        ([running_at(1)] + [PAUSED] * 6, 1),
+        # A running day without values (none the replay gives) counts 0.
+        ([ActivityDay(state="running")] * 7, 0),
+    ],
+)
+def test_a_weeks_goal_is_its_running_days_targets_over_7_rounded_up(
+    days: list[ActivityDay], goal: int
+) -> None:
+    assert week_goal(days) == goal
+
+
 def test_week_items_use_sundays_values_and_the_ids_given() -> None:
     rp = replay(mockup_run(), mockup_log())
     ids = {a.key: f"id-{a.key}" for a in rp.activities}
     items = week_items(rp, rp.week(d("2026-12-07")), ids)
     bench = next(i for i in items if i["id"] == "id-bench")
+    # A pin: the bench's weight changed on Wednesday, but its target was 3 all week, so it stays 3.
     assert bench == {
         "id": "id-bench",
         "name": "Bench press",
@@ -1288,11 +1331,53 @@ def test_week_items_use_sundays_values_and_the_ids_given() -> None:
     assert [i["id"] for i in items] == [
         f"id-{k}" for k in ("squat", "bench", "row", "deadlift", "plank")
     ]
+    assert {i["target"] for i in items} == {3}
     paused = next(
         i for i in week_items(rp, rp.week(d("2026-12-14")), ids) if i["id"] == "id-deadlift"
     )
     assert paused["target"] == 0
     assert validate.normalise_exercise(bench) == bench
+
+
+def test_a_split_weeks_goal_counts_the_days_the_activity_ran() -> None:
+    """John's squat (K163): 3 a week, paused from Wednesday. Its goal is 3 x 2 / 7, rounded up:
+    1. Its values stay the last it ran with, as before."""
+    pause = {"type": "pause-activity", "activity": "squat", "weeks": 1}
+    rp = replay(plain_run(), [change(1, d("2026-12-09"), pause)])
+    ids = {a.key: a.key for a in rp.activities}
+    items = {i["id"]: i for i in week_items(rp, rp.week(d("2026-12-07")), ids)}
+    assert items["squat"]["target"] == 1
+    assert items["squat"]["weight"] == weight(rp, d("2026-12-08"), "squat")
+    assert {k: i["target"] for k, i in items.items() if k != "squat"} == {
+        "bench": 3,
+        "row": 3,
+        "deadlift": 3,
+        "plank": 3,
+    }
+    # The next week, paused Monday and Tuesday and back on Wednesday: 3 x 5 / 7, rounded up.
+    later = {i["id"]: i for i in week_items(rp, rp.week(d("2026-12-14")), ids)}
+    assert later["squat"]["target"] == 3
+
+
+def test_a_start_after_monday_has_a_goal_for_the_days_it_runs() -> None:
+    """A Thursday start: Monday to Wednesday are before the run, so 3 x 4 / 7, rounded up: 2.
+    The weeks after it keep 3."""
+    rp = replay(plain_run(start=d("2026-11-26")), [])
+    ids = {a.key: a.key for a in rp.activities}
+    assert {i["target"] for i in week_items(rp, rp.weeks[0], ids)} == {2}
+    assert {i["target"] for i in week_items(rp, rp.weeks[1], ids)} == {3}
+
+
+def test_a_week_cut_by_end_programme_counts_its_days_before_the_end() -> None:
+    """The replay passes End programme by, so its days from the end read as running: `last` cuts
+    them. Ended from Wednesday: Monday and Tuesday at 3, so 1."""
+    rp = replay(plain_run(), [])
+    week = rp.week(d("2026-12-07"))
+    assert rp.day(d("2026-12-09")).activities["squat"].state == "running"
+    ids = {a.key: a.key for a in rp.activities}
+    assert {i["target"] for i in week_items(rp, week, ids, last=d("2026-12-08"))} == {1}
+    assert {i["target"] for i in week_items(rp, week, ids, last=d("2026-12-13"))} == {3}
+    assert {i["target"] for i in week_items(rp, week, ids, last=d("2026-12-06"))} == {0}
 
 
 def test_week_items_leave_out_what_isnt_in_the_week() -> None:
@@ -1305,12 +1390,13 @@ def test_week_items_leave_out_what_isnt_in_the_week() -> None:
     ids = {a.key: a.key for a in rp.activities}
     keys = [[i["id"] for i in week_items(rp, w, ids)] for w in rp.weeks[3:6]]
     assert keys == [
-        ["squat", "bench", "row", "deadlift", "plank"],  # plank ended Wed: kept, target 0
+        ["squat", "bench", "row", "deadlift", "plank"],  # plank ended Wed: kept
         ["squat", "bench", "row", "deadlift"],
         ["squat", "bench", "row", "deadlift", "dips"],
     ]
+    # It ran Monday and Tuesday at 3, so its goal is 1 (K163); its values are Tuesday's.
     plank = week_items(rp, rp.weeks[3], ids)[-1]
-    assert plank["target"] == 0 and plank["duration"] == 35
+    assert plank["target"] == 1 and plank["duration"] == 35
 
 
 def test_week_items_for_a_cardio_run() -> None:
@@ -1510,3 +1596,137 @@ def test_a_programme_change_that_runs_a_value_past_the_cap_names_the_activity() 
         today=d("2026-12-21"),
     )
     assert [str(e) for e in errors] == ["Heavy pull: week 2 comes to 506 kg. The most is 500."]
+
+
+# ---- K165: an end a re-open follows reads as a programme pause ----
+
+END = {"type": END_PROGRAMME}
+REOPEN = {"type": REOPEN_PROGRAMME}
+
+
+def days_json(rp: Replay) -> list[dict[str, Any]]:
+    return [day_to_json(day) for week in rp.weeks for day in week.days]
+
+
+def test_an_end_a_reopen_follows_reads_as_a_pause_resumed_at_the_paused_week() -> None:
+    """Ended on Wed 9 Dec in programme week 3, re-opened on Wed 16 Dec: the days between are a
+    pause of the whole programme, and the run carries on at week 3, a week later than planned."""
+    run = plain_run()
+    rp = replay(run, [change(1, d("2026-12-09"), END, "Knee"), change(2, d("2026-12-16"), REOPEN)])
+    gap = rp.day(d("2026-12-12"))
+    assert (gap.status, gap.programme_week, gap.until, gap.reason) == (
+        "paused",
+        3,
+        d("2026-12-16"),
+        "Knee",
+    )
+    assert {a.state for a in gap.activities.values()} == {"paused"}
+    assert [day.status for day in rp.week(d("2026-12-07")).days] == ["running"] * 2 + ["paused"] * 5
+    back = rp.day(d("2026-12-16"))
+    assert (back.status, back.programme_week) == ("running", 3)
+    assert back.activities["squat"].activity_week == 3
+    assert rp.day(d("2026-12-21")).programme_week == 4
+    assert rp.end == d("2027-01-24")
+    # The same days as a programme pause from the end's day, resumed at the paused week.
+    paused = replay(
+        run,
+        [
+            change(1, d("2026-12-09"), {"type": "pause-programme"}, "Knee"),
+            change(2, d("2026-12-16"), {"type": "resume-programme"}),
+        ],
+    )
+    for day in (d("2026-12-08"), d("2026-12-16"), d("2026-12-21"), d("2027-01-24")):
+        assert day_to_json(rp.day(day)) == day_to_json(paused.day(day)), day
+
+
+def test_an_activity_paused_before_the_end_moves_as_across_a_programme_pause() -> None:
+    run = plain_run()
+    deadlift = change(1, d("2026-12-01"), {"type": "pause-activity", "activity": "deadlift"})
+    resume = change(4, d("2026-12-30"), {"type": "resume-activity", "activity": "deadlift"})
+    reopened = replay(
+        run,
+        [deadlift, change(2, d("2026-12-09"), END), change(3, d("2026-12-16"), REOPEN), resume],
+    )
+    paused = replay(
+        run,
+        [
+            deadlift,
+            change(2, d("2026-12-09"), {"type": "pause-programme", "weeks": 1}),
+            resume,
+        ],
+    )
+    assert days_json(reopened) == days_json(paused)
+    # Paused on the Tuesday of week 2, it comes back at its week 3 (K151), whatever the gap.
+    assert reopened.day(d("2026-12-30")).activities["deadlift"].activity_week == 3
+
+
+def test_an_end_no_reopen_follows_is_passed_by() -> None:
+    run = plain_run()
+    plain = replay(run, [])
+    ended = replay(run, [change(1, d("2026-12-09"), END)])
+    assert days_json(ended) == days_json(plain)
+    assert ended.end == plain.end
+    # The latest end before a re-open is the one it lifts; one after it stands.
+    log = [
+        change(1, d("2026-12-09"), END),
+        change(2, d("2026-12-16"), REOPEN),
+        change(3, d("2026-12-23"), END),
+    ]
+    assert days_json(replay(run, log)) == days_json(replay(run, log[:2]))
+
+
+def test_a_reopen_on_the_ends_own_day_pauses_nothing() -> None:
+    run = plain_run()
+    rp = replay(run, [change(1, d("2026-12-09"), END), change(2, d("2026-12-09"), REOPEN)])
+    assert days_json(rp) == days_json(replay(run, []))
+
+
+def test_a_reopen_resumes_a_programme_paused_when_it_ended_on_the_reopens_day() -> None:
+    """A programme pause in force at the end becomes part of the gap: it holds the paused week,
+    and the re-open resumes it on its day."""
+    run = plain_run()
+    log = [
+        change(1, d("2026-12-02"), {"type": "pause-programme", "weeks": 4}, "Flu"),
+        change(2, d("2026-12-09"), END),
+        change(3, d("2026-12-16"), REOPEN),
+    ]
+    rp = replay(run, log)
+    gap = rp.day(d("2026-12-12"))
+    assert (gap.status, gap.programme_week, gap.until, gap.reason) == (
+        "paused",
+        2,
+        d("2026-12-16"),
+        "Flu",
+    )
+    assert (rp.day(d("2026-12-16")).status, rp.day(d("2026-12-16")).programme_week) == (
+        "running",
+        2,
+    )
+    # On the end's own day too.
+    same_day = [*log[:2], change(3, d("2026-12-09"), REOPEN)]
+    assert rp_day_status(replay(run, same_day), d("2026-12-09")) == ("running", 2)
+
+
+def rp_day_status(rp: Replay, day: date) -> tuple[str, int | None]:
+    plan = rp.day(day)
+    return plan.status, plan.programme_week
+
+
+def test_a_run_ended_and_reopened_twice_has_two_gaps() -> None:
+    run = plain_run()
+    log = [
+        change(1, d("2026-12-09"), END),
+        change(2, d("2026-12-16"), REOPEN),
+        change(3, d("2026-12-30"), END),
+        change(4, d("2027-01-06"), REOPEN),
+    ]
+    rp = replay(run, log)
+    assert rp_day_status(rp, d("2026-12-30")) == ("paused", 5)
+    assert rp_day_status(rp, d("2027-01-06")) == ("running", 5)
+    assert rp.end == d("2027-01-31")
+
+
+def test_a_reopen_with_no_end_before_it_does_nothing() -> None:
+    run = plain_run()
+    rp = replay(run, [change(1, d("2026-12-09"), REOPEN)])
+    assert days_json(rp) == days_json(replay(run, []))

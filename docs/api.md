@@ -749,23 +749,31 @@ is recorded as late, with `late` in the result. Its week is never copied, since 
 every week. Every mark and change an agent makes records the connection's name as its `source`:
 the token's name, or the OAuth app's ("Claude").
 
-**Programme tools.** Six tools write, save, start and change programmes. [mcp.md](mcp.md) §1.1
-gives each one's results and refusals, and [programmes.md](programmes.md) §10 the loop an agent
-follows.
+**Programme tools.** Nine tools write, save, start, change, end, restart and re-open programmes.
+[mcp.md](mcp.md) §1.1 gives each one's results and refusals, and [programmes.md](programmes.md)
+§10 the loop an agent follows.
 
-| Tool               | Scope | Arguments (defaults)                                                                                           | Annotations      |
-| ------------------ | ----- | -------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `programme_format` | read  | none                                                                                                           | `readOnlyHint`   |
-| `list_programmes`  | read  | none                                                                                                           | `readOnlyHint`   |
-| `get_programme`    | read  | `programme` (a library id) or `tracker` (a programme tracker's id or name), one of the two                     | `readOnlyHint`   |
-| `save_programme`   | write | `doc`; `programme` and `rev` to replace one                                                                    | not idempotent   |
-| `start_programme`  | write | `programme`, `start` (today), `params` (the defaults), `name` (the programme's)                                | not idempotent   |
-| `change_programme` | write | `tracker`, `change`, `from_date` (today), `reason`, `confirm` (false), `rev`                                    | `idempotentHint` |
+| Tool                | Scope | Arguments (defaults)                                                                       | Annotations      |
+| ------------------- | ----- | ------------------------------------------------------------------------------------------ | ---------------- |
+| `programme_format`  | read  | none                                                                                       | `readOnlyHint`   |
+| `list_programmes`   | read  | none                                                                                       | `readOnlyHint`   |
+| `get_programme`     | read  | `programme` (a library id) or `tracker` (a programme tracker's id or name), one of the two | `readOnlyHint`   |
+| `save_programme`    | write | `doc`; `programme` and `rev` to replace one                                                | not idempotent   |
+| `start_programme`   | write | `programme`, `start` (today), `params` (the defaults), `name` (the programme's)            | not idempotent   |
+| `change_programme`  | write | `tracker`, `change`, `from_date` (today), `reason`, `confirm` (false), `rev`               | `idempotentHint` |
+| `end_programme`     | write | `tracker`, `from_date` (today), `reason`, `confirm` (false), `rev`                         | `idempotentHint` |
+| `restart_programme` | write | `tracker`, `start` (today), `name` (the old tracker's), `confirm` (false), `rev`           | not idempotent   |
+| `reopen_programme`  | write | `tracker`, `from_date` (today), `reason`, `confirm` (false), `rev`                         | `idempotentHint` |
 
 The run objects they return keep REST's camelCase (§3.4), and `get_programme`'s, `start_programme`'s
 and `change_programme`'s carry the grid's weeks from this one on. A preview from
-`change_programme` leaves out the grid, since `cells` says what changes. End programme has no tool
-yet (issue #83): the person ends a run in the app.
+`change_programme` leaves out the grid, since `cells` says what changes. `end_programme` ends a run
+as `POST /runs/{tracker}/end` does (§3.4), after a preview of its from day and last week, confirmed
+with the preview's `rev`. `restart_programme` starts a new run from week 1 as a new tracker, from
+the old run's `doc_json` and `params_json`, after a preview confirmed the same way. A run still
+going on the new start day ends from it in the same transaction, as End programme ends it (K164).
+`reopen_programme` re-opens a run End programme stopped part way, after a preview confirmed the
+same way (K165). No REST route restarts or re-opens a run.
 
 ### 3.2 Ask
 
@@ -1123,9 +1131,9 @@ endsShort, grid}`.
 | `rev`          | The log's revision: 16 hex characters of a SHA-256 over the log. It shows the run changed, and never confirms a change              |
 | `openPause`    | `{since, programmeWeek, reason}` while the programme is paused with no end date, else null                                          |
 | `endsShort`    | Each activity that ends before its last week: `{key, name, week, of, message}`                                                      |
-| `ended`        | `{from, reason, seq}` after End programme, else null                                                                                |
+| `ended`        | `{from, reason, seq}` after End programme, else null; null again after a re-open (K165)                                             |
 | `clock`        | Today: `{programmeWeek, status, until, reason, activities}`, each activity `{state, activityWeek, until, reason}`                   |
-| `log`          | Every change, newest first: `{seq, madeAt, from, change, reason, source, undoneBy, undoable}`. `undoable` is true while Undo applies |
+| `log`          | Every row, newest first: `{seq, madeAt, from, change, reason, source, undoneBy, undoable}`. `change` is a change's body, `{"type": "end-programme"}` or `{"type": "reopen-programme"}`. `undoable` is true while Undo applies |
 | `grid`         | The overview: `{activities, weeks, whenResumed}`                                                                                    |
 
 A day's `status` is `before-start`, `running` or `paused`, and an activity's `state` is `running`,
@@ -1138,11 +1146,13 @@ A day's `status` is `before-start`, `running` or `paused`, and an activity's `st
   `locked` is true once the week's Sunday is past. `days` holds its seven days as `{date, status,
   programmeWeek, sealed}`.
 - `cells` maps each activity key to `{state, activityWeek, values, target, splits, hand, until,
-  reason, marks}`. `values` and `target` are what the week's plan holds: Sunday's, with a target
-  of 0 when the activity doesn't run on Sunday. `splits` maps a field whose value changes during
-  the week to its `[{from, value}]`. `hand` maps a hand-edited field to `{change, madeOn, rule}`,
-  `rule` being what the rule gives. `until` and `reason` describe a pause. `marks` is the item's
-  seven marks.
+  reason, marks}`. `values` and `target` are what the week's plan holds: Sunday's values, or the
+  last the activity ran with, and the week's goal, which counts its days (K163). `splits` maps a
+  field whose value changes during the week to its `[{from, value}]`. `hand` maps a hand-edited
+  field to `{change, madeOn, rule}`, `rule` being what the rule gives. `until` and `reason`
+  describe a pause. `until` is the day the activity runs again: a resume later in the same week
+  ends the pause on its day, though the sealed paused day keeps the date it was planned with.
+  `marks` is the item's seven marks.
 - `whenResumed` holds the weeks after an open-ended pause, as they will run when resumed:
   `{programmeWeek, label, cells}`, with no dates.
 
@@ -1179,11 +1189,22 @@ a boolean at `preview`. A run End programme ended gets 409 `ended`.
 **End programme.** `POST /runs/{tracker}/end` takes `{from?, reason?}` and returns
 `{tracker, run}`. `from` is today, the default, or a later day. The tracker then shows in no week
 after the one holding the day before `from`, so the week holding `from` still shows unless it is a
-Monday; an end never brings a week back. The end goes into the log as `{"type": "end-programme"}`,
-which the replay passes by. No change follows it, Undo no longer shows, and days from it on are
-never sealed. A second end gets 409 `ended`. End programme is a route of its own, not a change type
-(K156). `POST /trackers/{id}/end` on a programme tracker ends the run this way, and on a run
-already ended returns the tracker as it is.
+Monday; an end never brings a week back. Each goal in the weeks up to it counts its days before
+`from` only (K163); the weeks after it stay as they are. The end goes into the log as
+`{"type": "end-programme"}`, which the replay passes by unless a re-open follows it. No change
+follows it until a re-open, Undo no longer shows, and days from it on are never sealed. A second
+end gets 409 `ended`. End programme is a route of its own, not a change type (K156). `POST /trackers/{id}/end` on a programme tracker ends the run this way, and on a run
+already ended returns the tracker as it is. The MCP's `end_programme` ends a run this way too,
+after a preview confirmed with its `rev` (§3.1).
+
+**Re-open.** The MCP's `reopen_programme` lifts an end that stopped a run part way, after a
+preview confirmed with its `rev` (§3.1, K165). It goes into the log as
+`{"type": "reopen-programme"}` with its from day, reason and source. The replay then reads the end
+and the re-open as a pause of the whole programme from the end's day to the re-open's, resumed at
+the paused programme week. The run's `ended` is null again, and its status follows the replay.
+The re-open seals the days from the end to yesterday as paused, writes the weeks the end had
+hidden as paused, rewrites today's week and every later one, and moves `endWeek` to the run's new
+last day, later than before. Undo never applies to it. A run with a re-open can be ended again.
 
 **The lock and the evidence** (spec §8):
 
@@ -1193,17 +1214,17 @@ already ended returns the tracker as it is.
   is recorded as late. An earlier day gets 409 `locked-day` with its `date`. Each mark, a cleared
   day included, also goes into `mark_events` with when it was entered, its `source` (`app`, or the
   MCP connection's name) and `late`. Ticks stay the fast path every reader uses.
-- **Sealing.** Before every start, change and end, and on the first read each day (`/state`,
-  `GET /runs/{tracker}`, `/export`, Ask's context, and the MCP's `list_programmes`, `get_programme`
-  and `change_programme`), every unsealed
+- **Sealing.** Before every start, change, end and restart, and on the first read each day
+  (`/state`, `GET /runs/{tracker}`, `/export`, Ask's context, and the MCP's `list_programmes`,
+  `get_programme`, `change_programme`, `end_programme` and `restart_programme`), every unsealed
   day up to yesterday is copied into `programme_days`. A read with nothing to seal takes no write
   lock. Sealing never checks the quota.
 - **Stored runs.** A stored run loads without checking each week's value against the item's
   limits (K158). A run that still fails to load, seal or replay raises `RunUnreadable`: its own
   routes answer 500 `run-unreadable` and log the cause, `/state` and Ask's context leave it out
   and log it, and `/export` leaves it unsealed and exports its stored rows as they are. The MCP's
-  `get_programme` and `change_programme` refuse it in a sentence ([mcp.md](mcp.md) §1.1), and
-  `list_programmes` lists the other runs.
+  `get_programme`, `change_programme`, `end_programme` and `restart_programme` refuse it in a
+  sentence ([mcp.md](mcp.md) §1.1), and `list_programmes` lists the other runs.
 
 ## 4. Accounts and sessions
 
@@ -1641,7 +1662,9 @@ Tests sit in `api/tests/`:
   with `rev`, the library and size caps), `list_programmes`, `get_programme` (an unreadable run a
   plain refusal while the rest answer), `start_programme` (every problem listed, a date,
   parameters and a name, the tracker cap), `change_programme` (today by default, an ordinary or
-  ended tracker refused), the item tools refusing a programme tracker, and `mark_day` following
+  ended tracker refused), `end_programme` (a preview that changes nothing, a confirm that ends the
+  run with the connection as its source, a stale `rev` previewed again, an ordinary or ended
+  tracker and a past day refused), the item tools refusing a programme tracker, and `mark_day` following
   the lock.
 - `test_oauth.py`, `test_oauth_api.py`, `test_tokens_api.py`: OAuth's storage and rules (clients and
   redirects, codes, rotation and its grace, reuse, expiry, the caps, sweeping, ending credentials

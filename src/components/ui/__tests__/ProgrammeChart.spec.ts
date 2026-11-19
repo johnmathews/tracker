@@ -50,8 +50,9 @@ describe('the chart’s data, from the run’s grid', () => {
 
   it('counts the weeks done so far against each week’s goal, any mark counting', () => {
     const c = chart('squat')
+    // Week 1 started on a Friday, so its goal counts Friday to Sunday: 3 x 3 / 7, rounded up (K163).
     expect(c.weeks.map((w) => w.done)).toEqual([
-      { done: 2, target: 3, met: false },
+      { done: 2, target: 2, met: true },
       { done: 3, target: 3, met: true },
       { done: 0, target: 3, met: false },
       { done: 0, target: 3, met: false },
@@ -61,7 +62,7 @@ describe('the chart’s data, from the run’s grid', () => {
       null,
     ])
     expect(c.weeks.map((w) => w.doneText)).toEqual([
-      '2 of 3',
+      '2 of 2, goal met',
       '3 of 3, goal met',
       '0 of 3',
       '0 of 3 so far',
@@ -400,13 +401,13 @@ describe('the chart (K145)', () => {
 
   it('puts a pen dot on a week that met its goal, and a ring with its count on one that didn’t', () => {
     draw()
-    expect(svg().findAll('circle[data-met]')).toHaveLength(1)
-    expect(svg().findAll('circle[data-unmet]')).toHaveLength(3)
+    expect(svg().findAll('circle[data-met]')).toHaveLength(2)
+    expect(svg().findAll('circle[data-unmet]')).toHaveLength(2)
     expect(
       svg()
         .findAll('text[data-count]')
         .map((t) => t.text()),
-    ).toEqual(['2 of 3', '0 of 3', '0 of 3'])
+    ).toEqual(['0 of 3', '0 of 3'])
   })
 
   it('draws a labelled line for each change, and a gap with its reason for a pause', () => {

@@ -398,11 +398,12 @@ def test_the_grid_has_a_cell_per_activity_and_week(client: TestClient, config: C
         "programmeWeek": None,
         "sealed": True,
     }
+    # Started on a Friday: the goal counts Friday to Sunday at 3, 3 x 3 / 7 rounded up (K163).
     assert first["cells"]["squat"] == {
         "state": "running",
         "activityWeek": 1,
         "values": {"target": 3, "sets": 5, "reps": 5, "weight": 40},
-        "target": 3,
+        "target": 2,
         "splits": {},
         "hand": {},
         "until": None,
@@ -1332,6 +1333,167 @@ def test_the_data_layer_ends_a_programme_tracker_only_with_today(
 
 
 # --- export and import --------------------------------------------------------------------------
+
+
+# --- a split week's goal (K163) -------------------------------------------------------------------
+
+PAUSE_SQUAT_FROM_WED = {"type": "pause-activity", "activity": "squat", "weeks": 2}
+#: Wednesday of the week of NEXT_MONDAY.
+WEDNESDAY = "2026-10-28"
+
+
+def plan_revs(config: Config, tracker: str) -> dict[str, int]:
+    found = rows(config, "SELECT week, rev FROM plans WHERE section = ? ORDER BY week", tracker)
+    return {str(week): int(rev) for week, rev in found}
+
+
+def test_johns_squat_paused_on_wednesday_reads_2_of_1(
+    client: TestClient, config: Config, clock: Clock
+) -> None:
+    """John's case (#86): the squat at 3 a week, done Monday and Tuesday, paused from Wednesday.
+    Its goal for the week is 3 x 2 / 7, rounded up: 1, so the week reads "2 of 1", met."""
+    made = started(client, config)
+    tracker = made["tracker"]["id"]
+    go_to(clock, "2026-10-27")
+    assert tick(client, tracker, NEXT_MONDAY, "squat", 0, "great").status_code == 200
+    assert tick(client, tracker, NEXT_MONDAY, "squat", 1, "great").status_code == 200
+    run = apply(client, tracker, PAUSE_SQUAT_FROM_WED, WEDNESDAY, reason="Knee")["run"]
+    squat = item(plans(client, tracker)[NEXT_MONDAY], "squat")
+    assert squat["target"] == 1
+    # Its values stay the ones it last ran with.
+    assert squat["weight"] == 40
+    cell = week_of(run, NEXT_MONDAY)["cells"]["squat"]
+    assert (cell["state"], cell["target"], cell["until"]) == ("running", 1, "2026-11-11")
+    assert cell["marks"][:2] == ["great", "great"]
+    # The other activities ran all week at 3, and keep 3.
+    others = {i["id"]: i["target"] for i in plans(client, tracker)[NEXT_MONDAY]}
+    assert others == {"squat": 1, "bench": 3, "row": 3, "deadlift": 3, "plank": 3}
+    # Paused all of the next week: 0.
+    assert item(plans(client, tracker)["2026-11-02"], "squat")["target"] == 0
+    # Once the week is past, the grid and the plan read the same.
+    go_to(clock, "2026-11-03")
+    after = run_of(client, tracker)
+    assert week_of(after, NEXT_MONDAY)["cells"]["squat"]["target"] == 1
+    assert item(plans(client, tracker)[NEXT_MONDAY], "squat")["target"] == 1
+
+
+def test_a_resume_mid_week_ends_the_weeks_pause_on_its_day(
+    client: TestClient, config: Config, clock: Clock
+) -> None:
+    """John's preview (W6): the squat paused from Wednesday for two weeks, then resumed from
+    Thursday. Wednesday's sealed day keeps its plan ("until 11 Nov"), but the week's cell says the
+    pause ended on Thursday, so the grid and the item page stop reading it as paused."""
+    made = started(client, config)
+    tracker = made["tracker"]["id"]
+    go_to(clock, "2026-10-27")
+    apply(client, tracker, PAUSE_SQUAT_FROM_WED, WEDNESDAY, reason="Knee")
+    go_to(clock, "2026-10-29")
+    run = apply(client, tracker, {"type": "resume-activity", "activity": "squat"}, "2026-10-29")[
+        "run"
+    ]
+    cell = week_of(run, NEXT_MONDAY)["cells"]["squat"]
+    assert (cell["state"], cell["until"], cell["reason"]) == ("running", "2026-10-29", "Knee")
+    assert run["clock"]["activities"]["squat"]["state"] == "running"
+    # A pause still in force at the week's end keeps its own day.
+    go_to(clock, "2026-10-30")
+    paused = apply(client, tracker, PAUSE_SQUAT_FROM_WED, "2026-10-30")["run"]
+    assert week_of(paused, NEXT_MONDAY)["cells"]["squat"]["until"] == "2026-11-13"
+
+
+def test_end_programme_counts_a_weeks_days_before_the_end_only(
+    client: TestClient, config: Config, clock: Clock
+) -> None:
+    """Days from End programme's on count 0: ended from Wednesday, each goal at 3 is 1. The
+    weeks after the end's week stay as they were (K122)."""
+    made = started(client, config)
+    tracker = made["tracker"]["id"]
+    go_to(clock, "2026-10-27")
+    before = plan_revs(config, tracker)
+    stored_later = rows(
+        config, "SELECT week, items_json, rev FROM plans WHERE week > ? ORDER BY week", NEXT_MONDAY
+    )
+    r = client.post(f"/api/runs/{tracker}/end", json={"from": WEDNESDAY})
+    assert r.status_code == 200, r.text
+    assert {i["target"] for i in plans(client, tracker)[NEXT_MONDAY]} == {1}
+    assert {c["target"] for c in week_of(r.json()["run"], NEXT_MONDAY)["cells"].values()} == {1}
+    assert plan_revs(config, tracker)[NEXT_MONDAY] == before[NEXT_MONDAY] + 1
+    assert (
+        rows(
+            config,
+            "SELECT week, items_json, rev FROM plans WHERE week > ? ORDER BY week",
+            NEXT_MONDAY,
+        )
+        == stored_later
+    )
+
+
+def test_an_end_on_a_later_monday_changes_no_goal(
+    client: TestClient, config: Config, clock: Clock
+) -> None:
+    made = started(client, config)
+    tracker = made["tracker"]["id"]
+    go_to(clock, "2026-10-27")
+    stored = rows(config, "SELECT week, items_json, rev FROM plans ORDER BY week")
+    r = client.post(f"/api/runs/{tracker}/end", json={"from": "2026-11-09"})
+    assert r.status_code == 200, r.text
+    assert rows(config, "SELECT week, items_json, rev FROM plans ORDER BY week") == stored
+
+
+def test_the_first_seal_after_this_change_rewrites_a_week_split_before_it(
+    client: TestClient, config: Config, clock: Clock
+) -> None:
+    """A week written under Q1's Sunday rule, before K163, gets its new goal from the next day's
+    first read, which seals a day. A week whose items read the same keeps its rev."""
+    made = started(client, config)
+    tracker = made["tracker"]["id"]
+    go_to(clock, "2026-10-27")
+    apply(client, tracker, PAUSE_SQUAT_FROM_WED, WEDNESDAY)
+    # As the Sunday rule wrote it: the squat isn't running on Sunday, so 0.
+    (items_json,) = rows(
+        config, "SELECT items_json FROM plans WHERE section = ? AND week = ?", tracker, NEXT_MONDAY
+    )[0]
+    old = [{**i, "target": 0} if i["id"] == "squat" else i for i in json.loads(items_json)]
+    conn = connect(config.db_path)
+    try:
+        conn.execute(
+            "UPDATE plans SET items_json = ? WHERE section = ? AND week = ?",
+            (json.dumps(old), tracker, NEXT_MONDAY),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    revs = plan_revs(config, tracker)
+    # The same day's reads seal nothing, so they write nothing.
+    assert item(plans(client, tracker)[NEXT_MONDAY], "squat")["target"] == 0
+    assert plan_revs(config, tracker) == revs
+    # The next day's first read seals Tuesday and rewrites the week, once.
+    go_to(clock, WEDNESDAY)
+    state = client.get("/api/state").json()
+    assert item(state["sections"][tracker]["plans"][NEXT_MONDAY], "squat")["target"] == 1
+    assert state["sections"][tracker]["revs"][NEXT_MONDAY] == revs[NEXT_MONDAY] + 1
+    after = plan_revs(config, tracker)
+    assert after == {**revs, NEXT_MONDAY: revs[NEXT_MONDAY] + 1}
+    client.get("/api/state")
+    assert plan_revs(config, tracker) == after
+
+
+def test_a_seal_keeps_the_rev_of_every_week_that_reads_the_same(
+    client: TestClient, config: Config, clock: Clock
+) -> None:
+    """The pin for the rewrite at each seal: a run with no change reads the same each day, so
+    each day's first read seals a day and writes no week."""
+    made = started(client, config)
+    tracker = made["tracker"]["id"]
+    stored = rows(config, "SELECT week, items_json, rev FROM plans ORDER BY week")
+    for day in ("2026-10-27", "2026-10-28", "2026-11-03", "2026-11-10"):
+        go_to(clock, day)
+        assert client.get("/api/state").json()["sections"][tracker]["revs"] == plan_revs(
+            config, tracker
+        )
+        yesterday = (date.fromisoformat(day) - timedelta(days=1)).isoformat()
+        assert sealed(config)[-1][0] == yesterday
+        assert rows(config, "SELECT week, items_json, rev FROM plans ORDER BY week") == stored
+    assert set(plan_revs(config, tracker).values()) == {1}
 
 
 def alices_run(client: TestClient, config: Config, clock: Clock) -> dict[str, Any]:

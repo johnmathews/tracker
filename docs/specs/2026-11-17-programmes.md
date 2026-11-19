@@ -8,7 +8,7 @@
 > 2026-11-17 mockup round.
 
 **Status:** implemented on 2026-11-18. Approved by John on 2026-11-17, with the defaults in §12.
-The decisions made while building it are K142 to K162 in [decisions.md](../decisions.md) §4.32,
+The decisions made while building it are K142 to K166 in [decisions.md](../decisions.md) §4.32,
 and the text below follows them. [programmes.md](../programmes.md) documents the format. The views
 in §9 follow John's picks in the mockup round `brand/design-system/mockups/261117-programmes/`
 (§10).
@@ -160,6 +160,11 @@ any error is never stored.
   so it shows in no later week. Its weeks, marks, notes and log stay.
 - **Ending early** ("End programme") ends the run from a chosen day, today or later, as Delete
   tracker does today (K122). It never deletes history.
+- **Restarting** (an agent's `restart_programme`) starts the run again from week 1 as a new
+  tracker, from the run's own copy of the document. A run still going on the new start day ends
+  from it (K164).
+- **Re-opening** (an agent's `reopen_programme`) carries on a run that End programme stopped part
+  way, from a day today or later (§6.1, K165). Ending is final otherwise.
 
 ## 5. Writing the weeks
 
@@ -183,6 +188,8 @@ any error is never stored.
 - The programme week advances by one at each Monday while the run is running.
 - **Pause** stops it. **Resume** asks which programme week to resume at: the one that was paused
   (default) or the next one.
+- **Re-open** after End programme counts the days from the end to the re-open as a pause of the
+  whole programme. The run resumes at the paused programme week: the one it stopped in (K165).
 - **Go to week N** (rewind or skip) sets it to N from a chosen day. The overview previews the
   result first.
 
@@ -193,8 +200,13 @@ A change takes effect from a day: today or any later day. Weeks stay aligned to 
 - Going to week 5 on a Wednesday makes Wednesday to Sunday programme week 5, and the next Monday
   week 6.
 - The record keeps both parts of a split week: Monday and Tuesday at week 4, the rest at week 5.
-- A split week's goal for an item uses the item's target in force on Sunday. It isn't prorated in
-  this version (§12, Q1).
+- An item's goal for a week counts its days. It is the sum of each day's target over 7, rounded
+  up (§12, Q1).
+- A day the activity isn't running counts 0: a day it is paused, a day before the run starts, and
+  a day after the run ends.
+- A week with one target all week keeps that target. The squat at 3, done Monday and Tuesday and
+  paused from Wednesday, has a goal of 1 that week, so it reads "2 of 1". A Thursday start at 3
+  has a goal of 2.
 
 ### 6.3 The activity week
 
@@ -389,14 +401,17 @@ carry the library, the runs, their logs, the sealed days and the mark events.
 
 ### 11.3 MCP tools
 
-| Tool               | Scope | Does                                                                                        |
-| ------------------ | ----- | ------------------------------------------------------------------------------------------- |
-| `programme_format` | read  | The schema and a worked example.                                                            |
-| `list_programmes`  | read  | The library and every run, ended ones included.                                             |
-| `get_programme`    | read  | One programme, or one run with its clocks, upcoming weeks and log.                          |
-| `save_programme`   | write | Validates and adds or replaces a library programme. Returns every error.                    |
-| `start_programme`  | write | Starts a run from a date with parameters.                                                   |
-| `change_programme` | write | Any change in §7. Previews by default; `confirm: true` with the preview's `rev` applies it. |
+| Tool                | Scope | Does                                                                                            |
+| ------------------- | ----- | ----------------------------------------------------------------------------------------------- |
+| `programme_format`  | read  | The schema and a worked example.                                                                |
+| `list_programmes`   | read  | The library and every run, ended ones included.                                                 |
+| `get_programme`     | read  | One programme, or one run with its clocks, upcoming weeks and log.                              |
+| `save_programme`    | write | Validates and adds or replaces a library programme. Returns every error.                        |
+| `start_programme`   | write | Starts a run from a date with parameters.                                                       |
+| `change_programme`  | write | Any change in §7. Previews by default; `confirm: true` with the preview's `rev` applies it.     |
+| `end_programme`     | write | End programme (§4), previewed first, as a change is.                                            |
+| `restart_programme` | write | A new run from week 1 as a new tracker, from the run's own copy; a run still going ends (K164). |
+| `reopen_programme`  | write | Carries on a run End programme stopped part way, at the week it stopped in (K165).              |
 
 - `add_item`, `update_item` and `remove_item` refuse a programme tracker, and name
   `change_programme` in the error.
@@ -409,8 +424,9 @@ carry the library, the runs, their logs, the sealed days and the mark events.
 
 John approved these defaults on 2026-11-17. Each can change later if it reads wrong in practice.
 
-- **Q1. A split week's goal.** A week split by a change counts each item against its target on
-  Sunday. Prorating by days is the alternative.
+- **Q1. A split week's goal.** Prorated by day (§6.2). John chose this on 2026-11-18 (K163). It
+  replaces the first default, the target in force on Sunday, which read "2 of 0" for a week run on
+  pace and then paused.
 - **Q2. A paused activity at the end.** It ends with the programme, short of its last weeks. The
   alternative is to extend the run until every activity finishes.
 - **Q3. Today when travelling.** The lock uses the server's `TIMEZONE`. A per-account time zone
