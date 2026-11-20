@@ -325,9 +325,9 @@
   ],
   "lastChange": {
     "by": "John Mathews",
-    "at": "2026-11-20T00:10:00Z",
+    "at": "2026-11-20T16:53:00Z",
     "via": "Claude Code",
-    "note": "K178-K182, work charts: a new card, WorkChart (a column per week outlined at the planned amount and filled with pen to the amount done; the weeks to come dashed; this week on a tile band; a long programme scrolls sideways, opening on this week). ProgrammeGrid's overview gains a Work tab between Plan and Changes, and ProgrammeChart's item page a Work section under the step chart. The README names WorkChart among pen's uses. Header and BarAction: P is Programmes, and Print keeps the browser's own key."
+    "note": "K183-K192, the programme builder: new cards ProgrammeBuilder (a form with the weeks beside it, in a 1184u column), ActivityCard (one line per activity, opened in a 2px ink frame), ValueField (a value's line opening into None, Stays the same or Grows), ExceptionWeekEditor (typed weeks, groups of Set to or % of planned values, and a Rest these activities checklist), StartValueEditor (a value chosen at start) and Checkbox (a 24px box with a 2px control-border, filled ink with an on-ink tick). ProgrammeGrid marks a week over an item's limit in error-ink with circle-alert; ProgrammesPage gains Build a programme and Edit; SegmentedControl allows Measure's third choice, Neither; Switch points forms with a Save at Checkbox."
   },
   "layout": "files",
   "libraries": [],
