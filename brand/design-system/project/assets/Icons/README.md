@@ -4,7 +4,7 @@ Size: 20px inside buttons and icon buttons, 16px beside text. An icon never carr
 
 | Icon | Use |
 | --- | --- |
-| check | The selected ink; a success message |
+| check | The selected ink; a success message; a ticked Checkbox |
 | circle-alert | Errors, with `error-ink` |
 | triangle-alert | Caution messages, with `caution-ink` |
 | info | Information messages |

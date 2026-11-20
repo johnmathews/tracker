@@ -9,6 +9,7 @@ import LIBRARY_JSON from '@/lib/__tests__/programmes/library.json'
 import START_JSON from '@/lib/__tests__/programmes/start-preview.json'
 import RUN_JSON from '@/lib/__tests__/programmes/run.json'
 import SHARED_JSON from '@/lib/__tests__/programmes/shared.json'
+import { useProgrammesStore } from '@/stores/programmes'
 import { START_PREVIEW_DELAY } from '@/lib/programmes'
 
 const PID = LIBRARY_JSON.programmes[0]!.id
@@ -149,7 +150,63 @@ describe('the Programmes page (K147)', () => {
   it('says when the library is empty', async () => {
     await openPage({ 'GET /programmes': { body: { programmes: [] } } })
     await openTab('library')
-    expect(byTestId('programmes-library').text()).toContain('The library is empty.')
+    expect(byTestId('library-empty').text()).toBe(
+      'The library is empty. Build one, or add one on the Add tab.',
+    )
+  })
+
+  it('gives each row an Edit link to the builder (R3)', async () => {
+    await openPage()
+    await openTab('library')
+    const edit = page().get(
+      `[data-testid="library-programme"][data-programme="${PID}"] [data-testid="library-edit"]`,
+    )
+    expect(edit.element.tagName).toBe('A')
+    expect(edit.attributes('href')).toBe(`#/programmes/${PID}/edit`)
+    expect(edit.text()).toBe('Edit')
+  })
+
+  it('offers Build a programme above the paste field, linking to the builder (R2)', async () => {
+    await openPage()
+    await openTab('add')
+    const build = byTestId('add-build')
+    expect(build.element.tagName).toBe('A')
+    expect(build.attributes('href')).toBe('#/programmes/new')
+    expect(build.text()).toBe('Build a programme')
+    const add = byTestId('programme-add').element
+    expect(add.firstElementChild!.contains(build.element)).toBe(true)
+  })
+})
+
+describe('landing after a builder save (W5 to W7)', () => {
+  const landingStore = () => useProgrammesStore() as unknown as { landing: string | null }
+
+  it('opens Library, lands the row and clears store.landing once the library is loaded', async () => {
+    await openPage()
+    expect(byTestId('programmes-tab-running').attributes('aria-selected')).toBe('true')
+    landingStore().landing = PID
+    await settle()
+    expect(byTestId('programmes-tab-library').attributes('aria-selected')).toBe('true')
+    const row = page().get(`[data-testid="library-programme"][data-programme="${PID}"]`)
+    expect(row.attributes('data-landing')).toBe('')
+    expect(landingStore().landing).toBeNull()
+  })
+
+  it('waits for the library when it is set before the page loads', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    landingStore().landing = PID
+    history.replaceState(null, '', '/#/programmes')
+    const api = signedIn()
+    ;({ calls, routes } = withProgrammes(
+      api,
+      { 'GET /programmes': { body: LIBRARY_JSON } },
+      { today: '2026-11-12', runs: {} },
+    ))
+    wrapper = mount(App, { global: { plugins: [pinia] }, attachTo: document.body })
+    await settle()
+    expect(byTestId('programmes-tab-library').attributes('aria-selected')).toBe('true')
+    expect(landingStore().landing).toBeNull()
   })
 })
 

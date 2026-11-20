@@ -6,7 +6,8 @@
 > server turns it into weeks, how a run changes, and which past days are locked. The spec is
 > [specs/2026-11-17-programmes.md](specs/2026-11-17-programmes.md). The endpoints are in
 > [api.md](api.md) §3.4, the agent tools in [mcp.md](mcp.md) §1.1, and the engine's design in
-> [architecture.md](architecture.md) §8. §11 covers the shared library.
+> [architecture.md](architecture.md) §8. §11 covers the shared library, and §12 the builder, the
+app's form for writing a programme.
 
 ## 1. Overview
 
@@ -159,12 +160,26 @@ weeks only. `activities` maps an activity key, or `"*"` for every activity, to i
 - a number replaces the value as written, unrounded;
 - `{ "scale": f }`, with `f` above 0, multiplies the computed value before it is rounded.
 
+A `target` of 0 is how a rest is written: the activity has no sessions in those weeks, and the grid
+says Rest week (K170). The builder writes it from its Rest these activities list (§12, K191).
+
 An activity's own entry beats `"*"` field by field (K153). In the worked example (§6) `"*"` gives
 every activity 3 sets and 90% of its weight in weeks 4 and 8, and the deadlift's own entry keeps
 it at 1 set while it still takes the 90%.
 
-An override doesn't bend the series: the week after a deload continues as if the deload hadn't
-happened. A week has at most one override. An override names only activities the programme has,
+A deload doesn't bend the series: the week after a deload continues as if the deload hadn't
+happened. A rest does (K192). A rest is a week whose `target` an override puts at 0, by a number
+0 or by a `scale` that rounds to 0, for an activity whose own target that week isn't 0. In a rest
+week the activity's week doesn't advance. The week after the rest repeats the week before it,
+and counting goes on from there. A back squat from 40 kg at 2.5 kg a week, with a rest in week 4,
+runs 40, 42.5, 45, rest, 45, 47.5, 50. Two rests in a row hold it for both weeks. A rest in an
+activity's first week has nothing to repeat, so the activity starts at its week 1 after it. The
+rest week's own plan shows the value it comes back at, 45 kg here, with no sessions. Increases
+stay on the activity's own weeks, so a rest moves them too (K149). The programme keeps its
+length, so an activity that rested ends at a lower last value, and that is no reason to end
+short (§8.2). Edit one week with Times a week at 0 is a rest too (§8.3).
+
+A week has at most one override. An override names only activities the programme has,
 changes only fields each activity has, and never changes `perSide`. Overrides follow the
 programme week, not the activity week, so a deload reaches every running activity in the same
 week.
@@ -409,7 +424,17 @@ shown as 14, then 15.87, shown as 16.
   the value it paused on. A resume on any day of a week gives the same value as a resume on its
   Monday (K151).
 - When the programme ends, an activity still short of its last weeks ends with it: "Deadlift ends
-  at its week 6 of 8."
+  at its week 6 of 8." A rest is never the reason. Each week a rest held it counts as a week done
+  (K192).
+- A rest next to a pause holds the setting the activity was at (K192). A pause after a rest comes
+  back at the week the rest held. A rest during a pause changes nothing, since the paused week
+  already stands still. A rest just after a pause holds the week the pause comes back at. A
+  programme paused in a rest week shows the value the activity comes back at.
+- Go to week puts each running activity at the week the plan, rests included, has in the
+  programme week it goes to (K192). It moves the activity as far as the plan moves between the
+  week the run is in and that week, so an activity a pause held back stays as far behind. With a
+  rest in week 4, going from week 4 to week 6 gives the grid's week 6, 47.5 kg. Going back past a
+  rest runs the rest again.
 - A programme paused with no end date writes the paused weeks up to the run's last week. The
   overview shows the weeks after as "When resumed", without dates, and the tracker shows in every
   week until the run has an end again.
@@ -417,7 +442,9 @@ shown as 14, then 15.87, shown as 16.
 ### 8.3 Hand-edits
 
 Edit one week sets a field for one programme week: a one-week exception, like an override. It is
-keyed by programme week, so a pause moves it with its week. A later change never overwrites it.
+keyed by programme week, so a pause moves it with its week. Times a week set to 0 makes the week
+a rest, as an override's 0 does (§4, K192): the weeks after it move back, and undoing the edit
+moves them forward again. Times a week set above 0 in a planned rest week lifts the rest. A later change never overwrites it.
 When a hand-edit keeps its value though a change alters its week's rule, the preview names it:
 "Week 6 keeps the 35 kg set on 12 Dec." Sending its `seq` in the change's `dropHandEdits` drops
 it with the change.
@@ -544,8 +571,46 @@ are in [api.md](api.md) §3.5.
   programme's name. It keeps no link to the shared one, and later publishes don't reach it. It
   counts towards the library's 100 programmes and the account's quota.
 - **A shared programme names no one.** No shared answer carries an owner, a user id or a username.
-- **Adjusting a copy.** There is no form editor. A copy changes through the start options (the
-  parameters, the start day and the tracker's name) or through an agent's `save_programme`.
+- **Adjusting a copy.** A copy changes in the builder (§12), through the start options (the
+  parameters, the start day and the tracker's name), or through an agent's `save_programme`.
 
 An admin is an account with the admin flag, set with `tracker-admin admin <email>` ([api.md](api.md)
 §5). Publishing is in the app only: no MCP tool publishes.
+
+## 12. The builder
+
+The builder is the app's form for writing a programme without JSON. It writes the same
+`tracker-programme/1` document an agent sends, and the server checks it with the same rules. The
+spec is [specs/2026-11-20-programme-builder.md](specs/2026-11-20-programme-builder.md) (K183 to
+K191).
+
+- **Where it lives.** `#/programmes/new` opens from **Build a programme** on the Programmes page's
+  Add tab. `#/programmes/<id>/edit` opens from **Edit** on a Library row. A Reference programme is
+  copied to the Library first (§11), then edited.
+- **What it holds.** Four sections: The programme (name, description, kind, weeks), Activities,
+  Exception weeks (`overrides`, §4) and Values chosen at start (`params`, §2.2). Each activity is a
+  card, and each of its values is one line that opens into None, Stays the same or Grows (§3). The
+  key, notes and link sit under the card's More.
+- **No daily target.** The builder has no field for `dailyTarget` (K190). The times a week of each
+  activity already say how often a person trains. A new programme leaves the key out, so its
+  tracker starts at the kind's default of 3. The person changes it on the tracker's own "− 3 per
+  day +" Stepper, as for any tracker. A loaded document keeps its `dailyTarget` as it is, and a
+  problem with it shows at the top of The programme.
+- **Resting activities.** An exception week has a **Rest these activities** list under its label
+  (K191): Every activity, then each activity, one tick each. A tick writes `target: 0` for that
+  key in the exception's weeks, and the grid says Rest week in those cells (K170). The closed
+  exception week names them: "Rest: Back squat, Deadlift." A `target` of 0 shows only in the list,
+  not as a Times a week value.
+- **The weeks beside it.** About 400 ms after each change the app sends the draft to
+  `POST /api/programmes/draft` ([api.md](api.md) §3.4). The server answers with its problems and
+  the weeks a start today would write at the default values. Each problem shows under the field
+  its path names. A week over an item's limit shows in `error-ink` in the grid.
+- **Keys stay put.** A loaded activity or start value keeps its key through any rename. Only an
+  edit under More changes it, and the change follows into exception weeks and `"$key"` references
+  (K185).
+- **Saving.** A new programme lands in the Library. An edit saves with the rev it loaded, and a
+  programme changed elsewhere since then asks whether to load the saved version or save over it.
+  Save waits for a check with no problems, and is off while offline.
+- **Runs are untouched.** The builder never reads or writes a run. Each run keeps its own copy of
+  the document (§7), so a saved edit reaches only runs started after it. A programme with a run
+  says so under its title: "Runs already started keep their own copy."

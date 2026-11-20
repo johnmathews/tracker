@@ -654,3 +654,134 @@ describe('the shared library (shared library spec §5)', () => {
     expect(store.shared).toBeNull()
   })
 })
+
+describe('replacing a library programme and drafting one (programme builder, F2, F4)', () => {
+  const EDITED = { ...BEGINNER, name: 'Beginner 5×5, heavier' }
+  const SAVED = { ...RECORD, doc: EDITED, name: EDITED.name, rev: RECORD.rev + 1 }
+  const DRAFT = {
+    errors: [{ path: 'activities[0].weight', message: 'Weight can’t be below 0.' }],
+    plan: null,
+  }
+
+  it('replaces with the document and rev, and updates the library row', async () => {
+    serve({
+      'GET /programmes': { body: LIBRARY_JSON },
+      'GET /state': { body: { today: '2026-11-12', runs: {}, trackers: [] } },
+      [`PUT /programmes/${PID}`]: { body: SAVED },
+    })
+    const store = useProgrammesStore()
+    await store.loadPage()
+    const res = await store.replace(PID, EDITED, RECORD.rev)
+    expect(res).toEqual({ ok: true, data: SAVED })
+    const put = calls.find((c) => c.method === 'PUT')!
+    expect(put.body).toEqual({ doc: EDITED, rev: RECORD.rev })
+    expect(put.user).toBe('alice')
+    const row = store.library!.find((p) => p.id === PID)!
+    expect(row.name).toBe(EDITED.name)
+    expect(row.rev).toBe(SAVED.rev)
+    expect(row).not.toHaveProperty('doc')
+  })
+
+  it('replaces before the library has loaded', async () => {
+    serve({ [`PUT /programmes/${PID}`]: { body: SAVED } })
+    const store = useProgrammesStore()
+    expect((await store.replace(PID, EDITED, 1)).ok).toBe(true)
+    expect(store.library).toBeNull()
+  })
+
+  it('carries the server’s programme when the rev is stale (409)', async () => {
+    serve({
+      [`PUT /programmes/${PID}`]: {
+        status: 409,
+        body: { error: 'conflict', programme: SAVED, rev: SAVED.rev },
+      },
+    })
+    expect(await useProgrammesStore().replace(PID, EDITED, 1)).toEqual({
+      ok: false,
+      conflict: SAVED,
+    })
+  })
+
+  it('lists the problems a replace was refused with, and says why when it failed', async () => {
+    const store = useProgrammesStore()
+    serve({
+      [`PUT /programmes/${PID}`]: {
+        status: 422,
+        body: { error: 'invalid', errors: DRAFT.errors },
+      },
+    })
+    expect(await store.replace(PID, EDITED, 1)).toEqual({
+      ok: false,
+      problems: DRAFT.errors,
+      message: null,
+    })
+    serve({ [`PUT /programmes/${PID}`]: 'offline' })
+    expect(await store.replace(PID, EDITED, 1)).toMatchObject({
+      ok: false,
+      message: 'Can’t reach the server, so nothing changed. Try again when you’re online.',
+    })
+  })
+
+  it('drafts: the server’s problems and plan for a document', async () => {
+    const plan = { ...START_JSON, start: '2026-11-23' }
+    serve({ 'POST /programmes/draft': { body: { errors: [], plan } } })
+    expect(await useProgrammesStore().draft(EDITED)).toEqual({
+      ok: true,
+      data: { errors: [], plan },
+    })
+    expect(calls[0]!.body).toEqual({ doc: EDITED })
+  })
+
+  it('drafts with problems and no plan', async () => {
+    serve({ 'POST /programmes/draft': { body: DRAFT } })
+    expect(await useProgrammesStore().draft({})).toEqual({ ok: true, data: DRAFT })
+  })
+
+  it('says why a draft failed', async () => {
+    serve({ 'POST /programmes/draft': 'offline' })
+    expect(await useProgrammesStore().draft({})).toMatchObject({ ok: false, problems: [] })
+  })
+
+  it('drops an older draft’s answer when a newer call is made', async () => {
+    const release: Array<() => void> = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>(async (_input, init = {}) => {
+        const doc = JSON.parse(String(init.body)).doc as { name: string }
+        await new Promise<void>((resolve) => release.push(resolve))
+        return Response.json({ errors: [{ path: 'name', message: doc.name }], plan: null })
+      }),
+    )
+    const store = useProgrammesStore()
+    const first = store.draft({ name: 'first' })
+    const second = store.draft({ name: 'second' })
+    // The newer answer arrives first, then the older one.
+    release[1]!()
+    expect(await second).toEqual({
+      ok: true,
+      data: { errors: [{ path: 'name', message: 'second' }], plan: null },
+    })
+    release[0]!()
+    expect(await first).toEqual({ ok: false, superseded: true })
+  })
+
+  it('drops an older draft that fails after a newer one was made', async () => {
+    serve({ 'POST /programmes/draft': 'offline' })
+    const store = useProgrammesStore()
+    const first = store.draft({ name: 'first' })
+    const second = store.draft({ name: 'second' })
+    expect(await first).toEqual({ ok: false, superseded: true })
+    expect(await second).toMatchObject({ ok: false })
+  })
+})
+
+describe('the landing after a builder’s save (W5 → W7)', () => {
+  it('starts with no landing, and keeps the id the builder sets until it is cleared', () => {
+    const store = useProgrammesStore()
+    expect(store.landing).toBeNull()
+    store.landing = PID
+    expect(useProgrammesStore().landing).toBe(PID)
+    store.landing = null
+    expect(store.landing).toBeNull()
+  })
+})

@@ -99,7 +99,9 @@ shared library and copy a programme from it into your library. A started program
 
 - `programme_format()` returns `{format, schema, example, changes, notes}`. `schema` is the one
   `GET /api/programme.schema.json` serves. `changes` lists each change type as
-  `{type, keys, does}`.
+  `{type, keys, does}`. `notes` and edit-week's `does` say how a rest behaves: a target of 0,
+  in an exception week or by edit-week, stops the progression for that week, and the week after
+  picks up at the setting before it (K192).
 - `list_programmes()` returns `{programmes, runs, this_week, today}`. Each programme is
   `{id, name, description, kind, weeks, activities, rev, createdAt, updatedAt}`, without its
   document. Each run is `{tracker, trackerName, programmeId, name, status, week, weeks, start, end,

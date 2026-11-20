@@ -88,6 +88,12 @@ export type ProgrammeDoc = {
   params?: Record<string, ProgrammeParam>
   activities: DocActivity[]
 } & Record<string, unknown>
+/**
+ * What the builder's draft route answers (`POST /api/programmes/draft`): every problem with the
+ * document, and its plan as a start's preview at its own values from today, or null when the
+ * document has no plan to show yet.
+ */
+export type Draft = { errors: Problem[]; plan: StartPreview | null }
 /** One programme with its document (`GET /api/programmes/{id}`). */
 export type ProgrammeRecord = ProgrammeSummary & { doc: ProgrammeDoc }
 
@@ -106,6 +112,11 @@ export type Cell = {
   reason: string | null
   /** Monday to Sunday's marks; left out of the weeks after an open pause. */
   marks?: (string | null)[]
+  /**
+   * A draft's grid only (`POST /api/programmes/draft`): each field over a week limit, with the path
+   * of the error that names it, e.g. `{ weight: 'activities[3].weight' }`.
+   */
+  limits?: Record<string, string>
 }
 export type GridDay = {
   date: string
@@ -285,6 +296,10 @@ export type ChangeRequest = { change: Change; from: string; reason?: string }
 /** What a request came to: the data, or the problems with what was sent, or why it failed. */
 export type Outcome<T> =
   { ok: true; data: T } | { ok: false; problems: Problem[]; message: string | null }
+/** A draft's outcome: an older call's answer, once a newer call was made, is `superseded`. */
+export type DraftOutcome = Outcome<Draft> | { ok: false; superseded: true }
+/** A replace's outcome: a stale `rev` (409) brings the server's programme as `conflict`. */
+export type ReplaceOutcome = Outcome<ProgrammeRecord> | { ok: false; conflict: ProgrammeRecord }
 /** A confirm's outcome: a stale `rev` brings the change previewed again (409, spec §7.3). */
 export type ConfirmOutcome = Outcome<Run> | { ok: false; stale: ChangePreview }
 

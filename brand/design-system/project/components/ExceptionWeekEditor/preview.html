@@ -1,0 +1,214 @@
+<!-- @dsCard group="Forms" height=5600 subtitle="An exception week in the programme builder, such as a deload: closed, a row that says what it changes; open in 2px ink, its weeks typed as 4, 8, a label, the activities it rests, a group for every activity and one per activity, each value Set to or % of planned" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ExceptionWeekEditor — preview</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: var(--space-6); background: var(--canvas); color: var(--ink); font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
+  button, input, textarea { font: inherit; color: inherit; }
+  .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .variant { margin: 0 0 var(--space-3); color: var(--ink-secondary); max-width: 70ch; }
+  .gap { height: var(--space-8); }
+  svg.i { width: 1em; height: 1em; flex: none; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  /* The builder's 520u form column, at u = 1 (a 1280 × 800 screen). */
+  .form { max-width: 520px; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
+  .sect > h2 { margin: 0; font: 600 27px / 34px var(--font-sans); }
+  .sect > .lead { margin: -12px 0 0; color: var(--ink-secondary); font-size: 19px; line-height: 1.45; }
+
+  /* Button and IconButton at the page's size. */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 52px; padding: 0 16px; border: 1px solid var(--control-border); border-radius: var(--radius-md); background: transparent; color: var(--ink); font: 600 19px / 25px var(--font-sans); cursor: pointer; white-space: nowrap; }
+  .btn svg { width: 26px; height: 26px; }
+  .btn:hover { background: var(--tile); }
+  .btn.quiet { border-color: transparent; padding: 0 10px; }
+  .ib { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 52px; height: 52px; padding: 0; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); cursor: pointer; }
+  .ib svg { width: 26px; height: 26px; }
+  .ib:hover { background: var(--tile); }
+
+  /* Closed: rows on line rules, each with a pencil. */
+  .rows { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+  .rows > li { display: flex; align-items: flex-start; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+  .rows .txt { flex: 1 1 auto; min-width: 0; }
+  .rows .nm { display: block; font: 600 19px / 25px var(--font-sans); }
+  .rows .ln { display: block; font-size: 19px; line-height: 1.45; }
+
+  /* Open: the ActivityCard's open frame, 2px ink (K147). */
+  .ac { list-style: none; border: 2px solid var(--ink); border-radius: var(--radius-lg); background: var(--canvas); }
+  .ac-list { list-style: none; margin: 0; padding: 0; }
+  .ac-head { display: flex; align-items: flex-start; gap: 8px; padding: 12px 8px 12px 12px; }
+  .ac-toggle { flex: 1 1 auto; min-width: 0; display: flex; align-items: flex-start; gap: 10px; padding: 4px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+  .ac-toggle > svg { width: 26px; height: 26px; margin-top: 1px; color: var(--ink-secondary); }
+  .ac-toggle:hover { background: var(--tile); }
+  .ac-name { display: block; font: 600 22px / 1.3 var(--font-sans); }
+  .ac-sum { display: block; color: var(--ink-secondary); font-size: 19px; line-height: 1.45; }
+  .ac-body { display: flex; flex-direction: column; gap: 22px; padding: 4px 20px 20px 54px; }
+
+  .field { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .field > .lbl { font: 600 19px / 25px var(--font-sans); }
+  .hint { margin: 0; color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
+  .ferr { display: flex; gap: 6px; align-items: flex-start; margin: 0; color: var(--error-ink); font-size: 16px; line-height: 22px; }
+  .ferr svg { width: 16px; height: 16px; margin-top: 3px; flex: none; }
+  input.tf { width: 100%; height: 60px; padding: 0 15px; border: 1px solid var(--control-border); border-radius: var(--radius-sm); background: var(--panel); color: var(--ink); font: 400 19px / 1.3 var(--font-sans); font-variant-numeric: tabular-nums; }
+  input.tf.sm { max-width: 110px; }
+  input.tf:hover { border-color: var(--ink); }
+  input.tf[aria-invalid="true"] { border-color: var(--error-ink); }
+  .withunit { display: flex; align-items: center; gap: 10px; }
+  .withunit span { font-size: 19px; color: var(--ink-secondary); }
+  .seg { display: inline-flex; flex-wrap: wrap; align-self: flex-start; max-width: 100%; border: 1px solid var(--control-border); border-radius: var(--radius-md); }
+  .seg button { height: 58px; padding: 0 18px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); font: 600 19px / 25px var(--font-sans); cursor: pointer; white-space: nowrap; }
+  .seg button:hover { background: var(--tile); }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
+
+  /* A group of values, on a tile: for every activity, or for one. */
+  .grp { display: flex; flex-direction: column; gap: 16px; padding: 16px; border-radius: var(--radius-md); background: var(--tile); }
+  .grp > .lbl { font: 600 19px / 25px var(--font-sans); }
+  .exr { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding-top: 12px; border-top: 1px solid var(--control-border); }
+  .grp > .lbl + .exr { border-top: 0; padding-top: 0; }
+  .exr-h { flex: 0 0 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -6px 0; }
+  .exr-f { font: 600 19px / 25px var(--font-sans); }
+  .exr .ib { width: 44px; height: 44px; }
+  .exr .ib svg { width: 22px; height: 22px; }
+  .lnk { display: inline-flex; align-self: flex-start; padding: 0; border: 0; background: transparent; color: var(--ink); font-size: 16px; line-height: 22px; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; cursor: pointer; }
+  .lnk:hover { text-decoration-thickness: 2px; }
+
+  /* Rest these activities (K191): Checkbox rows on a tile, ruled. */
+  .rest { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: var(--radius-md); background: var(--tile); }
+  .rest > .lbl { font: 600 19px / 25px var(--font-sans); }
+  .cbl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+  .cbl li + li { border-top: 1px solid var(--control-border); }
+  .cb { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); font: 400 19px / 1.3 var(--font-sans); text-align: left; cursor: pointer; }
+  .cb:disabled { opacity: .4; cursor: not-allowed; }
+  .box { display: grid; place-content: center; flex: none; width: 24px; height: 24px; border: 2px solid var(--control-border); border-radius: var(--radius-sm); background: var(--panel); }
+  .box svg { width: 16px; height: 16px; color: var(--on-ink); visibility: hidden; }
+  .cb:hover:not(:disabled) .box { border-color: var(--ink); }
+  .cb[aria-checked="true"] .box { background: var(--ink); border-color: var(--ink); }
+  .cb[aria-checked="true"] .box svg { visibility: visible; }
+
+  /* Add a value: the Menu card, under its link. */
+  .anchor { position: relative; align-self: flex-start; }
+  .menu { position: absolute; top: calc(100% + 8px); left: 0; z-index: 5; width: 288px; padding: var(--space-2); background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-overlay); }
+  .menu .item { display: flex; align-items: center; gap: var(--space-3); width: 100%; min-height: 48px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); font: 600 16px / 22px var(--font-sans); cursor: pointer; text-align: left; }
+  .menu .item:hover, .menu .item[data-highlighted] { background: var(--tile); }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .btn, .ib, .ac-toggle, .seg button, .menu .item, input.tf, .box { transition: background-color 120ms, color 120ms, border-color 120ms; }
+  }
+  /* Folded: the system's n sizes (n = 1 on a phone). */
+  @media (max-width: 639px) {
+    body { padding: var(--space-4); }
+    .sect > h2 { font-size: 22px; line-height: 28px; }
+    .sect > .lead { font-size: 18px; line-height: 26px; margin-top: -8px; }
+    .btn { height: 48px; font-size: 16px; line-height: 22px; }
+    .btn svg { width: 22px; height: 22px; }
+    .ib { width: 44px; height: 48px; }
+    .ib svg { width: 24px; height: 24px; }
+    .rows .nm, .rows .ln { font-size: 18px; line-height: 26px; }
+    .ac-head { padding: 8px 4px 8px 8px; }
+    .ac-name { font-size: 18px; }
+    .ac-sum { font-size: 18px; line-height: 26px; }
+    .ac-body { padding: 4px 12px 16px 12px; gap: 18px; }
+    .field { gap: 6px; }
+    .field > .lbl, .grp > .lbl, .exr-f { font-size: 16px; line-height: 22px; }
+    input.tf { height: 48px; font-size: 18px; padding: 0 12px; }
+    .withunit span { font-size: 18px; }
+    .seg button { height: 46px; padding: 0 12px; font-size: 16px; line-height: 22px; }
+    .grp, .rest { padding: 12px; gap: 12px; }
+    .rest > .lbl { font-size: 16px; line-height: 22px; }
+    .cb { font-size: 18px; }
+    .menu { width: min(288px, calc(100vw - 32px)); }
+  }
+</style>
+</head>
+<body>
+  <p class="variant label">Exception weeks, closed: Beginner 5×5's deload as a row that says what it changes, with a pencil to open it, then Add exception week</p>
+  <div class="form sect" data-draw="closed"></div>
+
+  <div class="gap"></div>
+  <p class="variant label">Weeks 4 and 8, open in place in 2px ink: the weeks typed with a comma, the label, every activity's values, then Deadlift's own. Each value is Set to a number or % of planned</p>
+  <div class="form" data-draw="open"></div>
+
+  <div class="gap"></div>
+  <p class="variant label">Add a value, pressed in Deadlift's group: a Menu of the fields Deadlift has that the exception week doesn't set yet</p>
+  <div class="form" data-draw="add"></div>
+
+  <div class="gap"></div>
+  <p class="variant label">Week 3 rests the legs, open: Back squat and Deadlift ticked under Rest these activities. Back squat has nothing else, so it has no group; Deadlift keeps its 1 set. Closed, it reads "Rest: Back squat, Deadlift."</p>
+  <div class="form" data-draw="rest"></div>
+
+  <div class="gap"></div>
+  <p class="variant label">A week past the end: the programme has 8 weeks, so week 9 is a problem under Weeks</p>
+  <div class="form" data-draw="error"></div>
+
+<script>
+// Beginner 5×5's deload (docs/programmes.md §4, §6): weeks 4 and 8, 3 sets and 90% of the weight for
+// every activity, the deadlift at 1 set. The words follow the mockup mockups/261120-programme-builder
+// (round 2, question 3, option A) and docs/specs/2026-11-20-programme-builder.md §5.
+;(() => {
+  const P = {
+    right: '<path d="m9 18 6-6-6-6"/>',
+    down: '<path d="m6 9 6 6 6-6"/>',
+    plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+    alert: '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>',
+    pencil: '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>',
+    x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    check: '<path d="M20 6 9 17l-5-5"/>',
+    trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
+  }
+  const ic = (n) => `<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n]}</svg>`
+  let uid = 0
+  const id = (p) => `${p}${++uid}`
+
+  const head = `<h2>Exception weeks</h2><p class="lead">A week whose values differ, such as a deload or a rest. After a deload the plan carries on as planned. After a rest, an activity picks up where it stopped.</p>`
+  const addBtn = `<div><button type="button" class="btn" data-testid="exception-add">${ic('plus')}Add exception week</button></div>`
+  const closedRow = `<ul class="rows" aria-label="Exception weeks"><li data-testid="exception-week"><span class="txt"><span class="nm">Weeks 4 and 8 · Deload</span><span class="ln">Every activity: 3 sets, 90% of the weight.</span><span class="ln">Deadlift: 1 set.</span></span><button type="button" class="ib" aria-label="Change weeks 4 and 8" aria-expanded="false" data-testid="exception-open">${ic('pencil')}</button></li></ul>`
+
+  // A value: its field, a Remove, Set to or % of planned, and the number.
+  const exr = (name, mode, value, u, key) => { const f = id('x'); return `<div class="exr" data-testid="exception-value" data-field="${key}"><div class="exr-h"><span class="exr-f" id="${f}-l">${name}</span><button type="button" class="ib" aria-label="Remove ${name.toLowerCase()} from this group" data-testid="exception-value-remove">${ic('x')}</button></div><div class="seg" role="group" aria-labelledby="${f}-l" data-testid="exception-value-mode">${['Set to', '% of planned'].map((o) => `<button type="button" aria-pressed="${o === mode}">${o}</button>`).join('')}</div><span class="withunit"><input class="tf sm" aria-labelledby="${f}-l" value="${value}" inputmode="decimal"><span>${u}</span></span></div>` }
+  const addValue = (menu) => `<span class="anchor"><button type="button" class="lnk" aria-haspopup="menu" aria-expanded="${!!menu}" data-testid="exception-value-add">Add a value</button>${menu ? `<div class="menu" role="menu" aria-label="Add a value"><button type="button" class="item" role="menuitem" data-highlighted>Times a week</button><button type="button" class="item" role="menuitem">Reps</button><button type="button" class="item" role="menuitem">Weight</button></div>` : ''}</span>`
+  const group = (name, key, rows, after = '') => `<div class="grp" role="group" aria-label="${name}" data-testid="exception-group" data-activity="${key}"><span class="lbl">${name}</span>${rows}${after}</div>`
+
+  // Rest these activities: Every activity, then each activity in the programme's order.
+  const tick = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + P.check + '</svg>'
+  const restList = (on) => { const h = id('r'); return `<div class="rest" role="group" aria-labelledby="${h}" data-testid="exception-rest"><span class="lbl" id="${h}">Rest these activities</span><ul class="cbl">${[['*', 'Every activity'], ['squat', 'Back squat'], ['bench', 'Bench press'], ['row', 'Barbell row'], ['deadlift', 'Deadlift'], ['plank', 'Plank']].map(([k, n]) => `<li><button type="button" class="cb" role="checkbox" aria-checked="${on.includes(k)}" data-testid="exception-rest-row" data-rest="${k}"><span class="box" aria-hidden="true">${tick}</span>${n}</button></li>`).join('')}</ul><p class="hint">A rested activity has no sessions in these weeks.</p></div>` }
+
+  const body = (o = {}) => {
+    const w = id('w'), l = id('l')
+    const weeks = o.error
+      ? `<input class="tf" id="${w}" value="4, 9" inputmode="numeric" aria-invalid="true" aria-describedby="${w}-e" data-testid="exception-weeks"><p class="ferr" id="${w}-e" role="alert">${ic('alert')}<span>Week 9 is past the end. This programme has 8 weeks.</span></p>`
+      : `<input class="tf" id="${w}" value="4, 8" inputmode="numeric" aria-describedby="${w}-h" data-testid="exception-weeks"><p class="hint" id="${w}-h">Week numbers from 1 to 8, with commas.</p>`
+    if (o.rest) {
+      return `<div class="field"><label class="lbl" for="${w}">Weeks</label><input class="tf" id="${w}" value="3" inputmode="numeric" aria-describedby="${w}-h" data-testid="exception-weeks"><p class="hint" id="${w}-h">Week numbers from 1 to 8, with commas.</p></div>
+      <div class="field"><label class="lbl" for="${l}">Label</label><input class="tf" id="${l}" value="Legs rest" aria-describedby="${l}-h" data-testid="exception-label"><p class="hint" id="${l}-h">Optional. The grid shows it over each of these weeks.</p></div>
+      ${restList(['squat', 'deadlift'])}
+      ${group('Every activity', '*', '', addValue(false))}
+      ${group('Deadlift', 'deadlift', exr('Sets', 'Set to', '1', '', 'sets'), addValue(false) + '<p class="hint">Deadlift’s own value beats the value for every activity.</p>')}
+      <div><button type="button" class="btn" aria-haspopup="menu" data-testid="exception-group-add">${ic('plus')}Add values for one activity</button></div>
+      <div><button type="button" class="btn quiet" data-testid="exception-remove">${ic('trash')}Remove exception week</button></div>`
+    }
+    return `<div class="field"><label class="lbl" for="${w}">Weeks</label>${weeks}</div>
+      <div class="field"><label class="lbl" for="${l}">Label</label><input class="tf" id="${l}" value="Deload" aria-describedby="${l}-h" data-testid="exception-label"><p class="hint" id="${l}-h">Optional. The grid shows it over each of these weeks.</p></div>
+      ${restList([])}
+      ${group('Every activity', '*', exr('Sets', 'Set to', '3', '', 'sets') + exr('Weight', '% of planned', '90', '%', 'weight'), addValue(false))}
+      ${group('Deadlift', 'deadlift', exr('Sets', 'Set to', '1', '', 'sets'), addValue(!!o.menu) + '<p class="hint">Deadlift’s own value beats the value for every activity.</p>')}
+      <div><button type="button" class="btn" aria-haspopup="menu" data-testid="exception-group-add">${ic('plus')}Add values for one activity</button></div>
+      <div><button type="button" class="btn quiet" data-testid="exception-remove">${ic('trash')}Remove exception week</button></div>`
+  }
+  const open = (o) => { const c = id('ex'); return `<ul class="ac-list" aria-label="Exception weeks"><li class="ac" data-testid="exception-week"><div class="ac-head"><button type="button" class="ac-toggle" aria-expanded="true" aria-controls="${c}">${ic('down')}<span><span class="ac-name">${o && o.error ? 'Weeks 4 and 9' : 'Weeks 4 and 8'} · Deload</span><span class="ac-sum">Every activity: 3 sets, 90% of the weight. Deadlift: 1 set.</span></span></button></div><div class="ac-body" id="${c}" role="group" aria-label="Exception week">${body(o)}</div></li></ul>` }
+
+  const restOpen = () => { const c = id('ex'); return `<ul class="rows" aria-label="Exception weeks">${closedRow.replace(/^<ul[^>]*>|<\/ul>$/g, '')}</ul><ul class="ac-list" aria-label="Exception weeks" style="margin-top:12px"><li class="ac" data-testid="exception-week"><div class="ac-head"><button type="button" class="ac-toggle" aria-expanded="true" aria-controls="${c}">${ic('down')}<span><span class="ac-name">Week 3 · Legs rest</span><span class="ac-sum">Rest: Back squat, Deadlift. Deadlift: 1 set.</span></span></button></div><div class="ac-body" id="${c}" role="group" aria-label="Exception week">${body({ rest: true })}</div></li></ul>` }
+
+  const DRAW = {
+    closed: () => head + closedRow + addBtn,
+    open: () => open({}),
+    add: () => open({ menu: true }),
+    rest: restOpen,
+    error: () => open({ error: true }),
+  }
+  for (const host of document.querySelectorAll('[data-draw]')) host.innerHTML = DRAW[host.dataset.draw]()
+})()
+</script>
+</body>
+</html>

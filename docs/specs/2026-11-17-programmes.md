@@ -447,7 +447,8 @@ John approved these defaults on 2026-11-17. Each can change later if it reads wr
 
 - Training days within a week (day A, day B) and session-based clocks. The planner stays weekly.
 - Mixed kinds in one programme.
-- A form editor for library programmes. Agents write them, and people paste JSON.
+- A form editor for library programmes. Agents write them, and people paste JSON. The programme
+  builder added one later (K183, [2026-11-20-programme-builder.md](2026-11-20-programme-builder.md)).
 - Food programmes.
 - A start-of-week check-in that offers Repeat week or Carry on.
 - Double progression (add reps, then weight).

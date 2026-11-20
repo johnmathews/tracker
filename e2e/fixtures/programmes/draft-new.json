@@ -1,0 +1,22 @@
+{
+  "doc": {
+    "format": "tracker-programme/1",
+    "name": "",
+    "kind": "strength",
+    "weeks": 8,
+    "activities": []
+  },
+  "reply": {
+    "errors": [
+      {
+        "path": "name",
+        "message": "give a name of 1 to 60 characters."
+      },
+      {
+        "path": "activities",
+        "message": "give 1 to 30 activities."
+      }
+    ],
+    "plan": null
+  }
+}

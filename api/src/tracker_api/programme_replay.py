@@ -45,6 +45,13 @@ The log also holds two rows that are no change type: `end-programme` (End progra
   the Monday back, so the activity week counts the programme weeks the activity ran in, and a
   resume on any day of a week gives the same value. A paused activity stays put when the programme
   goes to another week. An added activity starts at its own week 1.
+- **A rest** (K192) is a programme week whose target an override or a hand-edit puts at 0, where
+  the rule's isn't. Its days hold the activity week shown before it (week 1 at the start), and
+  the first day with sessions after it repeats that week: the offset grows to match. A pause
+  after a rest keeps holding that week; a rest during a pause changes nothing. Go to week moves
+  a running activity as far as the plan, rests included, moves between the two programme weeks,
+  so a run with no pause lands on the planned grid's week. Ends short counts each held week as
+  done, so a rest never ends an activity short.
 - **A field's series** is the programme's, then one segment per value change (§7.1). Set value
   starts a segment at the activity week in force, at the new value, keeping the increase. Set
   increase starts one at the value the rule shows that week (rounded, before any override or
@@ -109,10 +116,12 @@ from .programme import (
     Series,
     as_decimal,
     fits_rate,
+    is_rest,
     json_path,
     number_text,
     param_problem,
     parse_activity,
+    planned_weeks,
     resolve,
     resolve_activity,
     whole_in,
@@ -387,6 +396,13 @@ class _Act:
     bumped: bool = False
     appeared: bool = False
     last_week: int | None = None
+    #: During a rest (K192), the activity week it holds and comes back at. It stays through a
+    #: pause that follows, and ends on the first day the activity runs with sessions again.
+    rest: int | None = None
+    #: The activity week shown on its last day, running or paused: what a rest holds.
+    shown: int | None = None
+    #: The activity weeks rests have held it back: a rest is no reason to end short.
+    rested: int = 0
     ended_on: date | None = None
     deleted: bool = False
 
@@ -458,6 +474,8 @@ class _Sim:
         self.hands: list[_Hand] = []
         self.days: list[DayPlan] = []
         self.first = _monday(run.start)
+        #: The day being stepped, or the last one stepped.
+        self.day = self.first
         self.acts: dict[str, _Act] = {
             a.key: _Act(
                 key=a.key,
@@ -500,6 +518,7 @@ class _Sim:
         )
 
     def _step(self, day: date) -> None:
+        self.day = day
         advanced = False
         if self.status == "before":
             if day == self.run.start:
@@ -555,10 +574,78 @@ class _Sim:
 
     def week_now(self, act: _Act) -> int:
         """The activity week a change on an activity lands on: the one it is in, or for a
-        paused activity the one it comes back at."""
+        paused activity the one it comes back at. In a rest, the week it holds (K192)."""
         if act.status == "paused":
-            return (act.last_week or 0) + 1
-        return self.pw - act.offset
+            return self._comes_back(act)
+        if self.pw - act.offset < 1:
+            return self.pw - act.offset
+        return self._week(act, self.day)[0]
+
+    def _comes_back(self, act: _Act) -> int:
+        """A paused activity's week when it resumes: the one after the last it ran, or the one
+        a rest before the pause holds."""
+        return act.rest if act.rest is not None else (act.last_week or 0) + 1
+
+    # -- rests (K192) --
+
+    def _resting(self, act: _Act, week: int, day: date) -> bool:
+        """Whether the programme week is a rest for the activity: a hand-edit, else an override,
+        puts its target at 0 where the rule's target in activity `week` isn't."""
+        target = self.series_at(act, "target", week)
+        edit = self._hand_at(act, "target", day)
+        if edit is not None:
+            return edit.value == 0 and target.value(week) != 0
+        return is_rest(target, week, self.programme.override_at(self.pw, act.key, "target"))
+
+    def _week(self, act: _Act, day: date) -> tuple[int, bool]:
+        """A started activity's week on `day`, and whether the day is in a rest. A rest holds
+        the week shown before it (week 1 at the start); the first week with sessions after it
+        repeats that week, and counting goes on from there."""
+        natural = self.pw - act.offset
+        if act.rest is not None:
+            held = act.rest
+        else:
+            held = act.shown if act.shown is not None else max(natural - 1, 1)
+        if self._resting(act, held, day):
+            return held, True
+        return (act.rest if act.rest is not None else natural), False
+
+    def _plan(self, act: _Act, day: date) -> tuple[tuple[int, ...], tuple[bool, ...]]:
+        """The activity's week in each programme week as the plan has it, rests included: its
+        overrides and the hand-edits in force on `day` (`planned_weeks`)."""
+
+        def rest_at(week: int, held: int) -> bool:
+            target = self.series_at(act, "target", held)
+            edit = self._hand_at(act, "target", day, week)
+            if edit is not None:
+                return edit.value == 0 and target.value(held) != 0
+            override = self.programme.override_at(week, act.key, "target")
+            return is_rest(target, held, override)
+
+        return planned_weeks(self.programme.weeks, rest_at)
+
+    def _go_to(self, act: _Act, week: int, day: date) -> None:
+        """Go to week for a running activity: it moves as far as the plan, rests included, moves
+        between the programme week it is in and `week`. So a run with no pause lands on the
+        planned grid's week, and one a pause held back stays as far behind it."""
+        plan, rests = self._plan(act, day)
+        natural = self.pw - act.offset
+        now = self._week(act, day)[0] if natural >= 1 else natural
+        moved = now + plan[week - 1] - plan[self.pw - 1]
+        # The weeks rests have held it back, as the plan has them at each end of the move.
+        holding = natural - act.rest if act.rest is not None else 0
+        act.rested += holding + (week - plan[week - 1]) - (self.pw - plan[self.pw - 1])
+        act.offset = week - moved
+        act.rest = moved if rests[week - 1] and moved >= 1 else None
+        act.shown = None
+
+    def _end_rest(self, act: _Act) -> None:
+        """Move the offset so the activity's week is the one the rest held."""
+        assert act.rest is not None
+        shift = self.pw - act.offset - act.rest
+        act.offset += shift
+        act.rested += shift
+        act.rest = None
 
     def series_at(self, act: _Act, name: Field, week: int) -> Series:
         """The latest segment that starts at or before `week`: the programme's own series starts
@@ -633,11 +720,13 @@ class _Sim:
             # Re-opened on the end's own day: `_step` resumes a pause due on any later one.
             self._resume_programme("paused")
         elif kind == "go-to-week" and self.status == "running":
-            delta = int(body["week"]) - self.pw
-            self.pw += delta
+            week = int(body["week"])
             for other in self.acts.values():
                 if other.status == "paused":
-                    other.offset += delta
+                    other.offset += week - self.pw
+                elif other.status == "running":
+                    self._go_to(other, week, day)
+            self.pw = week
         elif kind == "pause-activity" and act is not None and act.status == "running":
             weeks = body.get("weeks")
             act.status = "paused"
@@ -717,12 +806,13 @@ class _Sim:
 
     # -- a day --
 
-    def _hand_at(self, act: _Act, name: Field, day: date) -> _Hand | None:
+    def _hand_at(self, act: _Act, name: Field, day: date, week: int | None = None) -> _Hand | None:
+        """The hand-edit of a field in force on `day` for programme `week`, this one if None."""
         for hand in reversed(self.hands):
             if (
                 hand.key == act.key
                 and hand.field == name
-                and hand.programme_week == self.pw
+                and hand.programme_week == (self.pw if week is None else week)
                 and (hand.dropped_on is None or day < hand.dropped_on)
             ):
                 return hand
@@ -766,16 +856,18 @@ class _Sim:
                 acts[key] = ActivityDay(state="ended")
             elif act.status == "paused" or self.status == "paused":
                 if act.status == "paused":
-                    week = (act.last_week or 0) + 1
+                    week = self._comes_back(act)
                     until, reason = act.until, act.reason
                 else:
                     assert self.pause is not None
                     until, reason = self.pause.until, self.pause.reason
+                    if week >= 1:
+                        week = self._week(act, day)[0]
                 if week < 1:
                     acts[key] = ActivityDay(state="not-started")
                     continue
                 values = self._values(act, week)
-                act.appeared = True
+                act.appeared, act.shown = True, week
                 acts[key] = ActivityDay(
                     state="paused",
                     activity_week=week,
@@ -787,8 +879,13 @@ class _Sim:
             elif week < 1:
                 acts[key] = ActivityDay(state="not-started")
             else:
+                week, resting = self._week(act, day)
+                if resting:
+                    act.rest = week
+                elif act.rest is not None:
+                    self._end_rest(act)
                 acts[key] = self._running(act, week, day)
-                act.appeared, act.last_week = True, week
+                act.appeared, act.last_week, act.shown = True, week, week
         paused = self.status == "paused" and self.pause is not None
         return DayPlan(
             date=day,
@@ -799,6 +896,12 @@ class _Sim:
             reason=self.pause.reason if self.pause is not None else None,
             activities=acts,
         )
+
+    def reached(self, act: _Act) -> int:
+        """The last activity week the activity ran, counting each week a rest held it back as a
+        week done: a rest never ends it short (K192)."""
+        holding = self.pw - act.offset - act.rest if act.rest is not None else 0
+        return (act.last_week or 0) + act.rested + holding
 
     def project(self, monday: date) -> list[ProjectedWeek]:
         """The weeks after an open-ended pause, resumed at the paused week on `monday`."""
@@ -887,10 +990,15 @@ def _simulate(
         WeekPlan(monday=days[i].date, days=tuple(days[i : i + 7])) for i in range(0, len(days), 7)
     )
     weeks_n = run.programme.weeks
-    ends_short = tuple(
-        EndsShort(key=a.key, name=a.activity.name, week=a.last_week, of=weeks_n)
+    reached = {
+        a.key: final.reached(a)
         for a in final.acts.values()
-        if a.status != "ended" and a.last_week is not None and a.last_week < weeks_n
+        if a.status != "ended" and a.last_week is not None
+    }
+    ends_short = tuple(
+        EndsShort(key=key, name=final.acts[key].activity.name, week=week, of=weeks_n)
+        for key, week in reached.items()
+        if week < weeks_n
     )
     rp = Replay(
         run=run,

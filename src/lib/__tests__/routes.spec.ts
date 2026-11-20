@@ -15,6 +15,10 @@ import {
   parseNewHash,
   parseSettingsHash,
   isProgrammesHash,
+  isNewProgrammeHash,
+  parseEditProgrammeHash,
+  editProgrammeHref,
+  NEW_PROGRAMME_HREF,
   parseProgrammeHash,
   programmeHref,
   PROGRAMMES_HREF,
@@ -233,5 +237,39 @@ describe('whether an overview was opened from the Programmes page in this tab', 
     expect(cameFromProgrammes()).toBe(true)
     expect(cameFromWeek()).toBe(false)
     expect(history.state).toMatchObject({ other: 1 })
+  })
+})
+
+describe('the programme builder’s addresses (#/programmes/new, #/programmes/<id>/edit)', () => {
+  it('knows the new programme address and no other', () => {
+    expect(NEW_PROGRAMME_HREF).toBe('#/programmes/new')
+    expect(isNewProgrammeHash(NEW_PROGRAMME_HREF)).toBe(true)
+    for (const hash of ['', '#/programmes', '#/programmes/new/', '#/programmes/newer'])
+      expect(isNewProgrammeHash(hash)).toBe(false)
+  })
+
+  it('names the programme to edit, and reads back what it wrote', () => {
+    expect(editProgrammeHref('xmwluommflktp')).toBe('#/programmes/xmwluommflktp/edit')
+    expect(parseEditProgrammeHash(editProgrammeHref('xmwluommflktp'))).toBe('xmwluommflktp')
+  })
+
+  it('reads no id from an address that is not an edit address', () => {
+    for (const hash of [
+      '',
+      '#/programmes',
+      '#/programmes/new',
+      '#/programmes//edit',
+      '#/programmes/a/b/edit',
+      '#/programmes/A B/edit',
+      '#/programmes/__proto__/edit',
+      '#/programmes/x',
+      '#/programmes/x/edit/',
+    ])
+      expect(parseEditProgrammeHash(hash)).toBeNull()
+  })
+
+  it('leaves the Programmes page’s own address exact', () => {
+    expect(isProgrammesHash('#/programmes/new')).toBe(false)
+    expect(isProgrammesHash('#/programmes/x/edit')).toBe(false)
   })
 })

@@ -21,6 +21,7 @@ import {
   openStyleGuide,
   settle,
 } from './support'
+import { openEditWithDeadlift, openEditWithLegsRest, openNewWithActivity } from './builder-support'
 
 test.describe('dark really is dark', () => {
   test('the style guide', async ({ page }) => {
@@ -267,6 +268,42 @@ test.describe('the app passes axe', () => {
         await settle(page)
         await expectNoAxeViolations(page)
         await expectNoSidewaysScroll(page)
+      })
+    }
+
+    for (const [width, height, where] of [
+      [1280, 900, 'desktop'],
+      [390, 844, 'folded, 390px'],
+    ] as const) {
+      // The programme builder (docs/specs/2026-11-20-programme-builder.md), its /api mocked by
+      // builder-support.ts: a new programme with its first activity open and the server asking
+      // for its name; a Library programme with the Deadlift open over its limit, its weeks 6 to 8
+      // marked in the grid.
+      test(`the programme builder, new, an activity open, ${where}, ${theme}`, async ({ page }) => {
+        await page.setViewportSize({ width, height })
+        await openNewWithActivity(page, { theme })
+        await expect(page.getByTestId('activity-name')).toHaveAttribute('aria-invalid', 'true')
+        await expectNoAxeViolations(page)
+      })
+
+      test(`the programme builder, editing, an activity open over its limit, ${where}, ${theme}`, async ({
+        page,
+      }) => {
+        await page.setViewportSize({ width, height })
+        await openEditWithDeadlift(page, { theme, over: true })
+        await expect(page.getByTestId('value-error')).toBeVisible()
+        await expect(page.locator('[data-limit]').first()).toBeAttached()
+        await expectNoAxeViolations(page)
+      })
+
+      test(`the programme builder, an exception week resting the legs, ${where}, ${theme}`, async ({
+        page,
+      }) => {
+        await page.setViewportSize({ width, height })
+        await openEditWithLegsRest(page, { theme })
+        await expect(page.getByTestId('exception-rest')).toBeVisible()
+        await expect(page.locator('td[data-rest]')).toHaveCount(2)
+        await expectNoAxeViolations(page)
       })
     }
 

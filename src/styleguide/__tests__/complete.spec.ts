@@ -23,6 +23,20 @@ describe('the style guide', () => {
     expect(missing, 'primitives with no style guide section').toEqual([])
   })
 
+  it('has a section for each of the programme builder’s components (W5, W6)', () => {
+    // They live in src/components, as ItemPage and NewTrackerPage do, so the glob misses them.
+    const ids: string[] = SECTIONS.map((s) => s.id)
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        'sg-programme-builder',
+        'sg-activity-card',
+        'sg-value-field',
+        'sg-exception-week-editor',
+        'sg-start-value-editor',
+      ]),
+    )
+  })
+
   it('gives every section its own id', () => {
     const ids = SECTIONS.map((s) => s.id)
     expect(new Set(ids).size).toBe(ids.length)

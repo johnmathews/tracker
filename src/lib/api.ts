@@ -19,6 +19,8 @@ export type ConflictBody = {
   tracker?: unknown
   /** A stale programme change's: the change previewed again (spec §7.3). */
   preview?: unknown
+  /** A stale library programme's (`PUT /programmes/{id}`): the server's copy of it. */
+  programme?: unknown
 }
 
 /** One problem the API found with what was sent: where it is, and a sentence (spec §3.4). */

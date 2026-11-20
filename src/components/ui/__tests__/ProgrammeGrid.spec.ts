@@ -519,3 +519,91 @@ describe('ProgrammeGrid, a start’s preview on a phone', () => {
     expect(set).not.toHaveBeenCalled()
   })
 })
+
+describe('ProgrammeGrid, a week over an item’s limit in the builder (spec S2)', () => {
+  /** The start preview with the cells' `limits` the draft route gives a week over a limit. */
+  function overLimit(limits: Record<string, Record<number, Record<string, string>>>): Grid {
+    const grid: Grid = structuredClone(START.grid)
+    grid.weeks.forEach((week, i) => {
+      for (const [key, byWeek] of Object.entries(limits)) {
+        const marked = byWeek[i + 1]
+        if (marked) week.cells[key] = { ...week.cells[key]!, limits: marked }
+      }
+    })
+    return grid
+  }
+
+  it('shows the value in error-ink after circle-alert, with the problem’s path', () => {
+    const path = 'activities[3].weight'
+    const grid = overLimit({ deadlift: { 6: { weight: path }, 7: { weight: path } } })
+    mountGrid({ grid, mode: 'start', undated: true, itemHref: undefined })
+    const td = cell('deadlift', 6)
+    expect(td.dataset.limit).toBe(path)
+    const main = td.querySelector<HTMLElement>('[data-slot="cell-main"]')!
+    expect(main.querySelector('[data-slot="limit-mark"]')).not.toBeNull()
+    expect(main.querySelector('span.text-error-ink')!.textContent).toContain('kg')
+    expect(main.textContent).toContain(', over the limit')
+    expect(main.querySelector('.sr-only')!.textContent).toBe(', over the limit')
+    // The sets line under it is not over.
+    expect(td.querySelectorAll('[data-slot="limit-mark"]')).toHaveLength(1)
+    expect(cell('deadlift', 7).dataset.limit).toBe(path)
+    expect(cell('deadlift', 5).hasAttribute('data-limit')).toBe(false)
+    expect(cell('deadlift', 5).querySelector('[data-slot="limit-mark"]')).toBeNull()
+    expect(cell('deadlift', 5).textContent).not.toContain('over the limit')
+  })
+
+  it('marks the sets line when the sets or the reps are over', () => {
+    const grid = overLimit({
+      squat: { 2: { sets: 'activities[0].sets' } },
+      bench: { 2: { reps: 'activities[1].reps' } },
+    })
+    mountGrid({ grid, mode: 'start', undated: true })
+    for (const key of ['squat', 'bench']) {
+      const td = cell(key, 2)
+      const line = td.querySelector<HTMLElement>('[data-slot="limit-line"]')!
+      expect(line.textContent).toContain('5 × 5')
+      expect(line.textContent).toContain(', over the limit')
+      expect(line.className).toContain('text-error-ink')
+      expect(td.querySelector('[data-slot="cell-main"] [data-slot="limit-mark"]')).toBeNull()
+    }
+    expect(cell('squat', 2).dataset.limit).toBe('activities[0].sets')
+  })
+
+  it('marks the leading line for a goal-only activity or a field with no line of its own', () => {
+    const grid: Grid = structuredClone(START.grid)
+    for (const week of grid.weeks) {
+      week.cells.squat = { ...week.cells.squat!, values: { target: 3 } }
+      week.cells.bench = { ...week.cells.bench!, values: { target: 3, weight: 30 } }
+    }
+    grid.weeks[0]!.cells.squat!.limits = { target: 'activities[0].target' }
+    grid.weeks[0]!.cells.bench!.limits = { target: 'activities[1].target' }
+    mountGrid({ grid, mode: 'start', undated: true })
+    for (const key of ['squat', 'bench']) {
+      const main = cell(key, 1).querySelector('[data-slot="cell-main"]')!
+      expect(main.querySelector('[data-slot="limit-mark"]')).not.toBeNull()
+    }
+  })
+
+  it('marks a cardio session’s distance on its line under the time', () => {
+    const grid: Grid = structuredClone(START.grid)
+    grid.activities = [
+      { key: 'run', name: 'Run', addedOn: '2026-10-26', addedBy: null, endedOn: null },
+    ]
+    for (const week of grid.weeks) {
+      week.cells = {
+        run: { ...week.cells.squat!, values: { target: 3, duration: 1200, distance: 3 } },
+      }
+    }
+    grid.weeks[0]!.cells.run!.limits = { distance: 'activities[0].distance' }
+    mountGrid({ grid, kind: 'cardio', mode: 'start', undated: true })
+    const line = cell('run', 1).querySelector('[data-slot="limit-line"]')!
+    expect(line.textContent).toContain('3 km')
+  })
+
+  it('leaves the limits out of a dated grid', () => {
+    const grid = overLimit({ deadlift: { 6: { weight: 'activities[3].weight' } } })
+    mountGrid({ grid, mode: 'start' })
+    expect(cell('deadlift', 6).hasAttribute('data-limit')).toBe(false)
+    expect(cell('deadlift', 6).querySelector('[data-slot="limit-mark"]')).toBeNull()
+  })
+})

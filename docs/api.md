@@ -1114,6 +1114,23 @@ the document as it was sent.
   (`edits.new_id`), at `rev` 1. A document with any problem is never stored.
 - `POST /programmes/validate` takes `{doc}` and returns `{errors}`, [] when an add would take it,
   the size included. It stores nothing.
+- `POST /programmes/draft` takes `{doc}` and returns `{errors, plan}`. The programme builder
+  calls it as the person types. It stores nothing. `errors` is the list validate returns. `plan`
+  holds the weeks a start today would write at the document's own values. Its shape is the
+  shared preview's `plan` (§3.5): `{start, end, weeks, params, endsShort, grid}`. A document
+  whose only problems are week limits still gets a plan. Each cell over a limit then carries
+  `limits`, which maps the field to the problem's path. A limit names programme weeks, so the
+  marked cells are those in its programme weeks, whichever activity week a rest moved there
+  (K192). Any other problem makes `plan` null.
+  The deadlift at +90 kg a week, for example, gives one error and marks its weeks 6 to 8:
+
+  ```json
+  {"errors": [{"path": "activities[3].weight", "message": "week 6 comes to 510 kg. The most is 500."}],
+   "plan": {"grid": {"weeks": [{"programmeWeeks": [6], "cells": {"deadlift": {
+     "activityWeek": 6, "values": {"weight": 510}, "limits": {"weight": "activities[3].weight"}}}}]}}}
+  ```
+
+  The example leaves out the plan's other keys.
 - `GET /programmes/{id}` returns the record.
 - `PUT /programmes/{id}` takes `{doc, rev}` and returns the record at the next `rev`; the name
   follows the document. The document's problems come before the revision. A stale `rev` gets 409
@@ -1156,7 +1173,7 @@ endsShort, grid}`.
 | `week`         | Today's programme week, null unless running or paused; `weeks` is the programme's                                                                                                                                                                                                |
 | `rev`          | The log's revision: 16 hex characters of a SHA-256 over the log. It shows the run changed, and never confirms a change                                                                                                                                                           |
 | `openPause`    | `{since, programmeWeek, reason}` while the programme is paused with no end date, else null                                                                                                                                                                                       |
-| `endsShort`    | Each activity that ends before its last week: `{key, name, week, of, message}`                                                                                                                                                                                                   |
+| `endsShort`    | Each activity that ends before its last week: `{key, name, week, of, message}`. A rest is never the reason: `week` counts each week a rest held it as done (K192)                                                                                                                                                                                                   |
 | `ended`        | `{from, reason, seq, restarted}` after End programme, else null; null again after a re-open (K165). `restarted` is true when a restart wrote the end (K167)                                                                                                                      |
 | `canReopen`    | True when a re-open applies today: an end that stopped the run part way, not a restart's (K167). An end set for a later day leaves `status` at `running` and `canReopen` true                                                                                                    |
 | `clock`        | Today: `{programmeWeek, status, until, reason, activities}`, each activity `{state, activityWeek, until, reason}`                                                                                                                                                                |

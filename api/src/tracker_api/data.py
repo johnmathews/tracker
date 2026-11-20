@@ -2234,14 +2234,20 @@ def preview_programme(
     run, _ = _start_inputs(
         parse_programme(record["doc"]), start=start, params=params, name=None, today=when.today
     )
-    rp = replay(run, [], until=when.today)
+    return _plan_json(run, when.today)
+
+
+def _plan_json(run: Run, today: date) -> dict[str, Any]:
+    """A run as a start's preview shows it before anything is written: `{start, end, weeks,
+    params, endsShort, grid}`. The library's preview, the shared one and the builder's draft."""
+    rp = replay(run, [], until=today)
     return {
         "start": run.start.isoformat(),
         "end": _iso(rp.end),
         "weeks": run.programme.weeks,
         "params": {key: _number(value) for key, value in rp.params.items()},
         "endsShort": _ends_short_json(rp),
-        "grid": _grid_json(rp, when.today, {}, rp.end),
+        "grid": _grid_json(rp, today, {}, rp.end),
     }
 
 
@@ -2257,18 +2263,34 @@ def preview_shared(
     run, _ = _start_inputs(
         parse_programme(found["doc"]), start=None, params=None, name=None, today=when.today
     )
-    rp = replay(run, [], until=when.today)
-    return {
-        "programme": found,
-        "plan": {
-            "start": run.start.isoformat(),
-            "end": _iso(rp.end),
-            "weeks": run.programme.weeks,
-            "params": {key: _number(value) for key, value in rp.params.items()},
-            "endsShort": _ends_short_json(rp),
-            "grid": _grid_json(rp, when.today, {}, rp.end),
-        },
-    }
+    return {"programme": found, "plan": _plan_json(run, when.today)}
+
+
+def draft_programme(
+    doc: object, *, when: When
+) -> tuple[list[ProgrammeError], dict[str, Any] | None]:
+    """An unsaved document's problems and weeks, for the builder (`POST /api/programmes/draft`,
+    spec 2026-11-20 S1, S2). Stores nothing.
+
+    The problems are `programme_problems`', as validate gives them. The plan is a start's preview
+    at the document's own values from today, as the shared library shows it (K173). A document
+    whose only problems are week limits still has its plan: each cell over a limit gains
+    `limits`, its field's name to the problem's path. A limit names programme weeks, which a
+    rest moves away from the activity weeks (K192). Any other problem gives no plan."""
+    errors = programme_problems(doc)
+    if any(e.limit is None for e in errors):
+        return errors, None
+    programme = parse_programme(doc, check_ranges=False)
+    run = Run(resolved=resolve(programme, check_ranges=False), start=when.today)
+    plan = _plan_json(run, when.today)
+    for error in errors:
+        limit = error.limit
+        assert limit is not None and limit.activity is not None
+        for week in plan["grid"]["weeks"]:
+            cell = week["cells"].get(limit.activity)
+            if cell is not None and set(week["programmeWeeks"]) & set(limit.weeks):
+                cell.setdefault("limits", {})[limit.field] = error.path
+    return errors, plan
 
 
 def start_programme(

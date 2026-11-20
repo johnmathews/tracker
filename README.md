@@ -36,8 +36,8 @@
   one. Each food has a weekly goal, set on its page. Defaults are Vegetables (7), Fruit (5),
   Fish (2) and Nuts (3). A day whose marked foods reach **Foods a day** (default two) turns green,
   as an exercise day does.
-- **Programmes.** A programme is a multi-week plan, written in a formal format an agent can push,
-  and kept in a library. Start one and it becomes a tracker of its own. Change it on any day,
+- **Programmes.** A programme is a multi-week plan, written in a formal format an agent can push
+  or built in the app's form, and kept in a library. Start one and it becomes a tracker of its own. Change it on any day,
   with a preview first; the days before yesterday stay locked, so the record of the past never
   moves. See [docs/programmes.md](docs/programmes.md).
 - **Normal mode and config mode.** The app opens in normal mode, where you only mark cells. The

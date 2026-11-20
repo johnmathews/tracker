@@ -694,6 +694,15 @@ def create_app(
         nothing."""
         return {"errors": problems_json(data.programme_problems(body.get("doc")))}
 
+    @app.post("/api/programmes/draft")
+    def draft_programme(body: Body, user: User) -> dict[str, Any]:
+        """`{doc}` → `{errors, plan}`: validate's errors, and the weeks a start today would write
+        at the document's own values, as the shared preview's `plan`. A cell over a week limit
+        carries `limits`; any other problem makes `plan` null. Stores nothing (builder spec S1,
+        S2)."""
+        errors, plan = data.draft_programme(body.get("doc"), when=now())
+        return {"errors": problems_json(errors), "plan": plan}
+
     @app.get("/api/programmes/{programme_id}")
     def programme(programme_id: str, user: User, conn: Conn) -> data.ProgrammeRecord:
         found = data.load_programme(conn, user.id, programme_id)

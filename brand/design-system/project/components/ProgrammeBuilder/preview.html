@@ -1,0 +1,364 @@
+<!-- @dsCard group="Screens" height=3900 subtitle="The programme builder: a page that builds a programme or changes one in the Library. A 520u form (the programme, activities, exception weeks, values chosen at start) with the weeks beside it in a 1184u column on a laptop, the Preview under it on a phone, and the foot bar with the check, Cancel and Save" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ProgrammeBuilder — preview</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: var(--space-6); background: var(--canvas); color: var(--ink); font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
+  button, input, textarea { font: inherit; color: inherit; }
+  .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .variant { margin: 0 0 var(--space-3); color: var(--ink-secondary); max-width: 70ch; }
+  .gap { height: var(--space-8); }
+  svg.i { width: 1em; height: 1em; flex: none; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  /* A device: a 1280 × 800 laptop, scaled to the card (the script sets the scale), or a phone at
+     its real width. Each scrolls inside itself, as the window does. */
+  .dk-wrap { position: relative; width: 100%; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-lg); }
+  .dk { width: 1280px; height: 800px; overflow-y: auto; transform-origin: 0 0; background: var(--canvas); position: relative; }
+  .ph { width: min(390px, 100%); height: 800px; overflow-y: auto; overflow-x: hidden; margin: 0 auto; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--canvas); position: relative; }
+
+  /* ---- The page, at u = 1 (a 1280 × 800 screen; K55). ---- */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 52px; padding: 0 16px; border: 1px solid var(--control-border); border-radius: var(--radius-md); background: transparent; color: var(--ink); font: 600 19px / 25px var(--font-sans); cursor: pointer; white-space: nowrap; }
+  .btn svg { width: 26px; height: 26px; }
+  .btn:hover { background: var(--tile); }
+  .btn.primary { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+  .btn:disabled { opacity: 0.4; cursor: default; }
+  .ib { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 52px; height: 52px; padding: 0; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); cursor: pointer; }
+  .ib svg { width: 26px; height: 26px; }
+  .ib:hover { background: var(--tile); }
+  .chip { display: inline-block; font: 600 16px / 22px var(--font-sans); background: var(--tile); color: var(--ink-secondary); border-radius: var(--radius-sm); padding: 1px var(--space-2); white-space: nowrap; }
+
+  /* The head: Back to programmes, the line over the title, the title, the runs line. */
+  .page { padding: 28px 48px 0; display: flex; flex-direction: column; min-width: 0; }
+  .col { width: min(100%, 1184px); margin: 0 auto; }
+  .back { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-size: 19px; line-height: 26px; text-decoration: underline; text-underline-offset: 4px; }
+  .back svg { width: 26px; height: 26px; }
+  .over { margin: 4px 0 0; color: var(--ink-secondary); font: 600 16px / 22px var(--font-sans); }
+  h1 { margin: 0; font: 600 40px / 46px var(--font-serif); }
+  .runs { margin: 4px 0 0; color: var(--ink-secondary); font-size: 19px; line-height: 1.45; }
+
+  /* Fields, as TextField, TextArea, Stepper and SegmentedControl at the page's size (60u, 19u). */
+  .field { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .field > .lbl { font: 600 19px / 25px var(--font-sans); }
+  .hint { margin: 0; color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
+  .ferr { display: flex; gap: 6px; align-items: flex-start; margin: 0; color: var(--error-ink); font-size: 16px; line-height: 22px; }
+  .ferr svg { width: 16px; height: 16px; margin-top: 3px; flex: none; }
+  input.tf, textarea.ta { width: 100%; padding: 0 15px; border: 1px solid var(--control-border); border-radius: var(--radius-sm); background: var(--panel); color: var(--ink); font: 400 19px / 1.3 var(--font-sans); }
+  input.tf { height: 60px; }
+  input.tf[aria-invalid="true"] { border-color: var(--error-ink); }
+  textarea.ta { display: block; padding: 12px 15px; line-height: 1.45; resize: vertical; }
+  .stepper { display: inline-flex; align-items: stretch; height: 60px; border: 1px solid var(--control-border); border-radius: var(--radius-md); align-self: flex-start; }
+  .stepper button { display: inline-flex; align-items: center; justify-content: center; width: 56px; padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); cursor: pointer; }
+  .stepper button svg { width: 24px; height: 24px; }
+  .stepper output { display: flex; align-items: center; justify-content: center; min-width: 56px; padding: 0 4px; font: 600 19px / 25px var(--font-sans); white-space: nowrap; }
+  .seg { display: inline-flex; flex-wrap: wrap; align-self: flex-start; max-width: 100%; border: 1px solid var(--control-border); border-radius: var(--radius-md); }
+  .seg button { height: 58px; padding: 0 18px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); font: 600 19px / 25px var(--font-sans); cursor: pointer; white-space: nowrap; }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
+
+  /* The form's sections: a title on a line rule, as the Programmes page's sections (K171). */
+  .sect { display: flex; flex-direction: column; gap: 20px; padding-top: 28px; }
+  .sect + .sect { margin-top: 12px; border-top: 1px solid var(--line); }
+  .sect > h2 { margin: 0; font: 600 27px / 34px var(--font-sans); }
+  .sect > .lead { margin: -12px 0 0; color: var(--ink-secondary); font-size: 19px; line-height: 1.45; }
+
+  /* The ActivityCard card, closed and open; the ValueField card's lines. */
+  .acts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+  .ac { border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--canvas); }
+  .ac.bad { border-color: var(--error-ink); }
+  .ac.open { border: 2px solid var(--ink); }
+  .ac-head { display: flex; align-items: flex-start; gap: 8px; padding: 12px 8px 12px 12px; }
+  .ac-toggle { flex: 1 1 auto; min-width: 0; display: flex; align-items: flex-start; gap: 10px; padding: 4px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+  .ac-toggle > svg { width: 26px; height: 26px; margin-top: 1px; color: var(--ink-secondary); }
+  .ac-name { display: block; font: 600 22px / 1.3 var(--font-sans); }
+  .ac-sum { display: block; color: var(--ink-secondary); font-size: 19px; line-height: 1.45; }
+  .ac-err { margin-top: 4px; }
+  .ac-body { display: flex; flex-direction: column; gap: 22px; padding: 4px 20px 20px 54px; }
+  .vlist { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+  .vr { border-bottom: 1px solid var(--line); }
+  .vr-btn { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 10px 4px; border: 0; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+  .vr-btn > svg { width: 22px; height: 22px; color: var(--ink-secondary); }
+  .vr-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; }
+  .vr-l { flex: 0 0 132px; font: 600 19px / 25px var(--font-sans); }
+  .vr-v { flex: 1 1 180px; min-width: 0; font-size: 19px; line-height: 1.45; }
+  .more { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; padding: 0; border: 0; background: transparent; color: var(--ink); font-size: 19px; line-height: 26px; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
+  .more svg { width: 22px; height: 22px; }
+
+  /* The ExceptionWeekEditor and StartValueEditor cards, closed: rows on line rules. */
+  .rows { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+  .rows li { display: flex; align-items: flex-start; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+  .rows .txt { flex: 1 1 auto; min-width: 0; }
+  .rows .nm { display: block; font: 600 19px / 25px var(--font-sans); }
+  .rows .ln { display: block; font-size: 19px; line-height: 1.45; }
+  .rows .ln2 { display: block; color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
+
+  /* The form and the weeks, side by side in the 1184u column; the weeks stay in view. */
+  .two { display: grid; grid-template-columns: 520px minmax(0, 1fr); gap: 48px; align-items: start; margin-top: 8px; }
+  .pv { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 6px; padding-top: 28px; min-width: 0; }
+  .pv h2 { margin: 0; font: 600 27px / 34px var(--font-sans); }
+  .im { display: flex; align-items: flex-start; gap: var(--space-2); margin: 0; font-size: 16px; line-height: 22px; }
+  .im svg { width: 16px; height: 16px; margin-top: 3px; flex: none; }
+  .im.info { color: var(--ink-secondary); }
+
+  /* The weeks: the ProgrammeGrid card, undated (K173). A week over an item's limit: error-ink. */
+  .grid-wrap { position: relative; margin-top: 8px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
+  table.og { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 19px; color: var(--ink); }
+  .og th, .og td { padding: 12px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; font-weight: 400; }
+  .og thead th { border-bottom: 1px solid var(--ink); vertical-align: bottom; }
+  .og .act { position: sticky; left: 0; z-index: 2; background: var(--canvas); width: 216px; min-width: 216px; }
+  .og .wk { min-width: 108px; }
+  .og .wn { display: block; font: 600 19px / 1.35 var(--font-sans); white-space: nowrap; }
+  .og .wt { display: block; font: 600 16px / 22px var(--font-sans); white-space: nowrap; }
+  .og .an { display: block; font: 600 22px / 1.3 var(--font-sans); overflow-wrap: anywhere; }
+  .og .ad { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 4px; align-items: center; }
+  .og .ad .t { color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
+  .cv { display: flex; align-items: center; gap: 6px; font: 600 21px / 1.3 var(--font-sans); white-space: nowrap; }
+  .cv svg { width: 16px; height: 16px; }
+  .cs { display: block; color: var(--ink-secondary); font-size: 16px; line-height: 22px; white-space: nowrap; }
+  .og td[data-limit] .cv { color: var(--error-ink); }
+
+  /* The foot bar: ProgrammeGrid's "Previewing a change" bar (K148), holding the check and Save. */
+  .bar { position: sticky; bottom: 0; z-index: 6; margin-top: 40px; background: var(--panel); border-top: 1px solid var(--line); box-shadow: var(--shadow-overlay); }
+  .bar-in { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding: 14px 48px; }
+  .bar-in .im, .bar-in .go { flex: 1 1 260px; font-size: 19px; line-height: 26px; }
+  .bar-in .im svg, .bar-in .go svg { width: 20px; height: 20px; margin-top: 3px; }
+  .im.ok, .im.wait { color: var(--ink); }
+  .go { display: flex; align-items: flex-start; gap: var(--space-2); margin: 0; padding: 0; border: 0; background: transparent; color: var(--error-ink); text-align: left; cursor: pointer; }
+  .go span { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; }
+  .go:hover span { text-decoration-thickness: 2px; }
+  .go svg { flex: none; }
+  .bar-in .st { display: contents; }
+  .bar-in .btns { display: flex; gap: 12px; margin-left: auto; }
+
+  /* ---- Folded (the phone): the cards' n sizes, the grid under the form as Preview. ---- */
+  .ph .page { padding: 20px 16px 0; }
+  .ph .back { font-size: 18px; line-height: 26px; }
+  .ph .back svg { width: 22px; height: 22px; }
+  .ph h1 { font-size: 30px; line-height: 36px; }
+  .ph .runs { font-size: 18px; line-height: 26px; }
+  .ph .btn { height: 48px; font-size: 16px; line-height: 22px; }
+  .ph .btn svg { width: 22px; height: 22px; }
+  .ph .ib { width: 44px; height: 48px; }
+  .ph .ib svg { width: 24px; height: 24px; }
+  .ph .field { gap: 6px; }
+  .ph .field > .lbl { font-size: 16px; line-height: 22px; }
+  .ph input.tf { height: 48px; font-size: 18px; padding: 0 12px; }
+  .ph textarea.ta { font-size: 18px; padding: 10px 12px; }
+  .ph .stepper { height: 48px; }
+  .ph .stepper button { width: 44px; }
+  .ph .stepper output { font-size: 18px; min-width: 44px; }
+  .ph .seg button { height: 46px; padding: 0 12px; font-size: 16px; line-height: 22px; }
+  .ph .sect { gap: 16px; padding-top: 22px; }
+  .ph .sect > h2, .ph .pv h2 { font-size: 22px; line-height: 28px; }
+  .ph .sect > .lead { font-size: 18px; line-height: 26px; margin-top: -8px; }
+  .ph .ac-head { padding: 8px 4px 8px 8px; }
+  .ph .ac-name { font-size: 18px; }
+  .ph .ac-sum, .ph .rows .ln, .ph .rows .nm { font-size: 18px; line-height: 26px; }
+  .ph .ac-body { padding: 4px 12px 16px 12px; gap: 18px; }
+  .ph .vr-btn { min-height: 52px; padding: 8px 2px; }
+  .ph .vr-l { flex-basis: 100%; font-size: 16px; line-height: 22px; }
+  .ph .vr-v { flex-basis: 100%; font-size: 18px; line-height: 26px; }
+  .ph .more { font-size: 18px; }
+  .ph .two { display: block; margin-top: 0; }
+  .ph .pv { position: static; padding-top: 22px; margin-top: 12px; border-top: 1px solid var(--line); }
+  .ph table.og { font-size: 18px; }
+  .ph .og th, .ph .og td { padding: 10px 8px; }
+  .ph .og .act { width: 132px; min-width: 132px; box-shadow: 1px 0 0 var(--line); }
+  .ph .og .wk { min-width: 104px; }
+  .ph .og .wn { font-size: 16px; }
+  .ph .og .an, .ph .cv { font-size: 18px; }
+  .ph .grid-wrap { margin: 8px -16px 0; }
+  .ph .og th:first-child, .ph .og td:first-child { padding-left: 16px; }
+  .ph .bar { margin-top: 32px; }
+  .ph .bar-in { padding: 12px 16px; }
+  .ph .bar-in .im, .ph .bar-in .go { flex-basis: 100%; font-size: 16px; line-height: 22px; }
+  .ph .bar-in .im svg, .ph .bar-in .go svg { width: 16px; height: 16px; }
+  .ph .bar-in .btns { width: 100%; margin: 0; }
+  .ph .bar-in .btns .btn { flex: 1 1 0; min-width: 0; white-space: normal; }
+
+  @media (max-width: 639px) {
+    body { padding: var(--space-4); }
+  }
+</style>
+</head>
+<body>
+  <p class="variant label">A laptop, 1280 × 800: a new programme, Beginner 5×5 with one mistake. Deadlift grows 90 kg a week, so its card shows the problem, weeks 6 to 8 of its row are in error-ink (the weeks are scrolled sideways to week 5 to show them), and Save to library waits. Press the problem in the foot bar to open Deadlift. Scroll inside the screen: the weeks stay in view</p>
+  <div class="dk-wrap"><div class="dk" data-draw="limit"></div></div>
+
+  <div class="gap"></div>
+  <p class="variant label">A laptop: the name was cleared. The programme can't be expanded without one, so the weeks keep the last version with no problems, and a line over them says so</p>
+  <div class="dk-wrap"><div class="dk" data-draw="shape"></div></div>
+
+  <div class="gap"></div>
+  <p class="variant label">A laptop: Edit on Beginner 5×5 in the Library. The programme has a run, so a line under the title says the run keeps its copy. Back squat is open; the check found no problems, and Save changes is ready</p>
+  <div class="dk-wrap"><div class="dk" data-draw="edit"></div></div>
+
+  <div class="gap"></div>
+  <p class="variant label">A phone, 390 wide: the form, then the weeks under it as Preview. The foot bar's buttons share a row under its line</p>
+  <div class="ph" data-draw="phone"></div>
+
+  <div class="gap"></div>
+  <p class="variant label">A phone: a change a moment ago, so the check is on its way. Save waits for it</p>
+  <div class="ph" data-draw="checking"></div>
+
+<script>
+// The programme builder, drawn from the mockup mockups/261120-programme-builder (option A of each
+// question) and docs/specs/2026-11-20-programme-builder.md §5: Beginner 5×5 (docs/programmes.md §6).
+// The weeks are the server's plan from POST /api/programmes/draft (spec S1, S2): the app computes
+// no value.
+;(() => {
+  const P = {
+    left: '<path d="m15 18-6-6 6-6"/>',
+    right: '<path d="m9 18 6-6-6-6"/>',
+    down: '<path d="m6 9 6 6 6-6"/>',
+    minus: '<path d="M5 12h14"/>',
+    plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+    alert: '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>',
+    check: '<path d="M20 6 9 17l-5-5"/>',
+    info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+    ellipsis: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+    pencil: '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>',
+    loader: '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
+  }
+  const ic = (n) => `<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n]}</svg>`
+  let uid = 0
+  const id = (p) => `${p}${++uid}`
+
+  // ------------------------------------------------------------------------------- the data
+  const SETS = (n) => Array.from({ length: 8 }, (_, i) => ([3, 7].includes(i) ? '3 × 5' : n))
+  const ACTS = [
+    { key: 'squat', name: 'Back squat', chip: '5 × 5', sum: '5 × 5 · 40 kg, +5% a week, chosen at start', w: [40, 42.5, 45, 42.5, 47.5, 50, 52.5, 50], u: 'kg', s: SETS('5 × 5') },
+    { key: 'bench', name: 'Bench press', chip: '5 × 5', sum: '5 × 5 · 30 kg, +2.5 kg a week', w: [30, 32.5, 35, 35, 40, 42.5, 45, 42.5], u: 'kg', s: SETS('5 × 5') },
+    { key: 'row', name: 'Barbell row', chip: '5 × 5', sum: '5 × 5 · 30 kg, +2.5 kg a week', w: [30, 32.5, 35, 35, 40, 42.5, 45, 42.5], u: 'kg', s: SETS('5 × 5') },
+    { key: 'deadlift', name: 'Deadlift', chip: '1 × 5', sum: '1 × 5 · 60 kg, +5 kg a week', w: [60, 65, 70, 67.5, 80, 85, 90, 85], u: 'kg', s: Array(8).fill('1 × 5') },
+    { key: 'plank', name: 'Plank', chip: '3 sets', sum: '3 × 30 s · +5 s every 2 weeks, up to 90 s', w: [30, 30, 35, 35, 40, 40, 45, 45], u: 's', s: Array(8).fill('3 sets') },
+  ]
+  // The mistake: Deadlift at 70 kg, +90 kg a week. Weeks 6 to 8 pass the 500 kg an item can hold.
+  const LIMIT = 'Week 6 comes to 520 kg. The most is 500.'
+  const OVER = ACTS.map((a) => (a.key !== 'deadlift' ? a : { ...a, sum: '1 × 5 · 70 kg, +90 kg a week', w: [70, 160, 250, 305, 430, 520, 610, 630], over: [6, 7, 8], error: LIMIT }))
+  const LABELS = { 4: 'Deload', 8: 'Deload' }
+
+  // ------------------------------------------------------------------------- the controls
+  const field = (label, control, after = '') => { const f = id('f'); return `<div class="field"><label class="lbl" for="${f}">${label}</label>${control.replaceAll('%ID%', f)}${after.replaceAll('%ID%', f)}</div>` }
+  const stepper = (label, value, lower, raise, tid) => { const h = id('s'); return `<div class="field"><span class="lbl" id="${h}">${label}</span><div class="stepper" role="group" aria-labelledby="${h}" data-testid="${tid}"><button type="button" aria-label="${lower}">${ic('minus')}</button><output aria-live="polite">${value}</output><button type="button" aria-label="${raise}">${ic('plus')}</button></div></div>` }
+  const seg = (label, opts, on, tid) => { const h = id('g'); return `<div class="field"><span class="lbl" id="${h}">${label}</span><div class="seg" role="group" aria-labelledby="${h}" data-testid="${tid}">${opts.map((o) => `<button type="button" aria-pressed="${o === on}">${o}</button>`).join('')}</div></div>` }
+  const btn = (icon, words, cls = '', extra = '') => `<button type="button" class="btn${cls ? ' ' + cls : ''}"${extra}>${icon ? ic(icon) : ''}${words}</button>`
+
+  // -------------------------------------------------------------------------------- the grid
+  function grid(acts, label, from) {
+    const W = Array.from({ length: 8 }, (_, i) => i + 1)
+    const head = `<tr><th class="act" scope="col"><span class="vh">Activity</span></th>${W.map((n) => `<th class="wk" scope="col" data-week="${n}"><span class="wn">Week ${n}</span><span class="wt">${LABELS[n] || '&nbsp;'}</span></th>`).join('')}</tr>`
+    const cell = (a, i) => {
+      const n = i + 1, bad = a.over && a.over.includes(n)
+      const v = bad ? `${ic('alert')}${a.w[i]} ${a.u}<span class="vh">, over the limit</span>` : `${a.w[i]} ${a.u}`
+      return `<td class="wk" data-activity="${a.key}" data-week="${n}" data-cell="planned"${bad ? ' data-limit="activities[3].weight"' : ''}><span class="cv">${v}</span><span class="cs">${a.s[i]}</span></td>`
+    }
+    const rows = acts.map((a) => `<tr data-activity="${a.key}"><th class="act" scope="row"><span class="an">${a.name}</span><span class="ad"><span class="chip">${a.chip}</span><span class="t">3 a week</span></span></th>${W.map((_, i) => cell(a, i)).join('')}</tr>`).join('')
+    return `<div class="grid-wrap" tabindex="0" role="region" aria-label="${label}" data-testid="programme-grid"${from ? ` data-from-week="${from}"` : ''}><table class="og"><thead>${head}</thead><tbody>${rows}</tbody></table></div>`
+  }
+
+  // --------------------------------------------------------------------- the form's sections
+  function basics(o) {
+    const n = id('n')
+    const name = o.noName
+      ? `<input class="tf" id="${n}" value="" aria-invalid="true" aria-describedby="${n}-e" data-testid="builder-name"><p class="ferr" id="${n}-e">${ic('alert')}<span>Give a name of 1 to 60 characters.</span></p>`
+      : `<input class="tf" id="${n}" value="Beginner 5×5" data-testid="builder-name">`
+    return `<section class="sect" aria-labelledby="${n}-h" data-testid="builder-programme"><h2 id="${n}-h">The programme</h2>
+      <div class="field"><label class="lbl" for="${n}">Name</label>${name}</div>
+      ${field('Description', '<textarea class="ta" id="%ID%" rows="3" aria-describedby="%ID%-h" data-testid="builder-description">Three full-body sessions a week, adding weight each week, with a deload in weeks 4 and 8.</textarea>', '<p class="hint" id="%ID%-h">Markdown. Anyone who copies the programme sees it.</p>')}
+      ${seg('Kind', ['Strength', 'Mobility', 'Cardio'], 'Strength', 'builder-kind')}
+      ${stepper('Weeks', '8', 'Fewer weeks', 'More weeks', 'builder-weeks')}
+    </section>`
+  }
+  const card = (a, body) => {
+    const c = id('ac')
+    const e = a.error && !body ? `<span class="ferr ac-err" id="${c}-e">${ic('alert')}<span>${a.error}</span></span>` : ''
+    const cls = ['ac', body ? 'open' : '', a.error && !body ? 'bad' : ''].filter(Boolean).join(' ')
+    return `<li class="${cls}" data-testid="activity-card" data-activity="${a.key}"${body ? ' data-scroll-to' : ''}><div class="ac-head"><button type="button" class="ac-toggle" aria-expanded="${!!body}"${e ? ` aria-describedby="${c}-e"` : ''}>${ic(body ? 'down' : 'right')}<span><span class="ac-name">${a.name}</span><span class="ac-sum">${a.sum}</span>${e}</span></button><button type="button" class="ib" aria-label="More for ${a.name}" aria-haspopup="menu" data-testid="activity-menu">${ic('ellipsis')}</button></div>${body ? `<div class="ac-body" role="group" aria-label="${a.name}">${body}</div>` : ''}</li>`
+  }
+  const vline = (label, value) => `<li class="vr"><button type="button" class="vr-btn" aria-expanded="false"><span class="vr-txt"><span class="vr-l">${label}</span><span class="vr-v">${value}</span></span>${ic('right')}</button></li>`
+  const squatBody = `${field('Name', '<input class="tf" id="%ID%" value="Back squat">')}
+    ${seg('Measure', ['Reps', 'Time', 'Neither'], 'Reps', 'activity-measure')}
+    ${seg('Sides', ['Per set', 'Each side'], 'Per set', 'activity-sides')}
+    <ul class="vlist" aria-label="Back squat’s values">${vline('Times a week', '3')}${vline('Sets', '5')}${vline('Reps', '5')}${vline('Weight', '40 kg chosen at start, +5% a week chosen at start')}</ul>
+    <button type="button" class="more" aria-expanded="false">${ic('right')}More: key, notes, link</button>`
+  function activities(acts, o) {
+    const h = id('a')
+    return `<section class="sect" aria-labelledby="${h}" data-testid="builder-activities"${o.scrollActs ? ' data-scroll-to' : ''}><h2 id="${h}">Activities</h2><p class="lead">Five of at most 30. Press one to change it.</p>
+      <ul class="acts" aria-labelledby="${h}">${acts.map((a) => card(a, o.open === a.key ? squatBody : '')).join('')}</ul>
+      <div>${btn('plus', 'Add activity', '', ' data-testid="activity-add"')}</div></section>`
+  }
+  const exceptions = () => { const h = id('x'); return `<section class="sect" aria-labelledby="${h}" data-testid="builder-exceptions"><h2 id="${h}">Exception weeks</h2><p class="lead">A week whose values differ, such as a deload or a rest. After a deload the plan carries on as planned. After a rest, an activity picks up where it stopped.</p>
+    <ul class="rows" aria-labelledby="${h}"><li><span class="txt"><span class="nm">Weeks 4 and 8 · Deload</span><span class="ln">Every activity: 3 sets, 90% of the weight.</span><span class="ln">Deadlift: 1 set.</span></span><button type="button" class="ib" aria-label="Change weeks 4 and 8">${ic('pencil')}</button></li></ul>
+    <div>${btn('plus', 'Add exception week')}</div></section>` }
+  const params = () => { const h = id('p'); return `<section class="sect" aria-labelledby="${h}" data-testid="builder-params"><h2 id="${h}">Values chosen at start</h2><p class="lead">Each one is asked for when the programme starts, with its default filled in.</p>
+    <ul class="rows" aria-labelledby="${h}"><li><span class="txt"><span class="nm">Squat start</span><span class="ln">40 kg by default</span><span class="ln2">Used by Back squat’s weight</span></span><button type="button" class="ib" aria-label="Change Squat start">${ic('pencil')}</button></li><li><span class="txt"><span class="nm">Weekly increase</span><span class="ln">5% by default</span><span class="ln2">Used by Back squat’s weight</span></span><button type="button" class="ib" aria-label="Change Weekly increase">${ic('pencil')}</button></li></ul>
+    <div>${btn('plus', 'Add a value')}</div></section>` }
+
+  // ------------------------------------------------------------------------ the foot bar
+  function bar(o) {
+    const save = o.edit ? 'Save changes' : 'Save to library'
+    const wait = o.problem || o.checking
+    const line = o.problem
+      ? `<button type="button" class="go" data-testid="builder-check">${ic('alert')}<span>${o.problem}</span></button>`
+      : o.checking
+        ? `<p class="im wait" data-testid="builder-check">${ic('loader')}<span>Checking…</span></p>`
+        : `<p class="im ok" data-testid="builder-check">${ic('check')}<span>Checked. No problems.</span></p>`
+    return `<div class="bar" role="region" aria-label="Check and save" data-testid="builder-bar"><div class="bar-in"><div class="st" role="status">${line}</div><div class="btns">${btn('', 'Cancel', '', ' data-testid="builder-cancel"')}${btn('', save, 'primary', ` data-testid="builder-save"${wait ? ' disabled' : ''}`)}</div></div></div>`
+  }
+
+  // ------------------------------------------------------------------------------ the page
+  function page(o) {
+    const phone = !!o.phone
+    const t = id('t')
+    const headTxt = o.edit
+      ? `<p class="over">Edit programme</p><h1 id="${t}">Beginner 5×5</h1><p class="runs" data-testid="builder-runs">Runs already started keep their own copy.</p>`
+      : `<p class="over">Programmes</p><h1 id="${t}">New programme</h1>`
+    const kept = o.kept ? `<p class="im info" data-testid="builder-kept">${ic('info')}<span>The weeks show the last version with no problems.</span></p>` : ''
+    const pvHint = phone ? 'Weeks by number, at the default values. Swipe for later weeks.' : 'Weeks by number, at the default values. It updates a moment after each change.'
+    const pv = `<aside class="pv" aria-labelledby="${t}-pv"${o.scrollPv ? ' data-scroll-to' : ''}><h2 id="${t}-pv">${phone ? 'Preview' : 'The weeks'}</h2><p class="hint">${pvHint}</p>${kept}${grid(o.acts, 'The weeks, at the default values', o.fromWeek)}</aside>`
+    const form = `<div class="form">${basics(o)}${activities(o.acts, o)}${exceptions()}${params()}</div>`
+    return `<main class="page" aria-labelledby="${t}" data-testid="programme-builder"><div class="col"><a class="back" href="#" data-testid="builder-back">${ic('left')}<span>Back to programmes</span></a>${headTxt}<div class="two">${form}${pv}</div></div></main>${bar(o)}`
+  }
+
+  const DRAW = {
+    limit: () => page({ acts: OVER, scrollActs: true, fromWeek: 5, problem: 'One problem, in Deadlift. Fix it to save.' }),
+    shape: () => page({ acts: ACTS, noName: true, kept: true, problem: 'One problem, in the programme’s name. Fix it to save.' }),
+    edit: () => page({ acts: ACTS, edit: true, open: 'squat' }),
+    phone: () => page({ acts: ACTS, phone: true, scrollPv: true }),
+    checking: () => page({ acts: ACTS, phone: true, edit: true, checking: true }),
+  }
+  for (const host of document.querySelectorAll('[data-draw]')) host.innerHTML = DRAW[host.dataset.draw]()
+  for (const a of document.querySelectorAll('a[href="#"]')) a.addEventListener('click', (e) => e.preventDefault())
+
+  // A laptop keeps its 1280 × 800 layout and is scaled to the card's width.
+  const fit = () => {
+    for (const wrap of document.querySelectorAll('.dk-wrap')) {
+      const s = Math.min(1, wrap.clientWidth / 1280)
+      wrap.firstElementChild.style.transform = `scale(${s})`
+      wrap.style.height = `${800 * s}px`
+    }
+  }
+  // Each screen opens scrolled to what it shows.
+  const place = () => {
+    for (const st of document.querySelectorAll('.dk, .ph')) {
+      const to = st.querySelector('[data-scroll-to]')
+      st.scrollTop = 0
+      if (to) st.scrollTop = (to.getBoundingClientRect().top - st.getBoundingClientRect().top) / (st.getBoundingClientRect().height / st.offsetHeight) - 16
+    }
+    // The first stage shows the weeks over the limit: its grid is scrolled sideways to week 5.
+    for (const wrap of document.querySelectorAll('.grid-wrap[data-from-week]')) {
+      const wk = wrap.querySelector(`thead th[data-week="${wrap.dataset.fromWeek}"]`)
+      wrap.scrollLeft = wk.offsetLeft - wrap.querySelector('thead .act').offsetWidth
+    }
+  }
+  fit()
+  place()
+  if (document.fonts) document.fonts.ready.then(() => { fit(); place() })
+  new ResizeObserver(fit).observe(document.body)
+})()
+</script>
+</body>
+</html>

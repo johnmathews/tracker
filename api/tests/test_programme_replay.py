@@ -37,6 +37,8 @@ from tracker_api.programme_replay import (
     week_items,
 )
 
+from .test_programme import REST_CASES, STRAIGHT, rest, rest_doc
+
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "programmes"
 MOCKUP: dict[str, Any] = json.loads((FIXTURES / "replays" / "mockup.json").read_text("utf-8"))
 TODAY = date.fromisoformat(MOCKUP["today"])  # Wed 16 Dec 2026, programme week 4
@@ -1730,3 +1732,203 @@ def test_a_reopen_with_no_end_before_it_does_nothing() -> None:
     run = plain_run()
     rp = replay(run, [change(1, d("2026-12-09"), REOPEN)])
     assert days_json(rp) == days_json(replay(run, []))
+
+
+# ---- K192: a rest stops the progression ----
+
+
+def rest_run(*overrides: dict[str, Any], **squat: Any) -> Run:
+    """John's example as a run from Mon 23 Nov: the back squat from 40 kg, 2.5 kg a week."""
+    return start_run(parse_programme(rest_doc(*overrides, **squat)), {}, START)
+
+
+def activity_weeks(rp: Replay, key: str) -> list[int | None]:
+    return [w.days[6].activities[key].activity_week for w in rp.weeks]
+
+
+#: Week 4 of a rest run made a rest by hand: Edit one week, Times a week 0.
+EDIT_REST = {"type": "edit-week", "activity": "squat", "week": 4, "field": "target", "value": 0}
+#: Wed 2 Dec, in programme week 2 of a rest run.
+WED_WEEK_2 = d("2026-12-02")
+
+
+@pytest.mark.parametrize(
+    ("overrides", "squat", "weights", "weeks"),
+    [case[1:] for case in REST_CASES],
+    ids=[case[0] for case in REST_CASES],
+)
+def test_a_run_rests_as_its_document_does(
+    overrides: list[dict[str, Any]], squat: dict[str, Any], weights: list[Any], weeks: list[int]
+) -> None:
+    """The replay gives each week the value the document's expansion does, and a planned rest
+    is no reason to end short."""
+    rp = replay(rest_run(*overrides, **squat), [])
+    assert sunday_weights(rp, "squat") == weights
+    assert activity_weeks(rp, "squat") == weeks
+    assert rp.ends_short == ()
+
+
+def test_johns_rest_week_runs_with_no_sessions_at_the_value_it_comes_back_at() -> None:
+    """K170, K192: the week runs, its goal is 0, and its plan shows 45 kg, week 3's."""
+    rp = replay(rest_run(rest(4)), [])
+    week = rp.week(d("2026-12-14"))
+    squat = week.days[0].activities["squat"]
+    assert (squat.state, squat.activity_week) == ("running", 3)
+    assert squat.values == {"target": 0, "sets": 5, "reps": 5, "weight": 45}
+    items = week_items(rp, week, {"squat": "s", "bench": "b"})
+    assert [(i["id"], i["target"], i["weight"]) for i in items] == [("s", 0, 45), ("b", 3, 37.5)]
+
+
+def test_edit_one_week_to_no_sessions_is_a_rest_and_its_undo_brings_the_weeks_back() -> None:
+    run = rest_run()
+    preview = preview_change(
+        run, [], EDIT_REST, from_date=WED_WEEK_2, today=WED_WEEK_2, made_at=datetime(2026, 12, 2)
+    )
+    assert sunday_weights(preview.after, "squat") == [40, 42.5, 45, 45, 45, 47.5, 50]
+    assert activity_weeks(preview.after, "squat") == [1, 2, 3, 3, 3, 4, 5]
+    assert preview.ends_short == ()
+    cells = {(c.programme_week, c.field): (c.before, c.after) for c in preview.cells}
+    assert cells == {
+        (4, "target"): (3, 0),
+        (4, "weight"): (47.5, 45),
+        (5, "weight"): (50, 45),
+        (6, "weight"): (52.5, 47.5),
+        (7, "weight"): (55, 50),
+    }
+    log = [preview.change]
+    assert sunday_weights(replay(run, log), "squat") == [40, 42.5, 45, 45, 45, 47.5, 50]
+    undo = change(2, WED_WEEK_2, {"type": "undo", "change": 1})
+    assert sunday_weights(replay(run, [*log, undo]), "squat") == STRAIGHT
+
+
+def test_a_hand_edit_that_gives_a_rest_week_sessions_lifts_the_rest() -> None:
+    rp = replay(rest_run(rest(4)), [change(1, WED_WEEK_2, EDIT_REST | {"value": 2})])
+    assert sunday_weights(rp, "squat") == STRAIGHT
+
+
+def test_a_rest_never_changes_a_sealed_day() -> None:
+    """P1: Sun 6 Dec is sealed, with a label the engine wouldn't give it. A rest edited into week
+    3 holds week 2's setting and moves the weeks after it; the sealed day stays as recorded."""
+    run = rest_run()
+    sunday = d("2026-12-06")
+    record = day_from_json(day_to_json(replay(run, []).day(sunday)) | {"label": "Recorded"})
+    monday = d("2026-12-07")
+    preview = preview_change(
+        run,
+        [],
+        EDIT_REST | {"week": 3},
+        from_date=monday,
+        today=monday,
+        made_at=datetime(2026, 12, 7),
+        sealed={sunday: record},
+    )
+    assert all(c.starts >= monday for c in preview.cells)
+    assert preview.after.day(sunday) == replace(record, sealed=True)
+    assert sunday_weights(preview.after, "squat") == [40, 42.5, 42.5, 42.5, 45, 47.5, 50]
+
+
+def test_a_new_value_in_a_rest_week_is_the_one_it_comes_back_at() -> None:
+    body = {"type": "set-value", "activity": "squat", "field": "weight", "value": 50}
+    rp = replay(rest_run(rest(4)), [change(1, d("2026-12-16"), body)])
+    assert sunday_weights(rp, "squat")[3:] == [50, 50, 52.5, 55]
+
+
+def test_a_pause_after_a_rest_comes_back_at_the_rests_setting() -> None:
+    """The rest holds 45 kg, the pause keeps holding it, and the squat picks up at 45 kg. Only
+    the pause's week is short at the end."""
+    pause = {"type": "pause-activity", "activity": "squat", "weeks": 1}
+    rp = replay(rest_run(rest(4)), [change(1, d("2026-12-21"), pause)])
+    assert sunday_weights(rp, "squat") == [40, 42.5, 45, 45, "paused", 45, 47.5]
+    paused = rp.day(d("2026-12-21")).activities["squat"]
+    assert (paused.activity_week, paused.values) == (
+        3,
+        {"target": 3, "sets": 5, "reps": 5, "weight": 45},
+    )
+    assert [(e.key, e.week, e.of) for e in rp.ends_short] == [("squat", 6, 7)]
+
+
+def test_a_rest_during_a_pause_changes_nothing() -> None:
+    """A paused activity's week already stands still: it comes back where the pause would."""
+    pause = {"type": "pause-activity", "activity": "squat", "weeks": 3}
+    log = [change(1, d("2026-12-07"), pause)]
+    rp = replay(rest_run(rest(4)), log)
+    assert sunday_weights(rp, "squat") == [40, 42.5, "paused", "paused", "paused", 45, 47.5]
+    assert sunday_weights(rp, "squat") == sunday_weights(replay(rest_run(), log), "squat")
+    assert [(e.key, e.week) for e in rp.ends_short] == [("squat", 4)]
+
+
+def test_a_rest_after_a_pause_holds_the_week_the_pause_comes_back_at() -> None:
+    """Paused in weeks 2 and 3, the squat would come back at 42.5 kg. Week 4's rest holds that,
+    and week 5 picks up at it."""
+    pause = {"type": "pause-activity", "activity": "squat", "weeks": 2}
+    rp = replay(rest_run(rest(4)), [change(1, d("2026-11-30"), pause)])
+    assert sunday_weights(rp, "squat") == [40, "paused", "paused", 42.5, 42.5, 45, 47.5]
+    assert [(e.key, e.week) for e in rp.ends_short] == [("squat", 5)]
+
+
+def test_a_programme_paused_in_a_rest_week_shows_the_setting_it_comes_back_at() -> None:
+    log = [change(1, d("2026-12-16"), {"type": "pause-programme", "weeks": 1})]
+    rp = replay(rest_run(rest(4)), log)
+    day = rp.day(d("2026-12-20"))
+    squat = day.activities["squat"]
+    assert (day.status, day.programme_week, squat.activity_week) == ("paused", 4, 3)
+    assert squat.values is not None and squat.values["weight"] == 45
+    assert [w.days[6].programme_week for w in rp.weeks] == [1, 2, 3, 4, 4, 5, 6, 7]
+    assert sunday_weights(rp, "squat") == [40, 42.5, 45, "paused", 45, 45, 47.5, 50]
+
+
+def test_go_to_week_from_a_rest_lands_where_the_planned_grid_says() -> None:
+    """Go to week puts each running activity at the week the plan, rests included, has in the
+    programme week it goes to. From rest week 4, holding 45 kg, week 6 is the grid's 47.5 kg."""
+    log = [change(1, d("2026-12-16"), {"type": "go-to-week", "week": 6})]
+    rp = replay(rest_run(rest(4)), log)
+    squat = rp.day(d("2026-12-16")).activities["squat"]
+    assert (squat.activity_week, squat.values and squat.values["weight"]) == (4, 47.5)
+    assert sunday_weights(rp, "squat") == [40, 42.5, 45, 47.5, 50]
+    assert rp.ends_short == ()
+
+
+def test_go_to_a_rest_week_holds_the_week_the_plan_holds() -> None:
+    """From week 2 to week 4, the rest: it holds 45 kg, and week 5 repeats it."""
+    log = [change(1, WED_WEEK_2, {"type": "go-to-week", "week": 4})]
+    rp = replay(rest_run(rest(4)), log)
+    rested = rp.day(WED_WEEK_2).activities["squat"]
+    assert (rested.activity_week, rested.values) == (
+        3,
+        {"target": 0, "sets": 5, "reps": 5, "weight": 45},
+    )
+    assert sunday_weights(rp, "squat") == [40, 45, 45, 47.5, 50]
+    assert activity_weeks(rp, "squat") == [1, 3, 3, 4, 5]
+    assert rp.ends_short == ()
+
+
+def test_go_back_past_a_rest_repeats_the_planned_weeks_and_the_rest() -> None:
+    """From week 6 back to week 2: week 2's 42.5 kg, then the plan again, rest and all."""
+    log = [change(1, d("2026-12-28"), {"type": "go-to-week", "week": 2})]
+    rp = replay(rest_run(rest(4)), log)
+    assert sunday_weights(rp, "squat") == [
+        40, 42.5, 45, 45, 45, 42.5, 45, 45, 45, 47.5, 50
+    ]  # fmt: skip
+    assert rp.ends_short == ()
+
+
+def test_a_change_past_the_limit_names_the_week_a_rest_moves_it_to() -> None:
+    """From 400 kg at 25 kg a week, 30 kg a week from week 2 reaches 515 kg at activity week 5,
+    which the rest in week 4 moves to programme week 7."""
+    run = rest_run(rest(4), weight={"start": 400, "add": 25})
+    body = {"type": "set-increase", "activity": "squat", "field": "weight", "add": 30}
+    errors = check_change(run, [], body, from_date=WED_WEEK_2, today=WED_WEEK_2)
+    assert [str(e) for e in errors] == ["add: week 7 comes to 515 kg. The most is 500."]
+
+
+def test_go_to_week_follows_a_hand_edited_rest_and_leaves_an_ended_activity_alone() -> None:
+    """Week 4 made a rest by Edit one week is part of the plan Go to week follows. The bench,
+    ended before, stays ended."""
+    log = [
+        change(1, WED_WEEK_2, EDIT_REST),
+        change(2, WED_WEEK_2, {"type": "end-activity", "activity": "bench"}),
+        change(3, d("2026-12-16"), {"type": "go-to-week", "week": 6}),
+    ]
+    rp = replay(rest_run(), log)
+    assert sunday_weights(rp, "squat") == [40, 42.5, 45, 47.5, 50]
+    assert rp.day(d("2026-12-16")).activities["bench"].state == "ended"

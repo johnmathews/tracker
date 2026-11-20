@@ -5,6 +5,7 @@ import { weekName, type GridWeek } from '@/lib/programmes'
 import ExampleGroup from '../parts/ExampleGroup.vue'
 import StateExample from '../parts/StateExample.vue'
 import { OPEN_PAUSE_GRID, PART_PAUSE_GRID, REST_GRID, ROW_AT_45, RUN } from './programmeExamples'
+import { LIMIT_GRID } from './builderExamples'
 
 const names = Object.fromEntries(RUN.grid.activities.map((a) => [a.key, a.name]))
 /** An activity's name links to its item page, whose Programme row is the ProgrammeChart. */
@@ -17,7 +18,7 @@ function chose(what: string, key: string, week: GridWeek): void {
 }
 </script>
 
-<!-- The card's five tables (components/ProgrammeGrid/preview.html), drawn by the app's own
+<!-- The card's six tables (components/ProgrammeGrid/preview.html), drawn by the app's own
      ProgrammeGrid from browser-built example data (programmeExamples.ts): Beginner 5×5, today Wed
      16 Dec in week 4. Each grid's region has its own name, so the page's landmarks stay unique.
      The overview round it (its line, Tabs, Changes and controls) and the preview's bar at the foot
@@ -116,6 +117,23 @@ function chose(what: string, key: string, week: GridWeek): void {
           :changes="ROW_AT_45.cells"
           label="The plan with the change, week by week"
           :item-href="itemHref"
+        />
+      </StateExample>
+    </ExampleGroup>
+
+    <ExampleGroup title="Undated, in the programme builder">
+      <StateExample
+        state="Weeks by number, every week a later week, no buttons. Deadlift grows 90 kg a week, so weeks 6 to 8 pass the 500 kg an item can hold: each of those values is in error-ink with circle-alert, and the builder says why under Deadlift’s field."
+        class="w-full"
+      >
+        <ProgrammeGrid
+          id="sg-programme-grid-builder-limit"
+          class="w-full"
+          :grid="LIMIT_GRID"
+          kind="strength"
+          mode="start"
+          undated
+          label="The weeks, at the default values"
         />
       </StateExample>
     </ExampleGroup>

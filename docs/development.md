@@ -136,7 +136,7 @@ icon and favicon with `python3 scripts/app_icon.py` and commit what it writes in
   rule with a reason: the hidden username field password managers use (`PasswordForm.vue`) and the
   Stepper's live-region `<output>`.
 - **Single-word names** are kept where the design system or shadcn-vue gives them: Banner, Button,
-  Chip, Dialog, Popover, Stepper and Switch in `src/components/ui/` each open with a comment that
+  Checkbox, Chip, Dialog, Popover, Stepper and Switch in `src/components/ui/` each open with a comment that
   disables `vue/multi-word-component-names` and says whose name it is.
 - **No `<style>` blocks** in components (`vue/no-restricted-block`): styling is utilities on roles.
 
@@ -368,7 +368,7 @@ listed in [api.md](api.md) §10):
   that is a link (its cell's widget, Enter its own in one press, Space doing nothing, F2 into the
   cell's other controls and Escape back to the link).
 - `src/components/ui/__tests__/`: one spec per primitive (AnswerProgress, BarAction, Banner,
-  BrandMark, Button, ChangeSheet, Chip, ConfirmDialog, DayMark, Dialog, HistoryList, IconButton,
+  BrandMark, Button, ChangeSheet, Checkbox, Chip, ConfirmDialog, DayMark, Dialog, HistoryList, IconButton,
   InlineMessage, Menu, Popover, ProgrammeChart, ProgrammeGrid, QuotaChip, RadioCard, SectionHeader, SegmentedControl, SidePanel, Stepper, Switch,
   Tabs, TextArea, TextField, TextLink, Transcript, WorkChart), each checking its
   roles, accessible names, sizes, states and the role colours its card names. Examples: an
@@ -405,6 +405,22 @@ listed in [api.md](api.md) §10):
   link, locked days, a paused activity's sentence, no Add in Edit plan) and an activity's
   Programme row (the step chart, its work chart and its controls), all against `programmesApi.ts`,
   a helper.
+- `src/lib/__tests__/programmeDraft.spec.ts`: the builder's draft model (spec
+  2026-11-20-programme-builder §6): every valid fixture loads and saves back equal, keys in order;
+  writing a field by path; a value's shape and switching it; Measure; keys from names, a loaded
+  key kept, and an edited key followed into exception weeks and `"$key"` references (K185); a kind
+  change's dropped fields; removals and the refused start value; problems by path; the rule line;
+  exception weeks.
+- `src/components/__tests__/ProgrammeBuilder.spec.ts`, `ActivityCard.spec.ts`, `ValueField.spec.ts`,
+  `ExceptionWeekEditor.spec.ts`, `StartValueEditor.spec.ts` and `ProgrammeBuilderRoute.spec.ts`: the
+  builder (K183 to K192) against a fake store: building the beginner 5×5 from empty and saving it
+  with no `dailyTarget`, no Exercises a day field for any kind, the check a moment after the last
+  change, problems beside their fields and on closed cards, a `dailyTarget` problem at the top of
+  The programme, no problems on an untouched new programme, a Library programme saved back
+  unchanged, a loaded `dailyTarget` kept in its place, the conflict
+  Dialog closed by Escape keeping the draft, the deload and the start values, leaving, and the two addresses.
+- `src/styleguide/__tests__/builderSections.spec.ts`: the builder's style guide sections draw each
+  state their cards show.
 - `src/styleguide/__tests__/look.spec.ts`: the style guide's theme from the query string, the
   round trip back to it, and the class it sets.
 - `src/styleguide/__tests__/complete.spec.ts`: a style guide section for every folder in

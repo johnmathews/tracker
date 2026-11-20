@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, useTemplateRef, watch } from 'vue'
-import { Pencil } from '@lucide/vue'
+import { CircleAlert, Pencil } from '@lucide/vue'
 import { Chip } from '@/components/ui/chip'
 import { Menu, MenuItem } from '@/components/ui/menu'
 import {
@@ -151,6 +151,12 @@ type View = {
   split: boolean
   hand: string | null
   tap: boolean
+  /** Undated, in the builder: the path of the problem a week over an item's limit names. */
+  limit: string | null
+  /** The leading line is over the limit: its value in error-ink after circle-alert. */
+  overMain: boolean
+  /** The line under it that is over the limit ("5 × 5" for sets or reps), or null. */
+  overLine: string | null
 }
 
 /** A rest week's leading line (K170): a planned break, never "Paused", "0 of 0" or "0 a week". */
@@ -178,6 +184,9 @@ function view(column: Column, key: string): View {
     split: false,
     hand: null,
     tap: false,
+    limit: null,
+    overMain: false,
+    overLine: null,
   }
   if (!cell || !cell.values || cell.state === 'ended' || cell.state === 'not-started') return blank
   const values = cell.values
@@ -241,6 +250,7 @@ function view(column: Column, key: string): View {
     const text = changeWords(change)
     return { ...out, state: 'changed', main: text.now, was: text.was, lines, until, hand }
   }
+  const over = overLimit(cell.limits, lead, sets)
   const tap =
     props.mode === 'running' &&
     !props.readonly &&
@@ -258,6 +268,28 @@ function view(column: Column, key: string): View {
     split: !!split,
     hand,
     tap,
+    ...over,
+  }
+}
+
+/**
+ * Where a week over an item's limit shows (the ProgrammeGrid card, undated only): the leading line
+ * for its own field, a goal-only activity's goal or a field with no line; the sets line for sets
+ * or reps, and a cardio session's distance under its time.
+ */
+function overLimit(
+  limits: Record<string, string> | undefined,
+  lead: string | null,
+  sets: string | null,
+): Pick<View, 'limit' | 'overMain' | 'overLine'> {
+  const fields = props.undated ? Object.keys(limits ?? {}) : []
+  if (!fields.length) return { limit: null, overMain: false, overLine: null }
+  const ownLine = (f: string) =>
+    sets !== null && f !== lead && (props.kind === 'cardio' ? f === 'distance' : f !== 'target')
+  return {
+    limit: limits![fields[0]!]!,
+    overMain: fields.some((f) => !ownLine(f)),
+    overLine: fields.some(ownLine) ? sets : null,
   }
 }
 
@@ -415,6 +447,7 @@ function cellClass(column: Column, last: boolean): string[] {
             :data-rest="v.rest ? '' : undefined"
             :data-split="v.split ? '' : undefined"
             :data-hand-edit="v.hand ?? undefined"
+            :data-limit="v.limit ?? undefined"
             :data-when-resumed="column.week ? undefined : ''"
           >
             <Menu v-if="v.tap" align="start">
@@ -460,14 +493,24 @@ function cellClass(column: Column, last: boolean): string[] {
                 data-slot="cell-main"
               >
                 <span v-if="v.was" class="font-normal text-ink-secondary">{{ v.was }}</span>
+                <CircleAlert
+                  v-if="v.overMain"
+                  :size="16"
+                  :stroke-width="1.5"
+                  class="shrink-0 text-error-ink"
+                  aria-hidden="true"
+                  data-slot="limit-mark"
+                />
                 <span
-                  :class="
+                  :class="[
                     v.state === 'done' &&
-                    (v.met
-                      ? 'text-ink underline decoration-pen decoration-2 underline-offset-[0.22em]'
-                      : 'font-normal text-ink-secondary')
-                  "
+                      (v.met
+                        ? 'text-ink underline decoration-pen decoration-2 underline-offset-[0.22em]'
+                        : 'font-normal text-ink-secondary'),
+                    v.overMain && 'text-error-ink',
+                  ]"
                   >{{ v.main }}</span
+                ><span v-if="v.overMain" class="sr-only">, over the limit</span
                 ><Pencil
                   v-if="v.hand"
                   :size="16"
@@ -477,12 +520,25 @@ function cellClass(column: Column, last: boolean): string[] {
                   data-slot="hand-edit"
                 /><span v-if="v.hidden" class="sr-only">{{ v.hidden }}</span>
               </span>
-              <span
-                v-for="line in v.lines"
-                :key="line"
-                class="block text-(length:--set-caption) leading-[1.35] whitespace-nowrap text-ink-secondary"
-                >{{ line }}</span
-              >
+              <template v-for="line in v.lines" :key="line">
+                <span
+                  v-if="line === v.overLine"
+                  class="flex items-center gap-1.5 text-(length:--set-caption) leading-[1.35] whitespace-nowrap text-error-ink"
+                  data-slot="limit-line"
+                  ><CircleAlert
+                    :size="16"
+                    :stroke-width="1.5"
+                    class="shrink-0"
+                    aria-hidden="true"
+                    data-slot="limit-mark"
+                  />{{ line }}<span class="sr-only">, over the limit</span></span
+                >
+                <span
+                  v-else
+                  class="block text-(length:--set-caption) leading-[1.35] whitespace-nowrap text-ink-secondary"
+                  >{{ line }}</span
+                >
+              </template>
               <span v-if="v.until" :class="UNTIL" data-testid="paused-until">{{ v.until }}</span>
             </template>
             <span v-else class="sr-only">{{ v.hidden }}</span>

@@ -1342,6 +1342,17 @@ def test_programme_format_gives_the_schema_a_worked_example_and_the_changes(
         assert words in notes, words
 
 
+def test_programme_format_says_how_a_rest_behaves(agent: TestClient, token: str) -> None:
+    """K192: an agent writing exception weeks learns that a target of 0 stops the progression,
+    by override or by edit-week, and that a deload doesn't."""
+    out = tool(agent, token, "programme_format")
+    notes = " ".join(out["notes"])
+    assert "40, 42.5, 45, rest, 45, 47.5, 50" in notes
+    assert "deload" in notes
+    edit_week = next(c["does"] for c in out["changes"] if c["type"] == "edit-week")
+    assert "target to 0" in edit_week
+
+
 def test_save_programme_takes_the_document_as_json_text(
     agent: TestClient, uid: int, writer: str
 ) -> None:

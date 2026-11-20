@@ -128,10 +128,13 @@ John's picks in the mockup `brand/design-system/mockups/261119-shared-library` (
 
 ## 8. Adjusting a copy
 
-There is no form editor in this version (programmes spec §13). A user adjusts a copy in two ways:
+This version had no form editor (programmes spec §13). A user adjusts a copy in two ways:
 
 - the start options: the parameters, the start day and the tracker's name;
 - an agent's `save_programme` on the copy.
+
+The programme builder (K183, [2026-11-20-programme-builder.md](2026-11-20-programme-builder.md))
+adds a third: Edit on the copy's Library row.
 
 ## 9. Demo data
 

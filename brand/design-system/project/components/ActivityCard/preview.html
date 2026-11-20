@@ -1,0 +1,195 @@
+<!-- @dsCard group="Forms" height=4300 subtitle="An activity in the programme builder: closed, its name and its rule in a line, with any problem under it; open in place in 2px ink, its name, Measure, Sides, a line per value and More; the ⋯ Menu with Move up, Move down and Remove" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ActivityCard — preview</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: var(--space-6); background: var(--canvas); color: var(--ink); font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
+  button, input, textarea { font: inherit; color: inherit; }
+  .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .variant { margin: 0 0 var(--space-3); color: var(--ink-secondary); max-width: 70ch; }
+  .gap { height: var(--space-8); }
+  svg.i { width: 1em; height: 1em; flex: none; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  /* The builder's 520u form column, at u = 1 (a 1280 × 800 screen). */
+  .form { max-width: 520px; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
+
+  /* Button and IconButton at the page's size. */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 52px; padding: 0 16px; border: 1px solid var(--control-border); border-radius: var(--radius-md); background: transparent; color: var(--ink); font: 600 19px / 25px var(--font-sans); cursor: pointer; white-space: nowrap; }
+  .btn svg { width: 26px; height: 26px; }
+  .btn:hover { background: var(--tile); }
+  .ib { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 52px; height: 52px; padding: 0; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); cursor: pointer; }
+  .ib svg { width: 26px; height: 26px; }
+  .ib:hover, .ib[aria-expanded="true"] { background: var(--tile); }
+
+  /* An activity: a card with a 1px line; open in place in 2px ink (K147's open frame). */
+  .acts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+  .ac { border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--canvas); }
+  .ac.bad { border-color: var(--error-ink); }
+  .ac.open { border: 2px solid var(--ink); }
+  .ac-head { display: flex; align-items: flex-start; gap: 8px; padding: 12px 8px 12px 12px; }
+  .ac-toggle { flex: 1 1 auto; min-width: 0; display: flex; align-items: flex-start; gap: 10px; padding: 4px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+  .ac-toggle > svg { width: 26px; height: 26px; margin-top: 1px; color: var(--ink-secondary); }
+  .ac-toggle:hover { background: var(--tile); }
+  .ac-name { display: block; font: 600 22px / 1.3 var(--font-sans); overflow-wrap: anywhere; }
+  .ac-sum { display: block; color: var(--ink-secondary); font-size: 19px; line-height: 1.45; }
+  .ac-err { margin-top: 4px; }
+  .ac-body { display: flex; flex-direction: column; gap: 22px; padding: 4px 20px 20px 54px; }
+
+  /* Fields, as TextField, TextArea and SegmentedControl at the page's size (60u, 19u). */
+  .field { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .field > .lbl { font: 600 19px / 25px var(--font-sans); }
+  .hint { margin: 0; color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
+  .ferr { display: flex; gap: 6px; align-items: flex-start; margin: 0; color: var(--error-ink); font-size: 16px; line-height: 22px; }
+  .ferr svg { width: 16px; height: 16px; margin-top: 3px; flex: none; }
+  input.tf, textarea.ta { width: 100%; padding: 0 15px; border: 1px solid var(--control-border); border-radius: var(--radius-sm); background: var(--panel); color: var(--ink); font: 400 19px / 1.3 var(--font-sans); }
+  input.tf { height: 60px; }
+  textarea.ta { display: block; padding: 12px 15px; line-height: 1.45; resize: vertical; }
+  input.tf:hover, textarea.ta:hover { border-color: var(--ink); }
+  .seg { display: inline-flex; flex-wrap: wrap; align-self: flex-start; max-width: 100%; border: 1px solid var(--control-border); border-radius: var(--radius-md); }
+  .seg button { height: 58px; padding: 0 18px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); font: 600 19px / 25px var(--font-sans); cursor: pointer; white-space: nowrap; }
+  .seg button:hover { background: var(--tile); }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
+  .more { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; padding: 0; border: 0; background: transparent; color: var(--ink); font-size: 19px; line-height: 26px; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
+  .more svg { width: 22px; height: 22px; }
+  .morebody { display: flex; flex-direction: column; gap: 22px; }
+
+  /* The values: the ValueField card's lines. */
+  .vlist { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+  .vr { border-bottom: 1px solid var(--line); }
+  .vr-btn { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 10px 4px; border: 0; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+  .vr-btn:hover { background: var(--tile); }
+  .vr-btn > svg { width: 22px; height: 22px; color: var(--ink-secondary); }
+  .vr-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; }
+  .vr-l { flex: 0 0 132px; font: 600 19px / 25px var(--font-sans); }
+  .vr-v { flex: 1 1 180px; min-width: 0; font-size: 19px; line-height: 1.45; }
+  .vr-v.none { color: var(--ink-secondary); }
+
+  /* The ⋯ Menu, as the Menu card: under its IconButton, right edges aligned. */
+  .anchor { position: relative; display: inline-flex; }
+  .menu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 5; width: 288px; padding: var(--space-2); background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-overlay); }
+  .menu .item { display: flex; align-items: center; gap: var(--space-3); width: 100%; min-height: 48px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); font: 600 16px / 22px var(--font-sans); cursor: pointer; text-align: left; }
+  .menu .item svg { width: 22px; height: 22px; }
+  .menu .item:hover, .menu .item[data-highlighted] { background: var(--tile); }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .btn, .ib, .ac-toggle, .seg button, .vr-btn, .menu .item, input.tf, textarea.ta { transition: background-color 120ms, color 120ms, border-color 120ms; }
+  }
+  /* Folded: the system's n sizes (n = 1 on a phone). */
+  @media (max-width: 639px) {
+    body { padding: var(--space-4); }
+    .btn { height: 48px; font-size: 16px; line-height: 22px; }
+    .btn svg { width: 22px; height: 22px; }
+    .ib { width: 44px; height: 48px; }
+    .ib svg { width: 24px; height: 24px; }
+    .ac-head { padding: 8px 4px 8px 8px; }
+    .ac-name { font-size: 18px; }
+    .ac-sum { font-size: 18px; line-height: 26px; }
+    .ac-body { padding: 4px 12px 16px 12px; gap: 18px; }
+    .morebody { gap: 18px; }
+    .field { gap: 6px; }
+    .field > .lbl { font-size: 16px; line-height: 22px; }
+    input.tf { height: 48px; font-size: 18px; padding: 0 12px; }
+    textarea.ta { font-size: 18px; padding: 10px 12px; }
+    .seg button { height: 46px; padding: 0 12px; font-size: 16px; line-height: 22px; }
+    .more { font-size: 18px; }
+    .vr-btn { min-height: 52px; padding: 8px 2px; }
+    .vr-l { flex-basis: 100%; font-size: 16px; line-height: 22px; }
+    .vr-v { flex-basis: 100%; font-size: 18px; line-height: 26px; }
+    .menu { width: min(288px, calc(100vw - 32px)); }
+  }
+</style>
+</head>
+<body>
+  <p class="variant label">Beginner 5×5's activities, every card closed: each says its rule in a line. Deadlift grows 90 kg a week, so its card has a line rule in error-ink and the problem under its rule. Press a card to open it</p>
+  <div class="form" data-draw="closed"></div>
+
+  <div class="gap"></div>
+  <p class="variant label">Plank, open in place in 2px ink: Name, Measure (Reps, Time or Neither), Sides, a line per value, then More. One card is open at a time</p>
+  <div class="form" data-draw="open"></div>
+
+  <div class="gap"></div>
+  <p class="variant label">More: key, notes, link, opened. The key is what runs started later use as the item's id</p>
+  <div class="form" data-draw="more"></div>
+
+  <div class="gap"></div>
+  <p class="variant label">Long ride, in a cardio programme: no Measure and no Sides; its values are Times a week, Time and Distance</p>
+  <div class="form" data-draw="cardio"></div>
+
+  <div class="gap"></div>
+  <p class="variant label">The ⋯ Menu on Bench press: Move up, Move down and Remove. The first card has no Move up, and the last no Move down</p>
+  <div class="form" data-draw="menu" style="padding-bottom: 190px"></div>
+
+<script>
+// Beginner 5×5 (docs/programmes.md §6) with one mistake: the deadlift at +90 kg a week. The words
+// follow docs/specs/2026-11-20-programme-builder.md §5 and the mockup mockups/261120-programme-builder.
+;(() => {
+  const P = {
+    right: '<path d="m9 18 6-6-6-6"/>',
+    down: '<path d="m6 9 6 6 6-6"/>',
+    plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+    alert: '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>',
+    ellipsis: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+    up: '<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>',
+    dn: '<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>',
+    trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
+  }
+  const ic = (n) => `<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n]}</svg>`
+  let uid = 0
+  const id = (p) => `${p}${++uid}`
+
+  const field = (label, control, after = '', tid = '') => { const f = id('f'); return `<div class="field"><label class="lbl" for="${f}">${label}</label>${control.replaceAll('%ID%', f).replace('%TID%', tid)}${after.replaceAll('%ID%', f)}</div>` }
+  const tf = (value, extra = '') => `<input class="tf" id="%ID%" value="${value}" data-testid="%TID%"${extra}>`
+  const seg = (label, opts, on, tid) => { const h = id('g'); return `<div class="field"><span class="lbl" id="${h}">${label}</span><div class="seg" role="group" aria-labelledby="${h}" data-testid="${tid}">${opts.map((o) => `<button type="button" aria-pressed="${o === on}">${o}</button>`).join('')}</div></div>` }
+  const line = (key, label, value, none) => `<li class="vr" data-testid="value-line" data-field="${key}"><button type="button" class="vr-btn" aria-expanded="false"><span class="vr-txt"><span class="vr-l">${label}</span><span class="vr-v${none ? ' none' : ''}">${value}</span></span>${ic('right')}</button></li>`
+  const more = (w, open) => `<button type="button" class="more" aria-expanded="${open}" data-testid="activity-more">${ic(open ? 'down' : 'right')}${w}</button>`
+
+  const ACTS = [
+    { key: 'squat', name: 'Back squat', sum: '5 × 5 · 40 kg, +5% a week, chosen at start' },
+    { key: 'bench', name: 'Bench press', sum: '5 × 5 · 30 kg, +2.5 kg a week' },
+    { key: 'row', name: 'Barbell row', sum: '5 × 5 · 30 kg, +2.5 kg a week' },
+    { key: 'deadlift', name: 'Deadlift', sum: '1 × 5 · 70 kg, +90 kg a week', error: 'Week 6 comes to 520 kg. The most is 500.' },
+    { key: 'plank', name: 'Plank', sum: '3 × 30 s · +5 s every 2 weeks, up to 90 s' },
+  ]
+
+  // The ⋯ IconButton, named for its card; open, the Menu card under it.
+  const menuBtn = (a, i, n, open) => `<span class="anchor"><button type="button" class="ib" aria-label="More for ${a.name}" aria-haspopup="menu" aria-expanded="${open}" data-testid="activity-menu">${ic('ellipsis')}</button>${open ? `<div class="menu" role="menu" aria-label="More for ${a.name}">${i > 0 ? `<button type="button" class="item" role="menuitem" data-highlighted data-testid="activity-move-up">${ic('up')}Move up</button>` : ''}${i < n - 1 ? `<button type="button" class="item" role="menuitem" data-testid="activity-move-down">${ic('dn')}Move down</button>` : ''}<button type="button" class="item" role="menuitem" data-testid="activity-remove">${ic('trash')}Remove</button></div>` : ''}</span>`
+
+  const card = (a, i, n, o = {}) => {
+    const c = id('ac')
+    const e = a.error ? `<span class="ferr ac-err" id="${c}-e" data-testid="activity-problem">${ic('alert')}<span>${a.error}</span></span>` : ''
+    const cls = ['ac', o.body ? 'open' : '', a.error && !o.body ? 'bad' : ''].filter(Boolean).join(' ')
+    return `<li class="${cls}" data-testid="activity-card" data-activity="${a.key}"><div class="ac-head"><button type="button" class="ac-toggle" aria-expanded="${!!o.body}"${o.body ? ` aria-controls="${c}-b"` : ''}${e ? ` aria-describedby="${c}-e"` : ''}>${ic(o.body ? 'down' : 'right')}<span><span class="ac-name">${a.name}</span><span class="ac-sum">${a.sum}</span>${o.body ? '' : e}</span></button>${menuBtn(a, i, n, !!o.menu)}</div>${o.body ? `<div class="ac-body" id="${c}-b" role="group" aria-label="${a.name}">${o.body}</div>` : ''}</li>`
+  }
+
+  const plankBody = (moreOpen) => `${field('Name', tf('Plank'), '', 'activity-name')}
+    ${seg('Measure', ['Reps', 'Time', 'Neither'], 'Time', 'activity-measure')}
+    ${seg('Sides', ['Per set', 'Each side'], 'Per set', 'activity-sides')}
+    <ul class="vlist" aria-label="Plank’s values">${line('target', 'Times a week', '3')}${line('sets', 'Sets', '3')}${line('duration', 'Hold', '30 s, +5 s every 2 weeks, up to 90 s')}${line('weight', 'Weight', 'None', true)}</ul>
+    ${more('More: key, notes, link', moreOpen)}
+    ${moreOpen ? `<div class="morebody">
+      ${field('Key', tf('plank', ' spellcheck="false" autocapitalize="none" aria-describedby="%ID%-h"'), '<p class="hint" id="%ID%-h">Runs started from now use it as the item’s id. Lowercase letters, numbers and dashes.</p>', 'activity-key')}
+      ${field('Notes', '<textarea class="ta" id="%ID%" rows="3" aria-describedby="%ID%-h" data-testid="%TID%">Hips level. Breathe.</textarea>', '<p class="hint" id="%ID%-h">Markdown. Each run’s item shows it.</p>', 'activity-notes')}
+      ${field('Link', tf('', ' inputmode="url" spellcheck="false" autocapitalize="none"'), '', 'activity-link')}
+    </div>` : ''}`
+  const rideBody = `${field('Name', tf('Long ride'), '', 'activity-name')}
+    <ul class="vlist" aria-label="Long ride’s values">${line('target', 'Times a week', '1')}${line('duration', 'Time', '60 min, +10 min every 2 weeks')}${line('distance', 'Distance', '20 km chosen at start, +10% a week')}</ul>
+    ${more('More: key, notes, link', false)}`
+
+  const list = (cards, add = true) => `<ul class="acts" aria-label="Activities">${cards.join('')}</ul>${add ? `<div><button type="button" class="btn" data-testid="activity-add">${ic('plus')}Add activity</button></div>` : ''}`
+  const n = ACTS.length
+  const DRAW = {
+    closed: () => list(ACTS.map((a, i) => card(a, i, n))),
+    open: () => list(ACTS.slice(3).map((a, i) => card(a, i + 3, n, a.key === 'plank' ? { body: plankBody(false) } : {}))),
+    more: () => list([card(ACTS[4], 4, n, { body: plankBody(true) })], false),
+    cardio: () => list([card({ key: 'run', name: 'Easy run', sum: '20 min, +10% a week, up to 30 min · 3 km, +0.5 km a week, up to 6 km' }, 0, 2), card({ key: 'long-ride', name: 'Long ride', sum: '60 min, +10 min every 2 weeks · 20 km chosen at start, +10% a week' }, 1, 2, { body: rideBody })], false),
+    menu: () => list(ACTS.slice(0, 2).map((a, i) => card(a, i, n, i === 1 ? { menu: true } : {})), false),
+  }
+  for (const host of document.querySelectorAll('[data-draw]')) host.innerHTML = DRAW[host.dataset.draw]()
+})()
+</script>
+</body>
+</html>

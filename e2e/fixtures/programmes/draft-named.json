@@ -1,0 +1,18 @@
+{
+  "doc": {
+    "format": "tracker-programme/1",
+    "name": "Squat block",
+    "kind": "strength",
+    "weeks": 8,
+    "activities": []
+  },
+  "reply": {
+    "errors": [
+      {
+        "path": "activities",
+        "message": "give 1 to 30 activities."
+      }
+    ],
+    "plan": null
+  }
+}

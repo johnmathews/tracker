@@ -12,6 +12,7 @@ import TextAreaSection from './sections/TextAreaSection.vue'
 import SegmentedControlSection from './sections/SegmentedControlSection.vue'
 import RadioCardSection from './sections/RadioCardSection.vue'
 import SwitchSection from './sections/SwitchSection.vue'
+import CheckboxSection from './sections/CheckboxSection.vue'
 import StepperSection from './sections/StepperSection.vue'
 import PopoverSection from './sections/PopoverSection.vue'
 import MenuSection from './sections/MenuSection.vue'
@@ -30,6 +31,11 @@ import ProgrammeChartSection from './sections/ProgrammeChartSection.vue'
 import WorkChartSection from './sections/WorkChartSection.vue'
 import ItemPageSection from './sections/ItemPageSection.vue'
 import NewTrackerPageSection from './sections/NewTrackerPageSection.vue'
+import ProgrammeBuilderSection from './sections/ProgrammeBuilderSection.vue'
+import ActivityCardSection from './sections/ActivityCardSection.vue'
+import ValueFieldSection from './sections/ValueFieldSection.vue'
+import ExceptionWeekEditorSection from './sections/ExceptionWeekEditorSection.vue'
+import StartValueEditorSection from './sections/StartValueEditorSection.vue'
 import TranscriptSection from './sections/TranscriptSection.vue'
 import AnswerProgressSection from './sections/AnswerProgressSection.vue'
 import QuotaChipSection from './sections/QuotaChipSection.vue'
@@ -147,6 +153,13 @@ export const SECTIONS: readonly StyleGuideSection[] = [
     summary:
       'An on/off control that takes effect at once, with its label inside the same 44px button.',
     component: SwitchSection,
+  },
+  {
+    id: 'sg-checkbox',
+    title: 'Checkbox',
+    summary:
+      'A box to tick, with its label in the same row, for a choice inside a form that has a Save.',
+    component: CheckboxSection,
   },
   {
     id: 'sg-stepper',
@@ -273,6 +286,41 @@ export const SECTIONS: readonly StyleGuideSection[] = [
     summary:
       'The page Edit plan’s Add tracker opens: a name, and a kind with its settings and marks.',
     component: NewTrackerPageSection,
+  },
+  {
+    id: 'sg-programme-builder',
+    title: 'ProgrammeBuilder',
+    summary:
+      'The programme builder: a page of its own where a person builds a programme, or changes one in their Library, in a form with the weeks beside it, then saves it to the Library.',
+    component: ProgrammeBuilderSection,
+  },
+  {
+    id: 'sg-activity-card',
+    title: 'ActivityCard',
+    summary:
+      'One activity in the programme builder: closed, a card with its name and its rule in a line; open in place, the activity’s fields.',
+    component: ActivityCardSection,
+  },
+  {
+    id: 'sg-value-field',
+    title: 'ValueField',
+    summary:
+      'One of an activity’s numbers in the programme builder: a line that says its shape in words, which opens into the fields that set it, as None, Stays the same or Grows.',
+    component: ValueFieldSection,
+  },
+  {
+    id: 'sg-exception-week-editor',
+    title: 'ExceptionWeekEditor',
+    summary:
+      'An exception week in the programme builder, such as a deload: closed, a row that says what it changes; open in place, its weeks, its label and its values.',
+    component: ExceptionWeekEditorSection,
+  },
+  {
+    id: 'sg-start-value-editor',
+    title: 'StartValueEditor',
+    summary:
+      'A value chosen at start in the programme builder, such as a squat’s starting weight: closed, a row with its default and the fields that use it; open in place, its label, unit, default and range.',
+    component: StartValueEditorSection,
   },
   {
     id: 'sg-transcript',

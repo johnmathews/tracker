@@ -1,0 +1,152 @@
+<!-- @dsCard group="Forms" height=2300 subtitle="A value chosen at start in the programme builder: closed, a row with its default and the fields that use it; open in 2px ink, Label, Unit, Default, Lowest, Highest, the Used by line, More: key and Remove, refused while a field uses it" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>StartValueEditor — preview</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: var(--space-6); background: var(--canvas); color: var(--ink); font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
+  button, input, textarea { font: inherit; color: inherit; }
+  .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .variant { margin: 0 0 var(--space-3); color: var(--ink-secondary); max-width: 70ch; }
+  .gap { height: var(--space-8); }
+  svg.i { width: 1em; height: 1em; flex: none; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  /* The builder's 520u form column, at u = 1 (a 1280 × 800 screen). */
+  .form { max-width: 520px; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
+  .sect > h2 { margin: 0; font: 600 27px / 34px var(--font-sans); }
+  .sect > .lead { margin: -12px 0 0; color: var(--ink-secondary); font-size: 19px; line-height: 1.45; }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 52px; padding: 0 16px; border: 1px solid var(--control-border); border-radius: var(--radius-md); background: transparent; color: var(--ink); font: 600 19px / 25px var(--font-sans); cursor: pointer; white-space: nowrap; }
+  .btn svg { width: 26px; height: 26px; }
+  .btn:hover { background: var(--tile); }
+  .btn.quiet { border-color: transparent; padding: 0 10px; }
+  .ib { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 52px; height: 52px; padding: 0; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); cursor: pointer; }
+  .ib svg { width: 26px; height: 26px; }
+  .ib:hover { background: var(--tile); }
+
+  /* Closed: rows on line rules, each with a pencil. */
+  .rows { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+  .rows > li { display: flex; align-items: flex-start; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+  .rows .txt { flex: 1 1 auto; min-width: 0; }
+  .rows .nm { display: block; font: 600 19px / 25px var(--font-sans); }
+  .rows .ln { display: block; font-size: 19px; line-height: 1.45; }
+  .rows .ln2 { display: block; color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
+
+  /* Open: the ActivityCard's open frame, 2px ink (K147). */
+  .ac-list { list-style: none; margin: 0; padding: 0; }
+  .ac { border: 2px solid var(--ink); border-radius: var(--radius-lg); background: var(--canvas); }
+  .ac-head { display: flex; align-items: flex-start; gap: 8px; padding: 12px 8px 12px 12px; }
+  .ac-toggle { flex: 1 1 auto; min-width: 0; display: flex; align-items: flex-start; gap: 10px; padding: 4px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+  .ac-toggle > svg { width: 26px; height: 26px; margin-top: 1px; color: var(--ink-secondary); }
+  .ac-toggle:hover { background: var(--tile); }
+  .ac-name { display: block; font: 600 22px / 1.3 var(--font-sans); }
+  .ac-sum { display: block; color: var(--ink-secondary); font-size: 19px; line-height: 1.45; }
+  .ac-body { display: flex; flex-direction: column; gap: 22px; padding: 4px 20px 20px 54px; }
+
+  .field { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .field > .lbl { font: 600 19px / 25px var(--font-sans); }
+  .hint { margin: 0; color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
+  .used { margin: 0; font-size: 16px; line-height: 22px; }
+  input.tf { width: 100%; height: 60px; padding: 0 15px; border: 1px solid var(--control-border); border-radius: var(--radius-sm); background: var(--panel); color: var(--ink); font: 400 19px / 1.3 var(--font-sans); font-variant-numeric: tabular-nums; }
+  input.tf.num { max-width: 140px; }
+  input.tf.sm { max-width: 110px; }
+  input.tf:hover { border-color: var(--ink); }
+  .withunit { display: flex; align-items: center; gap: 10px; }
+  .withunit span { font-size: 19px; color: var(--ink-secondary); }
+  .row { display: flex; flex-wrap: wrap; gap: 20px 24px; align-items: flex-start; }
+  .more { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; padding: 0; border: 0; background: transparent; color: var(--ink); font-size: 19px; line-height: 26px; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
+  .more svg { width: 22px; height: 22px; }
+
+  /* InlineMessage (error): the refusal, under Remove. */
+  .im { display: flex; align-items: flex-start; gap: var(--space-2); margin: 0; font-size: 16px; line-height: 22px; color: var(--error-ink); }
+  .im svg { width: 16px; height: 16px; margin-top: 3px; flex: none; }
+  .rm { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .btn, .ib, .ac-toggle, input.tf { transition: background-color 120ms, color 120ms, border-color 120ms; }
+  }
+  /* Folded: the system's n sizes (n = 1 on a phone). */
+  @media (max-width: 639px) {
+    body { padding: var(--space-4); }
+    .sect > h2 { font-size: 22px; line-height: 28px; }
+    .sect > .lead { font-size: 18px; line-height: 26px; margin-top: -8px; }
+    .btn { height: 48px; font-size: 16px; line-height: 22px; }
+    .btn svg { width: 22px; height: 22px; }
+    .ib { width: 44px; height: 48px; }
+    .ib svg { width: 24px; height: 24px; }
+    .rows .nm, .rows .ln { font-size: 18px; line-height: 26px; }
+    .ac-head { padding: 8px 4px 8px 8px; }
+    .ac-name { font-size: 18px; }
+    .ac-sum { font-size: 18px; line-height: 26px; }
+    .ac-body { padding: 4px 12px 16px 12px; gap: 18px; }
+    .field { gap: 6px; }
+    .field > .lbl { font-size: 16px; line-height: 22px; }
+    input.tf { height: 48px; font-size: 18px; padding: 0 12px; }
+    .withunit span { font-size: 18px; }
+    .row { gap: 16px; }
+    .more { font-size: 18px; }
+  }
+</style>
+</head>
+<body>
+  <p class="variant label">Values chosen at start, closed: Beginner 5×5 asks for a squat start and a weekly increase. Each row gives its default and the fields that use it, then Add a value</p>
+  <div class="form sect" data-draw="closed"></div>
+
+  <div class="gap"></div>
+  <p class="variant label">Squat start, open in place in 2px ink: Label, Unit, Default, Lowest and Highest, the line naming the fields that use it, More: key, and Remove</p>
+  <div class="form" data-draw="open"></div>
+
+  <div class="gap"></div>
+  <p class="variant label">More: key, opened. Remove pressed while Back squat's weight uses it: the refusal names the field</p>
+  <div class="form" data-draw="refused"></div>
+
+<script>
+// Beginner 5×5's params (docs/programmes.md §2.2, fixtures/programmes/valid): squat and rate. The
+// words follow the mockup mockups/261120-programme-builder (round 2, "In both options") and
+// docs/specs/2026-11-20-programme-builder.md §5, F5 and F7.
+;(() => {
+  const P = {
+    right: '<path d="m9 18 6-6-6-6"/>',
+    down: '<path d="m6 9 6 6 6-6"/>',
+    plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+    alert: '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>',
+    pencil: '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>',
+    trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
+  }
+  const ic = (n) => `<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n]}</svg>`
+  let uid = 0
+  const id = (p) => `${p}${++uid}`
+
+  const field = (label, control, after = '') => { const f = id('f'); return `<div class="field"><label class="lbl" for="${f}">${label}</label>${control.replaceAll('%ID%', f)}${after.replaceAll('%ID%', f)}</div>` }
+  const unit = (value, u, tid) => `<span class="withunit"><input class="tf num" id="%ID%" value="${value}" inputmode="decimal" data-testid="${tid}"><span>${u}</span></span>`
+
+  const head = `<h2>Values chosen at start</h2><p class="lead">Each one is asked for when the programme starts, with its default filled in.</p>`
+  const row = (key, name, def, used) => `<li data-testid="start-value" data-param="${key}"><span class="txt"><span class="nm">${name}</span><span class="ln">${def}</span><span class="ln2">${used}</span></span><button type="button" class="ib" aria-label="Change ${name}" aria-expanded="false" data-testid="start-value-open">${ic('pencil')}</button></li>`
+  const addBtn = `<div><button type="button" class="btn" data-testid="start-value-add">${ic('plus')}Add a value</button></div>`
+
+  const body = (o = {}) => {
+    const r = id('r')
+    return `${field('Label', '<input class="tf" id="%ID%" value="Squat start" data-testid="start-value-label">')}
+      <div class="row">${field('Unit', '<input class="tf sm" id="%ID%" value="kg" data-testid="start-value-unit">')}${field('Default', unit('40', 'kg', 'start-value-default'))}</div>
+      <div class="row">${field('Lowest', unit('20', 'kg', 'start-value-min'))}${field('Highest', unit('200', 'kg', 'start-value-max'))}</div>
+      <p class="hint">Lowest and highest are optional. The start asks for a value between them.</p>
+      <p class="used" data-testid="start-value-used">Used by Back squat’s weight.</p>
+      <button type="button" class="more" aria-expanded="${!!o.more}" data-testid="start-value-more">${ic(o.more ? 'down' : 'right')}More: key</button>
+      ${o.more ? field('Key', '<input class="tf" id="%ID%" value="squat" spellcheck="false" autocapitalize="none" aria-describedby="%ID%-h" data-testid="start-value-key">', '<p class="hint" id="%ID%-h">A start through Claude names the value by it. Lowercase letters, numbers and dashes.</p>') : ''}
+      <div class="rm"><button type="button" class="btn quiet" data-testid="start-value-remove"${o.refused ? ` aria-describedby="${r}"` : ''}>${ic('trash')}Remove</button>${o.refused ? `<p class="im" id="${r}" role="alert" data-testid="start-value-refused">${ic('alert')}<span>Back squat’s weight uses Squat start. Give that field a number first, then remove it.</span></p>` : ''}</div>`
+  }
+  const open = (o) => { const c = id('sv'); return `<ul class="ac-list" aria-label="Values chosen at start"><li class="ac" data-testid="start-value" data-param="squat"><div class="ac-head"><button type="button" class="ac-toggle" aria-expanded="true" aria-controls="${c}">${ic('down')}<span><span class="ac-name">Squat start</span><span class="ac-sum">40 kg by default, from 20 to 200&nbsp;kg</span></span></button></div><div class="ac-body" id="${c}" role="group" aria-label="Squat start">${body(o)}</div></li></ul>` }
+
+  const DRAW = {
+    closed: () => `${head}<ul class="rows" aria-label="Values chosen at start">${row('squat', 'Squat start', '40 kg by default', 'Used by Back squat’s weight')}${row('rate', 'Weekly increase', '5% by default', 'Used by Back squat’s weight')}</ul>${addBtn}`,
+    open: () => open({}),
+    refused: () => open({ more: true, refused: true }),
+  }
+  for (const host of document.querySelectorAll('[data-draw]')) host.innerHTML = DRAW[host.dataset.draw]()
+})()
+</script>
+</body>
+</html>

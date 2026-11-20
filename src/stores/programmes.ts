@@ -8,10 +8,13 @@ import {
   type ChangePreview,
   type ChangeRequest,
   type ConfirmOutcome,
+  type Draft,
+  type DraftOutcome,
   type Outcome,
   type ProgrammeRecord,
   type ProgrammeSummary,
   type PublishPreview,
+  type ReplaceOutcome,
   type Run,
   type RunSummary,
   type SharedRef,
@@ -90,6 +93,11 @@ export const useProgrammesStore = defineStore('programmes', () => {
    * paused rows and programme week, and the item page's chart, read their grid (P4).
    */
   const byTracker = ref<Record<string, Run>>({})
+  /**
+   * The programme the builder just saved (W5 → W7): the Programmes page opens on Library with its
+   * row landing, as a copy's does (K177), then clears it.
+   */
+  const landing = ref<string | null>(null)
   /** The runs being read, so a second ask waits for the first. */
   const reading = new Map<string, Promise<Outcome<Run>>>()
 
@@ -140,6 +148,38 @@ export const useProgrammesStore = defineStore('programmes', () => {
       return { ok: false, problems: [], message: NOT_JSON }
     }
     return add(doc)
+  }
+
+  /**
+   * Save a changed document over a library programme (`PUT /programmes/{id}`). `rev` is the one the
+   * document was read at: when the server has moved on, it answers 409 and its programme comes back
+   * as `conflict`. On success the library row takes the saved programme's summary.
+   */
+  async function replace(id: string, doc: unknown, rev: number): Promise<ReplaceOutcome> {
+    const res = await call<ProgrammeRecord>('PUT', `/programmes/${id}`, { doc, rev })
+    if (!res.ok) {
+      if (res.error.kind === 'conflict') {
+        return { ok: false, conflict: res.error.body.programme as ProgrammeRecord }
+      }
+      return failed(res.error)
+    }
+    const { doc: _doc, ...summary } = res.data
+    if (library.value) library.value = library.value.map((p) => (p.id === id ? summary : p))
+    return { ok: true, data: res.data }
+  }
+
+  /** The newest draft call's number: an older call's answer is dropped. */
+  let drafts = 0
+
+  /**
+   * The server's problems and plan for a document as it stands (`POST /programmes/draft`); it
+   * writes nothing. When calls overlap, only the newest one's answer is used: an older call comes
+   * back as `superseded`, whether it succeeded or failed.
+   */
+  async function draft(doc: unknown): Promise<DraftOutcome> {
+    const mine = ++drafts
+    const res = outcome(await call<Draft>('POST', '/programmes/draft', { doc }))
+    return mine === drafts ? res : { ok: false, superseded: true }
   }
 
   /** A copy of a library programme, named as one. */
@@ -420,10 +460,13 @@ export const useProgrammesStore = defineStore('programmes', () => {
     loadFailure,
     run,
     byTracker,
+    landing,
     offline,
     loadPage,
     readProgramme,
     addProgramme,
+    replace,
+    draft,
     duplicate,
     remove,
     previewStart,

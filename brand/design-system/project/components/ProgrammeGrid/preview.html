@@ -1,4 +1,4 @@
-<!-- @dsCard group="Planner" height=3970 subtitle="A programme's plan as a table, every activity against every week, at every width: past weeks on a tile, this week framed in ink, a hand-edit's pencil, pauses, deloads and split weeks; on its overview page with the Changes tab, after an open pause, paused for part of the week (Paused until in paused-ink), a rest week (a goal of 0), and previewing a change with the bar at its foot (K142, K143, K148, K166, K170)" -->
+<!-- @dsCard group="Planner" height=4570 subtitle="A programme's plan as a table, every activity against every week, at every width: past weeks on a tile, this week framed in ink, a hand-edit's pencil, pauses, deloads and split weeks; on its overview page with the Changes tab, after an open pause, paused for part of the week (Paused until in paused-ink), a rest week (a goal of 0), previewing a change with the bar at its foot (K142, K143, K148, K166, K170), and undated in the programme builder with a week over an item's limit in error-ink" -->
 <!doctype html>
 <html lang="en">
   <head>
@@ -313,6 +313,11 @@
         text-decoration-color: var(--pen);
         text-decoration-thickness: 2px;
         text-underline-offset: 0.22em;
+      }
+      /* A week over an item's limit, in the builder's undated grid: error-ink with circle-alert. */
+      .og td[data-limit] .cv,
+      .og td[data-limit] .cv svg {
+        color: var(--error-ink);
       }
       .paused .cv {
         color: var(--ink-secondary);
@@ -974,6 +979,19 @@
       </div>
     </div>
 
+    <div class="gap"></div>
+    <p class="variant label">
+      Undated, in the programme builder (the ProgrammeBuilder card): weeks by number, every week a
+      later week, no buttons. Deadlift grows 90 kg a week, so weeks 6 to 8 pass the 500 kg an item
+      can hold: each of those values is in error-ink with circle-alert, and the builder says why
+      under Deadlift's field
+    </p>
+    <div class="stage">
+      <div class="page">
+        <div data-grid="limit"></div>
+      </div>
+    </div>
+
     <script>
       // The grid, drawn from the mockup's data (mockups/261117-programmes, proto.js): "Beginner 5×5",
       // eight weeks from Mon 23 Nov; today is Wed 16 Dec, in programme week 4. The app draws the same
@@ -983,6 +1001,8 @@
           pencil:
             '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>',
         }
+        P.alert =
+          '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>'
         const ic = (name) =>
           `<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name]}</svg>`
         const WEEKS = [
@@ -1077,11 +1097,18 @@
               ? { ...a, w: [30, 32.5, { rest: 35, done: 1 }, 32.5, 37.5, 40, 42.5, 40] }
               : a,
         )
+        // The builder's draft (spec S2): Deadlift at 70 kg, +90 kg a week; weeks 6 to 8 pass 500 kg.
+        const LIMIT = ACTS.filter((a) => ['squat', 'deadlift', 'plank'].includes(a.key)).map((a) =>
+          a.key === 'deadlift' ? { ...a, w: [70, 160, 250, 305, 430, 520, 610, 630], over: [6, 7, 8] } : a,
+        )
         // The change preview: Barbell row set to 45 kg from Mon 21 Dec; week 6 keeps its hand-edit.
         const PREVIEW = { row: { 4: [40, 45], 6: [45, 50], 7: [42.5, 47.5] } }
         const fmt = (v, unit) => `${v} ${unit}`
 
         function weekHead(wk, o) {
+          // Undated (K173): the week's number and its label, no dates, every week still to come.
+          if (o.undated)
+            return `<th class="wk" scope="col" data-week="${wk.n}"><span class="wn">Week ${wk.n}</span>${wk.deload ? '<span class="wt">Deload</span>' : ''}</th>`
           const past = wk.n < CUR,
             cur = wk.n === CUR
           const tags = []
@@ -1093,6 +1120,16 @@
         }
 
         function cell(a, i, o) {
+          if (o.undated) {
+            // The builder's plan: a value per week; a week over the item's limit carries the
+            // problem's path (the plan cell's `limits`) and shows its value in error-ink.
+            const n = i + 1,
+              over = a.over && a.over.includes(n)
+            const main = over
+              ? `${ic('alert')}${fmt(a.w[i], a.unit)}<span class="vh">, over the limit</span>`
+              : fmt(a.w[i], a.unit)
+            return `<td class="wk" data-activity="${a.key}" data-week="${n}" data-cell="planned"${over ? ` data-limit="activities[3].weight"` : ''}><span class="cv">${main}</span><span class="cs">${a.sets[i]}</span></td>`
+          }
           const wk = WEEKS[i],
             v = a.w[i]
           const past = wk.n < CUR,
@@ -1175,6 +1212,7 @@
           'part-pause': { label: 'The plan with a pause, week by week', acts: PART_PAUSE },
           rest: { label: 'The plan with rest weeks, week by week', acts: REST },
           preview: { label: 'The plan with the change, week by week', preview: PREVIEW },
+          limit: { label: 'The weeks, at the default values', undated: true, acts: LIMIT },
         }
         for (const host of document.querySelectorAll('[data-grid]'))
           host.innerHTML = table(GRIDS[host.dataset.grid])
@@ -1187,6 +1225,8 @@
             if (!folded.matches) continue
             const cur = wrap.querySelector('thead .cur'),
               act = wrap.querySelector('thead .act')
+            // An undated grid has no this week: it opens at week 1.
+            if (!cur) continue
             wrap.scrollLeft = Math.max(
               0,
               cur.getBoundingClientRect().left - act.getBoundingClientRect().right,

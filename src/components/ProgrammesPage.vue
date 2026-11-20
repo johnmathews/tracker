@@ -19,6 +19,7 @@ import {
   Ellipsis,
   Eye,
   EyeOff,
+  Pencil,
   Play,
   RefreshCw,
   Share,
@@ -26,7 +27,7 @@ import {
   Upload,
 } from '@lucide/vue'
 import { useConfirm } from '@/composables/useConfirm'
-import { backToWeek, programmeHref } from '@/lib/routes'
+import { backToWeek, editProgrammeHref, NEW_PROGRAMME_HREF, programmeHref } from '@/lib/routes'
 import {
   START_PREVIEW_DELAY,
   dayText,
@@ -48,7 +49,7 @@ import { useProgrammesStore } from '@/stores/programmes'
 import { useSessionStore } from '@/stores/session'
 import PublishDialog from '@/components/PublishDialog.vue'
 import SharedPreviewDialog from '@/components/SharedPreviewDialog.vue'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Chip } from '@/components/ui/chip'
 import { IconButton } from '@/components/ui/icon-button'
 import { InlineMessage } from '@/components/ui/inline-message'
@@ -254,7 +255,15 @@ const LAND_FADE = 600
  */
 async function copiedNow(sharedId: string, copyId: string): Promise<void> {
   copied.value = new Set(copied.value).add(sharedId)
-  // Copied from the Reference tab: the copy lands in Library, so that tab opens (K177).
+  await landOn(copyId)
+}
+
+/**
+ * Library opens and the row `copyId` lands there, first in the list (K174): a copy made here, or
+ * a programme the builder just saved (the store's `landing`, W5 to W7).
+ */
+async function landOn(copyId: string): Promise<void> {
+  // The copy lands in Library, so that tab opens (K177).
   tab.value = 'library'
   for (const t of landingTimers) clearTimeout(t)
   landing.value = { id: copyId, settled: false }
@@ -274,6 +283,18 @@ async function copiedNow(sharedId: string, copyId: string): Promise<void> {
     }, LAND_HOLD + LAND_FADE),
   ]
 }
+
+// A save in the builder leaves the programme's id in the store; once the library has it, the row
+// lands, and the id is spent so a later visit doesn't land again.
+watch(
+  () => [store.landing, store.library] as const,
+  ([id, library]) => {
+    if (!id || !library) return
+    store.landing = null
+    void landOn(id)
+  },
+  { immediate: true },
+)
 onBeforeUnmount(() => {
   for (const t of landingTimers) clearTimeout(t)
 })
@@ -503,8 +524,13 @@ const TWO =
           <InlineMessage v-if="libraryNote" :tone="libraryNote.tone" class="mt-2">{{
             libraryNote.text
           }}</InlineMessage>
-          <p v-if="store.library?.length === 0" :class="META" class="py-3.5">
-            The library is empty. Add a programme on the Add tab.
+          <p
+            v-if="store.library?.length === 0"
+            :class="META"
+            class="py-3.5"
+            data-testid="library-empty"
+          >
+            The library is empty. Build one, or add one on the Add tab.
           </p>
           <ul v-else aria-label="Library">
             <li
@@ -548,10 +574,10 @@ const TWO =
               </div>
               <div
                 v-if="opened?.id !== p.id"
-                class="flex flex-wrap gap-2 folded:grid folded:[&>*:first-child]:col-span-full"
+                class="flex flex-wrap gap-2 folded:grid"
                 :class="
                   session.isAdmin
-                    ? 'folded:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]'
+                    ? 'folded:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] folded:[&>*:first-child]:col-span-2'
                     : 'folded:grid-cols-2'
                 "
               >
@@ -561,6 +587,12 @@ const TWO =
                   data-testid="library-start"
                   @click="openStart(p)"
                   ><Play :stroke-width="1.5" />Preview and start</Button
+                >
+                <a
+                  :href="editProgrammeHref(p.id)"
+                  :class="buttonVariants({ variant: 'quiet' })"
+                  data-testid="library-edit"
+                  ><Pencil :stroke-width="1.5" />Edit</a
                 >
                 <Button
                   variant="quiet"
@@ -730,6 +762,14 @@ const TWO =
 
       <TabsContent value="add">
         <div class="flex max-w-[820px] flex-col gap-5 pt-4" data-testid="programme-add">
+          <a
+            :href="NEW_PROGRAMME_HREF"
+            :class="buttonVariants({ variant: 'primary' })"
+            class="folded:w-full"
+            data-testid="add-build"
+            >Build a programme</a
+          >
+          <hr class="border-line" />
           <div class="flex flex-col gap-1">
             <label :for="ids.json" :class="LABEL">Programme JSON</label>
             <textarea

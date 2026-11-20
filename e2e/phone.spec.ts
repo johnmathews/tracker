@@ -14,6 +14,7 @@ import {
   openStyleGuide,
   settle,
 } from './support'
+import { openEditWithDeadlift, openEditWithLegsRest, openNewWithActivity } from './builder-support'
 
 test.use({ viewport: { width: 375, height: 800 } })
 
@@ -133,6 +134,24 @@ test.describe('no sideways scroll at 375px', () => {
     await callUpBar(page)
     await expect(actions).toHaveText(['Ask', 'Add tracker', 'Settings', 'Programmes', 'Profile'])
     await expectApart()
+    await expectNoSidewaysScroll(page)
+  })
+
+  test('the programme builder, new, with an activity open', async ({ page }) => {
+    await openNewWithActivity(page)
+    await expect(page.getByTestId('activity-name')).toBeVisible()
+    await expectNoSidewaysScroll(page)
+  })
+
+  test('the programme builder, editing, with an activity open over its limit', async ({ page }) => {
+    await openEditWithDeadlift(page, { over: true })
+    await expect(page.getByTestId('value-error')).toBeVisible()
+    await expectNoSidewaysScroll(page)
+  })
+
+  test('the programme builder, an exception week open with its rest list', async ({ page }) => {
+    await openEditWithLegsRest(page)
+    await expect(page.getByTestId('exception-rest')).toBeVisible()
     await expectNoSidewaysScroll(page)
   })
 

@@ -635,7 +635,8 @@ CHANGES_DO: dict[str, str] = {
     "set-parameter": "Sets a parameter (`param`, its key) to `value` for every field that uses "
     "it, as set-value or set-increase would.",
     "edit-week": "Sets one field for one programme week only (`week`): a hand-edit. Later "
-    "changes keep it, and their previews say so.",
+    "changes keep it, and their previews say so. Setting target to 0 makes the week a rest: "
+    "the activity's progression stops that week and picks up at the setting before it.",
     "undo": "Reverses an earlier change (`change`, its `seq` in the log) whose effect starts "
     "today or later.",
 }
@@ -644,6 +645,12 @@ assert list(CHANGES_DO) == list(CHANGE_TYPES)
 FORMAT_NOTES = [
     "Write a document that follows `schema`; `example` is a valid one. Each numeric field is a "
     'number, a parameter ("$squat"), or a progression with `start` and `add` or `rate`.',
+    "An override is an exception week. Its values replace the computed ones for the weeks it "
+    "names, and the week after carries on as if it hadn't happened, as after a deload. A target "
+    "of 0 is a rest: the activity has no sessions that week, its progression stops, and the week "
+    "after picks up at the setting before the rest. A back squat from 40 kg at 2.5 kg a week, "
+    "with a rest in week 4, runs 40, 42.5, 45, rest, 45, 47.5, 50. An edit-week that sets "
+    "target to 0 is a rest too.",
     "save_programme checks a document and gives every problem with its path; fix them all and "
     "send the whole document again. With `programme` and `rev` it replaces that programme.",
     "start_programme starts a library programme as a new tracker, from a date today or later, "

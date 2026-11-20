@@ -9,6 +9,7 @@ import AskPage from '@/components/AskPage.vue'
 import TrackerSection from '@/components/TrackerSection.vue'
 import NewTrackerPage from '@/components/NewTrackerPage.vue'
 import ProgrammesPage from '@/components/ProgrammesPage.vue'
+import ProgrammeBuilder, { leaveGuard } from '@/components/ProgrammeBuilder.vue'
 import ProgrammeOverview from '@/components/ProgrammeOverview.vue'
 import LoginForm from '@/components/LoginForm.vue'
 import PasswordForm from '@/components/PasswordForm.vue'
@@ -34,12 +35,14 @@ import { useAskStore } from '@/stores/ask'
 import {
   isItemHash,
   isNewTrackerHash,
+  isNewProgrammeHash,
   isProgrammesHash,
   itemHref,
   markFromProgrammes,
   markFromWeek,
   parseItemHash,
   parseNewHash,
+  parseEditProgrammeHash,
   parseProgrammeHash,
   parseSettingsHash,
   type ItemRoute,
@@ -108,10 +111,12 @@ type Page =
   | 'new-tracker'
   | 'programmes'
   | 'programme'
+  | 'builder'
 function pageFor(): Page {
   if (parseSettingsHash(location.hash)) return 'settings'
   if (isProgrammesHash(location.hash)) return 'programmes'
   if (parseProgrammeHash(location.hash)) return 'programme'
+  if (isNewProgrammeHash(location.hash) || parseEditProgrammeHash(location.hash)) return 'builder'
   if (location.hash === '#/profile') return 'profile'
   if (location.hash === '#/ask') return 'ask'
   if (isNewTrackerHash(location.hash)) return 'new-tracker'
@@ -130,6 +135,8 @@ const item = ref<ItemRoute | null>(parseItemHash(location.hash))
 const newSection = ref(parseNewHash(location.hash))
 /** The programme tracker whose overview is open. */
 const programmeTracker = ref(parseProgrammeHash(location.hash))
+/** The library programme the builder edits, or null for a new one. */
+const builderProgramme = ref(parseEditProgrammeHash(location.hash))
 /**
  * The open Settings tab (K119): the one the address names, then the one chosen on the page, which
  * writes its address there too.
@@ -145,6 +152,8 @@ const shown = computed<Page>(() =>
   page.value === 'ask' && session.ask !== true ? 'planner' : page.value,
 )
 function onHash(): void {
+  // The builder with unsaved changes keeps the page and asks first (spec F9).
+  if (page.value === 'builder' && leaveGuard.blocks?.(location.hash)) return
   link.value = linkToken()
   confirmLink.value = confirmToken()
   connectId.value = connectRequest()
@@ -156,11 +165,12 @@ function onHash(): void {
   item.value = parseItemHash(location.hash)
   newSection.value = parseNewHash(location.hash)
   programmeTracker.value = parseProgrammeHash(location.hash)
+  builderProgramme.value = parseEditProgrammeHash(location.hash)
   settingsTab.value = parseSettingsHash(location.hash) ?? settingsTab.value
   page.value = pageFor()
   // Opened from the week in this tab: its Back goes back through history (lib/routes).
   if (
-    ['item', 'new', 'new-tracker', 'programmes', 'programme'].includes(page.value) &&
+    ['item', 'new', 'new-tracker', 'programmes', 'programme', 'builder'].includes(page.value) &&
     before === 'planner'
   )
     markFromWeek()
@@ -180,7 +190,7 @@ function forgetPage(): void {
 // from the new tracker page, to the new tracker's Add button, or to Add tracker when none was added
 // (K124); back from the Programmes page or an overview, to the bar's Programmes.
 const OPENERS: Record<
-  'settings' | 'profile' | 'ask' | 'new-tracker' | 'programmes' | 'programme',
+  'settings' | 'profile' | 'ask' | 'new-tracker' | 'programmes' | 'programme' | 'builder',
   string
 > = {
   settings: 'settings-button',
@@ -189,6 +199,7 @@ const OPENERS: Record<
   'new-tracker': 'add-tracker-button',
   programmes: 'programmes-button',
   programme: 'programmes-button',
+  builder: 'programmes-button',
 }
 /** A tracker's Add button on the week, found by its section's heading (TrackerSection). */
 function addButton(id: string): HTMLElement | null {
@@ -446,7 +457,8 @@ onBeforeUnmount(() => {
          to the week (K52, K104, K106). -->
     <AppNavbar v-if="shown === 'planner'" :overlay="screens" />
     <!-- Every page but the week sits in one centred column, 960u wide on the page's margins
-         (K176): Settings, Profile, Programmes, an overview, an item's page and the new pages. Edit
+         (K176): Settings, Profile, Programmes, an overview, an item's page and the new pages. The
+         programme builder's column is 1184u, its form and its weeks side by side (spec R4). Edit
          plan is the week, full width on its margins (K54). Ask fills the screen beside its side
          panel and sets its own margins. -->
     <main
@@ -454,11 +466,13 @@ onBeforeUnmount(() => {
       :class="
         shown === 'ask'
           ? undefined
-          : shown !== 'planner'
-            ? 'mx-auto w-full max-w-[calc(var(--u)*960_+_2*var(--screen-pad-x))] px-(--screen-pad-x) pb-[calc(var(--u)*64)]'
-            : store.configMode
-              ? 'px-(--screen-pad-x) pb-[calc(var(--u)*64)]'
-              : 'mx-auto max-w-6xl px-4 pb-16 sm:px-6 lg:px-8'
+          : shown === 'builder'
+            ? 'mx-auto w-full max-w-[calc(var(--u)*1184_+_2*var(--screen-pad-x))] px-(--screen-pad-x) pb-[calc(var(--u)*64)]'
+            : shown !== 'planner'
+              ? 'mx-auto w-full max-w-[calc(var(--u)*960_+_2*var(--screen-pad-x))] px-(--screen-pad-x) pb-[calc(var(--u)*64)]'
+              : store.configMode
+                ? 'px-(--screen-pad-x) pb-[calc(var(--u)*64)]'
+                : 'mx-auto max-w-6xl px-4 pb-16 sm:px-6 lg:px-8'
       "
     >
       <AskPage v-if="shown === 'ask'" />
@@ -486,6 +500,11 @@ onBeforeUnmount(() => {
         <SyncStatus />
         <EmailStatus />
         <ProgrammeOverview :key="programmeTracker!" :tracker="programmeTracker!" />
+      </template>
+      <template v-else-if="shown === 'builder'">
+        <SyncStatus />
+        <EmailStatus />
+        <ProgrammeBuilder :key="builderProgramme ?? 'new'" :programme-id="builderProgramme" />
       </template>
       <template v-else-if="shown === 'profile'">
         <SyncStatus />

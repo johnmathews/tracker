@@ -1,0 +1,124 @@
+{
+  "doc": {
+    "format": "tracker-programme/1",
+    "name": "Beginner 5×5",
+    "description": "Three full-body sessions a week, adding weight each week, with a deload in weeks 4 and 8.",
+    "kind": "strength",
+    "weeks": 8,
+    "dailyTarget": 3,
+    "params": {
+      "squat": {
+        "label": "Squat start",
+        "unit": "kg",
+        "default": 40,
+        "min": 20,
+        "max": 200
+      },
+      "rate": {
+        "label": "Weekly increase",
+        "unit": "%",
+        "default": 5,
+        "min": 0,
+        "max": 20
+      }
+    },
+    "activities": [
+      {
+        "key": "squat",
+        "name": "Back squat",
+        "notes": "Belt from week 5.",
+        "target": 3,
+        "sets": 5,
+        "reps": 5,
+        "weight": {
+          "start": "$squat",
+          "rate": "$rate",
+          "step": 2.5
+        }
+      },
+      {
+        "key": "bench",
+        "name": "Bench press",
+        "target": 3,
+        "sets": 5,
+        "reps": 5,
+        "weight": {
+          "start": 30,
+          "add": 2.5,
+          "step": 2.5
+        }
+      },
+      {
+        "key": "row",
+        "name": "Barbell row",
+        "target": 3,
+        "sets": 5,
+        "reps": 5,
+        "weight": {
+          "start": 30,
+          "add": 2.5,
+          "step": 2.5
+        }
+      },
+      {
+        "key": "deadlift",
+        "name": "Deadlift",
+        "notes": "Hinge, don’t squat. Bar close to the shins.",
+        "target": 3,
+        "sets": 1,
+        "reps": 5,
+        "weight": {
+          "start": 60,
+          "add": 5,
+          "step": 2.5
+        }
+      },
+      {
+        "key": "plank",
+        "name": "Plank",
+        "target": 3,
+        "sets": 3,
+        "duration": {
+          "start": 30,
+          "add": 5,
+          "every": 2,
+          "max": 90
+        }
+      }
+    ],
+    "overrides": [
+      {
+        "weeks": [4, 8],
+        "label": "Deload",
+        "activities": {
+          "*": {
+            "sets": 3,
+            "weight": {
+              "scale": 0.9
+            }
+          },
+          "deadlift": {
+            "sets": 1
+          }
+        }
+      },
+      {
+        "weeks": [],
+        "activities": {}
+      }
+    ]
+  },
+  "reply": {
+    "errors": [
+      {
+        "path": "overrides[1].weeks",
+        "message": "give a list of programme weeks."
+      },
+      {
+        "path": "overrides[1].activities",
+        "message": "give the activities it changes, by key or \"*\"."
+      }
+    ],
+    "plan": null
+  }
+}

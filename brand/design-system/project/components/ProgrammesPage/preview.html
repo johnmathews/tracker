@@ -1,4 +1,4 @@
-<!-- @dsCard group="Screens" height=7000 subtitle="The Programmes page: tabs for Started, Library and Add; a run running and one paused; the library, with a programme opened in place to start, the plan as its preview, then the shared library; the admin's More menu and Publish; a pasted programme with its problems listed (K147, K171)" -->
+<!-- @dsCard group="Screens" height=7600 subtitle="The Programmes page: tabs for Started, Library and Add; a run running and one paused; the library, with a programme opened in place to start, the plan as its preview, then the shared library; the admin's More menu and Publish; a pasted programme with its problems listed (K147, K171); Edit on each Library row, Build a programme on Add, and the empty Library's line (spec R2, R3)" -->
 <!doctype html>
 <html lang="en">
   <head>
@@ -231,6 +231,15 @@
         height: 52px;
         padding: 0 16px;
       }
+      .lib .pa .pg {
+        display: contents;
+      }
+      a.btn {
+        text-decoration: none;
+      }
+      .pm.empty {
+        padding: 14px 0;
+      }
       .lib .pa .btn.quiet {
         padding: 0 10px;
       }
@@ -400,6 +409,10 @@
       }
 
       /* Add: the pasted programme in TextArea's box, then the validator's problems. */
+      .build {
+        padding-bottom: 20px;
+        border-bottom: 1px solid var(--line);
+      }
       .addtab {
         display: flex;
         flex-direction: column;
@@ -813,6 +826,22 @@
         .lib .pa.two .btn:first-child {
           grid-column: auto;
         }
+        .lib .pa.own {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .lib .pa.own .pg {
+          display: flex;
+          gap: 8px;
+        }
+        .lib .pa.own .pg:first-child .btn:first-child {
+          flex: 1 1 auto;
+          min-width: 0;
+        }
+        .build .btn {
+          width: 100%;
+        }
         .lib .pa.trail {
           grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
         }
@@ -865,8 +894,8 @@
 
     <div class="gap"></div>
     <p class="variant label">
-      Library: three programmes, each with Preview and start, Duplicate and Delete. Press Preview
-      and start
+      Library: three programmes, each with Preview and start, Edit, Duplicate and Delete. Edit
+      opens the programme in the builder (the ProgrammeBuilder card). Press Preview and start
     </p>
     <div class="stage" data-page data-tab="library"></div>
 
@@ -907,10 +936,17 @@
 
     <div class="gap"></div>
     <p class="variant label">
-      Add, after Check and add: a pasted programme with three problems, each on its own line with
-      where it is
+      Add, after Check and add: Build a programme first, which opens the builder; then a pasted
+      programme with three problems, each on its own line with where it is
     </p>
     <div class="stage" data-page data-tab="add" data-errors></div>
+
+    <div class="gap"></div>
+    <p class="variant label">
+      An empty Library: one line points at the Add tab, where Build a programme and the paste field
+      are
+    </p>
+    <div class="stage" data-page data-tab="library" data-empty></div>
 
     <script>
       // The Programmes page, drawn from the mockup's option 6B (mockups/261117-programmes, proto.js):
@@ -939,6 +975,8 @@
           eyeoff:
             '<path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/>',
           check: '<path d="M20 6 9 17l-5-5"/>',
+          pencil:
+            '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>',
           share:
             '<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" x2="12" y1="2" y2="15"/>',
           x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
@@ -1093,7 +1131,9 @@
         ) => `<div data-testid="shared-library"><p class="lead">Programmes anyone with an account can copy. A copy is yours to change and start.</p>
     <ul class="plist" aria-label="Reference">${SHARED.map((p) => `<li class="lib" data-testid="shared-programme" data-shared="${p.id}"><div><h2 class="pn">${p.name}</h2><p class="pm">${p.meta}</p><p class="pd">${p.desc}</p></div><div class="acts pa two"><button type="button" class="btn" data-testid="shared-preview-open" aria-haspopup="dialog">${ic('eye')}Preview</button><button type="button" class="btn" data-testid="shared-copy"${copied && p.id === 's55' ? ' data-copied="true">' + ic('check') + 'Added to library' : '>' + ic('copyplus') + 'Copy to library'}</button></div></li>`).join('')}</ul></div>`
         const library = (s, id) =>
-          `<div data-testid="programmes-library"><ul class="plist" aria-label="Library">${(s.copied
+          s.empty
+            ? '<div data-testid="programmes-library"><p class="pm empty" data-testid="library-empty">The library is empty. Build one, or add one on the Add tab.</p></div>'
+            : `<div data-testid="programmes-library"><ul class="plist" aria-label="Library">${(s.copied
             ? [COPIED, ...LIB]
             : LIB
           )
@@ -1101,7 +1141,7 @@
               const open = s.open === p.id
               const actions = open
                 ? ''
-                : `<div class="acts pa${s.admin ? ' trail' : ''}"><button type="button" class="btn" data-start="${p.id}" aria-expanded="false" data-testid="library-start">${ic('play')}Preview and start</button><button type="button" class="btn quiet" data-testid="library-duplicate">${ic('copy')}Duplicate</button><button type="button" class="btn quiet" data-testid="library-delete">${ic('trash')}Delete</button>${s.admin ? more(p, p.id === 'c25') : ''}</div>`
+                : `<div class="acts pa own"><span class="pg"><button type="button" class="btn" data-start="${p.id}" aria-expanded="false" data-testid="library-start">${ic('play')}Preview and start</button><a class="btn quiet" href="#/programmes/${p.id}/edit" data-testid="library-edit">${ic('pencil')}Edit</a></span><span class="pg"><button type="button" class="btn quiet" data-testid="library-duplicate">${ic('copy')}Duplicate</button><button type="button" class="btn quiet" data-testid="library-delete">${ic('trash')}Delete</button>${s.admin ? more(p, p.id === 'c25') : ''}</span></div>`
               const name = `<h2 class="pn" id="${id}-${p.id}">${p.name}</h2>`
               const chip =
                 s.admin && SHARED_IDS.has(p.id)
@@ -1115,7 +1155,7 @@
           const errs = s.errors
             ? `<div class="errs" id="${id}-errs" data-testid="add-errors"><p class="im err" role="alert">${ic('alert')}<span>This programme has three problems. Fix them, then check it again.</span></p><ul class="errlist">${ERRORS.map(([path, text]) => `<li data-testid="add-error" data-path="${path}"><span class="path">${path}:</span> ${text}</li>`).join('')}</ul></div>`
             : ''
-          return `<div class="addtab" data-testid="programme-add"><div class="field"><label class="label" for="${id}-json">Programme JSON</label><textarea class="area" id="${id}-json" rows="7" spellcheck="false" aria-describedby="${id}-json-h${s.errors ? ` ${id}-errs` : ''}"${s.errors ? ' aria-invalid="true"' : ''} data-testid="add-json">${JSON_TEXT}</textarea><p class="hint" id="${id}-json-h">Paste a programme in the tracker-programme/1 format, or choose a file. Claude can add one for you through your connection.</p></div>
+          return `<div class="addtab" data-testid="programme-add"><div class="build"><a class="btn primary" href="#/programmes/new" data-testid="add-build">Build a programme</a></div><div class="field"><label class="label" for="${id}-json">Programme JSON</label><textarea class="area" id="${id}-json" rows="7" spellcheck="false" aria-describedby="${id}-json-h${s.errors ? ` ${id}-errs` : ''}"${s.errors ? ' aria-invalid="true"' : ''} data-testid="add-json">${JSON_TEXT}</textarea><p class="hint" id="${id}-json-h">Paste a programme in the tracker-programme/1 format, or choose a file. Claude can add one for you through your connection.</p></div>
       ${errs}<div class="acts"><button type="button" class="btn" data-testid="add-choose-file">${ic('upload')}Choose file</button><button type="button" class="btn primary" data-check data-testid="add-check">Check and add</button></div></div>`
         }
 
@@ -1133,6 +1173,7 @@
             errors: 'errors' in stage.dataset,
             copied: 'copied' in stage.dataset,
             admin: 'admin' in stage.dataset,
+            empty: 'empty' in stage.dataset,
           }
           const draw = (focus) => {
             const body =

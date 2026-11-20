@@ -1,0 +1,29 @@
+{
+  "id": "xmwdbhk000006",
+  "name": "Squat block",
+  "description": null,
+  "kind": "strength",
+  "weeks": 8,
+  "activities": 1,
+  "rev": 1,
+  "createdAt": 1794474000,
+  "updatedAt": 1794474000,
+  "doc": {
+    "format": "tracker-programme/1",
+    "name": "Squat block",
+    "kind": "strength",
+    "weeks": 8,
+    "activities": [
+      {
+        "key": "back-squat",
+        "name": "Back squat",
+        "sets": 3,
+        "reps": 10,
+        "weight": {
+          "start": 40,
+          "add": 2.5
+        }
+      }
+    ]
+  }
+}

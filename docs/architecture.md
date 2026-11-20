@@ -195,6 +195,9 @@ App.vue                 picks the screen (a link, planner, Settings, an item's p
 │                       screen (K125), and goes back with focus on its Add
 ├── ProgrammesPage.vue  the Programmes page, at #/programmes (§8, K147, K161): the Started,
 │                       Library and Add tabs; Preview and start opens in place in the library
+├── ProgrammeBuilder.vue  the programme builder, at #/programmes/new and #/programmes/<id>/edit
+│                       (K183): the form (ActivityCard, ValueField, ExceptionWeekEditor,
+│                       StartValueEditor) beside the weeks, and the foot bar with Save
 ├── ProgrammeOverview.vue  a run's overview, at #/programme/<tracker> (§8, K142, K148): the
 │                       plan in ProgrammeGrid, the Work tab, the Changes tab with Undo and the
 │                       ChangeSheet
@@ -886,7 +889,7 @@ component's own.
 | Group      | Primitives                                                                                                                                                                                                                           |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Basics     | Button (primary, secondary and quiet, 44px tall, `sm` 36px from 640px up), IconButton (44px, a required `label`), TextLink, Tabs with TabsList, TabsTrigger and TabsContent (K119), BrandMark, BarAction (the Header's actions, K47) |
-| Forms      | TextField, TextArea, SegmentedControl, Switch, Stepper, RadioCard                                                                                                                                                                    |
+| Forms      | TextField, TextArea, SegmentedControl, Switch, Checkbox (K191), Stepper, RadioCard                                                                                                                                                   |
 | Overlays   | Dialog, ConfirmDialog with ConfirmHost, Popover, Menu with MenuItem (K106)                                                                                                                                                           |
 | Planner    | DayMark, Chip, SectionHeader                                                                                                                                                                                                         |
 | Feedback   | InlineMessage, Banner                                                                                                                                                                                                                |
@@ -1469,15 +1472,20 @@ back.
 - **The programmes store** (`src/stores/programmes.ts`) holds the library, the open overview's run
   (`run`) and each tracker's run as last read (`byTracker`). `loadPage` reads `/programmes` and
   `/state` for the Programmes page. `previewStart`, `start`, `loadRun`, `previewChange`,
-  `confirmChange` and `endRun` call the routes in [api.md](api.md) §3.4; `ensureRun` reads a
-  tracker's run again when the state lists a newer `rev`. A start, a confirmed change and an end
+  `confirmChange` and `endRun` call the routes in [api.md](api.md) §3.4, and so do the builder's
+  `draft` (the newest call wins) and `replace` (a 409 comes back as a conflict with the server's
+  copy). `ensureRun` reads a tracker's run again when the state lists a newer `rev`. After a save,
+  `landing` holds the saved programme's id until the Library row has landed (K174). A start, a confirmed change and an end
   call `sync.refresh()`, so the week reads the plans the server wrote. Nothing here queues: offline
   (`offline`), the controls are disabled with one line saying why. `src/lib/programmes.ts` holds
   the API types, the wording, the change bodies and `runsFromState`. `src/lib/work.ts` words the
   work charts (K179, spec 2026-11-19-work-charts §5): amounts with a thousands separator, the line
   over each chart, and the sentence naming what the total leaves out.
 - **The views.** `ProgrammesPage.vue` is `#/programmes`: the Started, Library and Add tabs (K161), and
-  Preview and start in place in the library list (K147). `ProgrammeOverview.vue` is
+  Preview and start in place in the library list (K147). `ProgrammeBuilder.vue` is
+  `#/programmes/new` and `#/programmes/<id>/edit` (K183 to K192): its state is the document
+  itself, read and written by path through `src/lib/programmeDraft.ts`, and the weeks beside it
+  come from `POST /api/programmes/draft`. `ProgrammeOverview.vue` is
   `#/programme/<tracker>`: the plan in `ui/programme-grid/ProgrammeGrid.vue` (K142, K143), the
   Changes tab with Undo, the controls, and Show it in the plan with its bar at the foot (K148).
   `ui/change-sheet/ChangeSheet.vue` is the two-step change sheet (K144) that the overview and the

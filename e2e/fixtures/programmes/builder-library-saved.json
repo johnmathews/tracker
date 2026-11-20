@@ -1,0 +1,26 @@
+{
+  "programmes": [
+    {
+      "id": "xmwdbhk000005",
+      "name": "Beginner 5×5",
+      "description": "Three full-body sessions a week, adding weight each week, with a deload in weeks 4 and 8.",
+      "kind": "strength",
+      "weeks": 8,
+      "activities": 5,
+      "rev": 1,
+      "createdAt": 1794474000,
+      "updatedAt": 1794474000
+    },
+    {
+      "id": "xmwdbhk000006",
+      "name": "Squat block",
+      "description": null,
+      "kind": "strength",
+      "weeks": 8,
+      "activities": 1,
+      "rev": 1,
+      "createdAt": 1794474000,
+      "updatedAt": 1794474000
+    }
+  ]
+}

@@ -59,8 +59,8 @@ describe('ProgrammeGridSection', () => {
     expect(preview.querySelector('button[aria-haspopup="menu"]')).toBeNull()
 
     const labels = wrapper.findAll('[role="region"]').map((r) => r.attributes('aria-label'))
-    expect(new Set(labels).size).toBe(5)
-    expect(captions(wrapper.element)).toHaveLength(5)
+    expect(new Set(labels).size).toBe(6)
+    expect(captions(wrapper.element)).toHaveLength(6)
   })
 
   it('draws rest weeks as “Rest week”, past and to come, and a real pause as Paused (K170)', () => {

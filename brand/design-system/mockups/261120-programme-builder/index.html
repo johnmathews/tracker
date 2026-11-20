@@ -1,0 +1,702 @@
+<title>Programme builder: form or grid</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="tokens.css">
+<!--
+  A mockup (design-system skill, references/mockups.md), round 2. Question 1 (the layout) is
+  decided: A. Questions 2 and 3 are open, with lettered options, one recommended each. Every stage
+  is drawn by the script at the foot from the cards' own markup and styles (ProgrammesPage,
+  ProgrammeGrid, TextField, TextArea, Stepper, SegmentedControl, Switch, Button, Chip,
+  InlineMessage, Menu, TextLink), once per theme, phone first. A laptop stage is drawn at
+  1280 x 800 and scaled to fit its pane; a phone stage is drawn at 390 wide, at real size, and
+  scrolls inside its frame. The one new value is still --candidate-builder-width (round 1's
+  pick). No colour is new. Issue #78; run manual-20261120T064700Z; spec
+  docs/specs/2026-11-20-programme-builder.md §9.
+-->
+<style>
+  body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font-sans); }
+  .mockup-page {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: var(--space-8, 32px) var(--space-16, 64px);
+    max-width: 1200px; margin: 0 auto; display: grid; gap: var(--space-12, 48px);
+  }
+  .mockup-head { display: grid; gap: var(--space-2, 8px); max-width: 70ch; }
+  .mockup-head h1, .option h3, .question h2 { margin: 0; text-wrap: balance; }
+  .mockup-head p, .option > p, .q-head p { margin: 0; }
+  .mockup-meta { color: var(--ink-secondary); }
+  .option { display: grid; gap: var(--space-4, 16px); min-width: 0; }
+  .option-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2, 8px) var(--space-3, 12px); }
+  .option-tag { color: var(--ink-secondary); }
+  .option[data-recommended] .option-tag::after { content: " · Recommended"; color: var(--ink); }
+  .option ul.points { margin: 0; padding-left: 1.4em; display: grid; gap: 4px; max-width: 75ch; }
+  .panes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--space-4, 16px); }
+  .panes.wide { grid-template-columns: minmax(0, 1fr); }
+  .panes.phones { grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); }
+  .pane { min-width: 0; background: var(--canvas); color: var(--ink); border: 1px solid var(--line);
+          border-radius: var(--radius-lg, 10px); padding: var(--space-4, 16px); overflow-x: auto; }
+  .pane-label { color: var(--ink-secondary); margin: 0 0 var(--space-3, 12px); }
+  .measures { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: var(--space-2, 8px); }
+  .measures li { border: 1px solid var(--line); border-radius: var(--radius-sm, 4px); padding: 2px var(--space-2, 8px); font-variant-numeric: tabular-nums; }
+  .measures li[data-pass="no"] { border-color: currentColor; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .question { display: grid; gap: var(--space-10, 40px); padding-top: var(--space-8, 32px); border-top: 2px solid var(--ink); }
+  .q-head { display: grid; gap: var(--space-2, 8px); max-width: 75ch; }
+  .q-num { color: var(--ink-secondary); }
+  .sub { margin: var(--space-2, 8px) 0 0; }
+
+  /* ---- The candidate: option A's page column, wider than K176's 960u. ---- */
+  .question, .question [data-theme] { --candidate-builder-width: 1184px; }
+
+  /* ---- The stages. A laptop is 1280 x 800, scaled to its pane; a phone is 390 wide. ---- */
+  .dk-wrap { position: relative; width: 100%; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-lg); }
+  .dk { width: 1280px; height: 800px; overflow-y: auto; transform-origin: 0 0; background: var(--canvas); position: relative; }
+  .ph { width: 390px; max-width: 100%; height: 800px; overflow-y: auto; overflow-x: hidden; margin: 0 auto; border: 1px solid var(--line);
+        border-radius: var(--radius-lg); background: var(--canvas); position: relative; }
+
+  /* ---- Shared by the cards, at u = 1 (a 1280 x 800 screen; K55). ---- */
+  .pane * { box-sizing: border-box; }
+  .pane { font-variant-numeric: tabular-nums; }
+  .pane button, .pane input, .pane textarea { font: inherit; color: inherit; }
+  .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  svg.i { width: 1em; height: 1em; flex: none; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 60px; padding: 0 22px; border: 1px solid var(--control-border); border-radius: var(--radius-md);
+    background: transparent; color: var(--ink); font: 600 19px / 25px var(--font-sans); cursor: pointer; white-space: nowrap; }
+  .btn svg { width: 26px; height: 26px; }
+  .btn:hover { background: var(--tile); }
+  .btn.quiet { border-color: transparent; }
+  .btn.primary { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+  .btn.sm { height: 52px; padding: 0 16px; }
+  .ib { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 52px; height: 52px; padding: 0; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); cursor: pointer; }
+  .ib svg { width: 26px; height: 26px; }
+  .ib:hover { background: var(--tile); }
+  .chip { display: inline-block; font: 600 16px / 22px var(--font-sans); background: var(--tile); color: var(--ink-secondary); border-radius: var(--radius-sm); padding: 1px var(--space-2); white-space: nowrap; }
+  .im { display: flex; align-items: flex-start; gap: var(--space-2); margin: 0; font-size: 16px; line-height: 22px; }
+  .im svg { width: 16px; height: 16px; margin-top: 3px; flex: none; }
+  .im.err { color: var(--error-ink); }
+  .im.ok { color: var(--ink); }
+  .im.info { color: var(--ink-secondary); }
+  a.tl { color: var(--ink); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; font-size: 19px; line-height: 26px; }
+  a.tl:hover { text-decoration-thickness: 2px; }
+
+  /* The page: ProgrammesPage's head with no bar, Back to programmes, the title. */
+  .page { padding: 28px 48px 0; display: flex; flex-direction: column; min-width: 0; }
+  .col { width: min(100%, var(--candidate-builder-width)); margin: 0 auto; }
+  .back { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-size: 19px; line-height: 26px; text-decoration: underline; text-underline-offset: 4px; }
+  .back svg { width: 26px; height: 26px; }
+  .over { margin: 4px 0 0; color: var(--ink-secondary); font: 600 16px / 22px var(--font-sans); }
+  h4.ttl { margin: 0; font: 600 40px / 46px var(--font-serif); }
+
+  /* Fields, as TextField, Stepper and SegmentedControl at the page's size (60u, 19u). */
+  .field { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .field > .lbl { font: 600 19px / 25px var(--font-sans); }
+  .hint { margin: 0; color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
+  .ferr { display: flex; gap: 6px; align-items: flex-start; margin: 0; color: var(--error-ink); font-size: 16px; line-height: 22px; }
+  .ferr svg { width: 16px; height: 16px; margin-top: 3px; flex: none; }
+  input.tf, button.pick, textarea.ta { width: 100%; padding: 0 15px; border: 1px solid var(--control-border); border-radius: var(--radius-sm); background: var(--panel); color: var(--ink); font: 400 19px / 1.3 var(--font-sans); font-variant-numeric: tabular-nums; }
+  input.tf, button.pick { height: 60px; }
+  textarea.ta { padding: 12px 15px; line-height: 1.45; resize: vertical; display: block; }
+  input.tf.num { max-width: 140px; }
+  input.tf[aria-invalid="true"] { border-color: var(--error-ink); }
+  input.tf:hover, .pick:hover, textarea.ta:hover { border-color: var(--ink); }
+  .pick { display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; cursor: pointer; }
+  .pick b { font-weight: 600; }
+  .pick svg { width: 22px; height: 22px; color: var(--ink-secondary); }
+  .withunit { display: flex; align-items: center; gap: 10px; }
+  .withunit span { font-size: 19px; color: var(--ink-secondary); }
+  .stepper { display: inline-flex; align-items: stretch; height: 60px; border: 1px solid var(--control-border); border-radius: var(--radius-md); align-self: flex-start; }
+  .stepper button { display: inline-flex; align-items: center; justify-content: center; width: 56px; padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); cursor: pointer; }
+  .stepper button svg { width: 24px; height: 24px; }
+  .stepper button:hover { background: var(--tile); }
+  .stepper output { display: flex; align-items: center; justify-content: center; min-width: 56px; padding: 0 4px; font: 600 19px / 25px var(--font-sans); white-space: nowrap; }
+  .seg { display: inline-flex; flex-wrap: wrap; align-self: flex-start; max-width: 100%; border: 1px solid var(--control-border); border-radius: var(--radius-md); }
+  .seg button { height: 58px; padding: 0 18px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); font: 600 19px / 25px var(--font-sans); cursor: pointer; white-space: nowrap; }
+  .seg button:hover { background: var(--tile); }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
+  .row { display: flex; flex-wrap: wrap; gap: 20px 24px; align-items: flex-start; }
+  .row > .field { flex: 0 1 auto; }
+  .row > .field.grow { flex: 1 1 200px; }
+
+  /* The form's sections: a title on a line rule, as the Programmes page's sections (K171). */
+  .sect { display: flex; flex-direction: column; gap: 20px; padding-top: 28px; }
+  .sect + .sect { margin-top: 12px; border-top: 1px solid var(--line); }
+  .sect > h5 { margin: 0; font: 600 27px / 34px var(--font-sans); }
+  .sect > .lead { margin: -12px 0 0; color: var(--ink-secondary); font-size: 19px; line-height: 1.45; }
+
+  /* An activity: a card with a 1px line, opened in place in 2px ink (K147's open frame). */
+  .acts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+  .ac { border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--canvas); }
+  .ac.open { border: 2px solid var(--ink); }
+  .ac.bad { border-color: var(--error-ink); }
+  .ac-head { display: flex; align-items: flex-start; gap: 8px; padding: 12px 8px 12px 12px; }
+  .ac-toggle { flex: 1 1 auto; min-width: 0; display: flex; align-items: flex-start; gap: 10px; padding: 4px; border: 0; border-radius: var(--radius-sm); background: transparent; text-align: left; cursor: pointer; }
+  .ac-toggle > svg { width: 26px; height: 26px; margin-top: 1px; color: var(--ink-secondary); }
+  .ac-toggle:hover { background: var(--tile); }
+  .ac-name { display: block; font: 600 22px / 1.3 var(--font-sans); }
+  .ac-sum { display: block; color: var(--ink-secondary); font-size: 19px; line-height: 1.45; }
+  .ac-err { margin-top: 4px; }
+  .ac-body { display: flex; flex-direction: column; gap: 22px; padding: 4px 20px 20px 54px; }
+  .grp { display: flex; flex-direction: column; gap: 16px; padding: 16px; border-radius: var(--radius-md); background: var(--tile); }
+  .grp .lbl { font: 600 19px / 25px var(--font-sans); }
+  .grp input.tf, .grp .pick { background: var(--panel); }
+  .more { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; padding: 0; border: 0; background: transparent; color: var(--ink); font-size: 19px; line-height: 26px; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
+  .more svg { width: 22px; height: 22px; }
+
+  /* Lists of exception weeks and of values chosen at start: rows on line rules. */
+  .rows { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+  .rows li { display: flex; align-items: flex-start; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+  .rows .txt { flex: 1 1 auto; min-width: 0; }
+  .rows .nm { display: block; font: 600 19px / 25px var(--font-sans); }
+  .rows .ln { display: block; font-size: 19px; line-height: 1.45; }
+  .rows .ln2 { display: block; color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
+
+  /* The foot bar: ProgrammeGrid's "Previewing a change" bar (K148), holding the check and Save. */
+  .bar { position: sticky; bottom: 0; z-index: 6; margin-top: 40px; background: var(--panel); border-top: 1px solid var(--line); box-shadow: var(--shadow-overlay); }
+  .bar-in { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding: 14px 48px; }
+  .bar-in .im { flex: 1 1 260px; font-size: 19px; line-height: 26px; }
+  .bar-in .im svg { width: 20px; height: 20px; margin-top: 3px; }
+  .bar-in .btns { display: flex; gap: 12px; margin-left: auto; }
+
+  /* ---- The grid (ProgrammeGrid card), undated (K173): weeks by number, all later weeks. ---- */
+  .grid-wrap { position: relative; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
+  table.og { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 19px; color: var(--ink); }
+  .og button { color: var(--ink); }
+  .og th, .og td { padding: 12px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; font-weight: 400; }
+  .og thead th { border-bottom: 1px solid var(--ink); vertical-align: bottom; }
+  .og .act { position: sticky; left: 0; z-index: 2; background: var(--canvas); width: 216px; min-width: 216px; }
+  .og .wk { min-width: 108px; }
+  .og .wn { display: block; font: 600 19px / 1.35 var(--font-sans); white-space: nowrap; }
+  .og .wt { display: block; font: 600 16px / 22px var(--font-sans); white-space: nowrap; }
+  .og .an { display: block; font: 600 22px / 1.3 var(--font-sans); overflow-wrap: anywhere; }
+  .og .ad { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 4px; align-items: center; }
+  .og .ad .t { color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
+  .cv { display: flex; align-items: center; gap: 6px; font: 600 21px / 1.3 var(--font-sans); white-space: nowrap; }
+  .cv svg { width: 16px; height: 16px; color: var(--ink-secondary); }
+  .cs { display: block; color: var(--ink-secondary); font-size: 16px; line-height: 22px; white-space: nowrap; }
+  /* A week over an item's limit, in the live preview: error-ink, with the field's own words. */
+  .og td.over .cv { color: var(--error-ink); }
+  .og td.over .cv svg { color: var(--error-ink); }
+
+  /* Option A: the form and the live preview, side by side. */
+  .two { display: grid; grid-template-columns: 520px minmax(0, 1fr); gap: 48px; align-items: start; margin-top: 8px; }
+  .pv { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 6px; padding-top: 28px; min-width: 0; }
+  .pv h5 { margin: 0; font: 600 27px / 34px var(--font-sans); }
+  .pv .hint { font-size: 16px; }
+
+  /* Option C: the grid is the editor. Every cell, head and week is a button. */
+  .strip { display: flex; flex-wrap: wrap; gap: 20px 24px; align-items: flex-end; margin-top: 24px; }
+  .strip .field.name { flex: 1 1 320px; }
+  .og button.cellbtn, .og button.headbtn { display: block; width: 100%; min-height: 44px; margin: 0; padding: 12px 8px; border: 0; background: transparent; text-align: left; cursor: pointer; border-radius: 0; }
+  .og td.tap, .og th.tap { padding: 0; }
+  .og td.tap:hover, .og th.tap:hover { background: var(--tile); }
+  .og td.sel, .og th.sel { background: var(--tile); box-shadow: inset 0 0 0 2px var(--ink); }
+  .og .rule { display: block; margin-top: 2px; color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
+  .og .act .rule { color: var(--ink); font-weight: 600; }
+  .og .act.bad .rule { color: var(--error-ink); }
+  .anchor { position: relative; }
+  .menu { position: absolute; z-index: 5; width: 340px; padding: var(--space-2); background: var(--panel); color: var(--ink);
+    border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-overlay); text-align: left; }
+  .menu .mt { margin: 6px 12px 8px; font: 600 16px / 22px var(--font-sans); color: var(--ink-secondary); }
+  .menu ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .menu .item { display: flex; align-items: flex-start; gap: var(--space-3); width: 100%; padding: 10px var(--space-3); border: 0; border-radius: var(--radius-md);
+    background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+  .menu .item svg { width: 22px; height: 22px; margin-top: 2px; }
+  .menu .item b { display: block; font: 600 16px / 22px var(--font-sans); }
+  .menu .item span { display: block; color: var(--ink-secondary); font-size: 16px; line-height: 22px; }
+  .menu .item:hover, .menu .item[data-highlighted] { background: var(--tile); }
+  .under { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+  .note-c { margin: 16px 0 0; color: var(--ink-secondary); font-size: 16px; line-height: 22px; max-width: 70ch; }
+
+  /* ---- Folded (the phone stage): the cards' n sizes. ---- */
+  .ph .page { padding: 20px 16px 0; }
+  .ph .back, .ph a.tl { font-size: 18px; line-height: 26px; }
+  .ph .back svg { width: 22px; height: 22px; }
+  .ph h4.ttl { font-size: 30px; line-height: 36px; }
+  .ph .btn, .ph .btn.sm { height: 48px; padding: 0 16px; font-size: 16px; line-height: 22px; }
+  .ph .btn svg { width: 22px; height: 22px; }
+  .ph .ib { width: 44px; height: 48px; }
+  .ph .ib svg { width: 24px; height: 24px; }
+  .ph .field { gap: 6px; }
+  .ph .field > .lbl, .ph .grp .lbl { font-size: 16px; line-height: 22px; }
+  .ph input.tf, .ph button.pick { height: 48px; font-size: 18px; padding: 0 12px; }
+  .ph textarea.ta { font-size: 18px; padding: 10px 12px; }
+  .ph .stepper { height: 48px; }
+  .ph .stepper button { width: 44px; }
+  .ph .stepper output { font-size: 18px; min-width: 44px; }
+  .ph .seg button { height: 46px; padding: 0 12px; font-size: 16px; line-height: 22px; }
+  .ph .withunit span { font-size: 18px; }
+  .ph .row { gap: 16px; }
+  .ph .sect { gap: 16px; padding-top: 22px; }
+  .ph .sect > h5, .ph .pv h5 { font-size: 22px; line-height: 28px; }
+  .ph .sect > .lead { font-size: 18px; margin-top: -8px; }
+  .ph .ac-head { padding: 8px 4px 8px 8px; }
+  .ph .ac-name { font-size: 18px; }
+  .ph .ac-sum, .ph .rows .ln, .ph .rows .nm { font-size: 18px; line-height: 26px; }
+  .ph .ac-body { padding: 4px 12px 16px 12px; gap: 18px; }
+  .ph .grp { padding: 12px; gap: 12px; }
+  .ph .more { font-size: 18px; }
+  .ph .bar { margin-top: 32px; }
+  .ph .bar-in { padding: 12px 16px; }
+  .ph .bar-in .im { flex-basis: 100%; font-size: 16px; line-height: 22px; }
+  .ph .bar-in .im svg { width: 16px; height: 16px; }
+  .ph .bar-in .btns { width: 100%; margin: 0; }
+  .ph .bar-in .btns .btn { flex: 1 1 0; }
+  .ph .two { display: block; margin-top: 0; }
+  .ph .pv { position: static; padding-top: 22px; margin-top: 12px; border-top: 1px solid var(--line); }
+  .ph table.og { font-size: 18px; }
+  .ph .og th, .ph .og td { padding: 10px 8px; }
+  .ph .og .act { width: 132px; min-width: 132px; box-shadow: 1px 0 0 var(--line); }
+  .ph .og .wk { min-width: 104px; }
+  .ph .og .wn { font-size: 16px; }
+  .ph .og .an, .ph .cv { font-size: 18px; }
+  .ph .og button.cellbtn, .ph .og button.headbtn { padding: 10px 8px; }
+  .ph .grid-wrap { margin: 0 -16px; }
+  .ph .og th:first-child, .ph .og td:first-child { padding-left: 16px; }
+  .ph .og th.tap:first-child .headbtn { padding-left: 16px; }
+  .ph .strip { margin-top: 16px; gap: 16px; }
+  .ph .menu { width: min(320px, calc(100% - 32px)); }
+
+  @media (prefers-reduced-motion: no-preference) { .btn, .ib, .seg button, .stepper button, .menu .item, .ac-toggle { transition: background-color 120ms, color 120ms, border-color 120ms; } }
+  @media (max-width: 639px) {
+    .pane { padding: var(--space-3, 12px); }
+  }
+
+  /* ================= Round 2 ================= */
+  details.question { display: grid; gap: var(--space-4, 16px); }
+  details.question > summary { cursor: pointer; }
+  details.question > summary h2 { display: inline; }
+  .decided { color: var(--ink-secondary); }
+
+  /* A disclosure inside a group, and a TextLink-sized link button. */
+  .lnk { display: inline-flex; align-self: flex-start; padding: 0; border: 0; background: transparent; color: var(--ink); font-size: 16px; line-height: 22px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+  .pane input::placeholder { color: var(--ink-secondary); opacity: 1; }
+
+  /* Q2 A: one line per value; one opens at a time into the group. */
+  .vlist { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+  .vr { border-bottom: 1px solid var(--line); }
+  .vr-btn { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 10px 4px; border: 0; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+  .vr-btn:hover { background: var(--tile); }
+  .vr-btn > svg { width: 22px; height: 22px; color: var(--ink-secondary); }
+  .vr-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; }
+  .vr-l { flex: 0 0 132px; font: 600 19px / 25px var(--font-sans); }
+  .vr-v { flex: 1 1 180px; min-width: 0; font-size: 19px; line-height: 1.45; }
+  .vr-v.none { color: var(--ink-secondary); }
+  .vr.open > .vr-btn { padding-bottom: 6px; }
+  .vr.open > .grp { margin: 0 0 14px; }
+
+  /* Q2 C: a Grows switch on each field (the Switch card). */
+  .cf { display: flex; flex-direction: column; gap: 10px; }
+  .cf-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .cf-head .lbl { font: 600 19px / 25px var(--font-sans); }
+  .cf-ctl { display: flex; align-items: center; gap: 8px; }
+  .switch { display: inline-flex; align-items: center; gap: var(--space-3); height: 44px; padding: 0 var(--space-2); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); font: 400 16px/24px var(--font-sans); cursor: pointer; white-space: nowrap; }
+  .switch:hover { background: var(--tile); }
+  .track { position: relative; box-sizing: border-box; flex: none; width: 40px; height: 24px; border: 1px solid var(--control-border); border-radius: var(--radius-full); background: transparent; }
+  .thumb { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: var(--radius-full); background: var(--ink-secondary); }
+  .switch[aria-checked="true"] .track { background: var(--ink); border-color: var(--ink); }
+  .switch[aria-checked="true"] .thumb { left: 19px; background: var(--on-ink); }
+  input.tf.sm { max-width: 110px; }
+
+  /* Q3: the exception week's values, a group per activity; and its rows. */
+  .exr { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding-top: 12px; border-top: 1px solid var(--control-border); }
+  .grp > .exr:first-of-type { border-top: 0; padding-top: 0; }
+  .exr-h { flex: 0 0 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -6px 0 -6px; }
+  .exr-f { font: 600 19px / 25px var(--font-sans); }
+  .btn.quiet.sm { padding: 0 10px; }
+
+  /* Q3 B: week numbers to press, and the values as a table. */
+  .weekpick { display: flex; flex-wrap: wrap; gap: 8px; }
+  .weekpick button { width: 56px; height: 56px; padding: 0; border: 1px solid var(--control-border); border-radius: var(--radius-md); background: transparent; color: var(--ink); font: 600 19px / 25px var(--font-sans); cursor: pointer; }
+  .weekpick button:hover { background: var(--tile); }
+  .weekpick button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+  .xt-wrap { overflow-x: auto; overscroll-behavior-x: contain; }
+  table.xt { border-collapse: separate; border-spacing: 0; font-size: 19px; color: var(--ink); }
+  .xt th, .xt td { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+  .xt thead th { font: 600 16px / 22px var(--font-sans); color: var(--ink-secondary); border-bottom: 1px solid var(--ink); white-space: nowrap; }
+  .xt tbody th { font: 600 19px / 25px var(--font-sans); white-space: nowrap; position: sticky; left: 0; background: var(--canvas); z-index: 1; }
+  .xt input.tf { width: 92px; height: 52px; }
+  .xt .na { display: inline-block; width: 92px; text-align: center; color: var(--ink-secondary); }
+
+  /* Phone sizes for round 2. */
+  .ph .vr-btn { min-height: 52px; padding: 8px 2px; }
+  .ph .vr-l { flex-basis: 100%; font-size: 16px; line-height: 22px; }
+  .ph .vr-v { flex-basis: 100%; font-size: 18px; line-height: 26px; }
+  .ph .cf-head .lbl, .ph .exr-f { font-size: 16px; line-height: 22px; }
+  .ph .weekpick button { width: 48px; height: 48px; font-size: 16px; }
+  .ph table.xt { font-size: 18px; }
+  .ph .xt tbody th { font-size: 16px; }
+  .ph .xt input.tf { width: 76px; height: 48px; }
+  .ph .xt .na { width: 76px; }
+  .ph .xt-wrap { margin: 0 -12px; padding: 0 12px; }
+</style>
+
+<main class="mockup-page">
+  <header class="mockup-head">
+    <p class="caption mockup-meta">Mockup · round 2 · 2026-11-20 · Tracker · issue #78</p>
+    <h1 class="title-1">Programme builder: the fields and the editors</h1>
+    <p class="body">The layout is decided: a form, with the weeks beside it (option A of round 1). Two questions are open. Both are about parts of the form that round 1 drew closed, or drew only for Weight.</p>
+    <p class="body mockup-meta">Each option is drawn on a phone first, 390 wide at real size, then on a laptop at 1280 × 800, scaled to fit. Scroll inside a stage to see the rest of the page. The programme is Beginner 5×5 from docs/programmes.md, with no mistakes this time.</p>
+  </header>
+
+  <section class="question" id="q2" aria-labelledby="q2-h">
+    <header class="q-head">
+      <p class="label q-num">Open question</p>
+      <h2 class="title-1" id="q2-h">2. How a value shows its shape, and how a field is left out</h2>
+      <p class="body">Each number in an activity can be one of three things. It can be a plain number, a value chosen at start, or a value that grows week by week. Times a week, Sets, Reps, Time, Distance and Weight all work this way. Some fields can also be left out: a plank has no weight. The card shown is Plank: 3 sets, a hold that starts at 30 s and grows 5 s every 2 weeks up to 90 s, and no weight.</p>
+      <p class="body">Measure gains a third choice in every option: <b>Reps</b>, <b>Time</b> or <b>Neither</b>. A field that can be left out offers <b>None</b>. A field left out stays out of the saved programme.</p>
+    </header>
+
+    <section class="option" id="q2a" data-recommended aria-labelledby="q2a-h">
+      <div class="option-head"><h3 class="title-2" id="q2a-h">A. One line per value, opened one at a time</h3><span class="label option-tag">Option A</span></div>
+      <p class="body">Each value is a line: its name, then its shape in words, such as “30 s, +5 s every 2 weeks, up to 90 s” or “None”. Pressing a line opens it into the group that round 1 drew for Weight, and closes the one open before. Recommended: the card stays short, and every value reads as a sentence before it is opened.</p>
+      <p class="label sub">Phone: Plank open, its Hold opened</p>
+      <div class="panes phones"><div class="pane" data-theme="light" data-draw="q2a-ph"></div><div class="pane" data-theme="dark" data-draw="q2a-ph"></div></div>
+      <p class="label sub">Phone: Base miles, a cardio programme, with Long ride open. Its distance starts at a value chosen at start.</p>
+      <div class="panes phones"><div class="pane" data-theme="light" data-draw="q2a-cardio"></div><div class="pane" data-theme="dark" data-draw="q2a-cardio"></div></div>
+      <p class="label sub">Laptop, 1280 × 800: Plank open</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="q2a-dk"></div><div class="pane" data-theme="dark" data-draw="q2a-dk"></div></div>
+      <ul class="measures caption">
+        <li data-fg="var(--ink-secondary)" data-bg="var(--canvas)" data-min="4.5">“None” on a line</li>
+        <li data-fg="var(--ink-secondary)" data-bg="var(--tile)" data-min="4.5">A hint inside the open group</li>
+      </ul>
+    </section>
+
+    <section class="option" id="q2b" aria-labelledby="q2b-h">
+      <div class="option-head"><h3 class="title-2" id="q2b-h">B. Every value drawn in full</h3><span class="label option-tag">Option B</span></div>
+      <p class="body">Each value is its own group, always open, as round 1 drew Weight. Nothing needs pressing to be seen. The cost is height: Plank alone runs to about two phone screens, and an activity with weight and reps runs longer.</p>
+      <p class="label sub">Phone: Plank open</p>
+      <div class="panes phones"><div class="pane" data-theme="light" data-draw="q2b-ph"></div><div class="pane" data-theme="dark" data-draw="q2b-ph"></div></div>
+      <p class="label sub">Laptop, 1280 × 800: Plank open</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="q2b-dk"></div><div class="pane" data-theme="dark" data-draw="q2b-dk"></div></div>
+    </section>
+
+    <section class="option" id="q2c" aria-labelledby="q2c-h">
+      <div class="option-head"><h3 class="title-2" id="q2c-h">C. A Grows switch on each field</h3><span class="label option-tag">Option C</span></div>
+      <p class="body">Each value is a plain field with a <b>Grows</b> switch beside its name. Turning it on shows the increase under the field. The menu beside a field offers a value chosen at start. Weight left empty means none. The fields read like the app’s own exercise form. A value chosen at start and None are less visible, since each sits behind a menu or an empty box.</p>
+      <p class="label sub">Phone: Plank open</p>
+      <div class="panes phones"><div class="pane" data-theme="light" data-draw="q2c-ph"></div><div class="pane" data-theme="dark" data-draw="q2c-ph"></div></div>
+      <p class="label sub">Laptop, 1280 × 800: Plank open</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="q2c-dk"></div><div class="pane" data-theme="dark" data-draw="q2c-dk"></div></div>
+      <ul class="measures caption">
+        <li data-fg="var(--control-border)" data-bg="var(--canvas)" data-min="3">The switch’s track, off</li>
+        <li data-fg="var(--ink-secondary)" data-bg="var(--canvas)" data-min="3">The switch’s thumb, off</li>
+        <li data-fg="var(--on-ink)" data-bg="var(--ink)" data-min="3">The switch’s thumb, on</li>
+      </ul>
+    </section>
+  </section>
+
+  <section class="question" id="q3" aria-labelledby="q3-h">
+    <header class="q-head">
+      <p class="label q-num">Open question</p>
+      <h2 class="title-1" id="q3-h">3. An exception week, opened</h2>
+      <p class="body">An exception week replaces some values for named weeks, such as a deload. It holds its weeks (any of 1 to 156), an optional label, and its values. A value is for every activity or for one, and each is a number or a percentage of the planned value. One activity’s own value beats the value for every activity. Both options open the exception in place, framed as an open activity card is. The example is Beginner 5×5’s deload: weeks 4 and 8, 3 sets and 90% of the weight, and the deadlift at 1 set.</p>
+    </header>
+
+    <section class="option" id="q3a" data-recommended aria-labelledby="q3a-h">
+      <div class="option-head"><h3 class="title-2" id="q3a-h">A. Weeks typed as a list, values as rows</h3><span class="label option-tag">Option A</span></div>
+      <p class="body">The weeks are typed as numbers with commas: “4, 8”. The values sit in groups, one for every activity and one per activity that has its own. Each row says what it changes: <b>Set to</b> a number, or <b>% of planned</b>. Recommended: it works the same for 8 weeks or 156, and each row reads as what it does.</p>
+      <p class="label sub">Phone: weeks 4 and 8 open</p>
+      <div class="panes phones"><div class="pane" data-theme="light" data-draw="q3a-ph"></div><div class="pane" data-theme="dark" data-draw="q3a-ph"></div></div>
+      <p class="label sub">Laptop, 1280 × 800: weeks 4 and 8 open</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="q3a-dk"></div><div class="pane" data-theme="dark" data-draw="q3a-dk"></div></div>
+    </section>
+
+    <section class="option" id="q3b" aria-labelledby="q3b-h">
+      <div class="option-head"><h3 class="title-2" id="q3b-h">B. Weeks pressed on a grid of numbers, values in a table</h3><span class="label option-tag">Option B</span></div>
+      <p class="body">Each week is a number to press. The values sit in a table: a row for every activity and one per activity, and a column per field. A cell holds a number, or a percentage such as 90%, and an empty cell keeps the plan. The table shows every value at once. A 156-week programme shows 156 numbers, and the table scrolls sideways on a phone.</p>
+      <p class="label sub">Phone: weeks 4 and 8 open</p>
+      <div class="panes phones"><div class="pane" data-theme="light" data-draw="q3b-ph"></div><div class="pane" data-theme="dark" data-draw="q3b-ph"></div></div>
+      <p class="label sub">Laptop, 1280 × 800: weeks 4 and 8 open</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="q3b-dk"></div><div class="pane" data-theme="dark" data-draw="q3b-dk"></div></div>
+      <ul class="measures caption">
+        <li data-fg="var(--on-ink)" data-bg="var(--ink)" data-min="4.5">A pressed week’s number</li>
+        <li data-fg="var(--control-border)" data-bg="var(--canvas)" data-min="3">A week’s outline</li>
+      </ul>
+    </section>
+
+    <section class="option" id="q3s" aria-labelledby="q3s-h">
+      <div class="option-head"><h3 class="title-2" id="q3s-h">In both options: a value chosen at start, opened</h3></div>
+      <p class="body">A value chosen at start opens in place the same way. It holds a label, a unit, a default, and an optional lowest and highest value. A line names the fields that use it. Removing it is refused while a field uses it, and the refusal names that field.</p>
+      <p class="label sub">Phone: Squat start open</p>
+      <div class="panes phones"><div class="pane" data-theme="light" data-draw="q3s-ph"></div><div class="pane" data-theme="dark" data-draw="q3s-ph"></div></div>
+      <p class="label sub">Laptop, 1280 × 800: Squat start open</p>
+      <div class="panes wide"><div class="pane" data-theme="light" data-draw="q3s-dk"></div><div class="pane" data-theme="dark" data-draw="q3s-dk"></div></div>
+    </section>
+  </section>
+
+  <details class="question" id="q1">
+    <summary><h2 class="title-2">1. Where you type a programme’s values <span class="decided">(decided: A)</span></h2></summary>
+    <p class="body">A form, with the weeks beside it: John, 2026-11-20. The page column is 1184u on a laptop, so the 520u form and the grid sit side by side. On a phone the grid moves under the form as Preview. Option C, editing on the week grid, was not picked.</p>
+  </details>
+</main>
+
+<script>
+// Every stage is drawn here, once per pane, so light and dark show the same thing. The markup and
+// the sizes are the cards'; the words follow src/components/ProgrammesPage.vue, docs/programmes.md
+// and the voice (plain, one idea per sentence).
+(() => {
+  const P = {
+    left: '<path d="m15 18-6-6 6-6"/>',
+    down: '<path d="m6 9 6 6 6-6"/>',
+    right: '<path d="m9 18 6-6-6-6"/>',
+    minus: '<path d="M5 12h14"/>',
+    plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+    alert: '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>',
+    check: '<path d="M20 6 9 17l-5-5"/>',
+    ellipsis: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+    pencil: '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>',
+    x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+  }
+  const ic = (name, cls = 'i') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name]}</svg>`
+  const btn = (icon, words, cls = '') => `<button type="button" class="btn${cls ? ' ' + cls : ''}">${icon ? ic(icon) : ''}${words}</button>`
+  let uid = 0
+  const id = (p) => `${p}${++uid}`
+
+  // ------------------------------------------------------------------------------- the data
+  // Beginner 5×5 as the server computes it (docs/programmes.md §6).
+  const FIVE = {
+    title: 'New programme', over: 'Programmes', weeks: 8, labels: { 4: 'Deload', 8: 'Deload' },
+    acts: [
+      { key: 'squat', name: 'Back squat', chip: '5 × 5', t: '3 a week', sum: '5 × 5 · 40 kg, +5% a week, chosen at start', cells: [40, 42.5, 45, 42.5, 47.5, 50, 52.5, 50].map((v, i) => [`${v} kg`, [3, 7].includes(i) ? '3 × 5' : '5 × 5']) },
+      { key: 'bench', name: 'Bench press', chip: '5 × 5', t: '3 a week', sum: '5 × 5 · 30 kg, +2.5 kg a week', cells: [30, 32.5, 35, 35, 40, 42.5, 45, 42.5].map((v, i) => [`${v} kg`, [3, 7].includes(i) ? '3 × 5' : '5 × 5']) },
+      { key: 'row', name: 'Barbell row', chip: '5 × 5', t: '3 a week', sum: '5 × 5 · 30 kg, +2.5 kg a week', cells: [30, 32.5, 35, 35, 40, 42.5, 45, 42.5].map((v, i) => [`${v} kg`, [3, 7].includes(i) ? '3 × 5' : '5 × 5']) },
+      { key: 'deadlift', name: 'Deadlift', chip: '1 × 5', t: '3 a week', sum: '1 × 5 · 60 kg, +5 kg a week', cells: [60, 65, 70, 67.5, 80, 85, 90, 85].map((v) => [`${v} kg`, '1 × 5']) },
+      { key: 'plank', name: 'Plank', chip: '3 sets', t: '3 a week', sum: '3 × 30 s · +5 s every 2 weeks, up to 90 s', cells: [30, 30, 35, 35, 40, 40, 45, 45].map((v) => [`${v} s`, '3 sets']) },
+    ],
+  }
+  // Base miles (fixtures/programmes/valid/cardio.json) as the engine computes it: week 4 is the
+  // easy week, 80% of the time, and the long ride's 15 km.
+  const MILES = {
+    title: 'Base miles', over: 'Edit programme', weeks: 6, labels: { 4: 'Easy week' }, cardio: true,
+    acts: [
+      { key: 'run', name: 'Easy run', t: '2 a week', sum: '20 min, +10% a week, up to 30 min · 3 km, +0.5 km a week, up to 6 km', cells: [[20, 3], [22, 3.5], [24, 4], [21, 4.5], [29, 5], [30, 5.5]].map(([m, k]) => [`${m} min`, `${k} km`]) },
+      { key: 'long-ride', name: 'Long ride', t: '1 a week', sum: '60 min, +10 min every 2 weeks · 20 km chosen at start, +10% a week', cells: [[60, 20], [60, 22], [70, 24.2], [56, 15], [80, 29.3], [80, 32.2]].map(([m, k]) => [`${m} min`, `${k} km`]) },
+    ],
+  }
+
+  // ------------------------------------------------------------------------- the controls
+  const field = (label, control, after = '') => { const f = id('f'); return `<div class="field"><label class="lbl" for="${f}">${label}</label>${control.replace('%ID%', f)}${after}</div>` }
+  const tf = (value, cls = '', extra = '') => `<input class="tf${cls ? ' ' + cls : ''}" id="%ID%" value="${value}"${extra}>`
+  const unit = (value, u, cls = 'num', extra = ' inputmode="decimal"') => `<span class="withunit"><input class="tf ${cls}" id="%ID%" value="${value}"${extra}><span>${u}</span></span>`
+  const stepper = (label, value, lower, raise) => { const h = id('s'); return `<div class="field"><span class="lbl" id="${h}">${label}</span><div class="stepper" role="group" aria-labelledby="${h}"><button type="button" aria-label="${lower}">${ic('minus')}</button><output aria-live="polite">${value}</output><button type="button" aria-label="${raise}">${ic('plus')}</button></div></div>` }
+  const bareStepper = (label, value) => `<div class="stepper" role="group" aria-label="${label}"><button type="button" aria-label="Lower ${label}">${ic('minus')}</button><output aria-live="polite">${value}</output><button type="button" aria-label="Raise ${label}">${ic('plus')}</button></div>`
+  const seg = (label, opts, on, hidden) => { const h = id('g'); const lab = hidden ? '' : `<span class="lbl" id="${h}">${label}</span>`; const aria = hidden ? `aria-label="${label}"` : `aria-labelledby="${h}"`; return `<div class="field">${lab}<div class="seg" role="group" ${aria}>${opts.map((o) => `<button type="button" aria-pressed="${o === on}">${o}</button>`).join('')}</div></div>` }
+  const sw = (words, on, name) => `<button type="button" class="switch" role="switch" aria-checked="${on}">${words}<span class="vh"> ${name}</span><span class="track" aria-hidden="true"><span class="thumb"></span></span></button>`
+  const hint = (w) => `<p class="hint">${w}</p>`
+  const more = (w) => `<button type="button" class="more" aria-expanded="false">${ic('right')}${w}</button>`
+
+  // -------------------------------------------------------------------------------- the grid
+  function grid(prog) {
+    const W = Array.from({ length: prog.weeks }, (_, i) => i + 1)
+    const head = `<tr><th class="act" scope="col"><span class="vh">Activity</span></th>${W.map((n) => `<th class="wk" scope="col"><span class="wn">Week ${n}</span><span class="wt">${prog.labels[n] || '&nbsp;'}</span></th>`).join('')}</tr>`
+    const rows = prog.acts.map((a) => `<tr><th class="act" scope="row"><span class="an">${a.name}</span><span class="ad">${a.chip ? `<span class="chip">${a.chip}</span>` : ''}<span class="t">${a.t}</span></span></th>${a.cells.map(([m, s]) => `<td class="wk"><span class="cv">${m}</span><span class="cs">${s}</span></td>`).join('')}</tr>`).join('')
+    return `<div class="grid-wrap" tabindex="0" role="region" aria-label="The weeks, as the server computes them"><table class="og"><thead>${head}</thead><tbody>${rows}</tbody></table></div>`
+  }
+
+  // --------------------------------------------------------------------- the page's frame
+  const head = (prog) => `<a class="back" href="#">${ic('left')}<span>Back to programmes</span></a><p class="over">${prog.over}</p><h4 class="ttl">${prog.title}</h4>`
+  const bar = (save = 'Save to library') => `<div class="bar"><div class="bar-in"><p class="im ok" role="status">${ic('check')}<span>Checked. No problems.</span></p><div class="btns">${btn('', 'Cancel', 'sm')}${btn('', save, 'primary sm')}</div></div></div>`
+  function basics(prog) {
+    if (prog.cardio) {
+      return `<section class="sect"><h5>The programme</h5>${field('Name', tf('Base miles'))}
+        ${field('Description', `<textarea class="ta" id="%ID%" rows="2">Two runs and a long ride, with an easy week.</textarea>`)}
+        ${seg('Kind', ['Strength', 'Mobility', 'Cardio'], 'Cardio')}
+        <div class="row">${stepper('Weeks', '6', 'Fewer weeks', 'More weeks')}</div></section>`
+    }
+    return `<section class="sect"><h5>The programme</h5>
+      ${field('Name', tf('Beginner 5×5'))}
+      ${field('Description', `<textarea class="ta" id="%ID%" rows="2">Three full-body sessions a week, adding weight each week.</textarea>`, hint('Markdown. Anyone who copies the programme sees it.'))}
+      ${seg('Kind', ['Strength', 'Mobility', 'Cardio'], 'Strength')}
+      <div class="row">${stepper('Weeks', '8', 'Fewer weeks', 'More weeks')}${stepper('Exercises a day', '2', 'Fewer exercises a day', 'More exercises a day')}</div>
+    </section>`
+  }
+  const closedCard = (a) => `<li class="ac"><div class="ac-head"><button type="button" class="ac-toggle" aria-expanded="false">${ic('right')}<span><span class="ac-name">${a.name}</span><span class="ac-sum">${a.sum}</span></span></button><button type="button" class="ib" aria-label="More for ${a.name}">${ic('ellipsis')}</button></div></li>`
+  const openCard = (name, sum, body, scroll) => `<li class="ac open"${scroll ? ' data-scroll-to' : ''}><div class="ac-head"><button type="button" class="ac-toggle" aria-expanded="true">${ic('down')}<span><span class="ac-name">${name}</span><span class="ac-sum">${sum}</span></span></button><button type="button" class="ib" aria-label="More for ${name}">${ic('ellipsis')}</button></div><div class="ac-body">${body}</div></li>`
+  function activities(prog, open) {
+    const lead = prog.cardio ? 'Two of at most 30. Press one to change it.' : 'Five of at most 30. Press one to change it.'
+    const cards = prog.acts.map((a) => (open && open.key === a.key ? openCard(a.name, a.sum, open.body, open.scroll) : closedCard(a))).join('')
+    return `<section class="sect"><h5>Activities</h5><p class="lead">${lead}</p><ul class="acts">${cards}</ul><div>${btn('plus', 'Add activity', 'sm')}</div></section>`
+  }
+  function exceptions(prog, open) {
+    const lead = '<p class="lead">A week whose values differ, such as a deload. The week after carries on as planned.</p>'
+    if (prog.cardio) {
+      return `<section class="sect"><h5>Exception weeks</h5>${lead}<ul class="rows"><li><span class="txt"><span class="nm">Week 4 · Easy week</span><span class="ln">Every activity: 80% of the time.</span><span class="ln">Long ride: 15 km.</span></span><button type="button" class="ib" aria-label="Change week 4">${ic('pencil')}</button></li></ul><div>${btn('plus', 'Add exception week', 'sm')}</div></section>`
+    }
+    const item = open ? `<ul class="acts">${openCard('Weeks 4 and 8 · Deload', 'Every activity: 3 sets, 90% of the weight. Deadlift: 1 set.', open, true)}</ul>`
+      : `<ul class="rows"><li><span class="txt"><span class="nm">Weeks 4 and 8 · Deload</span><span class="ln">Every activity: 3 sets, 90% of the weight.</span><span class="ln">Deadlift: 1 set.</span></span><button type="button" class="ib" aria-label="Change weeks 4 and 8">${ic('pencil')}</button></li></ul>`
+    return `<section class="sect"><h5>Exception weeks</h5>${lead}${item}<div>${btn('plus', 'Add exception week', 'sm')}</div></section>`
+  }
+  function params(prog, open) {
+    const lead = '<p class="lead">Each one is asked for when the programme starts, with its default filled in.</p>'
+    if (prog.cardio) {
+      return `<section class="sect"><h5>Values chosen at start</h5>${lead}<ul class="rows"><li><span class="txt"><span class="nm">Long ride</span><span class="ln">20 km by default</span><span class="ln2">Used by Long ride’s distance</span></span><button type="button" class="ib" aria-label="Change Long ride">${ic('pencil')}</button></li></ul><div>${btn('plus', 'Add a value', 'sm')}</div></section>`
+    }
+    const squat = open ? `<ul class="acts">${openCard('Squat start', '40 kg by default, from 20 to 200&nbsp;kg', open, true)}</ul>`
+      : `<ul class="rows"><li><span class="txt"><span class="nm">Squat start</span><span class="ln">40 kg by default</span><span class="ln2">Used by Back squat’s weight</span></span><button type="button" class="ib" aria-label="Change Squat start">${ic('pencil')}</button></li></ul>`
+    return `<section class="sect"><h5>Values chosen at start</h5>${lead}${squat}
+      <ul class="rows"${open ? ' style="margin-top:4px"' : ''}><li><span class="txt"><span class="nm">Weekly increase</span><span class="ln">5 % by default</span><span class="ln2">Used by Back squat’s weight</span></span><button type="button" class="ib" aria-label="Change Weekly increase">${ic('pencil')}</button></li></ul>
+      <div>${btn('plus', 'Add a value', 'sm')}</div></section>`
+  }
+  function page(prog, phone, parts) {
+    const form = `<div class="form">${basics(prog)}${activities(prog, parts.act)}${exceptions(prog, parts.exc)}${params(prog, parts.par)}</div>`
+    const pv = `<aside class="pv" aria-label="Preview"><h5>${phone ? 'Preview' : 'The weeks'}</h5><p class="hint">Weeks by number, at the default values. ${phone ? 'Swipe for later weeks.' : 'It updates a moment after each change.'}</p>${grid(prog)}</aside>`
+    return `<div class="page"><div class="col">${head(prog)}<div class="two">${form}${pv}</div></div></div>${bar(prog.cardio ? 'Save changes' : 'Save to library')}`
+  }
+
+  // ------------------------------------------------- Q2: a value's shape, and leaving it out
+  const MEASURE = () => seg('Measure', ['Reps', 'Time', 'Neither'], 'Time')
+  const SIDES = () => seg('Sides', ['Per set', 'Each side'], 'Per set')
+  const plankName = () => field('Name', tf('Plank'))
+  const plankSum = '3 × 30 s · +5 s every 2 weeks, up to 90 s'
+
+  // The open Hold, as round 1's Weight group: Stays the same or Grows, then the increase.
+  function holdGroup(withLabel) {
+    return `<div class="grp" role="group" aria-label="Hold">${withLabel ? '<span class="lbl">Hold</span>' : ''}
+      ${seg('Hold', ['Stays the same', 'Grows'], 'Grows', true)}
+      ${field('Starts at', unit('30', 's'))}
+      <button type="button" class="lnk">Use a value chosen at start</button>
+      <div class="row">${seg('Grows by', ['s', '%'], 's')}${field('Amount', unit('5', 's'))}${stepper('Every', '2 weeks', 'Fewer weeks between increases', 'More weeks between increases')}</div>
+      ${hint('Up to 90 s. Rounds to 5 s.')}
+      ${more('Change the most and the rounding')}
+    </div>`
+  }
+  // A: one line per value.
+  const vrow = (label, value, open = '', none = false) => `<li class="vr${open ? ' open' : ''}"><button type="button" class="vr-btn" aria-expanded="${!!open}"><span class="vr-txt"><span class="vr-l">${label}</span><span class="vr-v${none ? ' none' : ''}">${value}</span></span>${ic(open ? 'down' : 'right')}</button>${open}</li>`
+  const plankA = () => `${plankName()}${MEASURE()}${SIDES()}
+    <ul class="vlist" aria-label="Plank’s values">
+      ${vrow('Times a week', '3')}${vrow('Sets', '3')}
+      ${vrow('Hold', '30 s, +5 s every 2 weeks, up to 90 s', holdGroup(false))}
+      ${vrow('Weight', 'None', '', true)}
+    </ul>${more('More: key, notes, link')}`
+  const rideA = () => `${field('Name', tf('Long ride'))}
+    <ul class="vlist" aria-label="Long ride’s values">
+      ${vrow('Times a week', '1')}${vrow('Time', '60 min, +10 min every 2 weeks')}
+      ${vrow('Distance', '20 km chosen at start, +10% a week', `<div class="grp" role="group" aria-label="Distance">
+        ${seg('Distance', ['None', 'Stays the same', 'Grows'], 'Grows', true)}
+        ${field('Starts at', `<button type="button" class="pick" id="%ID%" aria-haspopup="menu"><span><b>Long ride</b> · 20 km</span>${ic('down')}</button>`, hint('Chosen when the programme starts. A number works too.'))}
+        <div class="row">${seg('Grows by', ['km', '%'], '%')}${field('Amount', unit('10', '%'))}${stepper('Every', '1 week', 'Fewer weeks between increases', 'More weeks between increases')}</div>
+        ${hint('No most. Rounds to 0.1 km.')}
+        ${more('Change the most and the rounding')}
+      </div>`)}
+    </ul>${more('More: key, notes, link')}`
+  // B: every value in full.
+  const stays = (label, value, u = '') => `<div class="grp" role="group" aria-label="${label}"><span class="lbl">${label}</span>${seg(label, ['Stays the same', 'Grows'], 'Stays the same', true)}${field('Value', u ? unit(value, u) : tf(value, 'num', ' inputmode="numeric"'))}<button type="button" class="lnk">Use a value chosen at start</button></div>`
+  const plankB = () => `${plankName()}${MEASURE()}${SIDES()}
+    ${stays('Times a week', '3')}${stays('Sets', '3')}${holdGroup(true)}
+    <div class="grp" role="group" aria-label="Weight"><span class="lbl">Weight</span>${seg('Weight', ['None', 'Stays the same', 'Grows'], 'None', true)}${hint('Plank has no weight. Pick Stays the same to give it one.')}</div>
+    ${more('More: key, notes, link')}`
+  // C: a Grows switch on each field.
+  const cf = (label, control, on, extra = '') => `<div class="cf"><div class="cf-head"><span class="lbl">${label}</span>${sw('Grows', on, label)}</div><div class="cf-ctl">${control}<button type="button" class="ib" aria-label="More for ${label}">${ic('ellipsis')}</button></div>${extra}</div>`
+  const plankC = () => `${plankName()}${MEASURE()}${SIDES()}
+    ${cf('Times a week', bareStepper('times a week', '3'), false)}
+    ${cf('Sets', bareStepper('sets', '3'), false)}
+    ${cf('Hold', unit('30', 's').replace('%ID%', id('h')), true, `<div class="grp" role="group" aria-label="Hold’s increase"><div class="row">${seg('Grows by', ['s', '%'], 's')}${field('Amount', unit('5', 's'))}${stepper('Every', '2 weeks', 'Fewer weeks between increases', 'More weeks between increases')}${field('Up to', unit('90', 's'))}</div>${hint('Rounds to 5 s.')}</div>`)}
+    ${cf('Weight', unit('', 'kg', 'num', ' inputmode="decimal" placeholder="None"').replace('%ID%', id('w')), false, hint('Empty means no weight.'))}
+    ${more('More: key, notes, link')}`
+
+  // ------------------------------------------------------ Q3: an exception week, opened
+  const exr = (name, mode, value, u) => `<div class="exr"><div class="exr-h"><span class="exr-f">${name}</span><button type="button" class="ib" aria-label="Remove ${name}">${ic('x')}</button></div>${seg(name, ['Set to', '% of planned'], mode, true)}${(u ? unit(value, u, 'num sm') : tf(value, 'num sm', ' inputmode="numeric"')).replace('%ID%', id('x'))}</div>`
+  const weeksLabel = () => field('Label', tf('Deload'), hint('Optional. The grid shows it over each of these weeks.'))
+  const excA = () => `${field('Weeks', tf('4, 8', '', ' inputmode="numeric"'), hint('Week numbers from 1 to 8, with commas.'))}
+    ${weeksLabel()}
+    <div class="grp" role="group" aria-label="Every activity"><span class="lbl">Every activity</span>
+      ${exr('Sets', 'Set to', '3')}${exr('Weight', '% of planned', '90', '%')}
+      <button type="button" class="lnk">Add a value</button></div>
+    <div class="grp" role="group" aria-label="Deadlift"><span class="lbl">Deadlift</span>
+      ${exr('Sets', 'Set to', '1')}
+      <button type="button" class="lnk">Add a value</button>
+      ${hint('Deadlift’s own value beats the value for every activity.')}</div>
+    <div>${btn('plus', 'Add values for one activity', 'sm')}</div>
+    <div>${btn('trash', 'Remove exception week', 'quiet sm')}</div>`
+  function excB() {
+    const weeks = Array.from({ length: 8 }, (_, i) => i + 1).map((n) => `<button type="button" aria-pressed="${[4, 8].includes(n)}" aria-label="Week ${n}">${n}</button>`).join('')
+    const cell = (v) => v === null ? '<span class="na" aria-label="Not a field of this activity">—</span>' : `<input class="tf" value="${v}" aria-label="value" inputmode="decimal">`
+    // Columns: Sets, Reps, Time, Weight. null: the activity has no such field.
+    const rows = [['Every activity', '3', '', '', '90%'], ['Back squat', '', '', null, ''], ['Bench press', '', '', null, ''], ['Barbell row', '', '', null, ''], ['Deadlift', '1', '', null, ''], ['Plank', '', null, '', null]]
+    const table = `<div class="xt-wrap" tabindex="0" role="region" aria-label="Values in these weeks"><table class="xt"><thead><tr><th scope="col"><span class="vh">Activity</span></th><th scope="col">Sets</th><th scope="col">Reps</th><th scope="col">Time</th><th scope="col">Weight</th></tr></thead><tbody>${rows.map(([n, ...c]) => `<tr><th scope="row">${n}</th>${c.map((v) => `<td>${cell(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`
+    return `<div class="field"><span class="lbl">Weeks</span><div class="weekpick" role="group" aria-label="Weeks">${weeks}</div>${hint('Press a week to add it or take it out.')}</div>
+      ${weeksLabel()}
+      <div class="field"><span class="lbl">Values in these weeks</span>${table}${hint('Type a number to set the value, or a percentage like 90% to scale the planned value. An empty cell keeps the plan.')}</div>
+      <div>${btn('trash', 'Remove exception week', 'quiet sm')}</div>`
+  }
+  const startValue = () => `${field('Label', tf('Squat start'))}
+    <div class="row">${field('Unit', tf('kg', 'sm'))}${field('Default', unit('40', 'kg'))}</div>
+    <div class="row">${field('Lowest', unit('20', 'kg'))}${field('Highest', unit('200', 'kg'))}</div>
+    ${hint('Lowest and highest are optional. The start asks for a value between them.')}
+    <p class="hint" style="color:var(--ink)">Used by Back squat’s weight.</p>
+    ${more('More: key')}
+    <div>${btn('trash', 'Remove', 'quiet sm')}</div>`
+
+  const plank = FIVE.acts[4], ride = MILES.acts[1]
+  const dk = (h) => `<div class="dk-wrap"><div class="dk">${h}</div></div>`
+  const ph = (h) => `<div class="ph">${h}</div>`
+  const A = (body) => ({ act: { key: 'plank', body: body(), scroll: true } })
+  const DRAW = {
+    'q2a-ph': () => ph(page(FIVE, true, A(plankA))),
+    'q2a-dk': () => dk(page(FIVE, false, A(plankA))),
+    'q2a-cardio': () => ph(page(MILES, true, { act: { key: 'long-ride', body: rideA(), scroll: true } })),
+    'q2b-ph': () => ph(page(FIVE, true, A(plankB))),
+    'q2b-dk': () => dk(page(FIVE, false, A(plankB))),
+    'q2c-ph': () => ph(page(FIVE, true, A(plankC))),
+    'q2c-dk': () => dk(page(FIVE, false, A(plankC))),
+    'q3a-ph': () => ph(page(FIVE, true, { exc: excA() })),
+    'q3a-dk': () => dk(page(FIVE, false, { exc: excA() })),
+    'q3b-ph': () => ph(page(FIVE, true, { exc: excB() })),
+    'q3b-dk': () => dk(page(FIVE, false, { exc: excB() })),
+    'q3s-ph': () => ph(page(FIVE, true, { par: startValue() })),
+    'q3s-dk': () => dk(page(FIVE, false, { par: startValue() })),
+  }
+  void plank; void ride
+  for (const pane of document.querySelectorAll('.pane[data-draw]')) {
+    pane.innerHTML = `<p class="label pane-label">${pane.dataset.theme === 'dark' ? 'Dark' : 'Light'}</p>${DRAW[pane.dataset.draw]()}`
+  }
+  for (const a of document.querySelectorAll('.pane a[href="#"]')) a.addEventListener('click', (e) => e.preventDefault())
+
+  // Each stage opens scrolled to what the question is about.
+  for (const st of document.querySelectorAll('.dk, .ph')) {
+    const to = st.querySelector('[data-scroll-to]')
+    if (to) st.scrollTop = to.getBoundingClientRect().top - st.getBoundingClientRect().top - 16
+  }
+  // A laptop stage keeps its 1280 x 800 layout and is scaled to its pane's width.
+  const fit = () => {
+    for (const wrap of document.querySelectorAll('.dk-wrap')) {
+      const d = wrap.firstElementChild
+      const s = Math.min(1, wrap.clientWidth / 1280)
+      d.style.transform = `scale(${s})`
+      wrap.style.height = `${800 * s}px`
+    }
+  }
+  fit()
+  new ResizeObserver(fit).observe(document.body)
+})()
+</script>
+
+<script>
+  // Measures: for each <li data-fg data-bg data-min>, the WCAG contrast of the two colours in each
+  // theme, resolved inside the option (so --candidate-* values apply), written after the label.
+  (() => {
+    const rgb = (value, scope, theme) => {
+      const probe = document.createElement('span')
+      probe.dataset.theme = theme
+      probe.style.color = value
+      scope.append(probe)
+      const parts = getComputedStyle(probe).color.match(/[\d.]+/g).map(Number)
+      probe.remove()
+      return parts.slice(0, 3)
+    }
+    const lum = ([r, g, b]) => [r, g, b]
+      .map((c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4 })
+      .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0)
+    const ratio = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05) }
+    for (const li of document.querySelectorAll('.measures li[data-fg]')) {
+      const scope = li.closest('.option') || document.body
+      const min = Number(li.dataset.min || 0)
+      const results = ['light', 'dark'].map((theme) => {
+        const r = ratio(rgb(li.dataset.fg, scope, theme), rgb(li.dataset.bg, scope, theme))
+        return { theme, r, ok: !min || r >= min }
+      })
+      li.dataset.pass = results.every((x) => x.ok) ? 'yes' : 'no'
+      li.append(`: ${results.map((x) => `${x.theme} ${x.r.toFixed(1)}:1${x.ok ? '' : ' (below ' + min + ':1)'}`).join(', ')}`)
+    }
+  })()
+</script>

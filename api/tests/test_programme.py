@@ -19,6 +19,7 @@ from tracker_api.programme import (
     FORMAT,
     MAX_REPS,
     SCHEMA_PATH,
+    Limit,
     ProgrammeError,
     ProgrammeInvalid,
     Scale,
@@ -375,6 +376,131 @@ def test_an_override_without_a_label() -> None:
     assert programme.override_at(4, "squat", "sets") == Decimal(3)
 
 
+# ---- K192: a rest stops the progression ----
+
+
+def rest_doc(*overrides: dict[str, Any], weeks: int = 7, **squat: Any) -> dict[str, Any]:
+    """John's example (K192): a back squat from 40 kg, 2.5 kg a week, and a bench beside it.
+    `squat` replaces the squat's own fields."""
+    return {
+        "format": FORMAT,
+        "name": "Rest weeks",
+        "kind": "strength",
+        "weeks": weeks,
+        "activities": [
+            {
+                "key": "squat",
+                "name": "Back squat",
+                "target": 3,
+                "sets": 5,
+                "reps": 5,
+                "weight": {"start": 40, "add": 2.5},
+                **squat,
+            },
+            {
+                "key": "bench",
+                "name": "Bench press",
+                "target": 3,
+                "sets": 5,
+                "reps": 5,
+                "weight": {"start": 30, "add": 2.5},
+            },
+        ],
+        "overrides": list(overrides),
+    }
+
+
+def rest(*weeks: int, key: str = "squat", **fields: Any) -> dict[str, Any]:
+    """An exception week: a rest (target 0) for `key` unless `fields` says otherwise."""
+    return {"weeks": list(weeks), "activities": {key: fields or {"target": 0}}}
+
+
+STRAIGHT = [40, 42.5, 45, 47.5, 50, 52.5, 55]
+#: (id, overrides, the squat's own fields, its weight in programme weeks 1 to 7, the activity
+#: weeks). The web's grid, the draft and a run all compute these.
+REST_CASES: list[tuple[str, list[dict[str, Any]], dict[str, Any], list[Any], list[int]]] = [
+    ("no rest", [], {}, STRAIGHT, [1, 2, 3, 4, 5, 6, 7]),
+    ("john", [rest(4)], {}, [40, 42.5, 45, 45, 45, 47.5, 50], [1, 2, 3, 3, 3, 4, 5]),
+    ("two in a row", [rest(4, 5)], {}, [40, 42.5, 45, 45, 45, 45, 47.5], [1, 2, 3, 3, 3, 3, 4]),
+    ("week 1", [rest(1)], {}, [40, 40, 42.5, 45, 47.5, 50, 52.5], [1, 1, 2, 3, 4, 5, 6]),
+    ("last week", [rest(7)], {}, [40, 42.5, 45, 47.5, 50, 52.5, 52.5], [1, 2, 3, 4, 5, 6, 6]),
+    (
+        "star",
+        [{"weeks": [4], "activities": {"*": {"target": 0}}}],
+        {},
+        [40, 42.5, 45, 45, 45, 47.5, 50],
+        [1, 2, 3, 3, 3, 4, 5],
+    ),
+    (
+        "own target beats star",
+        [{"weeks": [4], "activities": {"*": {"target": 0}, "squat": {"target": 2}}}],
+        {},
+        STRAIGHT,
+        [1, 2, 3, 4, 5, 6, 7],
+    ),
+    (
+        "scale to 0",
+        [rest(4, target={"scale": 0.1})],
+        {},
+        [40, 42.5, 45, 45, 45, 47.5, 50],
+        [1, 2, 3, 3, 3, 4, 5],
+    ),
+    ("scale to 2", [rest(4, target={"scale": 0.5})], {}, STRAIGHT, [1, 2, 3, 4, 5, 6, 7]),
+    (
+        "deload",
+        [rest(4, sets=3, weight={"scale": 0.9})],
+        {},
+        [40, 42.5, 45, 43, 50, 52.5, 55],  # 47.5 x 0.9 = 42.75, shown as 43
+        [1, 2, 3, 4, 5, 6, 7],
+    ),
+    (
+        "every 2",
+        [rest(4)],
+        {"weight": {"start": 40, "add": 2.5, "every": 2}},
+        [40, 40, 42.5, 42.5, 42.5, 42.5, 45],
+        [1, 2, 3, 3, 3, 4, 5],
+    ),
+    ("base target 0", [rest(4)], {"target": 0}, STRAIGHT, [1, 2, 3, 4, 5, 6, 7]),
+]
+
+
+@pytest.mark.parametrize(
+    ("overrides", "squat", "weights", "activity_weeks"),
+    [case[1:] for case in REST_CASES],
+    ids=[case[0] for case in REST_CASES],
+)
+def test_a_rest_stops_the_series_and_picks_up_at_the_previous_setting(
+    overrides: list[dict[str, Any]], squat: dict[str, Any], weights: list[Any], activity_weeks: Any
+) -> None:
+    """K192: in a week whose target an exception puts at 0, the activity week doesn't advance,
+    and the week after repeats the one before the rest. Deloads still don't bend the series."""
+    resolved = resolve(parse_programme(rest_doc(*overrides, **squat)))
+    weeks = [expand_week(resolved, n)["squat"] for n in range(1, 8)]
+    assert [w["weight"] for w in weeks] == weights
+    assert resolved.activity_weeks("squat") == tuple(activity_weeks)
+
+
+def test_a_rest_week_shows_the_value_it_comes_back_at_with_no_sessions() -> None:
+    resolved = resolve(parse_programme(rest_doc(rest(4))))
+    week = expand_week(resolved, 4)
+    assert week["squat"] == {"target": 0, "sets": 5, "reps": 5, "weight": 45}
+    # The bench doesn't rest, so its week runs on.
+    assert week["bench"] == {"target": 3, "sets": 5, "reps": 5, "weight": 37.5}
+    assert resolved.activity_weeks("bench") == (1, 2, 3, 4, 5, 6, 7)
+
+
+def test_a_week_limit_names_the_programme_week_a_rest_moves_it_to() -> None:
+    """The range check follows the rest-shifted activity weeks: 525 kg is activity week 6, which
+    a rest in week 4 moves from programme week 6 to 8."""
+    heavy = {"weight": {"start": 400, "add": 25}}
+    [error] = check_programme(rest_doc(weeks=8, **heavy))
+    assert error.message == "week 6 comes to 525 kg. The most is 500."
+    assert error.limit is not None and error.limit.weeks == (6, 7, 8)
+    [error] = check_programme(rest_doc(rest(4), weeks=8, **heavy))
+    assert error.message == "week 8 comes to 525 kg. The most is 500."
+    assert error.limit == Limit(activity="squat", field="weight", week=8, weeks=(8,))
+
+
 # ---- Parameters ----
 
 
@@ -495,6 +621,56 @@ def test_weeks_outside_the_programme_are_refused(programme_week: int, activity_w
         expand_activity(
             resolved, "squat", programme_week=programme_week, activity_week=activity_week
         )
+
+
+# ---- Week limits, for the builder's draft (docs/specs/2026-11-20-programme-builder.md S2) ----
+
+
+def heavy_deadlift() -> dict[str, Any]:
+    doc: dict[str, Any] = load(FIXTURES / "valid" / "beginner-5x5.json")
+    doc["activities"][3]["weight"]["add"] = 90
+    return doc
+
+
+def test_a_week_limit_problem_names_its_activity_field_and_weeks() -> None:
+    """The message names the first week over; `limit` holds every week over, as numbers."""
+    [error] = check_programme(heavy_deadlift())
+    assert (error.path, error.message) == (
+        "activities[3].weight",
+        "week 6 comes to 510 kg. The most is 500.",
+    )
+    assert error.limit == Limit(activity="deadlift", field="weight", week=6, weeks=(6, 7, 8))
+    # The limit is extra: the error compares and prints as before.
+    assert error == ProgrammeError("activities[3].weight", error.message)
+    assert repr(error) == repr(ProgrammeError("activities[3].weight", error.message))
+
+
+def test_a_week_back_under_the_limit_is_not_among_its_weeks() -> None:
+    doc = heavy_deadlift()
+    doc["overrides"].append({"weeks": [7], "activities": {"deadlift": {"weight": {"scale": 0.5}}}})
+    [error] = check_programme(doc)
+    assert error.limit is not None
+    assert (error.limit.week, error.limit.weeks) == (6, (6, 8))
+
+
+def test_a_limit_from_a_parameters_value_names_its_activity() -> None:
+    with pytest.raises(ProgrammeInvalid) as raised:
+        resolve(parse_programme(spec_example()), {"squat": 600})
+    [error] = raised.value.errors
+    assert error.limit is not None
+    assert (error.limit.activity, error.limit.field, error.limit.week) == ("squat", "weight", 1)
+
+
+def test_other_problems_carry_no_limit() -> None:
+    doc = heavy_deadlift()
+    doc["name"] = ""
+    doc["activities"][0]["sets"] = 0
+    errors = check_programme(doc)
+    assert [(e.path, e.limit is None) for e in errors] == [
+        ("name", True),
+        ("activities[0].sets", True),
+        ("activities[3].weight", False),
+    ]
 
 
 def test_rep_cap_is_the_formats_own() -> None:

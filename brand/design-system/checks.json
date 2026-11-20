@@ -14,6 +14,7 @@
     "SegmentedControl",
     "RadioCard",
     "Switch",
+    "Checkbox",
     "Stepper",
     "SearchField",
     "Dialog",
@@ -48,7 +49,12 @@
     "ChangeSheet",
     "ProgrammeChart",
     "ProgrammesPage",
-    "WorkChart"
+    "WorkChart",
+    "ProgrammeBuilder",
+    "ActivityCard",
+    "ValueField",
+    "ExceptionWeekEditor",
+    "StartValueEditor"
   ],
   "extra_contrast_pairs": [
     [

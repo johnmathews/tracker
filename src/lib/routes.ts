@@ -69,6 +69,31 @@ export function isProgrammesHash(hash: string): boolean {
   return hash === PROGRAMMES_HREF
 }
 
+/** The programme builder's address for a new programme. */
+export const NEW_PROGRAMME_HREF = '#/programmes/new'
+
+/** Whether the address is the new programme builder's. */
+export function isNewProgrammeHash(hash: string): boolean {
+  return hash === NEW_PROGRAMME_HREF
+}
+
+/** The builder's address for a library programme, `#/programmes/<id>/edit`. */
+const EDIT_PROGRAMME = /^#\/programmes\/([^/]+)\/edit$/
+
+/** The address of the builder editing a library programme. */
+export function editProgrammeHref(id: string): string {
+  return `#/programmes/${id}/edit`
+}
+
+/**
+ * The library programme id an edit address names, or null for any other address. Whether the
+ * account has the programme is the server's to say.
+ */
+export function parseEditProgrammeHash(hash: string): string | null {
+  const id = EDIT_PROGRAMME.exec(hash)?.[1]
+  return isTrackerId(id) ? id : null
+}
+
 /** A programme's overview, `#/programme/<tracker>` (spec §9.2): its tracker's id names it. */
 const PROGRAMME = /^#\/programme\/([^/]+)$/
 

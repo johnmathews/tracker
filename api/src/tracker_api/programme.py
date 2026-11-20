@@ -6,9 +6,11 @@ expands each field for a programme week and an activity week (§3.2, §3.3). The
 decimals under one fixed context, so the same inputs give the same numbers on every machine.
 
 The two weeks stay separate inputs. Overrides follow the programme week. A field's series follows
-the activity week, which falls behind the programme week while an activity is paused (§6.3). A
-`Series` can start from a later activity week (`origin`), which is how the replay continues a field
-from the value shown when its value or increase changes (§7.1).
+the activity week, which falls behind the programme week while an activity is paused (§6.3) and
+in a rest: a week an override puts its target at 0 holds it, and the week after repeats the one
+before the rest (K192, `Resolved.activity_weeks`). A `Series` can start from a later activity week
+(`origin`), which is how the replay continues a field from the value shown when its value or
+increase changes (§7.1).
 
 The JSON Schema (`programme_schema()`, committed as `programme.schema.json` beside this file) is
 built from the same rule constants. Rules it can't express are the validator's alone: unique
@@ -228,12 +230,28 @@ RATE_DOMAIN = f"a number {RATE_RANGE}"
 # ---- Errors ----
 
 
+@dataclass(frozen=True, kw_only=True)
+class Limit:
+    """A week-limit problem in numbers: the activity whose field some week can't hold, the first
+    such programme week (the one its message names) and every such week, in order."""
+
+    activity: str | None
+    field: Field
+    week: int
+    weeks: tuple[int, ...]
+
+
 @dataclass(frozen=True)
 class ProgrammeError:
-    """One problem: where it is, as a JSON path (`activities[2].weight.rate`), and a sentence."""
+    """One problem: where it is, as a JSON path (`activities[2].weight.rate`), and a sentence.
+
+    `limit` is set on a week-limit problem only ("week 6 comes to 510 kg"), so the builder's
+    draft can mark the weeks over (`data.draft_programme`). It takes no part in equality or the
+    repr: the error reads as its path and message."""
 
     path: str
     message: str
+    limit: Limit | None = field(default=None, compare=False, repr=False)
 
     def __str__(self) -> str:
         return f"{self.path}: {self.message}" if self.path else self.message
@@ -408,6 +426,49 @@ class Series:
         return round_to_step(value, self.step)
 
 
+def is_rest(target: Series, week: int, override: OverrideValue | None) -> bool:
+    """Whether an override makes a week a rest (K192): it puts the target at 0, a number 0 or a
+    scale that rounds to 0, where the rule's target in activity `week` isn't 0. An activity whose
+    own target is 0 never rests."""
+    return override is not None and target.value(week) != 0 and target.value(week, override) == 0
+
+
+def planned_weeks(
+    weeks: int, rest_at: Callable[[int, int], bool]
+) -> tuple[tuple[int, ...], tuple[bool, ...]]:
+    """Each programme week's activity week, from week 1, for an activity that runs every week
+    with no pause, and whether the week is a rest (K192). `rest_at(week, held)` says whether
+    programme `week` is a rest when it holds activity week `held`. A rest week doesn't advance
+    the activity week and shows the week it comes back at: the one done before the rest, or week
+    1 when none was. The week after the rest repeats that one, and counting resumes."""
+    out: list[int] = []
+    rests: list[bool] = []
+    done = 0
+    held: int | None = None
+    for week in range(1, weeks + 1):
+        pickup = held if held is not None else max(done, 1)
+        resting = rest_at(week, pickup)
+        if resting:
+            held = pickup
+        else:
+            done, held = (held if held is not None else done + 1), None
+        out.append(held if held is not None else done)
+        rests.append(resting)
+    return tuple(out), tuple(rests)
+
+
+def _activity_weeks(
+    overrides: Sequence[Override], key: str, target: Series | None, weeks: int
+) -> tuple[int, ...]:
+    """`planned_weeks` for a document's activity, whose rests are its overrides'."""
+
+    def rest_at(week: int, held: int) -> bool:
+        override = _override_at(overrides, week, key, "target")
+        return target is not None and is_rest(target, held, override)
+
+    return planned_weeks(weeks, rest_at)[0]
+
+
 @dataclass(frozen=True, kw_only=True)
 class Resolved:
     """A programme with its parameters' values and each field's series."""
@@ -415,6 +476,13 @@ class Resolved:
     programme: Programme
     params: Mapping[str, Decimal]
     series: Mapping[str, Mapping[Field, Series]]
+
+    def activity_weeks(self, key: str) -> tuple[int, ...]:
+        """An activity's week in each programme week, as a run with no pauses has them: the
+        programme week less the weeks its rests held it back (K192). Index 0 is week 1."""
+        programme = self.programme
+        target = self.series[key].get("target")
+        return _activity_weeks(programme.overrides, key, target, programme.weeks)
 
 
 #: One activity's plan fields for a week, as an item holds them (no id or name).
@@ -516,8 +584,8 @@ class _Checker:
     #: Whether every week's value must fit the item (`_resolve_series`): off for a stored run.
     check_ranges: bool = True
 
-    def error(self, path: str, message: str) -> None:
-        self.errors.append(ProgrammeError(path, message))
+    def error(self, path: str, message: str, limit: Limit | None = None) -> None:
+        self.errors.append(ProgrammeError(path, message, limit))
 
     def unknown_keys(self, raw: Mapping[Any, Any], allowed: Sequence[str], path: str) -> None:
         for key in raw:
@@ -967,17 +1035,24 @@ def _resolve_series(
     check_ranges: bool = True,
 ) -> dict[str, dict[Field, Series]]:
     """Each activity's series by field, and an error for each field whose value the item can't
-    hold in some week (the first such week). `activities` holds each one's path (`activities[2]`),
-    key and parsed values. Fields that use a parameter with no usable value are left out.
+    hold in some week: the message names the first such week, its `limit` every one. `activities`
+    holds each one's path (`activities[2]`), key and parsed values. Fields that use a parameter
+    with no usable value are left out.
 
-    The check runs each programme week with its override at the same activity week, as a run
-    with no pauses would. Without `check_ranges` it is skipped: a stored run was checked when it
-    started, and must load whatever the engine computes now (spec P1)."""
+    The check runs each programme week with its override at the activity week a run with no
+    pauses has in it: the programme week less the weeks a rest held it back (K192). Without
+    `check_ranges` it is skipped: a stored run was checked when it started, and must load
+    whatever the engine computes now (spec P1)."""
     out: dict[str, dict[Field, Series]] = {}
     rules = KIND_FIELDS[kind]
     for base, activity_key, values in activities:
         key = activity_key if activity_key is not None else ALL
         fields: dict[Field, Series] = {}
+        weeks_of: tuple[int, ...] = ()
+        if check_ranges:
+            # The target's own problems are reported in the loop below, in field order.
+            target = _series(_Checker(), values["target"], base, TARGET, params)
+            weeks_of = _activity_weeks(overrides, key, target, weeks)
         for name, value in values.items():
             path = f"{base}.{name}"
             rule = rules[name]
@@ -985,12 +1060,16 @@ def _resolve_series(
             if series is None:
                 continue
             fields[name] = series
-            for week in range(1, weeks + 1 if check_ranges else 1):
-                shown = series.value(week, _override_at(overrides, week, key, name))
+            over: dict[int, str] = {}
+            for week, activity_week in enumerate(weeks_of, start=1):
+                shown = series.value(activity_week, _override_at(overrides, week, key, name))
                 problem = rule.out_of_range(week, shown)
                 if problem is not None:
-                    checker.error(path, problem)
-                    break
+                    over[week] = problem
+            if over:
+                first = min(over)
+                limit = Limit(activity=activity_key, field=name, week=first, weeks=tuple(over))
+                checker.error(path, over[first], limit)
         if activity_key is not None:
             out[activity_key] = fields
     return out
@@ -1131,14 +1210,16 @@ def expand_week(
     resolved: Resolved, programme_week: int, activity_weeks: Mapping[str, int] | None = None
 ) -> dict[str, PlanValues]:
     """Every activity's plan fields for a programme week, keyed by activity, in the programme's
-    order. An activity's week defaults to the programme week."""
+    order. An activity's week defaults to the one a run with no pauses has in that programme
+    week (`Resolved.activity_weeks`, K192)."""
+    _check_week("programme week", programme_week, resolved.programme.weeks)
     weeks = activity_weeks or {}
     return {
         a.key: expand_activity(
             resolved,
             a.key,
             programme_week=programme_week,
-            activity_week=weeks.get(a.key, programme_week),
+            activity_week=weeks.get(a.key) or resolved.activity_weeks(a.key)[programme_week - 1],
         )
         for a in resolved.programme.activities
     }
